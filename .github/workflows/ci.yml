@@ -1,0 +1,165 @@
+# CI workflow for Nvet Care Platform monorepo.
+#
+# 3 paquetes en paralelo (jobs concurrentes):
+#   - backend  → lint + prisma generate + test
+#   - mobile   → lint + typecheck + test (jest unit + MSW)
+#   - dashboard → lint + build (Vite incluye tsc)
+#
+# Triggers:
+#   - push a main
+#   - pull_request a main
+#
+# Concurrency: cancela runs anteriores del mismo branch para ahorrar minutos.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  backend:
+    name: Backend (NestJS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+        env:
+          DATABASE_URL: postgresql://stub:stub@localhost:5432/stub?schema=public
+
+      - name: Lint
+        run: npm run lint -- --max-warnings 0
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test -- --ci --maxWorkers=2
+
+      - name: Upload test coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage
+          if-no-files-found: ignore
+          retention-days: 7
+
+  mobile:
+    name: Mobile (React Native)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test (jest unit + MSW)
+        run: npm run test:ci
+
+      - name: Upload test coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-coverage
+          path: mobile/coverage
+          if-no-files-found: ignore
+          retention-days: 7
+
+  dashboard:
+    name: Dashboard (Vite + React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (incluye typecheck via tsc)
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-dist
+          path: dashboard/dist
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Job final que requiere los 3 anteriores — útil como required check en branch protection
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [backend, mobile, dashboard]
+    if: always()
+    steps:
+      - name: Verify all jobs passed
+        run: |
+          if [[ "${{ needs.backend.result }}" != "success" ]]; then
+            echo "Backend failed: ${{ needs.backend.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.mobile.result }}" != "success" ]]; then
+            echo "Mobile failed: ${{ needs.mobile.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.dashboard.result }}" != "success" ]]; then
+            echo "Dashboard failed: ${{ needs.dashboard.result }}"
+            exit 1
+          fi
+          echo "All CI jobs passed."

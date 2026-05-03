@@ -1,0 +1,89 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+*.log
+
+# Production builds
+build/
+dist/
+*.tgz
+
+# Environment variables (CRÍTICO — nunca commitear)
+.env
+.env.local
+.env.development
+.env.staging
+.env.production
+.env.*.local
+.env.secrets
+**/.env
+**/.env.local
+**/.env.secrets
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# React Native
+mobile/android/.gradle
+mobile/android/app/build
+mobile/ios/Pods/
+mobile/ios/build/
+
+# Backend
+backend/dist/
+backend/prisma/migrations/.migration_lock
+
+# Dashboard
+dashboard/dist/
+dashboard/node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temp
+tmp/
+temp/
+*.tmp
+
+# Test artifacts
+coverage/
+junit.xml
+*.lcov
+.jest-cache/
+
+# React Native (extra)
+mobile/.expo/
+mobile/android/local.properties
+mobile/ios/DerivedData/
+mobile/*.jsbundle
+mobile/.metro-health-check*
+
+# Sentry
+.sentryclirc
+
+# Prisma local experiments
+backend/prisma/migrations/dev_*/
+
+# Uploads / Generated
+backend/uploads/
+backend/temp/
+dashboard/stats.html
+
+# OS adicionales
+desktop.ini

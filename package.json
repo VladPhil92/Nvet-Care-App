@@ -1,0 +1,26 @@
+{
+  "name": "nvet-care-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nvet Care - Plataforma completa de servicios veterinarios domiciliarios",
+  "author": "CTG One Corporation",
+  "license": "PROPRIETARY",
+  "workspaces": [
+    "mobile",
+    "backend",
+    "dashboard"
+  ],
+  "scripts": {
+    "mobile": "cd mobile && npm run android",
+    "mobile:ios": "cd mobile && npm run ios",
+    "backend": "cd backend && npm run start:dev",
+    "dashboard": "cd dashboard && npm run dev",
+    "backend:test": "cd backend && npm run test",
+    "backend:migrate": "cd backend && npx prisma migrate dev",
+    "install:all": "npm install && cd mobile && npm install && cd ../backend && npm install && cd ../dashboard && npm install"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

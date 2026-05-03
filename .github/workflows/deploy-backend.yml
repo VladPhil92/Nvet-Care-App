@@ -1,0 +1,140 @@
+# Deploy Backend → Railway
+#
+# Despliega el backend NestJS a Railway en cada push a main
+# o manualmente con workflow_dispatch.
+#
+# Secrets requeridos:
+#   RAILWAY_TOKEN       → https://railway.app/account/tokens
+#   RAILWAY_SERVICE_ID  → ID del servicio en Railway (Dashboard → Settings → Service ID)
+#   DATABASE_URL        → PostgreSQL connection string en Railway
+#   REDIS_URL           → Redis connection string en Railway (si aplica)
+#   JWT_SECRET          → Secret para firmar tokens JWT
+#   JWT_REFRESH_SECRET  → Secret para refresh tokens
+#   SENTRY_DSN          → DSN del proyecto Sentry (opcional)
+#
+# Cómo obtener RAILWAY_TOKEN:
+#   1. Ir a https://railway.app/account/tokens
+#   2. "New Token" → copiar y agregar como secret en el repo de GitHub
+#
+# Cómo obtener RAILWAY_SERVICE_ID:
+#   1. Abrir el proyecto en Railway
+#   2. Click en el servicio del backend
+#   3. Settings → Copy Service ID
+#
+# Estrategia de deploy:
+#   1. Build + test + lint en CI para garantizar que lo que se despliega es válido
+#   2. railway up sube el código; Railway hace el deploy con su Dockerfile o Nixpacks
+#   3. Healthcheck post-deploy contra /health/ready (readiness probe)
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Saltar tests (solo para hotfixes urgentes)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: false  # No cancelar deploys en curso — podría dejar estado inestable
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  validate:
+    name: Validate before deploy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+        env:
+          DATABASE_URL: postgresql://stub:stub@localhost:5432/stub?schema=public
+
+      - name: Lint
+        run: npm run lint -- --max-warnings 0
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        run: npm test -- --ci --maxWorkers=2
+
+  deploy:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    needs: validate
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up \
+            --service ${{ secrets.RAILWAY_SERVICE_ID }} \
+            --detach
+
+      - name: Wait for deployment to stabilize
+        run: sleep 30
+
+      - name: Health check post-deploy
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_PROD_URL }}
+        run: |
+          BACKEND_URL="${BACKEND_URL:-https://api.nvetcare.co}"
+          MAX_ATTEMPTS=10
+          ATTEMPT=0
+          until curl -sf "$BACKEND_URL/health/ready" > /dev/null; do
+            ATTEMPT=$((ATTEMPT+1))
+            if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+              echo "❌ Health check falló después de $MAX_ATTEMPTS intentos"
+              echo "URL: $BACKEND_URL/health/ready"
+              exit 1
+            fi
+            echo "Intento $ATTEMPT/$MAX_ATTEMPTS - esperando..."
+            sleep 10
+          done
+          echo "✅ Backend saludable: $BACKEND_URL/health/ready"
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Deploy backend FALLÓ - ${new Date().toISOString()}`,
+              body: `El deploy del backend a Railway falló.\n\n**Commit**: ${context.sha}\n**Branch**: ${context.ref}\n**Actor**: ${context.actor}\n\n[Ver log del workflow](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              labels: ['bug', 'deploy-failure']
+            })

@@ -1,0 +1,134 @@
+import { Translations } from '../types'
+
+const esCO: Translations = {
+  common: {
+    loading: 'Cargando…',
+    error: 'Algo salió mal',
+    retry: 'Reintentar',
+    cancel: 'Cancelar',
+    save: 'Guardar',
+    confirm: 'Confirmar',
+    delete: 'Eliminar',
+    edit: 'Editar',
+    back: 'Atrás',
+    next: 'Siguiente',
+    continue: 'Continuar',
+    close: 'Cerrar',
+    yes: 'Sí',
+    no: 'No',
+    search: 'Buscar',
+    empty: 'Sin resultados',
+    today: 'Hoy',
+    tomorrow: 'Mañana',
+    yesterday: 'Ayer',
+  },
+
+  auth: {
+    login: {
+      title: 'Bienvenido de vuelta',
+      subtitle: 'Ingresa a tu cuenta de Nvet Care',
+      emailLabel: 'Correo electrónico',
+      passwordLabel: 'Contraseña',
+      forgotPassword: '¿Olvidaste tu contraseña?',
+      submit: 'Iniciar sesión',
+      noAccount: '¿No tienes cuenta?',
+      registerLink: 'Regístrate',
+      errorInvalid: 'Correo o contraseña incorrectos',
+    },
+    register: {
+      title: 'Crea tu cuenta',
+      subtitle: 'Únete a Nvet Care en menos de 2 minutos',
+      firstNameLabel: 'Nombre',
+      lastNameLabel: 'Apellido',
+      phoneLabel: 'Teléfono',
+      submit: 'Crear cuenta',
+      hasAccount: '¿Ya tienes cuenta?',
+      loginLink: 'Inicia sesión',
+      vetNotice:
+        'Para activar el modo veterinario deberás verificar tus credenciales profesionales.',
+    },
+    forgotPassword: {
+      title: 'Recuperar contraseña',
+      subtitle:
+        'Te enviaremos un correo con instrucciones para restablecer tu contraseña.',
+      submit: 'Enviar correo',
+      success:
+        'Revisa tu correo para continuar con la recuperación de contraseña.',
+    },
+    logout: 'Cerrar sesión',
+    logoutConfirm: '¿Seguro que quieres cerrar tu sesión actual?',
+  },
+
+  profile: {
+    title: 'Mi perfil',
+    sections: {
+      mode: 'Modo de uso',
+      account: 'Mi cuenta',
+      security: 'Seguridad',
+      support: 'Soporte',
+    },
+    modeClient: 'Modo Cliente',
+    modeVet: 'Modo Veterinario',
+    clientDescription: 'Buscar y agendar servicios veterinarios',
+    vetDescription: 'Ofrecer servicios profesionales',
+    becomeVet: 'Convertirme en veterinario',
+    becomeVetSubtitle:
+      'Verifica tus credenciales y comienza a ofrecer servicios',
+    pendingVerification: 'Verificación en proceso',
+    verifiedBadge: 'Veterinario verificado',
+    menu: {
+      wallet: 'Mi billetera',
+      notifications: 'Notificaciones',
+      services: 'Mis servicios',
+      editProfile: 'Editar perfil',
+      changePassword: 'Cambiar contraseña',
+      twoFactor: 'Autenticación de dos factores',
+      privacy: 'Privacidad',
+      help: 'Ayuda y soporte',
+      terms: 'Términos y condiciones',
+      about: 'Acerca de Nvet Care',
+    },
+  },
+
+  appointments: {
+    title: 'Mis citas',
+    upcoming: 'Próximas',
+    past: 'Pasadas',
+    book: 'Reservar cita',
+    cancel: 'Cancelar cita',
+    cancelConfirm: '¿Seguro que quieres cancelar esta cita?',
+    statusPending: 'Por confirmar',
+    statusConfirmed: 'Confirmada',
+    statusInProgress: 'En curso',
+    statusCompleted: 'Completada',
+    statusCancelled: 'Cancelada',
+    statusDisputed: 'En disputa',
+    emptyUpcoming: 'Sin citas próximas',
+    emptyPast: 'Sin citas pasadas',
+  },
+
+  wallet: {
+    title: 'Mi billetera',
+    balance: 'Saldo disponible',
+    pending: 'Pendiente',
+    topUp: 'Recargar',
+    withdraw: 'Retirar',
+    transactions: 'Movimientos',
+    filters: {
+      all: 'Todas',
+      payments: 'Pagos',
+      commissions: 'Comisiones',
+      deposits: 'Depósitos',
+      withdrawals: 'Retiros',
+    },
+  },
+
+  errors: {
+    network: 'Sin conexión. Verifica tu internet.',
+    unauthorized: 'Tu sesión expiró. Vuelve a iniciar sesión.',
+    serverError: 'Algo falló en nuestro servidor. Intenta de nuevo.',
+    validation: 'Revisa los campos resaltados en rojo.',
+  },
+}
+
+export default esCO

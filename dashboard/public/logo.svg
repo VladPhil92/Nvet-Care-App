@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Nvet Care — canonical brand mark (paleta oficial).
+
+  Source-of-truth para favicons, app icons, splash screens y branding.
+
+  Forma del símbolo:
+    - Trazo continuo serpenteante con 3 ondulaciones horizontales (estilo N estilizada/waveform)
+    - Esquinas SUPER redondeadas (stroke-linecap+linejoin round, stroke-width grueso)
+    - Gradient horizontal: Azul Profundo (#0D1B2A) izquierda → Verde Principal (#34B27A) derecha
+    - Dot naranja (#FF8A3D) al lado del extremo inferior derecho del trazo
+
+  Paleta oficial:
+    - Azul Profundo  #0D1B2A
+    - Verde Principal #34B27A
+    - Naranja Acento  #FF8A3D
+
+  Nota: viewBox 200x100 (relación natural del símbolo). Para favicons / app icons
+  cuadrados, el script `scripts/generate-assets.mjs` toma este SVG y agrega padding
+  centrado para llegar a 1:1 (favicon-32, apple-touch 180, etc.).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="256" viewBox="0 0 200 100" fill="none" role="img" aria-label="Nvet Care">
+  <title>Nvet Care</title>
+  <desc>Símbolo de Nvet Care: trazo continuo serpenteante con tres ondulaciones, gradient azul a verde y un punto naranja al final.</desc>
+
+  <!-- Gradient horizontal azul profundo → verde principal -->
+  <defs>
+    <linearGradient id="nvetGradient" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%"   stop-color="#0D1B2A" />
+      <stop offset="45%"  stop-color="#1F5343" />
+      <stop offset="75%"  stop-color="#2E8C68" />
+      <stop offset="100%" stop-color="#34B27A" />
+    </linearGradient>
+  </defs>
+
+  <!--
+    Path: 3 lobulos verticales tipo "nnn" minuscula con conexiones suaves.
+    Cada lóbulo:
+      - sube vertical desde la base con esquina superior redondeada
+      - baja vertical, conecta al siguiente lóbulo con curva descendente suave
+      - termina conectando al dot naranja en el extremo inferior derecho
+  -->
+  <path
+    d="M 25 75
+       L 25 35
+       C 25 22 45 22 45 35
+       L 45 55
+       C 45 65 60 65 65 55
+       L 80 35
+       C 80 22 100 22 100 35
+       L 100 55
+       C 100 65 115 65 120 55
+       L 135 35
+       C 135 22 155 22 155 35
+       L 155 75"
+    stroke="url(#nvetGradient)"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+
+  <!-- Dot naranja al extremo inferior derecho — energía/latido -->
+  <circle cx="170" cy="75" r="6" fill="#FF8A3D" />
+</svg>
