@@ -4,6 +4,7 @@ import appointmentService from '../../services/appointment.service'
 import paymentService from '../../services/payment.service'
 import authService from '../../services/auth.service'
 import petService, { CreatePetData, Pet } from '../../services/pet.service'
+import reviewService, { CreateReviewPayload, UpdateReviewPayload } from '../../services/review.service'
 import vetService from '../../services/vet.service'
 
 /**
@@ -355,6 +356,113 @@ export function useUpdatePriceMutation() {
 
     onSettled: () => {
       qc.invalidateQueries({ queryKey: qk.vets.me.prices() })
+    },
+  })
+}
+
+// ============================================================
+// PETS - update + delete (create ya existe más arriba)
+// ============================================================
+
+interface UpdatePetVars {
+  petId: string
+  data: Partial<CreatePetData>
+}
+
+export function useUpdatePetMutation() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationKey: ['pets', 'update'],
+    mutationFn: ({ petId, data }: UpdatePetVars) =>
+      petService.updatePet(petId, data),
+
+    onSuccess: (updatedPet: Pet) => {
+      qc.setQueryData(qk.pets.detail(updatedPet.id), updatedPet)
+      qc.setQueryData<Pet[] | undefined>(qk.pets.list(), (prev) =>
+        prev?.map((p) => (p.id === updatedPet.id ? updatedPet : p)),
+      )
+    },
+  })
+}
+
+export function useDeletePetMutation() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationKey: ['pets', 'delete'],
+    mutationFn: (petId: string) => petService.deletePet(petId),
+
+    onMutate: async (petId) => {
+      await qc.cancelQueries({ queryKey: qk.pets.all })
+      const previous = qc.getQueryData<Pet[]>(qk.pets.list())
+      // Optimistic remove
+      qc.setQueryData<Pet[] | undefined>(qk.pets.list(), (prev) =>
+        prev?.filter((p) => p.id !== petId),
+      )
+      return { previous }
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData(qk.pets.list(), context.previous)
+      }
+    },
+
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qk.pets.all })
+    },
+  })
+}
+
+// ============================================================
+// REVIEWS
+// ============================================================
+
+export function useCreateReviewMutation() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationKey: ['reviews', 'create'],
+    mutationFn: (payload: CreateReviewPayload) =>
+      reviewService.createReview(payload),
+
+    onSuccess: (review: any) => {
+      // Cachear la review de la cita para que LeaveReviewScreen la muestre
+      qc.setQueryData(qk.reviews.forAppointment(review.appointmentId), review)
+      // Invalidar reviews del vet para reflejar el nuevo rating
+      qc.invalidateQueries({ queryKey: qk.reviews.all })
+      // Invalidar detalle del vet para actualizar rating promedio visible
+      qc.invalidateQueries({ queryKey: qk.vets.all })
+    },
+  })
+}
+
+export function useUpdateReviewMutation() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationKey: ['reviews', 'update'],
+    mutationFn: ({ reviewId, payload }: { reviewId: string; payload: UpdateReviewPayload }) =>
+      reviewService.updateReview(reviewId, payload),
+
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.reviews.all })
+      qc.invalidateQueries({ queryKey: qk.vets.all })
+    },
+  })
+}
+
+export function useDeleteReviewMutation() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationKey: ['reviews', 'delete'],
+    mutationFn: (reviewId: string) => reviewService.deleteReview(reviewId),
+
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.reviews.all })
+      qc.invalidateQueries({ queryKey: qk.vets.all })
     },
   })
 }

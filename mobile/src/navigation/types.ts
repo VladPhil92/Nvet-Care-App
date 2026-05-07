@@ -117,6 +117,8 @@ export type SharedStackParamList = {
   VetVerification: undefined
   UploadVerificationDocs: undefined
   TopUpWallet: undefined
+  /** Gestión de mascotas: lista, crear, editar, eliminar */
+  MyPets: undefined
   /**
    * Configuración y enrollment de 2FA TOTP. Solo accesible desde Profile
    * para usuarios autenticados que quieren activar 2FA.

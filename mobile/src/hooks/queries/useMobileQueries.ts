@@ -6,6 +6,7 @@ import appointmentService from '../../services/appointment.service'
 import paymentService from '../../services/payment.service'
 import authService from '../../services/auth.service'
 import petService from '../../services/pet.service'
+import reviewService from '../../services/review.service'
 
 /**
  * Queries de la app móvil organizadas por dominio.
@@ -300,5 +301,52 @@ export function useMyPricesQuery(options?: { enabled?: boolean }) {
     queryFn: () => vetService.getMyPrices(),
     staleTime: STALE_TIMES.MEDIUM,
     enabled: options?.enabled ?? true,
+  })
+}
+
+// ============================================================
+// REVIEWS
+// ============================================================
+
+/**
+ * Reviews de un vet (público, usado en VetDetailsScreen).
+ */
+export function useVetReviewsQuery(
+  vetId: string | undefined,
+  filters: { limit?: number; offset?: number; minRating?: number } = {},
+) {
+  return useQuery({
+    queryKey: qk.reviews.forVet(vetId ?? '', filters as any),
+    queryFn: () => reviewService.getVetReviews(vetId!, filters),
+    staleTime: STALE_TIMES.MEDIUM,
+    enabled: !!vetId,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/**
+ * Review de una cita específica del cliente autenticado.
+ * Retorna null si aún no ha calificado esa cita.
+ */
+export function useAppointmentReviewQuery(appointmentId: string | undefined) {
+  return useQuery({
+    queryKey: qk.reviews.forAppointment(appointmentId ?? ''),
+    queryFn: () => reviewService.getAppointmentReview(appointmentId!),
+    staleTime: STALE_TIMES.LONG,
+    enabled: !!appointmentId,
+  })
+}
+
+/**
+ * Reviews propias del cliente autenticado.
+ */
+export function useMyReviewsQuery(
+  filters: { limit?: number; offset?: number } = {},
+) {
+  return useQuery({
+    queryKey: qk.reviews.mine(filters as any),
+    queryFn: () => reviewService.getMyReviews(filters),
+    staleTime: STALE_TIMES.MEDIUM,
+    placeholderData: keepPreviousData,
   })
 }

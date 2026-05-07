@@ -11,6 +11,8 @@ import { ChatModule } from './chat/chat.module';
 import { VetsModule } from './vets/vets.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AdminModule } from './admin/admin.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { PetsModule } from './pets/pets.module';
 
 /**
  * Orden de imports importante:
@@ -39,6 +41,8 @@ import { AdminModule } from './admin/admin.module';
     VetsModule,
     PaymentsModule,
     AdminModule,
+    ReviewsModule,
+    PetsModule,
   ],
 })
 export class AppModule {}

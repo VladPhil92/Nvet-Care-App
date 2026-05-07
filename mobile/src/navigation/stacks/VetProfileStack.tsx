@@ -12,6 +12,7 @@ import PriceManagementScreen from '../../screens/vet/PriceManagementScreen'
 import RequestWithdrawalScreen from '../../screens/vet/RequestWithdrawalScreen'
 import TwoFactorEnrollmentScreen from '../../screens/auth/TwoFactorEnrollmentScreen'
 import ActiveSessionsScreen from '../../screens/shared/ActiveSessionsScreen'
+import MyPetsScreen from '../../screens/shared/MyPetsScreen'
 
 const Stack = createNativeStackNavigator()
 
@@ -50,6 +51,7 @@ export default function VetProfileStack() {
         component={TwoFactorEnrollmentScreen}
       />
       <Stack.Screen name="ActiveSessions" component={ActiveSessionsScreen} />
+      <Stack.Screen name="MyPets" component={MyPetsScreen} />
     </Stack.Navigator>
   )
 }

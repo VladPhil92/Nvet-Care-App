@@ -10,6 +10,7 @@ import TopUpWalletScreen from '../../screens/shared/TopUpWalletScreen'
 import EditProfileScreen from '../../screens/shared/EditProfileScreen'
 import TwoFactorEnrollmentScreen from '../../screens/auth/TwoFactorEnrollmentScreen'
 import ActiveSessionsScreen from '../../screens/shared/ActiveSessionsScreen'
+import MyPetsScreen from '../../screens/shared/MyPetsScreen'
 
 const Stack = createNativeStackNavigator()
 
@@ -45,6 +46,7 @@ export default function ClientProfileStack() {
         component={TwoFactorEnrollmentScreen}
       />
       <Stack.Screen name="ActiveSessions" component={ActiveSessionsScreen} />
+      <Stack.Screen name="MyPets" component={MyPetsScreen} />
     </Stack.Navigator>
   )
 }

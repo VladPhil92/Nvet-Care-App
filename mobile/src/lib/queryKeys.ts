@@ -61,6 +61,16 @@ export const qk = {
     detail: (id: string) => [...qk.pets.all, 'detail', id] as const,
   },
 
+  reviews: {
+    all: ['reviews'] as const,
+    forVet: (vetId: string, filters?: Record<string, unknown>) =>
+      [...qk.reviews.all, 'vet', vetId, filters ?? {}] as const,
+    mine: (filters?: Record<string, unknown>) =>
+      [...qk.reviews.all, 'mine', filters ?? {}] as const,
+    forAppointment: (appointmentId: string) =>
+      [...qk.reviews.all, 'appointment', appointmentId] as const,
+  },
+
   schedule: {
     all: ['schedule'] as const,
     forVet: (vetId: string, date: string) =>
