@@ -9,24 +9,7 @@ import {
 } from '@nestjs/common';
 import { SkipThrottle, Throttle, seconds } from '@nestjs/throttler';
 import { PseWebhookGuard } from './guards/pse-webhook.guard';
-import { PaymentsService } from './payments.service';
-
-/**
- * Payload típico de webhook PSE. Cada provider tiene su propio shape;
- * ajustar al tipo real según contrato del partner (Wompi, ePayco, PayU, etc.).
- */
-interface PseWebhookPayload {
-  /** ID que el provider asigna a la transacción */
-  externalTransactionId: string;
-  /** Nuestro transactionId que enviamos en initiatePse */
-  transactionId: string;
-  /** APPROVED | DECLINED | PENDING | EXPIRED */
-  status: string;
-  /** Monto confirmado (para validación de double-check) */
-  amount?: number;
-  /** Timestamp del provider */
-  timestamp?: string;
-}
+import { PaymentsService, PseWebhookPayload } from './payments.service';
 
 /**
  * PseWebhookController — endpoint público para recibir notificaciones del
@@ -67,17 +50,8 @@ export class PseWebhookController {
       `PSE webhook recibido: txId=${payload.transactionId} status=${payload.status}`,
     );
 
-    // Delegar al service. El service es idempotente: si la transacción ya
-    // fue procesada con el mismo status, retorna sin cambios.
-    if (typeof (this.paymentsService as any).handlePseWebhook === 'function') {
-      await (this.paymentsService as any).handlePseWebhook(payload);
-    } else {
-      // Si el service aún no implementa el handler (versión actual), al
-      // menos loggeamos para que no se pierda el evento.
-      this.logger.warn(
-        'PaymentsService.handlePseWebhook no implementado. Payload registrado solo en logs.',
-      );
-    }
+    // Delegar al service — idempotente por externalTransactionId
+    await this.paymentsService.handlePseWebhook(payload);
 
     return { received: true };
   }

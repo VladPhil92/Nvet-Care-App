@@ -61,6 +61,8 @@ export type ClientHomeStackParamList = {
   AppointmentDetail: { appointmentId: string }
   AppointmentTracking: { appointmentId: string }
   Emergency: undefined
+  /** Tienda de productos veterinarios (estado: Coming Soon) */
+  Store: { category?: string } | undefined
 }
 
 export type ClientSearchStackParamList = {

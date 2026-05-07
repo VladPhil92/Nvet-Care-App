@@ -129,6 +129,24 @@ const esCO: Translations = {
     serverError: 'Algo falló en nuestro servidor. Intenta de nuevo.',
     validation: 'Revisa los campos resaltados en rojo.',
   },
+
+  home: {
+    greeting: 'Hola, {name}',
+    heading: '¿Cómo podemos ayudarte hoy?',
+    searchPlaceholder: 'Buscar servicios, veterinarios, productos...',
+    quickVetHome: 'Veterinarios\na domicilio',
+    quickTelemedicine: 'Telemedicina',
+    quickEmergency: 'Emergencias\n24/7',
+    quickStore: 'Tienda',
+    heroTitle: 'Bienestar para tu mascota,\ntranquilidad para ti.',
+    heroSubtitle: 'Conecta con veterinarios verificados y recibe la mejor atención.',
+    heroCta: 'Solicitar veterinario',
+    appointmentsTitle: 'Citas próximas',
+    appointmentsSeeAll: 'Ver todas',
+    appointmentsEmpty: 'No tienes citas programadas',
+    appointmentsSearchCta: 'Buscar veterinario',
+    productsTitle: 'Para ti y tu mascota',
+  },
 }
 
 export default esCO

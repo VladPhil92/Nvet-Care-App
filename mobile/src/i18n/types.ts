@@ -137,4 +137,22 @@ export interface Translations {
     serverError: string
     validation: string
   }
+
+  home: {
+    greeting: string          // "Hola, {name}"
+    heading: string
+    searchPlaceholder: string
+    quickVetHome: string
+    quickTelemedicine: string
+    quickEmergency: string
+    quickStore: string
+    heroTitle: string
+    heroSubtitle: string
+    heroCta: string
+    appointmentsTitle: string
+    appointmentsSeeAll: string
+    appointmentsEmpty: string
+    appointmentsSearchCta: string
+    productsTitle: string
+  }
 }

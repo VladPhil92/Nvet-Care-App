@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   ConflictException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -17,6 +18,23 @@ import {
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
+
+// ============================================================
+// TYPES
+// ============================================================
+
+export interface PseWebhookPayload {
+  /** ID que el provider asigna a la transacción */
+  externalTransactionId: string;
+  /** Nuestro transactionId que enviamos en initiatePse */
+  transactionId: string;
+  /** APPROVED | DECLINED | PENDING | EXPIRED */
+  status: string;
+  /** Monto confirmado (para double-check anti-fraude) */
+  amount?: number;
+  /** Timestamp del provider (ISO8601) */
+  timestamp?: string;
+}
 
 import {
   ProcessPaymentDto,
@@ -75,6 +93,7 @@ const PSE_BANKS: Record<string, string> = {
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
   private readonly uploadDir: string;
   /** Cache de idempotency keys (en producción usar Redis con TTL 24h) */
   private readonly idempotencyCache = new Map<string, { result: any; ts: number }>();
@@ -448,7 +467,144 @@ export class PaymentsService {
   }
 
   // ============================================================
-  // PSE
+  // PSE — WEBHOOK HANDLER
+  // ============================================================
+
+  /**
+   * Procesa el webhook entrante del proveedor PSE.
+   *
+   * Responsabilidades:
+   *  1. Idempotencia por `externalTransactionId` — si el evento ya fue
+   *     procesado, retorna sin efectos (el provider puede reintentar).
+   *  2. Validación de monto (anti-fraude): si `amount` viene en el payload,
+   *     verifica que coincida con el monto de la transacción (±1 COP).
+   *  3. Mapeo de status externo → estado interno:
+   *     APPROVED  → CONFIRMED  (+ AppointmentStatus.CONFIRMED)
+   *     DECLINED  → FAILED
+   *     EXPIRED   → FAILED
+   *     PENDING   → sin cambio (el provider enviará otro webhook)
+   *  4. Logging estructurado para forensics y debugging.
+   *
+   * El método NO lanza excepciones para estados desconocidos porque eso
+   * causaría que el provider reintente indefinidamente. En cambio,
+   * loggea y retorna silenciosamente.
+   */
+  async handlePseWebhook(payload: PseWebhookPayload): Promise<void> {
+    const { externalTransactionId, transactionId, status, amount } = payload;
+
+    // 1. Idempotencia: si ya procesamos este evento externo, salir sin efectos
+    const idempotencyKey = `pse_webhook:${externalTransactionId}`;
+    const alreadyProcessed = this.getIdempotencyResult(idempotencyKey);
+    if (alreadyProcessed) {
+      this.logger.log(
+        `PSE webhook idempotente (ya procesado): extId=${externalTransactionId}`,
+      );
+      return;
+    }
+
+    // 2. Buscar la transacción interna
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+      include: { appointment: true },
+    });
+
+    if (!transaction) {
+      this.logger.warn(
+        `PSE webhook: transaccionId=${transactionId} no encontrada. ` +
+          `extId=${externalTransactionId} status=${status}`,
+      );
+      // Cachear para evitar retries inútiles
+      this.setIdempotencyResult(idempotencyKey, { notFound: true });
+      return;
+    }
+
+    if (transaction.paymentMethod !== PaymentMethod.PSE) {
+      this.logger.warn(
+        `PSE webhook sobre transacción con método ${transaction.paymentMethod} (se esperaba PSE). ` +
+          `txId=${transactionId}`,
+      );
+      return;
+    }
+
+    // 3. Validación de monto (anti-fraude)
+    if (amount !== undefined && Math.abs(amount - transaction.amountCop) > 1) {
+      this.logger.error(
+        `PSE webhook MONTO NO COINCIDE: esperado=${transaction.amountCop} ` +
+          `recibido=${amount} txId=${transactionId} extId=${externalTransactionId}`,
+      );
+      // NO procesamos: posible manipulación del webhook
+      return;
+    }
+
+    // 4. Mapear status externo → transición interna
+    const upperStatus = status.toUpperCase();
+    let newTxStatus: TransactionStatus | null = null;
+    let newApptStatus: AppointmentStatus | null = null;
+
+    switch (upperStatus) {
+      case 'APPROVED':
+        newTxStatus = TransactionStatus.CONFIRMED;
+        newApptStatus = AppointmentStatus.CONFIRMED;
+        break;
+      case 'DECLINED':
+      case 'EXPIRED':
+      case 'FAILED':
+        newTxStatus = TransactionStatus.FAILED;
+        break;
+      case 'PENDING':
+        // El provider enviará otro webhook cuando cambie. Sin acción.
+        this.logger.log(
+          `PSE webhook PENDING — esperando confirmación del banco: txId=${transactionId}`,
+        );
+        this.setIdempotencyResult(idempotencyKey, { status: 'pending_noop' });
+        return;
+      default:
+        this.logger.warn(
+          `PSE webhook: status desconocido "${status}" para txId=${transactionId}. Ignorando.`,
+        );
+        return;
+    }
+
+    // 5. Verificar que la transición es válida desde el estado actual
+    if (!VALID_TRANSITIONS[transaction.status]?.includes(newTxStatus)) {
+      this.logger.warn(
+        `PSE webhook: transición inválida ${transaction.status} → ${newTxStatus} ` +
+          `txId=${transactionId}. Posible replay del webhook.`,
+      );
+      this.setIdempotencyResult(idempotencyKey, { alreadyInState: transaction.status });
+      return;
+    }
+
+    // 6. Aplicar cambios en una transacción DB atómica
+    await this.prisma.$transaction(async (tx) => {
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: newTxStatus!,
+          externalTransactionId,
+          ...(newTxStatus === TransactionStatus.CONFIRMED && { verifiedAt: new Date() }),
+        } as any,
+      });
+
+      if (newApptStatus) {
+        await tx.appointment.update({
+          where: { id: transaction.appointmentId },
+          data: { status: newApptStatus },
+        });
+      }
+    });
+
+    // 7. Marcar como procesado para idempotencia
+    this.setIdempotencyResult(idempotencyKey, { status: newTxStatus, processedAt: new Date() });
+
+    this.logger.log(
+      `PSE webhook procesado: txId=${transactionId} ${transaction.status} → ${newTxStatus} ` +
+        `extId=${externalTransactionId}`,
+    );
+  }
+
+  // ============================================================
+  // PSE — INITIATE + STATUS
   // ============================================================
 
   /**

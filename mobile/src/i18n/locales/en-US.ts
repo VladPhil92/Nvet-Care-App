@@ -128,6 +128,24 @@ const enUS: Translations = {
     serverError: 'Something failed on our server. Please try again.',
     validation: 'Please check the fields highlighted in red.',
   },
+
+  home: {
+    greeting: 'Hello, {name}',
+    heading: 'How can we help you today?',
+    searchPlaceholder: 'Search services, vets, products...',
+    quickVetHome: 'Home Visit\nVets',
+    quickTelemedicine: 'Telemedicine',
+    quickEmergency: 'Emergency\n24/7',
+    quickStore: 'Store',
+    heroTitle: "Your pet's wellbeing,\nyour peace of mind.",
+    heroSubtitle: 'Connect with verified vets and get the best care when they need it most.',
+    heroCta: 'Find a vet',
+    appointmentsTitle: 'Upcoming appointments',
+    appointmentsSeeAll: 'See all',
+    appointmentsEmpty: 'No upcoming appointments',
+    appointmentsSearchCta: 'Find a vet',
+    productsTitle: 'For you and your pet',
+  },
 }
 
 export default enUS

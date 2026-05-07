@@ -25,10 +25,33 @@ interface AuthenticatedSocket extends Socket {
   };
 }
 
+/**
+ * Orígenes permitidos para WebSocket.
+ *
+ * Lee `CORS_ORIGIN` del env (comma-separated). Si no está configurado,
+ * cae al whitelist de desarrollo. En producción SIEMPRE debe estar seteado.
+ *
+ * Ejemplo env: CORS_ORIGIN=https://app.nvetcare.co,https://admin.nvetcare.co
+ */
+function getAllowedOrigins(): string[] {
+  const raw = process.env.CORS_ORIGIN;
+  if (raw) {
+    return raw.split(',').map((o) => o.trim()).filter(Boolean);
+  }
+  // Fallback: solo desarrollo local
+  return [
+    'http://localhost:5173',  // Dashboard (Vite)
+    'http://localhost:8081',  // Mobile (Metro bundler)
+    'http://localhost:3001',
+  ];
+}
+
 @WebSocketGateway({
   cors: {
-    origin: '*', // In production, specify exact origins
+    origin: getAllowedOrigins(),
     credentials: true,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
   },
 })
 @UseGuards(WsJwtGuard)

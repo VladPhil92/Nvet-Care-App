@@ -6,6 +6,7 @@ import HomeScreenV2 from '../../screens/client/HomeScreenV2'
 import AppointmentDetailPlaceholder from '../../screens/client/AppointmentDetailPlaceholder'
 import AppointmentTrackingScreen from '../../screens/client/AppointmentTrackingScreen'
 import EmergencyScreen from '../../screens/client/EmergencyScreen'
+import StoreScreen from '../../screens/client/StoreScreen'
 
 const Stack = createNativeStackNavigator<ClientHomeStackParamList>()
 
@@ -36,6 +37,19 @@ export default function ClientHomeStack() {
       <Stack.Screen
         name="Emergency"
         component={EmergencyScreen}
+        options={{
+          animation: 'slide_from_bottom',
+          gestureEnabled: true,
+        }}
+      />
+      {/*
+        Store: pantalla "Próximamente" de la tienda de productos.
+        Accesible desde HomeScreenV2 (card de tienda y sección de productos).
+        Presenta con slide_from_bottom para un feel de modal exploratorio.
+      */}
+      <Stack.Screen
+        name="Store"
+        component={StoreScreen}
         options={{
           animation: 'slide_from_bottom',
           gestureEnabled: true,
