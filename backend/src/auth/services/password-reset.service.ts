@@ -130,15 +130,15 @@ export class PasswordResetService {
 
     // Validar fortaleza adicional (anti-common-passwords + diversidad)
     const strengthCheck = this.passwordService.validateStrength(newPassword);
-    if (!strengthCheck.isValid) {
+    if (!strengthCheck.valid) {
       throw new BadRequestException(
-        `Contraseña débil: ${strengthCheck.reasons.join(', ')}`,
+        `Contraseña débil: ${strengthCheck.issues.join(', ')}`,
       );
     }
 
     // Validar que no sea la MISMA contraseña actual
     const sameAsCurrent = await this.passwordService.verify(newPassword, user.passwordHash);
-    if (sameAsCurrent.isValid) {
+    if (sameAsCurrent.valid) {
       throw new BadRequestException(
         'La nueva contraseña no puede ser igual a la anterior',
       );

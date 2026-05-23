@@ -1,12 +1,10 @@
 # CI workflow for Nvet Care Platform monorepo.
 #
-# 3 paquetes en paralelo (jobs concurrentes):
-#   - backend  → lint + prisma generate + test
-#   - mobile   → lint + typecheck + test (jest unit + MSW)
-#   - dashboard → lint + build (Vite incluye tsc)
+# 3 jobs en paralelo (backend / mobile / dashboard) con install compartido
+# desde el root (npm workspaces — un solo package-lock.json).
 #
 # Triggers:
-#   - push a main
+#   - push a cualquier rama
 #   - pull_request a main
 #
 # Concurrency: cancela runs anteriores del mismo branch para ahorrar minutos.
@@ -14,7 +12,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
 
@@ -29,9 +27,6 @@ jobs:
   backend:
     name: Backend (NestJS)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,23 +36,27 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (workspace root)
+        run: npm install --legacy-peer-deps
 
       - name: Generate Prisma client
-        run: npm run prisma:generate
+        working-directory: backend
+        run: npx prisma generate
         env:
           DATABASE_URL: postgresql://stub:stub@localhost:5432/stub?schema=public
 
       - name: Lint
+        working-directory: backend
         run: npm run lint -- --max-warnings 0
 
       - name: Build
+        working-directory: backend
         run: npm run build
 
       - name: Test
+        working-directory: backend
         run: npm test -- --ci --maxWorkers=2
 
       - name: Upload test coverage
@@ -72,9 +71,6 @@ jobs:
   mobile:
     name: Mobile (React Native)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -84,18 +80,21 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (workspace root)
+        run: npm install --legacy-peer-deps
 
       - name: Lint
+        working-directory: mobile
         run: npm run lint
 
       - name: Typecheck
+        working-directory: mobile
         run: npm run typecheck
 
       - name: Test (jest unit + MSW)
+        working-directory: mobile
         run: npm run test:ci
 
       - name: Upload test coverage
@@ -110,9 +109,6 @@ jobs:
   dashboard:
     name: Dashboard (Vite + React)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: dashboard
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -122,15 +118,17 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: dashboard/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (workspace root)
+        run: npm install --legacy-peer-deps
 
       - name: Lint
+        working-directory: dashboard
         run: npm run lint
 
       - name: Build (incluye typecheck via tsc)
+        working-directory: dashboard
         run: npm run build
 
       - name: Upload build artifact
