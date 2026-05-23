@@ -55,12 +55,12 @@ enum MessageType {
 }
 
 enum VerificationStatus {
-  NONE        // No ha iniciado verificación
-  PENDING     // Documentos subidos, esperando revisión
-  IN_REVIEW   // En revisión manual por admin
-  APPROVED    // Aprobado - puede ejercer
-  REJECTED    // Rechazado - debe volver a enviar
-  EXPIRED     // Documentos vencidos - renovar
+  NONE // No ha iniciado verificación
+  PENDING // Documentos subidos, esperando revisión
+  IN_REVIEW // En revisión manual por admin
+  APPROVED // Aprobado - puede ejercer
+  REJECTED // Rechazado - debe volver a enviar
+  EXPIRED // Documentos vencidos - renovar
 }
 
 enum DocumentType {
@@ -130,66 +130,66 @@ enum AuditSeverity {
 // ============================================
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  passwordHash  String    @map("password_hash")
-  role          UserRole  @default(CLIENT)
-  firstName     String?   @map("first_name")
-  lastName      String?   @map("last_name")
-  phone         String?
-  avatar        String?
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(CLIENT)
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  phone        String?
+  avatar       String?
 
-  ctgBalance    Float     @default(0) @map("ctg_balance")
+  ctgBalance Float @default(0) @map("ctg_balance")
 
   // ============================================
   // SECURITY: email verification
   // ============================================
-  emailVerified         Boolean   @default(false) @map("email_verified")
+  emailVerified              Boolean   @default(false) @map("email_verified")
   emailVerificationTokenHash String?   @map("email_verification_token_hash")
   emailVerificationExpiresAt DateTime? @map("email_verification_expires_at")
 
   // ============================================
   // SECURITY: password reset (single-use, hashed token)
   // ============================================
-  passwordResetTokenHash    String?   @map("password_reset_token_hash")
-  passwordResetExpiresAt    DateTime? @map("password_reset_expires_at")
-  passwordChangedAt         DateTime? @map("password_changed_at")
+  passwordResetTokenHash String?   @map("password_reset_token_hash")
+  passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
+  passwordChangedAt      DateTime? @map("password_changed_at")
 
   // ============================================
   // SECURITY: 2FA TOTP (Google Authenticator)
   // twoFactorSecret se guarda cifrado AES-256-GCM (no plain)
   // recoveryCodes son hashes Argon2 de 10 códigos one-time
   // ============================================
-  twoFactorEnabled      Boolean   @default(false) @map("two_factor_enabled")
-  twoFactorSecret       String?   @map("two_factor_secret")
-  twoFactorEnrolledAt   DateTime? @map("two_factor_enrolled_at")
-  recoveryCodesHash     String[]  @default([]) @map("recovery_codes_hash")
+  twoFactorEnabled    Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret     String?   @map("two_factor_secret")
+  twoFactorEnrolledAt DateTime? @map("two_factor_enrolled_at")
+  recoveryCodesHash   String[]  @default([]) @map("recovery_codes_hash")
 
   // ============================================
   // SECURITY: brute force protection + audit
   // ============================================
-  failedLoginAttempts   Int       @default(0) @map("failed_login_attempts")
-  lockedUntil           DateTime? @map("locked_until")
-  lastLoginAt           DateTime? @map("last_login_at")
-  lastLoginIp           String?   @map("last_login_ip")
-  lastLoginUserAgent    String?   @map("last_login_user_agent")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  lastLoginAt         DateTime? @map("last_login_at")
+  lastLoginIp         String?   @map("last_login_ip")
+  lastLoginUserAgent  String?   @map("last_login_user_agent")
 
   // ============================================
   // SECURITY: account lifecycle
   // ============================================
-  isActive              Boolean   @default(true) @map("is_active")
-  deactivatedAt         DateTime? @map("deactivated_at")
+  isActive      Boolean   @default(true) @map("is_active")
+  deactivatedAt DateTime? @map("deactivated_at")
 
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  vetProfile    VetProfile?
-  pets          Pet[]
-  appointments  Appointment[] @relation("ClientAppointments")
-  messages      Message[]
-  reviews       Review[]
-  sessions      UserSession[]
+  vetProfile   VetProfile?
+  pets         Pet[]
+  appointments Appointment[] @relation("ClientAppointments")
+  messages     Message[]
+  reviews      Review[]
+  sessions     UserSession[]
 
   @@index([emailVerified])
   @@index([lockedUntil])
@@ -200,12 +200,12 @@ model User {
 // SESSIONS: rastreo de dispositivos / refresh tokens
 // ============================================
 model UserSession {
-  id              String    @id @default(uuid())
-  userId          String    @map("user_id")
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Hash SHA-256 del refresh token actual (no plain)
-  refreshTokenHash String   @unique @map("refresh_token_hash")
+  refreshTokenHash String @unique @map("refresh_token_hash")
 
   // Hashes históricos de tokens previos (rotaciones).
   // Si un cliente envía un refresh token que matchea un hash de aquí (no del
@@ -214,17 +214,17 @@ model UserSession {
   previousTokenHashes String[] @default([]) @map("previous_token_hashes")
 
   // Device fingerprinting
-  userAgent       String?   @map("user_agent")
-  ipAddress       String?   @map("ip_address")
-  deviceLabel     String?   @map("device_label")
+  userAgent   String? @map("user_agent")
+  ipAddress   String? @map("ip_address")
+  deviceLabel String? @map("device_label")
 
   // Lifecycle
-  expiresAt       DateTime  @map("expires_at")
-  revokedAt       DateTime? @map("revoked_at")
-  revokedReason   String?   @map("revoked_reason")
-  lastUsedAt      DateTime  @default(now()) @map("last_used_at")
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at")
+  revokedReason String?   @map("revoked_reason")
+  lastUsedAt    DateTime  @default(now()) @map("last_used_at")
 
-  createdAt       DateTime  @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId])
   @@index([refreshTokenHash])
@@ -233,47 +233,47 @@ model UserSession {
 }
 
 model VetProfile {
-  id              String    @id @default(uuid())
-  userId          String    @unique @map("user_id")
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  licenseNumber   String    @unique @map("license_number")
-  specialties     String[]
-  tier            VetTier   @default(FREE)
-  ctgBalance      Float     @default(0) @map("ctg_balance")
-  
+  id     String @id @default(uuid())
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  licenseNumber String   @unique @map("license_number")
+  specialties   String[]
+  tier          VetTier  @default(FREE)
+  ctgBalance    Float    @default(0) @map("ctg_balance")
+
   bio             String?
-  yearsExperience Int?      @map("years_experience")
-  rating          Float?    @default(0)
-  reviewCount     Int       @default(0) @map("review_count")
-  
-  isVerified      Boolean   @default(false) @map("is_verified")
-  isActive        Boolean   @default(true) @map("is_active")
-  
+  yearsExperience Int?    @map("years_experience")
+  rating          Float?  @default(0)
+  reviewCount     Int     @default(0) @map("review_count")
+
+  isVerified Boolean @default(false) @map("is_verified")
+  isActive   Boolean @default(true) @map("is_active")
+
   // Verification
   verificationStatus VerificationStatus @default(NONE) @map("verification_status")
   verifiedAt         DateTime?          @map("verified_at")
   rejectionReason    String?            @map("rejection_reason")
-  
+
   // Geolocation
-  latitude           Float?
-  longitude          Float?
-  city               String?
-  department         String?
-  serviceRadius      Int                @default(10) @map("service_radius")
-  
+  latitude      Float?
+  longitude     Float?
+  city          String?
+  department    String?
+  serviceRadius Int     @default(10) @map("service_radius")
+
   // Schedule / availability
-  isAvailableNow     Boolean            @default(false) @map("is_available_now")
-  timezone           String             @default("America/Bogota")
-  
+  isAvailableNow Boolean @default(false) @map("is_available_now")
+  timezone       String  @default("America/Bogota")
+
   // Professional details
-  comvezcolNumber    String?            @unique @map("comvezcol_number")
-  universityName     String?            @map("university_name")
-  graduationYear     Int?               @map("graduation_year")
-  
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  
+  comvezcolNumber String? @unique @map("comvezcol_number")
+  universityName  String? @map("university_name")
+  graduationYear  Int?    @map("graduation_year")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relations
   appointments          Appointment[]          @relation("VetAppointments")
   prices                Price[]
@@ -289,33 +289,33 @@ model VetProfile {
 }
 
 model VerificationDocument {
-  id              String          @id @default(uuid())
-  
-  vetProfileId    String          @map("vet_profile_id")
-  vetProfile      VetProfile      @relation(fields: [vetProfileId], references: [id], onDelete: Cascade)
-  
-  type            DocumentType
-  status          DocumentStatus  @default(UPLOADED)
-  
-  fileName        String          @map("file_name")
-  fileUrl         String          @map("file_url")
-  fileMimeType    String          @map("file_mime_type")
-  fileSize        Int             @map("file_size")
-  
+  id String @id @default(uuid())
+
+  vetProfileId String     @map("vet_profile_id")
+  vetProfile   VetProfile @relation(fields: [vetProfileId], references: [id], onDelete: Cascade)
+
+  type   DocumentType
+  status DocumentStatus @default(UPLOADED)
+
+  fileName     String @map("file_name")
+  fileUrl      String @map("file_url")
+  fileMimeType String @map("file_mime_type")
+  fileSize     Int    @map("file_size")
+
   // Extracted data (OCR/manual)
-  documentNumber  String?         @map("document_number")
-  issuedDate      DateTime?       @map("issued_date")
-  expiryDate      DateTime?       @map("expiry_date")
-  issuedBy        String?         @map("issued_by")
-  
+  documentNumber String?   @map("document_number")
+  issuedDate     DateTime? @map("issued_date")
+  expiryDate     DateTime? @map("expiry_date")
+  issuedBy       String?   @map("issued_by")
+
   // Review
-  reviewedBy      String?         @map("reviewed_by")
-  reviewedAt      DateTime?       @map("reviewed_at")
-  reviewNotes     String?         @map("review_notes")
-  
-  uploadedAt      DateTime        @default(now()) @map("uploaded_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-  
+  reviewedBy  String?   @map("reviewed_by")
+  reviewedAt  DateTime? @map("reviewed_at")
+  reviewNotes String?   @map("review_notes")
+
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
   @@index([vetProfileId])
   @@index([type])
   @@index([status])
@@ -323,62 +323,62 @@ model VerificationDocument {
 }
 
 model VetSchedule {
-  id              String       @id @default(uuid())
-  
-  vetProfileId    String       @map("vet_profile_id")
-  vetProfile      VetProfile   @relation(fields: [vetProfileId], references: [id], onDelete: Cascade)
-  
-  dayOfWeek       DayOfWeek    @map("day_of_week")
-  startTime       String       @map("start_time")
-  endTime         String       @map("end_time")
-  slotDuration    Int          @default(60) @map("slot_duration")
-  
-  isActive        Boolean      @default(true) @map("is_active")
-  
-  createdAt       DateTime     @default(now()) @map("created_at")
-  updatedAt       DateTime     @updatedAt @map("updated_at")
-  
+  id String @id @default(uuid())
+
+  vetProfileId String     @map("vet_profile_id")
+  vetProfile   VetProfile @relation(fields: [vetProfileId], references: [id], onDelete: Cascade)
+
+  dayOfWeek    DayOfWeek @map("day_of_week")
+  startTime    String    @map("start_time")
+  endTime      String    @map("end_time")
+  slotDuration Int       @default(60) @map("slot_duration")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@unique([vetProfileId, dayOfWeek])
   @@map("vet_schedules")
 }
 
 model ScheduleException {
-  id              String       @id @default(uuid())
-  
-  vetProfileId    String       @map("vet_profile_id")
-  vetProfile      VetProfile   @relation(fields: [vetProfileId], references: [id], onDelete: Cascade)
-  
-  date            DateTime
-  isAvailable     Boolean      @default(false) @map("is_available")
-  reason          String?
-  
-  startTime       String?      @map("start_time")
-  endTime         String?      @map("end_time")
-  
-  createdAt       DateTime     @default(now()) @map("created_at")
-  
+  id String @id @default(uuid())
+
+  vetProfileId String     @map("vet_profile_id")
+  vetProfile   VetProfile @relation(fields: [vetProfileId], references: [id], onDelete: Cascade)
+
+  date        DateTime
+  isAvailable Boolean  @default(false) @map("is_available")
+  reason      String?
+
+  startTime String? @map("start_time")
+  endTime   String? @map("end_time")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
   @@unique([vetProfileId, date])
   @@index([date])
   @@map("schedule_exceptions")
 }
 
 model Pet {
-  id          String    @id @default(uuid())
-  ownerId     String    @map("owner_id")
-  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  
-  name        String
-  species     String
-  breed       String?
-  weight      Float?
-  birthDate   DateTime? @map("birth_date")
-  
-  photo       String?
-  notes       String?
-  
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  
+  id      String @id @default(uuid())
+  ownerId String @map("owner_id")
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  name      String
+  species   String
+  breed     String?
+  weight    Float?
+  birthDate DateTime? @map("birth_date")
+
+  photo String?
+  notes String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relations
   appointments Appointment[]
 
@@ -386,132 +386,132 @@ model Pet {
 }
 
 model Appointment {
-  id              String              @id @default(uuid())
-  
-  vetId           String              @map("vet_id")
-  vet             VetProfile          @relation("VetAppointments", fields: [vetId], references: [id])
-  
-  clientId        String              @map("client_id")
-  client          User                @relation("ClientAppointments", fields: [clientId], references: [id])
-  
-  petId           String              @map("pet_id")
-  pet             Pet                 @relation(fields: [petId], references: [id])
-  
-  serviceType     String              @map("service_type")
-  date            DateTime
-  time            String
-  address         String
-  
-  status          AppointmentStatus   @default(PENDING)
-  paymentMethod   PaymentMethod       @map("payment_method")
-  amount          Float
-  
-  notes           String?
-  diagnosis       String?
-  treatment       String?
+  id String @id @default(uuid())
+
+  vetId String     @map("vet_id")
+  vet   VetProfile @relation("VetAppointments", fields: [vetId], references: [id])
+
+  clientId String @map("client_id")
+  client   User   @relation("ClientAppointments", fields: [clientId], references: [id])
+
+  petId String @map("pet_id")
+  pet   Pet    @relation(fields: [petId], references: [id])
+
+  serviceType String   @map("service_type")
+  date        DateTime
+  time        String
+  address     String
+
+  status        AppointmentStatus @default(PENDING)
+  paymentMethod PaymentMethod     @map("payment_method")
+  amount        Float
+
+  notes     String?
+  diagnosis String?
+  treatment String?
 
   // GPS tracking (vet location during in-progress appointment)
-  vetLatitude     Float?    @map("vet_latitude")
-  vetLongitude    Float?    @map("vet_longitude")
-  vetLocationAt   DateTime? @map("vet_location_at")
-  etaMinutes      Int?      @map("eta_minutes")
+  vetLatitude   Float?    @map("vet_latitude")
+  vetLongitude  Float?    @map("vet_longitude")
+  vetLocationAt DateTime? @map("vet_location_at")
+  etaMinutes    Int?      @map("eta_minutes")
 
   // Timeline timestamps
-  scheduledAt         DateTime? @map("scheduled_at")
-  confirmedAt         DateTime? @map("confirmed_at")
-  inProgressAt        DateTime? @map("in_progress_at")
-  completedAt         DateTime? @map("completed_at")
-  lastStatusChangeAt  DateTime? @map("last_status_change_at")
+  scheduledAt        DateTime? @map("scheduled_at")
+  confirmedAt        DateTime? @map("confirmed_at")
+  inProgressAt       DateTime? @map("in_progress_at")
+  completedAt        DateTime? @map("completed_at")
+  lastStatusChangeAt DateTime? @map("last_status_change_at")
 
-  createdAt       DateTime            @default(now()) @map("created_at")
-  updatedAt       DateTime            @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  transaction     Transaction?
-  messages        Message[]
-  review          Review?
+  transaction Transaction?
+  messages    Message[]
+  review      Review?
 
   @@index([vetId])
   @@index([clientId])
   @@index([date])
-  @@index([vetId, date, status])  // Performance: dashboard del vet (citas de hoy/semana)
-  @@index([clientId, status])     // Performance: "mis citas activas" del cliente
+  @@index([vetId, date, status]) // Performance: dashboard del vet (citas de hoy/semana)
+  @@index([clientId, status]) // Performance: "mis citas activas" del cliente
   @@map("appointments")
 }
 
 model Transaction {
-  id                String              @id @default(uuid())
-  
-  appointmentId     String              @unique @map("appointment_id")
-  appointment       Appointment         @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  
-  amountCop         Float               @map("amount_cop")
-  amountCtg         Float?              @map("amount_ctg")
-  
-  commissionPct     Float               @map("commission_pct")
-  commissionAmount  Float               @map("commission_amount")
-  
-  paymentMethod     PaymentMethod       @map("payment_method")
-  status            TransactionStatus   @default(PENDING)
-  
-  hashOnchain       String?             @map("hash_onchain")
-  transferCode      String?             @map("transfer_code")
-  externalTransactionId String?         @map("external_transaction_id")
-  
-  verifiedAt        DateTime?           @map("verified_at")
-  liquidatedAt      DateTime?           @map("liquidated_at")
-  
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
+  id String @id @default(uuid())
+
+  appointmentId String      @unique @map("appointment_id")
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  amountCop Float  @map("amount_cop")
+  amountCtg Float? @map("amount_ctg")
+
+  commissionPct    Float @map("commission_pct")
+  commissionAmount Float @map("commission_amount")
+
+  paymentMethod PaymentMethod     @map("payment_method")
+  status        TransactionStatus @default(PENDING)
+
+  hashOnchain           String? @map("hash_onchain")
+  transferCode          String? @map("transfer_code")
+  externalTransactionId String? @map("external_transaction_id")
+
+  verifiedAt   DateTime? @map("verified_at")
+  liquidatedAt DateTime? @map("liquidated_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([paymentMethod])
-  @@index([status, paymentMethod, createdAt])  // Performance: panel admin con filtros combinados
+  @@index([status, paymentMethod, createdAt]) // Performance: panel admin con filtros combinados
   @@map("transactions")
 }
 
 model Price {
-  id          String    @id @default(uuid())
-  
-  vetId       String    @map("vet_id")
-  vet         VetProfile @relation(fields: [vetId], references: [id], onDelete: Cascade)
-  
-  serviceName String    @map("service_name")
-  priceCop    Float     @map("price_cop")
-  priceCtg    Float     @map("price_ctg")
-  
-  isActive    Boolean   @default(true) @map("is_active")
-  
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id String @id @default(uuid())
+
+  vetId String     @map("vet_id")
+  vet   VetProfile @relation(fields: [vetId], references: [id], onDelete: Cascade)
+
+  serviceName String @map("service_name")
+  priceCop    Float  @map("price_cop")
+  priceCtg    Float  @map("price_ctg")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([vetId, serviceName])
   @@map("prices")
 }
 
 model Message {
-  id              String      @id @default(uuid())
+  id String @id @default(uuid())
 
-  appointmentId   String      @map("appointment_id")
-  appointment     Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  appointmentId String      @map("appointment_id")
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
 
-  senderId        String      @map("sender_id")
-  sender          User        @relation(fields: [senderId], references: [id])
+  senderId String @map("sender_id")
+  sender   User   @relation(fields: [senderId], references: [id])
 
-  content         String
-  type            MessageType @default(TEXT)
+  content String
+  type    MessageType @default(TEXT)
 
-  priceData       Json?       @map("price_data")
-  readAt          DateTime?   @map("read_at")
+  priceData Json?     @map("price_data")
+  readAt    DateTime? @map("read_at")
 
-  createdAt       DateTime    @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  reports         MessageReport[]
+  reports MessageReport[]
 
   @@index([appointmentId])
-  @@index([appointmentId, createdAt])  // Performance: timeline ordenado del chat
-  @@index([senderId])                  // Performance: actividad del usuario
-  @@index([readAt])                    // Performance: unread count queries
+  @@index([appointmentId, createdAt]) // Performance: timeline ordenado del chat
+  @@index([senderId]) // Performance: actividad del usuario
+  @@index([readAt]) // Performance: unread count queries
   @@map("messages")
 }
 
@@ -530,22 +530,22 @@ enum ReportStatus {
 }
 
 model MessageReport {
-  id          String        @id @default(uuid())
+  id String @id @default(uuid())
 
-  messageId   String        @map("message_id")
-  message     Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String  @map("message_id")
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
-  reporterId  String        @map("reporter_id")
+  reporterId String @map("reporter_id")
 
-  reason      ReportReason
-  details     String?
-  status      ReportStatus  @default(OPEN)
+  reason  ReportReason
+  details String?
+  status  ReportStatus @default(OPEN)
 
-  reviewedBy  String?       @map("reviewed_by")
-  reviewedAt  DateTime?     @map("reviewed_at")
-  reviewNotes String?       @map("review_notes")
+  reviewedBy  String?   @map("reviewed_by")
+  reviewedAt  DateTime? @map("reviewed_at")
+  reviewNotes String?   @map("review_notes")
 
-  createdAt   DateTime      @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([messageId])
   @@index([reporterId])
@@ -554,24 +554,24 @@ model MessageReport {
 }
 
 model Review {
-  id              String      @id @default(uuid())
-  
-  appointmentId   String      @unique @map("appointment_id")
-  appointment     Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  
-  vetId           String      @map("vet_id")
-  vet             VetProfile  @relation(fields: [vetId], references: [id])
-  
-  clientId        String      @map("client_id")
-  client          User        @relation(fields: [clientId], references: [id])
-  
-  rating          Int
-  comment         String?
-  
-  createdAt       DateTime    @default(now()) @map("created_at")
+  id String @id @default(uuid())
+
+  appointmentId String      @unique @map("appointment_id")
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  vetId String     @map("vet_id")
+  vet   VetProfile @relation(fields: [vetId], references: [id])
+
+  clientId String @map("client_id")
+  client   User   @relation(fields: [clientId], references: [id])
+
+  rating  Int
+  comment String?
+
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([vetId])
-  @@index([vetId, rating])  // Performance: mejores ratings de un vet
+  @@index([vetId, rating]) // Performance: mejores ratings de un vet
   @@map("reviews")
 }
 
@@ -580,37 +580,37 @@ model Review {
 // ============================================
 
 model AuditLog {
-  id              String        @id @default(uuid())
+  id String @id @default(uuid())
 
   // Quién ejecutó la acción
-  actorId         String?       @map("actor_id")     // null si fue sistema/cron
-  actorRole       String?       @map("actor_role")
-  actorIp         String?       @map("actor_ip")
-  actorUserAgent  String?       @map("actor_user_agent")
+  actorId        String? @map("actor_id") // null si fue sistema/cron
+  actorRole      String? @map("actor_role")
+  actorIp        String? @map("actor_ip")
+  actorUserAgent String? @map("actor_user_agent")
 
   // Qué se hizo
-  action          AuditAction
-  severity        AuditSeverity @default(INFO)
+  action   AuditAction
+  severity AuditSeverity @default(INFO)
 
   // Sobre qué recurso
-  targetType      String?       @map("target_type")  // "VetProfile", "Transaction", etc.
-  targetId        String?       @map("target_id")
+  targetType String? @map("target_type") // "VetProfile", "Transaction", etc.
+  targetId   String? @map("target_id")
 
   // Estado antes / después (JSON serializado)
-  beforeData      Json?         @map("before_data")
-  afterData       Json?         @map("after_data")
+  beforeData Json? @map("before_data")
+  afterData  Json? @map("after_data")
 
   // Contexto adicional
-  reason          String?
-  metadata        Json?         // { requestId, sessionId, etc. }
+  reason   String?
+  metadata Json? // { requestId, sessionId, etc. }
 
-  createdAt       DateTime      @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([actorId])
   @@index([action])
   @@index([targetType, targetId])
   @@index([createdAt])
-  @@index([severity, createdAt])  // Audit reports filtrados por severidad
+  @@index([severity, createdAt]) // Audit reports filtrados por severidad
   @@map("audit_logs")
 }
 
@@ -633,28 +633,28 @@ model WaitlistEntry {
 // ============================================
 
 model IdempotencyKey {
-  id            String    @id @default(uuid())
+  id String @id @default(uuid())
 
   // Clave única generada por el cliente
-  key           String    @unique
+  key String @unique
 
   // Endpoint que se está protegiendo
-  endpoint      String
+  endpoint String
   // User que envió la request (para auditoría)
-  userId        String?   @map("user_id")
+  userId   String? @map("user_id")
 
   // Hash del request body (para detectar collision con misma key + body distinto)
-  requestHash   String    @map("request_hash")
+  requestHash String @map("request_hash")
 
   // Resultado cacheado
-  responseStatus Int      @map("response_status")
-  responseBody  Json?     @map("response_body")
+  responseStatus Int   @map("response_status")
+  responseBody   Json? @map("response_body")
 
   // TTL: 24 horas por default
-  expiresAt     DateTime  @map("expires_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([expiresAt])    // Cleanup job
+  @@index([expiresAt]) // Cleanup job
   @@index([userId])
   @@map("idempotency_keys")
 }
