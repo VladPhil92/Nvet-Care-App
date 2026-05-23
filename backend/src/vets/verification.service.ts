@@ -5,8 +5,10 @@ import {
   ForbiddenException,
   ConflictException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../common/mail/mail.service';
 import {
   DocumentType,
   DocumentStatus,
@@ -43,9 +45,13 @@ const COMVEZCOL_REGEX = /^\d{4,6}-\d{1}$/;
 
 @Injectable()
 export class VerificationService {
+  private readonly logger = new Logger(VerificationService.name);
   private readonly uploadDir: string;
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private mail: MailService,
+  ) {
     this.uploadDir =
       process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
     this.ensureUploadDirExists();
@@ -546,7 +552,7 @@ export class VerificationService {
     );
 
     if (allApproved) {
-      await this.prisma.vetProfile.update({
+      const vet = await this.prisma.vetProfile.update({
         where: { id: vetProfileId },
         data: {
           verificationStatus: VerificationStatus.APPROVED,
@@ -555,9 +561,23 @@ export class VerificationService {
           verifiedAt: new Date(),
           rejectionReason: null,
         },
+        include: {
+          user: {
+            select: { email: true, firstName: true },
+          },
+        },
       });
 
-      // TODO: Send notification email to vet
+      const result = await this.mail.sendVetApproval({
+        to: vet.user.email,
+        firstName: vet.user.firstName ?? 'Veterinario',
+      });
+
+      if (!result.ok) {
+        this.logger.warn(
+          `Vet approval email failed for vetProfileId=${vetProfileId}: ${result.error}`,
+        );
+      }
     }
   }
 

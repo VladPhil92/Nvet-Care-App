@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   passwordResetTemplate,
   emailVerificationTemplate,
+  vetApprovalTemplate,
 } from './mail.templates';
 
 /**
@@ -131,6 +132,21 @@ export class MailService {
       html: rendered.html,
       text: rendered.text,
       category: 'email_verification',
+    });
+  }
+
+  async sendVetApproval(params: {
+    to: string;
+    firstName: string;
+    dashboardLink?: string;
+  }): Promise<SendResult> {
+    const rendered = vetApprovalTemplate(params);
+    return this.send({
+      to: params.to,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
+      category: 'vet_verification_approved',
     });
   }
 

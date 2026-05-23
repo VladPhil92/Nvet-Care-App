@@ -139,6 +139,8 @@ model User {
   phone         String?
   avatar        String?
 
+  ctgBalance    Float     @default(0) @map("ctg_balance")
+
   // ============================================
   // SECURITY: email verification
   // ============================================
@@ -407,10 +409,23 @@ model Appointment {
   notes           String?
   diagnosis       String?
   treatment       String?
-  
+
+  // GPS tracking (vet location during in-progress appointment)
+  vetLatitude     Float?    @map("vet_latitude")
+  vetLongitude    Float?    @map("vet_longitude")
+  vetLocationAt   DateTime? @map("vet_location_at")
+  etaMinutes      Int?      @map("eta_minutes")
+
+  // Timeline timestamps
+  scheduledAt         DateTime? @map("scheduled_at")
+  confirmedAt         DateTime? @map("confirmed_at")
+  inProgressAt        DateTime? @map("in_progress_at")
+  completedAt         DateTime? @map("completed_at")
+  lastStatusChangeAt  DateTime? @map("last_status_change_at")
+
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
-  
+
   // Relations
   transaction     Transaction?
   messages        Message[]
@@ -441,6 +456,7 @@ model Transaction {
   
   hashOnchain       String?             @map("hash_onchain")
   transferCode      String?             @map("transfer_code")
+  externalTransactionId String?         @map("external_transaction_id")
   
   verifiedAt        DateTime?           @map("verified_at")
   liquidatedAt      DateTime?           @map("liquidated_at")
@@ -475,24 +491,66 @@ model Price {
 
 model Message {
   id              String      @id @default(uuid())
-  
+
   appointmentId   String      @map("appointment_id")
   appointment     Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  
+
   senderId        String      @map("sender_id")
   sender          User        @relation(fields: [senderId], references: [id])
-  
+
   content         String
   type            MessageType @default(TEXT)
-  
+
   priceData       Json?       @map("price_data")
-  
+  readAt          DateTime?   @map("read_at")
+
   createdAt       DateTime    @default(now()) @map("created_at")
+
+  reports         MessageReport[]
 
   @@index([appointmentId])
   @@index([appointmentId, createdAt])  // Performance: timeline ordenado del chat
   @@index([senderId])                  // Performance: actividad del usuario
+  @@index([readAt])                    // Performance: unread count queries
   @@map("messages")
+}
+
+enum ReportReason {
+  INAPPROPRIATE_CONTENT
+  HARASSMENT
+  SPAM
+  FRAUD
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWED
+  DISMISSED
+}
+
+model MessageReport {
+  id          String        @id @default(uuid())
+
+  messageId   String        @map("message_id")
+  message     Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  reporterId  String        @map("reporter_id")
+
+  reason      ReportReason
+  details     String?
+  status      ReportStatus  @default(OPEN)
+
+  reviewedBy  String?       @map("reviewed_by")
+  reviewedAt  DateTime?     @map("reviewed_at")
+  reviewNotes String?       @map("review_notes")
+
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  @@index([messageId])
+  @@index([reporterId])
+  @@index([status])
+  @@map("message_reports")
 }
 
 model Review {
@@ -554,6 +612,20 @@ model AuditLog {
   @@index([createdAt])
   @@index([severity, createdAt])  // Audit reports filtrados por severidad
   @@map("audit_logs")
+}
+
+// ============================================
+// WAITLIST (tienda en construcción)
+// ============================================
+
+model WaitlistEntry {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  source    String   @default("store")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email])
+  @@map("waitlist_entries")
 }
 
 // ============================================

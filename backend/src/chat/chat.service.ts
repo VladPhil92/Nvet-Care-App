@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { MessageType } from '@prisma/client';
+import { MessageType, ReportReason } from '@prisma/client';
 
 interface PriceData {
   serviceName: string;
@@ -203,12 +203,11 @@ export class ChatService {
       },
     });
 
-    // Get unread count (messages not from user)
-    // Note: In production, add a readAt field to track reads per user
     const unreadCount = await this.prisma.message.count({
       where: {
         appointmentId,
         senderId: { not: userId },
+        readAt: null,
       },
     });
 
@@ -231,17 +230,23 @@ export class ChatService {
   }
 
   /**
-   * Mark messages as read
-   * Note: Requires readAt field in Message model for production
+   * Mark messages as read (sets readAt timestamp on unread messages not sent by user)
    */
   async markAsRead(messageIds: string[], userId: string) {
-    // TODO: Implement with readAt field
-    // For now, just return success
-    return { message: 'Messages marked as read', count: messageIds.length };
+    const result = await this.prisma.message.updateMany({
+      where: {
+        id: { in: messageIds },
+        senderId: { not: userId },
+        readAt: null,
+      },
+      data: { readAt: new Date() },
+    });
+
+    return { message: 'Messages marked as read', count: result.count };
   }
 
   /**
-   * Report a message
+   * Report a message — persists to MessageReport table for admin review
    */
   async reportMessage(
     messageId: string,
@@ -257,16 +262,20 @@ export class ChatService {
       throw new NotFoundException('Message not found');
     }
 
-    // TODO: Create Report model in schema and persist here
-    // For now, log and flag message
-    console.log('Message reported:', {
-      messageId,
-      reporterId,
-      reason,
-      details,
+    // Map string reason to enum; default to OTHER if unrecognised
+    const reasonEnum = Object.values(ReportReason).includes(reason as ReportReason)
+      ? (reason as ReportReason)
+      : ReportReason.OTHER;
+
+    await this.prisma.messageReport.create({
+      data: {
+        messageId,
+        reporterId,
+        reason: reasonEnum,
+        details,
+      },
     });
 
-    // In production: create Report entry, notify admin, optionally flag conversation
     return {
       success: true,
       message: 'Report submitted successfully',
@@ -335,6 +344,7 @@ export class ChatService {
           where: {
             appointmentId: apt.id,
             senderId: { not: userId },
+            readAt: null,
           },
         });
 

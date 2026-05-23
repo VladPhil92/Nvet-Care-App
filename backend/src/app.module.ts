@@ -13,6 +13,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { AdminModule } from './admin/admin.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { PetsModule } from './pets/pets.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
 
 /**
  * Orden de imports importante:
@@ -43,6 +44,7 @@ import { PetsModule } from './pets/pets.module';
     AdminModule,
     ReviewsModule,
     PetsModule,
+    WaitlistModule,
   ],
 })
 export class AppModule {}

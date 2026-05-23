@@ -377,9 +377,9 @@ export class PaymentsService {
       };
     }
 
-    // Cliente: solo CTG balance
+    // Cliente: CTG balance desde campo User.ctgBalance
     return {
-      ctgBalance: 0, // TODO: tabla `WalletBalance` o columna en User para clientes
+      ctgBalance: user.ctgBalance,
       copBalance: 0,
       pendingCtg: 0,
       pendingCop: 0,
