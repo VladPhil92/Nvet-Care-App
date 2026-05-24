@@ -4,17 +4,16 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
-  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../common/mail/mail.service';
+import { StorageService } from '../common/storage/storage.service';
 import {
   DocumentType,
   DocumentStatus,
   VerificationStatus,
 } from '@prisma/client';
-import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
@@ -46,16 +45,12 @@ const COMVEZCOL_REGEX = /^\d{4,6}-\d{1}$/;
 @Injectable()
 export class VerificationService {
   private readonly logger = new Logger(VerificationService.name);
-  private readonly uploadDir: string;
 
   constructor(
     private prisma: PrismaService,
     private mail: MailService,
-  ) {
-    this.uploadDir =
-      process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-    this.ensureUploadDirExists();
-  }
+    private storage: StorageService,
+  ) {}
 
   // ============================================
   // DOCUMENT UPLOAD
@@ -119,8 +114,16 @@ export class VerificationService {
       );
     }
 
-    // Save file
-    const { fileName, fileUrl } = await this.saveFile(file, vet.id, documentType);
+    // Upload file via StorageService (local or Cloudinary depending on STORAGE_DRIVER)
+    const hash = crypto.randomBytes(16).toString('hex');
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uploaded = await this.storage.upload(
+      file,
+      `verification/${vet.id}`,
+      { filename: `${documentType}_${hash}${ext}` },
+    );
+    const fileName = path.basename(uploaded.url);
+    const fileUrl = uploaded.url;
 
     // Validate COMVEZCOL if applicable
     if (
@@ -132,7 +135,7 @@ export class VerificationService {
 
     // If existing UPLOADED doc, delete old file and update record
     if (existing && existing.status === DocumentStatus.UPLOADED) {
-      await this.deleteFile(existing.fileUrl).catch(() => {});
+      await this.storage.delete(existing.fileUrl).catch(() => {});
 
       const updated = await this.prisma.verificationDocument.update({
         where: { id: existing.id },
@@ -441,51 +444,6 @@ export class VerificationService {
   }
 
   /**
-   * Save file to disk with secure filename
-   * In production, use S3/CloudStorage
-   */
-  private async saveFile(
-    file: Express.Multer.File,
-    vetProfileId: string,
-    documentType: DocumentType,
-  ) {
-    // Generate secure filename: vetId_docType_hash.ext
-    const ext = path.extname(file.originalname).toLowerCase();
-    const hash = crypto.randomBytes(16).toString('hex');
-    const fileName = `${vetProfileId}_${documentType}_${hash}${ext}`;
-
-    // Create vet-specific directory
-    const vetDir = path.join(this.uploadDir, 'verification', vetProfileId);
-    await fs.mkdir(vetDir, { recursive: true });
-
-    const filePath = path.join(vetDir, fileName);
-
-    try {
-      await fs.writeFile(filePath, file.buffer);
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to save file');
-    }
-
-    // Relative URL for API serving
-    const fileUrl = `/uploads/verification/${vetProfileId}/${fileName}`;
-
-    return { fileName, fileUrl };
-  }
-
-  /**
-   * Delete file from disk
-   */
-  private async deleteFile(fileUrl: string) {
-    const filePath = path.join(process.cwd(), fileUrl);
-    try {
-      await fs.unlink(filePath);
-    } catch (error) {
-      // Log but don't throw
-      console.warn(`Failed to delete file: ${filePath}`);
-    }
-  }
-
-  /**
    * Validate COMVEZCOL license number format
    */
   private validateComvezcolNumber(licenseNumber: string) {
@@ -632,14 +590,4 @@ export class VerificationService {
     }
   }
 
-  /**
-   * Ensure upload directory exists
-   */
-  private async ensureUploadDirExists() {
-    try {
-      await fs.mkdir(this.uploadDir, { recursive: true });
-    } catch (error) {
-      console.error('Failed to create upload directory:', error);
-    }
-  }
 }

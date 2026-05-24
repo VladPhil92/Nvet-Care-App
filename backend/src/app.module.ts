@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { CommonModule } from './common/common.module';
 import { ResilienceModule } from './common/resilience.module';
 import { MailModule } from './common/mail/mail.module';
+import { StorageModule } from './common/storage/storage.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
@@ -35,6 +36,7 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     PrismaModule,
     ResilienceModule,
     MailModule,
+    StorageModule,
     HealthModule,
     AuthModule,
     AppointmentsModule,
