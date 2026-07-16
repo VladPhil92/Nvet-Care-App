@@ -47,17 +47,23 @@ jobs:
         env:
           DATABASE_URL: postgresql://stub:stub@localhost:5432/stub?schema=public
 
-      - name: Lint
+      - name: Typecheck
         working-directory: backend
-        run: npm run lint -- --max-warnings 0
+        run: npx tsc --noEmit
+
+      - name: Lint (check only — no auto-fix in CI)
+        working-directory: backend
+        run: npx eslint "{src,apps,libs,test}/**/*.ts" --max-warnings 0
 
       - name: Build
         working-directory: backend
         run: npm run build
 
-      - name: Test
+      - name: Test (with coverage)
         working-directory: backend
-        run: npm test -- --ci --maxWorkers=2
+        run: npm test -- --ci --coverage --maxWorkers=2
+        env:
+          NODE_ENV: test
 
       - name: Upload test coverage
         if: always()
@@ -85,15 +91,15 @@ jobs:
       - name: Install dependencies (workspace root)
         run: npm install --legacy-peer-deps
 
-      - name: Lint
-        working-directory: mobile
-        run: npm run lint
-
       - name: Typecheck
         working-directory: mobile
         run: npm run typecheck
 
-      - name: Test (jest unit + MSW)
+      - name: Lint
+        working-directory: mobile
+        run: npm run lint
+
+      - name: Test
         working-directory: mobile
         run: npm run test:ci
 
@@ -127,7 +133,7 @@ jobs:
         working-directory: dashboard
         run: npm run lint
 
-      - name: Build (incluye typecheck via tsc)
+      - name: Build (includes typecheck via tsc)
         working-directory: dashboard
         run: npm run build
 
