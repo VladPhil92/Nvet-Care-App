@@ -5,7 +5,7 @@ interface MobileAppProps {
   setScreen: (screen: string) => void
 }
 
-export default function MobileApp({ screen, setScreen }: MobileAppProps) {
+export default function MobileApp({ screen, setScreen: _setScreen }: MobileAppProps) {
   return (
     <div style={{ padding: '28px 32px' }}>
       <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, marginBottom: 24 }}>

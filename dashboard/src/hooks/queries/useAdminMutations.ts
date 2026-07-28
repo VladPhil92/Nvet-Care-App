@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { qk, invalidateAfterPayment, invalidateAfterVetUpdate } from '../../lib/queryKeys'
-import adminService from '../../services/admin.service'
+import { adminService } from '../../services/admin.service'
 
 /**
  * Mutations para acciones administrativas con optimistic updates.
@@ -20,7 +20,7 @@ import adminService from '../../services/admin.service'
 
 interface ResolveDisputeVars {
   transactionId: string
-  resolution: 'CONFIRM' | 'REFUND' | 'CANCEL'
+  resolution: 'FAVOR_VET' | 'FAVOR_CLIENT' | 'PARTIAL_REFUND'
   notes: string
 }
 
@@ -50,7 +50,7 @@ export function useResolveDisputeMutation() {
               tx.id === transactionId
                 ? {
                     ...tx,
-                    status: resolution === 'CONFIRM' ? 'LIQUIDATED' : 'FAILED',
+                    status: resolution === 'FAVOR_VET' ? 'LIQUIDADO' : 'DISPUTA',
                     _optimistic: true,
                   }
                 : tx,
@@ -84,7 +84,7 @@ export function useResolveDisputeMutation() {
 
 interface UpdateVetTierVars {
   vetId: string
-  tier: 'FREE' | 'PRO' | 'ELITE'
+  tier: 'free' | 'pro' | 'elite'
   reason?: string
 }
 
@@ -93,7 +93,7 @@ export function useUpdateVetTierMutation() {
 
   return useMutation({
     mutationKey: ['admin', 'updateVetTier'],
-    mutationFn: ({ vetId, tier, reason }: UpdateVetTierVars) =>
+    mutationFn: ({ vetId, tier, reason: _reason }: UpdateVetTierVars) =>
       adminService.updateVetTier(vetId, tier),
 
     onMutate: async ({ vetId, tier }) => {
@@ -186,7 +186,7 @@ export function useVerifyTransferMutation() {
 // ============================================================
 
 interface ExportTransactionsVars {
-  format: 'CSV' | 'XLSX'
+  format: 'csv' | 'xlsx'
   startDate?: string
   endDate?: string
   status?: string

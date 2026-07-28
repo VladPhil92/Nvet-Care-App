@@ -1,4 +1,4 @@
-import { T, F, SPACING, MEDIA } from '../theme/tokens'
+import { T, F, SPACING } from '../theme/tokens'
 import { Metric, Bar, cardStyle } from '../components/UI'
 import { Badge } from '../components/UI'
 import { PayBadge, TierBadge } from '../components/Badges'

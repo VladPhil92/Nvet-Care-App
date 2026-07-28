@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { StringValue } from 'ms';
 import * as crypto from 'crypto';
 import { AuditAction, AuditSeverity, UserRole } from '@prisma/client';
 
@@ -685,7 +686,7 @@ export class AuthService {
       },
       {
         secret: process.env.JWT_SECRET,
-        expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+        expiresIn: (process.env.JWT_EXPIRES_IN || '15m') as StringValue,
       },
     );
   }
@@ -695,7 +696,7 @@ export class AuthService {
       { sub: user.id, type: 'refresh' },
       {
         secret: process.env.JWT_REFRESH_SECRET,
-        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+        expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as StringValue,
       },
     );
   }

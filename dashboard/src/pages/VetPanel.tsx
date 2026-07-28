@@ -5,7 +5,7 @@ import { PayBadge } from '../components/Badges'
 import { useResponsive } from '../hooks/useResponsive'
 
 export default function VetPanel() {
-  const [showChat, setShowChat] = useState(false)
+  const [_showChat, setShowChat] = useState(false)
   const { isMobile, isTablet } = useResponsive()
   
   const tier = TIERS.elite

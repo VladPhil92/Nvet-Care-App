@@ -127,7 +127,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       // Actualizar la transacción en el estado local
       const transactions = get().transactions.map((t) =>
         t.id === transactionId
-          ? { ...t, status: verified ? 'LIQUIDADO' : 'DISPUTA' as const }
+          ? { ...t, status: (verified ? 'LIQUIDADO' : 'DISPUTA') as Transaction['status'] }
           : t
       )
       set({ transactions })

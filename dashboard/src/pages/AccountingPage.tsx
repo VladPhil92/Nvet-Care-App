@@ -73,7 +73,7 @@ export default function AccountingPage() {
             ))}
           </div>
         )}
-        {shown.map((tx, i) => {
+        {shown.map((tx, _i) => {
           const open = expandedTx === tx.id
           return (
             <div key={tx.id}>
