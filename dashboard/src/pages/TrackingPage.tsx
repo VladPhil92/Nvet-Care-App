@@ -3,133 +3,263 @@ import { T, F, SPACING } from '../theme/tokens'
 import { Badge, Bar, cardStyle, Btn } from '../components/UI'
 import { PayBadge, TierBadge } from '../components/Badges'
 import { useResponsive } from '../hooks/useResponsive'
+import { useAdminAppointmentsQuery } from '../hooks/queries/useAdminQueries'
+
+const STATUS_PCT: Record<string, number> = {
+  Pendiente: 10,
+  Confirmada: 25,
+  Verificando: 40,
+  'En camino': 60,
+  Llegó: 80,
+  Completada: 100,
+}
+
+const STAGES = ['Confirmada', 'Pago', 'En camino', 'Llegó', 'Completada']
+
+function SkeletonCard() {
+  return (
+    <div style={{ ...cardStyle, padding: '18px 24px', opacity: 0.5 }}>
+      <div style={{ height: 16, background: T.surfaceAlt, borderRadius: 6, width: '50%', marginBottom: 10 }} />
+      <div style={{ height: 12, background: T.surfaceAlt, borderRadius: 6, width: '75%' }} />
+    </div>
+  )
+}
 
 export default function TrackingPage() {
-  const [expanded, setExpanded] = useState(0)
+  const [expanded, setExpanded] = useState<string | null>(null)
   const { isMobile, isTablet } = useResponsive()
-  const containerPadding = isMobile ? `${SPACING.mobile.gutter}px` : isTablet ? `${SPACING.tablet.gutter}px` : `${SPACING.desktop.gutter}px`
+  const containerPadding = isMobile
+    ? `${SPACING.mobile.gutter}px`
+    : isTablet
+      ? `${SPACING.tablet.gutter}px`
+      : `${SPACING.desktop.gutter}px`
 
-  const apts = [
-    { id: '#C0047', vet: 'Dra. Valeria Ospina', tier: 'elite' as const, pet: '🐕 Max', svc: 'Consulta domiciliaria', date: 'Hoy · 14:00', pay: 'CTG', st: 'En camino', pct: 60, eta: '12 min', amount: 85000 },
-    { id: '#C0048', vet: 'Dr. Andrés Mora', tier: 'pro' as const, pet: '🐈 Mochi', svc: 'Vacunación', date: 'Lun · 10:30', pay: 'TRANSFER', st: 'Confirmada', pct: 20, eta: 'Mañana', amount: 65000 },
-    { id: '#C0049', vet: 'Dra. Carolina Ríos', tier: 'free' as const, pet: '🐕 Max', svc: 'Revisión preventiva', date: 'Vie · 09:00', pay: 'PSE', st: 'Pendiente', pct: 5, eta: '6 días', amount: 75000 },
-  ]
-
-  const stages = ['Confirmada', 'Pago', 'En camino', 'Llegó', 'Completada']
+  const appointmentsQ = useAdminAppointmentsQuery({ limit: 20 } as any)
+  const apts = appointmentsQ.data ?? []
 
   return (
     <div style={{ padding: containerPadding }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, flexWrap: isMobile ? 'wrap' : 'nowrap', gap: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
+          marginBottom: 28,
+          flexWrap: isMobile ? 'wrap' : 'nowrap',
+          gap: 16,
+        }}
+      >
         <div>
-          <div style={{ fontFamily: F.sans, fontSize: 11, fontWeight: 600, color: T.inkMuted, letterSpacing: '1.2px', textTransform: 'uppercase', marginBottom: 6 }}>SEGUIMIENTO</div>
-          <div style={{ fontFamily: F.serif, fontSize: isMobile ? 22 : 28, fontWeight: 300 }}>Mis citas</div>
+          <div
+            style={{
+              fontFamily: F.sans,
+              fontSize: 11,
+              fontWeight: 600,
+              color: T.inkMuted,
+              letterSpacing: '1.2px',
+              textTransform: 'uppercase',
+              marginBottom: 6,
+            }}
+          >
+            SEGUIMIENTO
+          </div>
+          <div style={{ fontFamily: F.serif, fontSize: isMobile ? 22 : 28, fontWeight: 300 }}>
+            Citas en curso
+          </div>
         </div>
-        <Btn onClick={() => {}}>+ Nueva cita</Btn>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {appointmentsQ.isFetching && (
+            <span style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted }}>
+              Actualizando…
+            </span>
+          )}
+          <Btn size="sm" variant="ghost" onClick={() => appointmentsQ.refetch()}>
+            ↻ Refrescar
+          </Btn>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {apts.map((apt, i) => {
-          const open = expanded === i
-          const sidx = Math.ceil(apt.pct / 20)
-          return (
-            <div key={i} style={{ ...cardStyle, border: `1.5px solid ${open && apt.st === 'En camino' ? T.sage : T.line}`, transition: 'border .2s' }}>
-              {/* Summary row */}
-              <div
-                style={{
-                  padding: isMobile ? '14px 16px' : '18px 24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: isMobile ? 8 : 16,
-                  cursor: 'pointer',
-                  flexWrap: isMobile ? 'wrap' : 'nowrap'
-                }}
-                onClick={() => setExpanded(open ? -1 : i)}
-              >
-                <div style={{ fontFamily: F.mono, fontSize: 12, color: T.inkMuted, width: isMobile ? '100%' : 56, flexShrink: isMobile ? 1 : 0, marginBottom: isMobile ? 8 : 0 }}>
-                  {apt.id}
-                </div>
-                <div style={{ flex: 1, minWidth: isMobile ? '100%' : 'auto' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 14, fontWeight: 500 }}>{apt.vet}</span>
-                    <TierBadge t={apt.tier} />
-                  </div>
-                  <div style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted, marginTop: 3 }}>
-                    {apt.pet} · {apt.svc} · {apt.date}
-                  </div>
-                </div>
-                {!isMobile && (
-                  <>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <PayBadge m={apt.pay} />
-                      <Badge variant={apt.st === 'En camino' ? 'sage' : apt.st === 'Confirmada' ? 'ok' : 'default'}>{apt.st}</Badge>
-                    </div>
-                    <div style={{ textAlign: 'right', minWidth: 80 }}>
-                      <div style={{ fontFamily: F.serif, fontSize: 16, color: T.sage }}>{apt.eta}</div>
-                      <div style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted }}>ETA</div>
-                    </div>
-                  </>
-                )}
-                <div style={{ color: T.inkMuted, fontSize: 16, transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'none' }}>⌄</div>
-              </div>
+      {appointmentsQ.isLoading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
+        </div>
+      ) : appointmentsQ.isError ? (
+        <div style={{ ...cardStyle, padding: '24px', color: T.err, fontFamily: F.sans, fontSize: 13 }}>
+          Error al cargar citas. Intenta refrescar.
+        </div>
+      ) : apts.length === 0 ? (
+        <div style={{ ...cardStyle, padding: '32px 24px', textAlign: 'center', color: T.inkMuted, fontFamily: F.sans, fontSize: 14 }}>
+          No hay citas activas en este momento.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {apts.map((apt) => {
+            const pct = STATUS_PCT[apt.status] ?? 50
+            const sidx = Math.ceil(pct / 20)
+            const open = expanded === apt.id
 
-              {/* Expandable detail */}
-              {open && (
-                <div style={{ padding: isMobile ? '0 16px 16px' : '0 24px 20px' }}>
-                  <Bar pct={apt.pct} color={apt.st === 'En camino' ? T.sage : T.gold} />
-                  {/* Progress stages */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, marginBottom: 20, overflowX: isMobile ? 'auto' : 'visible' }}>
-                    {stages.map((st, j) => (
-                      <div key={j} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: isMobile ? 60 : 'auto' }}>
-                        <div style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: '50%',
-                          background: sidx > j ? T.sage : T.surfaceAlt,
-                          border: `1.5px solid ${sidx > j ? T.sage : T.line}`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 10,
-                          color: sidx > j ? T.inkInv : T.inkMuted
-                        }}>
-                          {sidx > j ? '✓' : j + 1}
-                        </div>
-                        <div style={{ fontSize: 10, color: sidx > j ? T.sage : T.inkMuted, fontWeight: 600, whiteSpace: 'nowrap' }}>{st}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Map placeholder */}
-                  <div style={{
-                    background: T.surfaceAlt,
-                    borderRadius: 10,
-                    height: isMobile ? 90 : 110,
+            return (
+              <div
+                key={apt.id}
+                style={{
+                  ...cardStyle,
+                  border: `1.5px solid ${open && apt.status === 'En camino' ? T.sage : T.line}`,
+                  transition: 'border .2s',
+                }}
+              >
+                {/* Summary row */}
+                <div
+                  style={{
+                    padding: isMobile ? '14px 16px' : '18px 24px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: 16,
-                    border: `1px solid ${T.line}`
-                  }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 28 }}>⊙</div>
-                      <div style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted, marginTop: 6 }}>Mapa en tiempo real</div>
+                    gap: isMobile ? 8 : 16,
+                    cursor: 'pointer',
+                    flexWrap: isMobile ? 'wrap' : 'nowrap',
+                  }}
+                  onClick={() => setExpanded(open ? null : apt.id)}
+                >
+                  <div
+                    style={{
+                      fontFamily: F.mono,
+                      fontSize: 12,
+                      color: T.inkMuted,
+                      width: isMobile ? '100%' : 56,
+                      flexShrink: isMobile ? 1 : 0,
+                      marginBottom: isMobile ? 8 : 0,
+                    }}
+                  >
+                    {apt.id.slice(0, 8)}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: isMobile ? '100%' : 'auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 14, fontWeight: 500 }}>{apt.vet}</span>
+                      <TierBadge t={apt.tier} />
+                    </div>
+                    <div style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted, marginTop: 3 }}>
+                      {apt.patient} · {apt.service} · {apt.date}
                     </div>
                   </div>
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    {apt.pay === 'TRANSFER' && (
-                      <Btn variant="ghost" size="sm" onClick={() => {}}>→ Verificar transferencia</Btn>
-                    )}
-                    <Btn variant="ghost" size="sm">💬 Chat con vet</Btn>
-                    {!isMobile && <div style={{ marginLeft: 'auto' }}>
-                      <Btn variant="ghost" size="sm">Cancelar cita</Btn>
-                    </div>}
-                  </div>
+
+                  {!isMobile && (
+                    <>
+                      <PayBadge m={apt.paymentMethod} />
+                      <div style={{ width: 120, flexShrink: 0 }}>
+                        <Bar pct={pct} color={T.sage} thin />
+                      </div>
+                    </>
+                  )}
+
+                  <Badge
+                    variant={
+                      apt.status === 'Completada'
+                        ? 'ok'
+                        : apt.status === 'En camino'
+                          ? 'sage'
+                          : apt.status === 'Verificando'
+                            ? 'warn'
+                            : 'default'
+                    }
+                  >
+                    {apt.status}
+                  </Badge>
+
+                  <span
+                    style={{
+                      color: T.inkMuted,
+                      transition: 'transform .15s',
+                      transform: open ? 'rotate(180deg)' : 'none',
+                    }}
+                  >
+                    ⌄
+                  </span>
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+
+                {/* Accordion: stages */}
+                {open && (
+                  <div
+                    style={{
+                      padding: isMobile ? '16px' : '20px 24px',
+                      borderTop: `1px solid ${T.line}`,
+                      background: T.surfaceAlt,
+                    }}
+                  >
+                    {isMobile && (
+                      <div style={{ marginBottom: 16 }}>
+                        <Bar pct={pct} color={T.sage} />
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: isMobile ? 4 : 0,
+                        flexWrap: isMobile ? 'wrap' : 'nowrap',
+                      }}
+                    >
+                      {STAGES.map((stage, si) => {
+                        const done = si < sidx
+                        const current = si === sidx - 1
+                        return (
+                          <div
+                            key={stage}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              flex: 1,
+                              minWidth: isMobile ? '30%' : 'auto',
+                              marginBottom: isMobile ? 12 : 0,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 14,
+                                background: done || current ? T.sage : T.surfaceAlt,
+                                border: `2px solid ${done || current ? T.sage : T.line}`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: 6,
+                                fontSize: 12,
+                                color: done || current ? '#fff' : T.inkMuted,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {done ? '✓' : si + 1}
+                            </div>
+                            <div
+                              style={{
+                                fontFamily: F.sans,
+                                fontSize: 11,
+                                textAlign: 'center',
+                                color: done || current ? T.sage : T.inkMuted,
+                                fontWeight: current ? 700 : 400,
+                              }}
+                            >
+                              {stage}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <Btn size="sm" variant="ghost">Ver detalle</Btn>
+                      {apt.status !== 'Completada' && (
+                        <Btn size="sm" variant="ghost">Contactar vet</Btn>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

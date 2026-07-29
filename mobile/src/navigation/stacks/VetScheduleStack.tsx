@@ -1,7 +1,7 @@
 import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
-import AppointmentDetailPlaceholder from '../../screens/client/AppointmentDetailPlaceholder'
+import AppointmentDetailScreen from '../../screens/client/AppointmentDetailScreen'
 import { lazyScreen } from '../lazyScreen'
 
 // VetScheduleScreen incluye WeekScheduleEditor (grid 7×11) — carga lazy
@@ -31,7 +31,7 @@ export default function VetScheduleStack() {
       <Stack.Screen name="ScheduleMain" component={VetScheduleScreen} />
       <Stack.Screen
         name="VetAppointmentDetail"
-        component={AppointmentDetailPlaceholder}
+        component={AppointmentDetailScreen}
       />
     </Stack.Navigator>
   )

@@ -3,7 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
 import type { ClientHomeStackParamList } from '../types'
 import HomeScreenV2 from '../../screens/client/HomeScreenV2'
-import AppointmentDetailPlaceholder from '../../screens/client/AppointmentDetailPlaceholder'
+import AppointmentDetailScreen from '../../screens/client/AppointmentDetailScreen'
 import AppointmentTrackingScreen from '../../screens/client/AppointmentTrackingScreen'
 import EmergencyScreen from '../../screens/client/EmergencyScreen'
 import StoreScreen from '../../screens/client/StoreScreen'
@@ -28,7 +28,7 @@ export default function ClientHomeStack() {
       <Stack.Screen name="HomeMain" component={HomeScreenV2} />
       <Stack.Screen
         name="AppointmentDetail"
-        component={AppointmentDetailPlaceholder}
+        component={AppointmentDetailScreen}
       />
       <Stack.Screen
         name="AppointmentTracking"

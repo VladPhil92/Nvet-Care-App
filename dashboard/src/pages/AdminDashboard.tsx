@@ -1,29 +1,106 @@
 import { T, F, SPACING } from '../theme/tokens'
-import { Metric, Bar, cardStyle } from '../components/UI'
-import { Badge } from '../components/UI'
+import { Metric, Bar, cardStyle, Badge } from '../components/UI'
 import { PayBadge, TierBadge } from '../components/Badges'
 import { useResponsive } from '../hooks/useResponsive'
+import {
+  useMetricsQuery,
+  useTransferTrackingQuery,
+  useAdminAppointmentsQuery,
+  usePaymentMethodStatsQuery,
+} from '../hooks/queries/useAdminQueries'
+
+function Skeleton({ w = '80px', h = '24px' }: { w?: string; h?: string }) {
+  return (
+    <div
+      style={{
+        width: w,
+        height: h,
+        background: T.surfaceAlt,
+        borderRadius: 6,
+        display: 'inline-block',
+        animation: 'pulse 1.4s ease-in-out infinite',
+      }}
+    />
+  )
+}
+
+function formatCOP(n: number) {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)} M`
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)} K`
+  return `$${n.toLocaleString('es-CO')}`
+}
 
 export default function AdminDashboard() {
   const { isMobile, isTablet, isDesktop } = useResponsive()
 
-  // Padding adaptable
-  const containerPadding = isMobile ? `${SPACING.mobile.gutter}px` : isTablet ? `${SPACING.tablet.gutter}px` : `${SPACING.desktop.gutter}px`
-  
-  // Grid KPIs condicional
+  const containerPadding = isMobile
+    ? `${SPACING.mobile.gutter}px`
+    : isTablet
+      ? `${SPACING.tablet.gutter}px`
+      : `${SPACING.desktop.gutter}px`
+
   const kpiColumns = isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)'
-  
-  // Paneles: 2 columnas en desktop, stack en mobile/tablet
   const panelColumns = isDesktop ? '1fr 1fr' : '1fr'
+
+  const metricsQ = useMetricsQuery()
+  const transferQ = useTransferTrackingQuery({ refetchInterval: 30_000 })
+  const appointmentsQ = useAdminAppointmentsQuery({ limit: 5 } as any)
+  const paymentStatsQ = usePaymentMethodStatsQuery()
+
+  const metrics = metricsQ.data
+  const transfers = transferQ.data ?? []
+  const appointments = appointmentsQ.data ?? []
+  const paymentStats = paymentStatsQ.data ?? []
+
+  const paymentRows =
+    paymentStats.length > 0
+      ? paymentStats.map((s) => ({
+          label: s.method === 'CTG' ? 'CTG One Token' : s.method === 'PSE' ? 'PSE' : 'Transferencia',
+          pct: Math.round(s.percentage),
+          val: formatCOP(s.amount),
+          color: s.method === 'CTG' ? T.gold : s.method === 'PSE' ? T.payPSE : T.payTRF,
+          badge: (s.method === 'CTG' ? 'gold' : s.method === 'PSE' ? 'pse' : 'trf') as 'gold' | 'pse' | 'trf',
+        }))
+      : [
+          { label: 'CTG One Token', pct: 48, val: '—', color: T.gold, badge: 'gold' as const },
+          { label: 'PSE', pct: 32, val: '—', color: T.payPSE, badge: 'pse' as const },
+          { label: 'Transferencia', pct: 20, val: '—', color: T.payTRF, badge: 'trf' as const },
+        ]
 
   return (
     <div style={{ padding: containerPadding }}>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
+
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: kpiColumns, gap: 14, marginBottom: 24 }}>
-        <Metric label="CITAS HOY" value="47" sub="↑ 12 % vs. ayer" accent={T.sage} />
-        <Metric label="VETERINARIOS ACTIVOS" value="23" sub="3 pendientes" accent={T.sageLt} />
-        <Metric label="VOLUMEN CTG HOY" value="4,821" sub="≈ $2.02 M COP" accent={T.gold} />
-        <Metric label="COMISIONES HOY" value="$420 K" sub="CTG + fiat" accent={T.goldLt} />
+        <Metric
+          label="CITAS HOY"
+          value={metricsQ.isLoading ? '…' : String(metrics?.citasHoy ?? 0)}
+          sub={metricsQ.isError ? 'Error al cargar' : undefined}
+          accent={T.sage}
+        />
+        <Metric
+          label="VETERINARIOS ACTIVOS"
+          value={metricsQ.isLoading ? '…' : String(metrics?.veterinariosActivos ?? 0)}
+          sub={metricsQ.isLoading ? undefined : ''}
+          accent={T.sageLt}
+        />
+        <Metric
+          label="VOLUMEN CTG HOY"
+          value={metricsQ.isLoading ? '…' : String(metrics?.volumenCtgHoy ?? 0)}
+          sub={
+            metrics
+              ? `≈ ${formatCOP((metrics.volumenCtgHoy ?? 0) * 420)} COP`
+              : undefined
+          }
+          accent={T.gold}
+        />
+        <Metric
+          label="COMISIONES HOY"
+          value={metricsQ.isLoading ? '…' : formatCOP(metrics?.comisionesHoy ?? 0)}
+          sub="CTG + fiat"
+          accent={T.goldLt}
+        />
       </div>
 
       {/* Two columns */}
@@ -36,132 +113,244 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div style={{ padding: '20px 22px' }}>
-            {[
-              { label: 'CTG One Token', pct: 48, val: '$9.8 M', color: T.gold, badge: 'gold' as const },
-              { label: 'PSE', pct: 32, val: '$6.5 M', color: T.payPSE, badge: 'pse' as const },
-              { label: 'Transferencia', pct: 20, val: '$4.1 M', color: T.payTRF, badge: 'trf' as const },
-            ].map((r, i) => (
-              <div key={i} style={{ marginBottom: 18 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <Badge variant={r.badge}>{r.label}</Badge>
-                    <span style={{ fontFamily: F.mono, fontSize: 12, color: T.inkMuted }}>{r.pct}%</span>
-                  </span>
-                  <span style={{ fontFamily: F.serif, fontSize: 17, fontWeight: 400, color: T.ink }}>{r.val}</span>
-                </div>
-                <Bar pct={r.pct} color={r.color} />
-              </div>
-            ))}
+            {paymentStatsQ.isLoading
+              ? [1, 2, 3].map((i) => (
+                  <div key={i} style={{ marginBottom: 18 }}>
+                    <Skeleton w="120px" h="16px" />
+                    <div style={{ marginTop: 8 }}>
+                      <Skeleton w="100%" h="8px" />
+                    </div>
+                  </div>
+                ))
+              : paymentRows.map((r, i) => (
+                  <div key={i} style={{ marginBottom: 18 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <Badge variant={r.badge}>{r.label}</Badge>
+                        <span style={{ fontFamily: F.mono, fontSize: 12, color: T.inkMuted }}>
+                          {r.pct}%
+                        </span>
+                      </span>
+                      <span style={{ fontFamily: F.serif, fontSize: 17, fontWeight: 400, color: T.ink }}>
+                        {r.val}
+                      </span>
+                    </div>
+                    <Bar pct={r.pct} color={r.color} />
+                  </div>
+                ))}
           </div>
         </div>
 
         {/* Transfer tracking */}
         <div style={cardStyle}>
-          <div style={{ padding: '18px 22px', borderBottom: `1px solid ${T.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            style={{
+              padding: '18px 22px',
+              borderBottom: `1px solid ${T.line}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
             <div style={{ fontFamily: F.sans, fontSize: 15, fontWeight: 600, color: T.ink }}>
               Transferencias — trazabilidad
             </div>
             <Badge variant="warn">En vivo</Badge>
           </div>
           <div style={{ padding: '8px 0' }}>
-            {[
-              { vet: 'Dra. Ospina', cl: 'Laura G.', amt: 85000, st: 'Confirmada', tier: 'elite' as const },
-              { vet: 'Dr. Mora', cl: 'Carlos R.', amt: 65000, st: 'Pendiente', tier: 'pro' as const },
-              { vet: 'Dra. Ríos', cl: 'Sofía H.', amt: 75000, st: 'En disputa', tier: 'free' as const },
-              { vet: 'Dr. Castro', cl: 'Miguel T.', amt: 45000, st: 'Confirmada', tier: 'pro' as const },
-            ].map((r, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 22px', borderBottom: i < 3 ? `1px solid ${T.line}` : 'none' }}>
-                <TierBadge t={r.tier} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 500, color: T.ink }}>{r.vet}</div>
-                  <div style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted }}>{r.cl}</div>
+            {transferQ.isLoading ? (
+              [1, 2, 3].map((i) => (
+                <div key={i} style={{ padding: '14px 22px', borderBottom: `1px solid ${T.line}` }}>
+                  <Skeleton w="180px" h="14px" />
                 </div>
-                <span style={{ fontFamily: F.mono, fontSize: 13, color: T.sage }}>${r.amt.toLocaleString('es-CO')}</span>
-                <Badge variant={r.st === 'Confirmada' ? 'ok' : r.st === 'Pendiente' ? 'warn' : 'err'}>{r.st}</Badge>
+              ))
+            ) : transfers.length === 0 ? (
+              <div style={{ padding: '20px 22px', color: T.inkMuted, fontFamily: F.sans, fontSize: 13 }}>
+                No hay transferencias pendientes
               </div>
-            ))}
+            ) : (
+              transfers.slice(0, 5).map((r, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '11px 22px',
+                    borderBottom: i < transfers.length - 1 ? `1px solid ${T.line}` : 'none',
+                  }}
+                >
+                  <TierBadge t={r.tier} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 500, color: T.ink }}>{r.vet}</div>
+                    <div style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted }}>{r.client}</div>
+                  </div>
+                  <span style={{ fontFamily: F.mono, fontSize: 13, color: T.sage }}>
+                    ${r.amount.toLocaleString('es-CO')}
+                  </span>
+                  <Badge
+                    variant={
+                      r.status === 'Confirmada' ? 'ok' : r.status === 'Pendiente' ? 'warn' : 'err'
+                    }
+                  >
+                    {r.status}
+                  </Badge>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
 
       {/* Recent appointments */}
       <div style={cardStyle}>
-        <div style={{ padding: '18px 22px', borderBottom: `1px solid ${T.line}`, display: 'flex', justifyContent: 'space-between' }}>
-          <div style={{ fontFamily: F.sans, fontSize: 15, fontWeight: 600, color: T.ink }}>Citas recientes</div>
+        <div
+          style={{
+            padding: '18px 22px',
+            borderBottom: `1px solid ${T.line}`,
+            display: 'flex',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ fontFamily: F.sans, fontSize: 15, fontWeight: 600, color: T.ink }}>
+            Citas recientes
+          </div>
         </div>
-        
-        {isMobile ? (
-          // Vista Mobile: Cards apiladas
+
+        {appointmentsQ.isLoading ? (
+          <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {[1, 2, 3].map((i) => <Skeleton key={i} w="100%" h="16px" />)}
+          </div>
+        ) : appointments.length === 0 ? (
+          <div style={{ padding: '20px 22px', color: T.inkMuted, fontFamily: F.sans, fontSize: 13 }}>
+            Sin citas recientes
+          </div>
+        ) : isMobile ? (
           <div style={{ padding: '8px 0' }}>
-            {[
-              { id: '#C0047', pac: 'Laura G.', vet: 'Dra. Ospina', tier: 'elite' as const, svc: 'Consulta', pay: 'CTG', comm: '$2.550', st: 'Completada' },
-              { id: '#C0048', pac: 'Carlos R.', vet: 'Dr. Mora', tier: 'pro' as const, svc: 'Vacunación', pay: 'TRANSFER', comm: '$5.200', st: 'Verificando' },
-              { id: '#C0049', pac: 'Sofía H.', vet: 'Dra. Ríos', tier: 'free' as const, svc: 'Revisión', pay: 'PSE', comm: '$7.500', st: 'Confirmada' },
-              { id: '#C0050', pac: 'Miguel T.', vet: 'Dr. Castro', tier: 'pro' as const, svc: 'Consulta', pay: 'CTG', comm: '$6.800', st: 'En camino' },
-            ].map((r, i) => (
-              <div key={i} style={{ 
-                padding: '16px 20px', 
-                borderBottom: i < 3 ? `1px solid ${T.line}` : 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10
-              }}>
+            {appointments.map((r, i) => (
+              <div
+                key={r.id}
+                style={{
+                  padding: '16px 20px',
+                  borderBottom: i < appointments.length - 1 ? `1px solid ${T.line}` : 'none',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                }}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontFamily: F.mono, fontSize: 13, color: T.inkMuted }}>{r.id}</span>
-                  <Badge variant={r.st === 'Completada' ? 'ok' : r.st === 'Verificando' ? 'warn' : r.st === 'En camino' ? 'sage' : 'default'}>
-                    {r.st}
+                  <Badge
+                    variant={
+                      r.status === 'Completada'
+                        ? 'ok'
+                        : r.status === 'Verificando'
+                          ? 'warn'
+                          : r.status === 'En camino'
+                            ? 'sage'
+                            : 'default'
+                    }
+                  >
+                    {r.status}
                   </Badge>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: T.ink, marginBottom: 4 }}>{r.pac}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: T.ink, marginBottom: 4 }}>
+                      {r.patient}
+                    </div>
                     <div style={{ fontSize: 12, color: T.inkSec }}>{r.vet}</div>
                   </div>
                   <TierBadge t={r.tier} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ background: T.surfaceAlt, padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500 }}>{r.svc}</span>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <PayBadge m={r.pay} />
-                    <span style={{ fontFamily: F.mono, fontSize: 12, color: T.err }}>{r.comm}</span>
-                  </div>
+                  <span
+                    style={{
+                      background: T.surfaceAlt,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {r.service}
+                  </span>
+                  <PayBadge m={r.paymentMethod} />
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          // Vista Desktop/Tablet: Tabla normal (ocultar columnas en tablet)
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: T.surfaceAlt }}>
-                  {(isTablet ? ['Paciente', 'Veterinario', 'Tier', 'Servicio', 'Estado'] : ['ID', 'Paciente', 'Veterinario', 'Tier', 'Servicio', 'Método', 'Comisión', 'Estado']).map((h) => (
-                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontFamily: F.sans, fontSize: 11, fontWeight: 600, color: T.inkMuted, letterSpacing: '1.2px', textTransform: 'uppercase' }}>
+                  {(isTablet
+                    ? ['Paciente', 'Veterinario', 'Tier', 'Servicio', 'Estado']
+                    : ['ID', 'Paciente', 'Veterinario', 'Tier', 'Servicio', 'Método', 'Estado']
+                  ).map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: '10px 16px',
+                        textAlign: 'left',
+                        fontFamily: F.sans,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: T.inkMuted,
+                        letterSpacing: '1.2px',
+                        textTransform: 'uppercase',
+                      }}
+                    >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {[
-                  { id: '#C0047', pac: 'Laura G.', vet: 'Dra. Ospina', tier: 'elite' as const, svc: 'Consulta', pay: 'CTG', comm: '$2.550', st: 'Completada' },
-                  { id: '#C0048', pac: 'Carlos R.', vet: 'Dr. Mora', tier: 'pro' as const, svc: 'Vacunación', pay: 'TRANSFER', comm: '$5.200', st: 'Verificando' },
-                  { id: '#C0049', pac: 'Sofía H.', vet: 'Dra. Ríos', tier: 'free' as const, svc: 'Revisión', pay: 'PSE', comm: '$7.500', st: 'Confirmada' },
-                  { id: '#C0050', pac: 'Miguel T.', vet: 'Dr. Castro', tier: 'pro' as const, svc: 'Consulta', pay: 'CTG', comm: '$6.800', st: 'En camino' },
-                ].map((r, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${T.line}` }}>
-                    {!isTablet && <td style={{ padding: '12px 16px' }}><span style={{ fontFamily: F.mono }}>{r.id}</span></td>}
-                    <td style={{ padding: '12px 16px', fontWeight: 500 }}>{r.pac}</td>
+                {appointments.map((r, _i) => (
+                  <tr key={r.id} style={{ borderBottom: `1px solid ${T.line}` }}>
+                    {!isTablet && (
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{ fontFamily: F.mono }}>{r.id.slice(0, 8)}</span>
+                      </td>
+                    )}
+                    <td style={{ padding: '12px 16px', fontWeight: 500 }}>{r.patient}</td>
                     <td style={{ padding: '12px 16px', color: T.inkSec }}>{r.vet}</td>
-                    <td style={{ padding: '12px 16px' }}><TierBadge t={r.tier} /></td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{ background: T.surfaceAlt, padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500 }}>{r.svc}</span>
+                      <TierBadge t={r.tier} />
                     </td>
-                    {!isTablet && <td style={{ padding: '12px 16px' }}><PayBadge m={r.pay} /></td>}
-                    {!isTablet && <td style={{ padding: '12px 16px', fontFamily: F.mono, color: T.err }}>{r.comm}</td>}
                     <td style={{ padding: '12px 16px' }}>
-                      <Badge variant={r.st === 'Completada' ? 'ok' : r.st === 'Verificando' ? 'warn' : r.st === 'En camino' ? 'sage' : 'default'}>
-                        {r.st}
+                      <span
+                        style={{
+                          background: T.surfaceAlt,
+                          padding: '3px 10px',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {r.service}
+                      </span>
+                    </td>
+                    {!isTablet && (
+                      <td style={{ padding: '12px 16px' }}>
+                        <PayBadge m={r.paymentMethod} />
+                      </td>
+                    )}
+                    <td style={{ padding: '12px 16px' }}>
+                      <Badge
+                        variant={
+                          r.status === 'Completada'
+                            ? 'ok'
+                            : r.status === 'Verificando'
+                              ? 'warn'
+                              : r.status === 'En camino'
+                                ? 'sage'
+                                : 'default'
+                        }
+                      >
+                        {r.status}
                       </Badge>
                     </td>
                   </tr>
