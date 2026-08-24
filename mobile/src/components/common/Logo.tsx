@@ -1,18 +1,5 @@
 /**
  * Nvet Care — Logo (React Native port del símbolo oficial).
- *
- * Símbolo: trazo continuo serpenteante (estilo "N" estilizada con 3 ondulaciones)
- * con gradient horizontal azul → verde y dot naranja al extremo derecho.
- *
- * Wordmark: "Nvet" en azul profundo (bold) + "Care" en verde principal (regular).
- *
- * Path data idéntico a `dashboard/public/logo.svg` y al componente web
- * `dashboard/src/components/Logos.tsx`.
- *
- * Props:
- *  - size: alto del símbolo en dp (default 36)
- *  - showWordmark: muestra "Nvet Care" al lado (default true)
- *  - inverted: paleta invertida para fondos oscuros
  */
 
 import React from 'react'
@@ -25,7 +12,6 @@ interface LogoProps {
   inverted?: boolean
 }
 
-// Paleta oficial Nvet Care (sincronizada con mobile/src/theme/colors.ts)
 const COLORS = {
   blueDeep: '#0D1B2A',
   greenPrimary: '#34B27A',
@@ -35,8 +21,6 @@ const COLORS = {
 } as const
 
 export function Logo({ size = 36, showWordmark = true, inverted = false }: LogoProps) {
-  // ID único del gradient por instancia para evitar colisiones cuando hay
-  // varios <Logo> en una misma pantalla.
   const gradId = `nvetGrad_${size}_${inverted ? 'inv' : 'reg'}`
 
   const orangeColor = COLORS.orangeAccent
@@ -44,7 +28,6 @@ export function Logo({ size = 36, showWordmark = true, inverted = false }: LogoP
   const wordmarkAccent = COLORS.greenPrimary
   const captionColor = inverted ? 'rgba(255,255,255,0.55)' : COLORS.inkMutedDark
 
-  // Símbolo horizontal 200x100 (relación natural). Lo escalamos respetando aspect.
   const symW = size * 1.7
   const symH = size * 0.85
 
@@ -53,24 +36,24 @@ export function Logo({ size = 36, showWordmark = true, inverted = false }: LogoP
       <Svg width={symW} height={symH} viewBox="0 0 200 100" fill="none">
         <Defs>
           <LinearGradient id={gradId} x1="0" y1="0.5" x2="1" y2="0.5">
-            {inverted ? (
-              <>
-                <Stop offset="0%" stopColor="#FFFFFF" />
-                <Stop offset="60%" stopColor="#9CD8B7" />
-                <Stop offset="100%" stopColor={COLORS.greenPrimary} />
-              </>
-            ) : (
-              <>
-                <Stop offset="0%" stopColor={COLORS.blueDeep} />
-                <Stop offset="45%" stopColor="#1F5343" />
-                <Stop offset="75%" stopColor="#2E8C68" />
-                <Stop offset="100%" stopColor={COLORS.greenPrimary} />
-              </>
+            <Stop
+              offset="0%"
+              stopColor={inverted ? '#FFFFFF' : COLORS.blueDeep}
+            />
+            <Stop
+              offset={inverted ? '60%' : '45%'}
+              stopColor={inverted ? '#9CD8B7' : '#1F5343'}
+            />
+            <Stop
+              offset={inverted ? '100%' : '75%'}
+              stopColor={inverted ? COLORS.greenPrimary : '#2E8C68'}
+            />
+            {!inverted && (
+              <Stop offset="100%" stopColor={COLORS.greenPrimary} />
             )}
           </LinearGradient>
         </Defs>
 
-        {/* Trazo serpenteante con 3 lobulos */}
         <Path
           d="M 25 75 L 25 35 C 25 22 45 22 45 35 L 45 55 C 45 65 60 65 65 55 L 80 35 C 80 22 100 22 100 35 L 100 55 C 100 65 115 65 120 55 L 135 35 C 135 22 155 22 155 35 L 155 75"
           stroke={`url(#${gradId})`}
@@ -80,7 +63,6 @@ export function Logo({ size = 36, showWordmark = true, inverted = false }: LogoP
           fill="none"
         />
 
-        {/* Dot naranja en extremo inferior derecho */}
         <Circle cx={170} cy={75} r={6} fill={orangeColor} />
       </Svg>
 
@@ -110,10 +92,6 @@ export function Logo({ size = 36, showWordmark = true, inverted = false }: LogoP
   )
 }
 
-/**
- * Símbolo solo (sin wordmark) — para tab bar headers, app launcher,
- * splash screen donde el wordmark vive separado.
- */
 export function LogoMark({
   size = 36,
   inverted = false,
