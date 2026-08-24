@@ -48,9 +48,7 @@ export function Logo({ size = 36, showWordmark = true, inverted = false }: LogoP
               offset={inverted ? '100%' : '75%'}
               stopColor={inverted ? COLORS.greenPrimary : '#2E8C68'}
             />
-            {!inverted && (
-              <Stop offset="100%" stopColor={COLORS.greenPrimary} />
-            )}
+            <Stop offset="100%" stopColor={COLORS.greenPrimary} />
           </LinearGradient>
         </Defs>
 
