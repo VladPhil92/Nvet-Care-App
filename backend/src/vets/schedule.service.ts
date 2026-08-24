@@ -8,6 +8,14 @@ export interface VetAvailabilitySlot {
   available: boolean;
 }
 
+interface AvailabilityOptions {
+  /**
+   * Permite revalidar un cambio de fecha/hora ignorando la propia cita que
+   * se está reprogramando. El endpoint público nunca utiliza esta opción.
+   */
+  excludeAppointmentId?: string;
+}
+
 const DAY_BY_JS_UTC: Record<number, DayOfWeek> = {
   0: DayOfWeek.SUNDAY,
   1: DayOfWeek.MONDAY,
@@ -30,6 +38,7 @@ export class ScheduleService {
   async getAvailability(
     vetId: string,
     date: string,
+    options: AvailabilityOptions = {},
   ): Promise<VetAvailabilitySlot[]> {
     const dayStart = this.parseDateOnly(date);
     const dayEnd = new Date(dayStart);
@@ -75,6 +84,9 @@ export class ScheduleService {
               AppointmentStatus.IN_PROGRESS,
             ],
           },
+          ...(options.excludeAppointmentId
+            ? { id: { not: options.excludeAppointmentId } }
+            : {}),
         },
         select: { time: true },
       }),
@@ -96,7 +108,9 @@ export class ScheduleService {
       return [];
     }
 
-    const bookedTimes = new Set(appointments.map((appointment) => appointment.time));
+    const bookedTimes = new Set(
+      appointments.map((appointment) => appointment.time),
+    );
     const slots = this.generateTimes(startTime, endTime, slotDuration);
 
     return slots.map((time) => ({
