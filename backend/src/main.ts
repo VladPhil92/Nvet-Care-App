@@ -6,7 +6,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, INestApplication } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import helmet from 'helmet';
-import compression from 'compression';
+import compression = require('compression');
 import { AppModule } from './app.module';
 
 /**
