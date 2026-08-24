@@ -3,6 +3,10 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 react {
+    root = file("../..")
+    reactNativeDir = file("../../../node_modules/react-native")
+    codegenDir = file("../../../node_modules/@react-native/codegen")
+    cliFile = file("../../../node_modules/react-native/cli.js")
     autolinkLibrariesWithApp()
 }
 
@@ -56,6 +60,7 @@ android {
             }
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            proguardFile "${rootProject.projectDir}/../../node_modules/detox/android/detox/proguard-rules-app.pro"
         }
     }
 
