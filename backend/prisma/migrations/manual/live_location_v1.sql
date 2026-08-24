@@ -25,3 +25,23 @@ CREATE INDEX IF NOT EXISTS appointment_live_locations_updated_at_idx
 
 COMMENT ON TABLE appointment_live_locations IS
   'Private ephemeral veterinarian GPS position scoped to an active appointment.';
+
+-- Privacy retention rule: once the service is no longer trackable, remove the
+-- precise coordinate immediately rather than retaining a movement trace.
+CREATE OR REPLACE FUNCTION nvet_clear_closed_appointment_live_location()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status IN ('COMPLETED', 'CANCELLED', 'DISPUTED') THEN
+    DELETE FROM appointment_live_locations
+    WHERE appointment_id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS appointments_clear_live_location_on_close ON appointments;
+CREATE TRIGGER appointments_clear_live_location_on_close
+AFTER UPDATE OF status ON appointments
+FOR EACH ROW
+WHEN (OLD.status IS DISTINCT FROM NEW.status)
+EXECUTE FUNCTION nvet_clear_closed_appointment_live_location();
