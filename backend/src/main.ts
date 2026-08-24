@@ -24,26 +24,15 @@ import { AppModule } from './app.module';
  */
 async function bootstrap() {
   const app: INestApplication = await NestFactory.create(AppModule, {
-    bufferLogs: true, // Buffer logs hasta que pino esté listo
-    rawBody: true,    // Preserva `req.rawBody` para validación HMAC de webhooks PSE
+    bufferLogs: true,
+    rawBody: true,
   });
 
-  // ----------------------------------------------------------
-  // LOGGER
-  // ----------------------------------------------------------
   app.useLogger(app.get(PinoLogger));
 
-  // ----------------------------------------------------------
-  // PREFIX & TRUST PROXY
-  // ----------------------------------------------------------
   app.setGlobalPrefix('api');
-  // Detrás de un load balancer / Cloudflare: confiar en X-Forwarded-For
-  // para que el throttler use la IP real del cliente.
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
-  // ----------------------------------------------------------
-  // SECURITY HEADERS (Helmet)
-  // ----------------------------------------------------------
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -58,7 +47,7 @@ async function bootstrap() {
         },
       },
       hsts: {
-        maxAge: 31_536_000, // 1 año
+        maxAge: 31_536_000,
         includeSubDomains: true,
         preload: true,
       },
@@ -68,31 +57,18 @@ async function bootstrap() {
     }),
   );
 
-  // ----------------------------------------------------------
-  // COMPRESSION (gzip/brotli)
-  // ----------------------------------------------------------
   app.use(
     compression({
-      level: 6, // balance entre CPU y compresión
-      threshold: 1024, // no comprimir respuestas <1 KB
+      level: 6,
+      threshold: 1024,
       filter: (req, res) => {
-        // Respeta x-no-compression header
         if (req.headers['x-no-compression']) return false;
         return compression.filter(req, res);
       },
     }),
   );
 
-  // ----------------------------------------------------------
-  // BODY LIMITS + RAW BODY CAPTURE (para HMAC de webhooks)
-  // ----------------------------------------------------------
-  // Por defecto express usa 100 KB. Subimos a 1 MB para JSON
-  // (uploads van por multipart con su propio límite en Multer).
-  //
-  // Además, capturamos el `rawBody` con un `verify` callback en
-  // `express.json` para que el `PseWebhookGuard` pueda calcular el HMAC
-  // contra los bytes exactos enviados por el provider (NestJS `rawBody: true`
-  // necesita este verify para poblar `req.rawBody`).
+  // Preserve the exact body bytes used by external webhook signatures.
   const expressApp = app.getHttpAdapter().getInstance();
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const express = require('express');
@@ -106,12 +82,9 @@ async function bootstrap() {
   );
   expressApp.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-  // ----------------------------------------------------------
-  // CORS
-  // ----------------------------------------------------------
   const allowedOrigins = [
-    'http://localhost:5173', // Dashboard (Vite)
-    'http://localhost:8081', // Mobile (Metro)
+    'http://localhost:5173',
+    'http://localhost:8081',
     'http://localhost:3001',
     process.env.FRONTEND_URL,
   ].filter(Boolean);
@@ -124,15 +97,13 @@ async function bootstrap() {
       'Content-Type',
       'Authorization',
       'X-Request-Id',
+      'Idempotency-Key',
       'X-Idempotency-Key',
     ],
     exposedHeaders: ['X-Request-Id'],
-    maxAge: 86_400, // preflight cached 24h
+    maxAge: 86_400,
   });
 
-  // ----------------------------------------------------------
-  // VALIDATION PIPE
-  // ----------------------------------------------------------
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -144,17 +115,11 @@ async function bootstrap() {
     }),
   );
 
-  // ----------------------------------------------------------
-  // GRACEFUL SHUTDOWN
-  // ----------------------------------------------------------
-  // Al recibir SIGTERM/SIGINT, drenar conexiones en curso (max 15s)
-  // antes de salir. PrismaService implementa OnModuleDestroy.
   app.enableShutdownHooks();
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
 
-  // Logs finales (estos sí van a pino)
   const logger = app.get(PinoLogger);
   logger.log(`Nvet Care API running on http://localhost:${port}/api`);
   logger.log(`WebSocket available at ws://localhost:${port}`);

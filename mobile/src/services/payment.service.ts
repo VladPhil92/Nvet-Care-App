@@ -14,7 +14,13 @@ export interface Transaction {
   amountCop: number
   amountCtg?: number
   paymentMethod: 'CTG' | 'PSE' | 'TRANSFER'
-  status: 'PENDING' | 'VERIFYING' | 'CONFIRMED' | 'LIQUIDATED' | 'DISPUTED' | 'FAILED'
+  status:
+    | 'PENDING'
+    | 'VERIFYING'
+    | 'CONFIRMED'
+    | 'LIQUIDATED'
+    | 'DISPUTED'
+    | 'FAILED'
   description?: string
   appointmentId?: string
   commissionPct?: number
@@ -22,6 +28,14 @@ export interface Transaction {
   transferProof?: string
   createdAt: string
   updatedAt: string
+}
+
+export interface TransactionPage {
+  results: Transaction[]
+  total: number
+  limit: number
+  offset: number
+  hasMore: boolean
 }
 
 export interface WalletBalance {
@@ -42,17 +56,29 @@ export interface VerifyTransferMetadata {
   transferDate?: string
 }
 
+export interface WithdrawalResponse {
+  success: boolean
+  message: string
+  requestedAmount: number
+  method: 'BANK_TRANSFER' | 'NEQUI' | 'DAVIPLATA'
+  estimatedArrival: string
+}
+
 const paymentService = {
   async processPayment(data: ProcessPaymentData): Promise<Transaction> {
     const { idempotencyKey, ...payload } = data
-    const response = await api.post('/payments/process', {
-      ...payload,
-      ...(idempotencyKey ? { idempotencyKey } : {}),
-    }, {
-      headers: idempotencyKey
-        ? { 'Idempotency-Key': idempotencyKey }
-        : undefined,
-    })
+    const response = await api.post(
+      '/payments/process',
+      {
+        ...payload,
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      },
+      {
+        headers: idempotencyKey
+          ? { 'Idempotency-Key': idempotencyKey }
+          : undefined,
+      },
+    )
     return response.data
   },
 
@@ -61,6 +87,23 @@ const paymentService = {
     return response.data
   },
 
+  async getTransactionPage(filters?: {
+    type?: string
+    status?: string
+    paymentMethod?: string
+    startDate?: string
+    endDate?: string
+    limit?: number
+    offset?: number
+  }): Promise<TransactionPage> {
+    const response = await api.get('/payments/transactions', { params: filters })
+    return response.data
+  },
+
+  /**
+   * Convenience API used by list screens: backend pagination is normalized to
+   * a plain array here so callers never accidentally iterate the page object.
+   */
   async getTransactions(filters?: {
     type?: string
     status?: string
@@ -70,8 +113,8 @@ const paymentService = {
     limit?: number
     offset?: number
   }): Promise<Transaction[]> {
-    const response = await api.get('/payments/transactions', { params: filters })
-    return response.data
+    const page = await this.getTransactionPage(filters)
+    return page.results
   },
 
   async getTransactionById(id: string): Promise<Transaction> {
@@ -109,16 +152,30 @@ const paymentService = {
     bank: string
     userType: 'NATURAL' | 'JURIDICA'
     returnUrl?: string
+    idempotencyKey?: string
   }): Promise<{
     paymentUrl: string
     transactionId: string
+    bankName?: string
   }> {
-    const response = await api.post('/payments/pse/initiate', data)
+    const { idempotencyKey, ...payload } = data
+    const response = await api.post(
+      '/payments/pse/initiate',
+      {
+        ...payload,
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      },
+      {
+        headers: idempotencyKey
+          ? { 'Idempotency-Key': idempotencyKey }
+          : undefined,
+      },
+    )
     return response.data
   },
 
   async checkPsePaymentStatus(transactionId: string): Promise<{
-    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'FAILED'
+    status: Transaction['status']
     transaction?: Transaction
   }> {
     const response = await api.get(`/payments/pse/status/${transactionId}`)
@@ -147,7 +204,7 @@ const paymentService = {
       phoneNumber?: string
       documentId: string
     }
-  }): Promise<Transaction> {
+  }): Promise<WithdrawalResponse> {
     const response = await api.post('/payments/withdrawals', data)
     return response.data
   },

@@ -65,7 +65,7 @@ describe('AppointmentsService booking integrity', () => {
     expect(prisma.appointment.create).not.toHaveBeenCalled();
   });
 
-  it('normaliza la fecha a medianoche UTC antes de persistir', async () => {
+  it('reserva el slot sin crear una transacción financiera prematura', async () => {
     scheduleService.getAvailability.mockResolvedValue([
       { date: '2099-01-05', time: '09:00', available: true },
     ]);
@@ -76,6 +76,7 @@ describe('AppointmentsService booking integrity', () => {
     const call = prisma.appointment.create.mock.calls[0][0];
     expect(call.data.date.toISOString()).toBe('2099-01-05T00:00:00.000Z');
     expect(call.data.status).toBe(AppointmentStatus.PENDING);
+    expect(call.data.transaction).toBeUndefined();
     expect(scheduleService.getAvailability).toHaveBeenCalledWith(
       createDto.vetId,
       '2099-01-05',

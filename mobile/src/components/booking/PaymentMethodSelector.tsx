@@ -7,31 +7,14 @@ import {
   useCtgRateQuery,
 } from '../../hooks/queries/useMobileQueries'
 
-/**
- * PaymentMethodSelector — selector de método de pago con info contextual.
- *
- * Métodos:
- *  - CTG: paga con saldo de tokens CTG (instantáneo, sin comisiones bancarias)
- *  - PSE: pago directo desde banco colombiano (~30 segundos)
- *  - TRANSFER: transferencia bancaria con comprobante (tarda más)
- *
- * Lógica:
- *  - Si el balance de CTG no alcanza para el monto, CTG aparece deshabilitado
- *    con mensaje claro y CTA implícito de recarga
- *  - Cada método incluye glifo, label, descripción de timing y badge de estado
- *  - El método actualmente seleccionado tiene borde sage + check mark
- *
- * a11y:
- *  - `accessibilityRole="radio"` con `accessibilityState={{ selected, disabled }}`
- *  - Cada card tiene un `accessibilityLabel` descriptivo
- */
-
 export type PaymentMethod = 'CTG' | 'PSE' | 'TRANSFER'
 
 interface Props {
   amountCop: number
   selected: PaymentMethod | null
   onSelect: (method: PaymentMethod) => void
+  /** Métodos visibles pero temporalmente no seleccionables. */
+  disabledMethods?: PaymentMethod[]
 }
 
 interface MethodInfo {
@@ -70,22 +53,28 @@ const METHODS: MethodInfo[] = [
   },
 ]
 
+/**
+ * CTG aún no tiene ledger de saldo de cliente y PSE conserva un adapter
+ * sandbox. Hasta que ambos flujos tengan settlement real, se muestran como
+ * próximos pero no se pueden seleccionar por defecto. TRANSFER permanece como
+ * el método productizable del MVP.
+ */
+const DEFAULT_DISABLED_METHODS: PaymentMethod[] = ['CTG', 'PSE']
+
 export default function PaymentMethodSelector({
   amountCop,
   selected,
   onSelect,
+  disabledMethods = DEFAULT_DISABLED_METHODS,
 }: Props) {
   const balanceQuery = useBalanceQuery()
   const ctgRateQuery = useCtgRateQuery()
 
   const ctgRate = ctgRateQuery.data?.rate ?? 0
   const ctgBalance = balanceQuery.data?.ctgBalance ?? 0
-
-  // Convertir saldo CTG a COP para comparar contra el monto
   const ctgInCop = ctgRate > 0 ? ctgBalance * ctgRate : 0
   const ctgEquivalentForPayment = ctgRate > 0 ? amountCop / ctgRate : 0
   const hasEnoughCtg = ctgInCop >= amountCop && ctgRate > 0
-
   const isLoadingBalance = balanceQuery.isLoading || ctgRateQuery.isLoading
 
   return (
@@ -99,7 +88,10 @@ export default function PaymentMethodSelector({
         {METHODS.map((method) => {
           const isSelected = selected === method.id
           const isCtg = method.id === 'CTG'
-          const isDisabled = isCtg && !isLoadingBalance && !hasEnoughCtg
+          const isFeatureDisabled = disabledMethods.includes(method.id)
+          const isBalanceDisabled =
+            isCtg && !isLoadingBalance && !hasEnoughCtg
+          const isDisabled = isFeatureDisabled || isBalanceDisabled
 
           return (
             <Pressable
@@ -117,7 +109,11 @@ export default function PaymentMethodSelector({
                 disabled: isDisabled,
               }}
               accessibilityLabel={`${method.title}. ${method.subtitle}. Tiempo de procesamiento ${method.timing}${
-                isDisabled ? '. Saldo insuficiente' : ''
+                isFeatureDisabled
+                  ? '. Temporalmente no disponible'
+                  : isBalanceDisabled
+                    ? '. Saldo insuficiente'
+                    : ''
               }`}
             >
               <View style={styles.glyphCircle}>
@@ -134,7 +130,12 @@ export default function PaymentMethodSelector({
                   >
                     {method.title}
                   </Text>
-                  <Badge label={method.timing} tone={method.timingTone} size="sm" outline />
+                  <Badge
+                    label={isFeatureDisabled ? 'Próximamente' : method.timing}
+                    tone={isFeatureDisabled ? 'muted' : method.timingTone}
+                    size="sm"
+                    outline
+                  />
                 </View>
                 <Text
                   style={[
@@ -146,7 +147,13 @@ export default function PaymentMethodSelector({
                   {method.subtitle}
                 </Text>
 
-                {isCtg && (
+                {isFeatureDisabled && (
+                  <Text style={styles.unavailableNote}>
+                    Integración de producción en validación.
+                  </Text>
+                )}
+
+                {isCtg && !isFeatureDisabled && (
                   <View style={styles.balanceRow}>
                     {isLoadingBalance ? (
                       <Skeleton width={140} height={12} />
@@ -177,7 +184,6 @@ export default function PaymentMethodSelector({
                 )}
               </View>
 
-              {/* Radio indicator */}
               <View
                 style={[
                   styles.radio,
@@ -237,6 +243,12 @@ const styles = StyleSheet.create({
   titleDisabled: { color: UI_COLORS.muted },
   subtitle: { fontSize: 12, color: UI_COLORS.muted, lineHeight: 16 },
   subtitleDisabled: { color: UI_COLORS.muted },
+  unavailableNote: {
+    fontSize: 11,
+    color: UI_COLORS.muted,
+    fontStyle: 'italic',
+    marginTop: 5,
+  },
   balanceRow: {
     marginTop: 6,
     paddingTop: 6,

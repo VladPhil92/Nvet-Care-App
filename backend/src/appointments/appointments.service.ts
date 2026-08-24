@@ -5,22 +5,11 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
-import {
-  AppointmentStatus,
-  Prisma,
-  UserRole,
-  VetTier,
-} from '@prisma/client';
+import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScheduleService } from '../vets/schedule.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
-
-const TIER_COMMISSIONS = {
-  [VetTier.FREE]: 0.1,
-  [VetTier.PRO]: 0.08,
-  [VetTier.ELITE]: 0.03,
-};
 
 @Injectable()
 export class AppointmentsService {
@@ -148,9 +137,10 @@ export class AppointmentsService {
   }
 
   /**
-   * El slot se valida contra agenda real antes del write. La restricción
-   * parcial `appointments_active_slot_unique` es la barrera definitiva frente
-   * a dos requests concurrentes que intenten reservar el mismo slot.
+   * Crear la cita reserva exclusivamente el slot. La transacción financiera
+   * se crea después, en PaymentsService, cuando el cliente realmente inicia
+   * el pago. Separar ambos pasos evita una transacción PENDING fantasma que
+   * bloqueaba `/payments/process` inmediatamente después del booking.
    */
   async createAppointment(clientId: string, data: CreateAppointmentDto) {
     const vet = await this.prisma.vetProfile.findUnique({
@@ -181,9 +171,6 @@ export class AppointmentsService {
     const dateOnly = this.toDateOnly(data.date);
     await this.assertSlotAvailable(data.vetId, dateOnly, data.time);
 
-    const commissionPct = TIER_COMMISSIONS[vet.tier];
-    const commissionAmount = data.amount * commissionPct;
-
     try {
       return await this.prisma.appointment.create({
         data: {
@@ -198,15 +185,6 @@ export class AppointmentsService {
           paymentMethod: data.paymentMethod,
           notes: data.notes,
           status: AppointmentStatus.PENDING,
-          transaction: {
-            create: {
-              amountCop: data.amount,
-              amountCtg: data.amountCtg,
-              commissionPct: commissionPct * 100,
-              commissionAmount,
-              paymentMethod: data.paymentMethod,
-            },
-          },
         },
         include: {
           vet: {
