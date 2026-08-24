@@ -10,42 +10,64 @@ export type AppointmentStatus =
 
 export type PaymentMethod = 'CTG' | 'PSE' | 'TRANSFER'
 
+export interface AppointmentVet {
+  id: string
+  userId?: string
+  user?: {
+    id?: string
+    firstName?: string
+    lastName?: string
+    avatar?: string
+    phone?: string
+    email?: string
+  }
+  firstName?: string
+  lastName?: string
+  tier: 'FREE' | 'PRO' | 'ELITE'
+  rating: number
+  avatar?: string
+}
+
 export interface Appointment {
   id: string
   vetId: string
-  vet: {
-    id: string
-    firstName: string
-    lastName: string
-    tier: 'FREE' | 'PRO' | 'ELITE'
-    rating: number
-    avatar?: string
-  }
+  vet: AppointmentVet
   clientId: string
   client: {
     id: string
     firstName: string
     lastName: string
+    avatar?: string
   }
   petId: string
   pet: {
     id: string
     name: string
     species: string
+    breed?: string
     photo?: string
   }
   serviceType: string
+  /** Alias normalizado para componentes de presentación legacy. */
+  serviceName: string
   date: string
   time: string
+  /** ISO compuesto a partir de date + time cuando el backend no lo envía. */
+  scheduledAt: string
   address: string
   status: AppointmentStatus
   paymentMethod: PaymentMethod
   amount: number
+  /** Alias del monto COP usado por stores legacy. */
+  amountCop: number
+  amountCtg?: number
   notes?: string
   diagnosis?: string
   treatment?: string
+  clinicalNotes?: string
   createdAt: string
   updatedAt: string
+  transaction?: unknown
 }
 
 export interface CreateAppointmentData {
@@ -57,30 +79,76 @@ export interface CreateAppointmentData {
   address: string
   paymentMethod: PaymentMethod
   amount: number
-  /** Monto en CTG si el cliente paga con saldo CTG (opcional). */
   amountCtg?: number
   notes?: string
-  /**
-   * Idempotency key generada por el cliente (UUID v4) para deduplicar
-   * intentos de booking repetidos en redes inestables.
-   */
   idempotencyKey?: string
 }
 
 export interface AppointmentTracking {
   appointmentId: string
-  status: AppointmentStatus
-  progress: number // 0-100
+  /** Shape canónico del backend. */
+  currentStatus: AppointmentStatus
+  vetLocation?: {
+    lat: number
+    lng: number
+  } | null
+  estimatedArrival?: string | null
+  statusHistory: Array<{
+    status: AppointmentStatus | string
+    timestamp: string
+  }>
+  /** Campos de compatibilidad para la UI de tracking existente. */
+  status?: AppointmentStatus
+  progress?: number
   eta?: string
   location?: {
     lat: number
     lng: number
   }
-  timeline: Array<{
+  timeline?: Array<{
     status: AppointmentStatus
     timestamp: string
     completed: boolean
   }>
+  vet?: AppointmentVet
+  etaMinutes?: number | null
+  lastStatusChangeAt?: string
+  scheduledAt?: string
+}
+
+function toScheduledAt(date: unknown, time: unknown): string {
+  const rawDate = typeof date === 'string' ? date : new Date(String(date)).toISOString()
+  const datePart = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate
+  const timePart = typeof time === 'string' && time ? time : '00:00'
+  const candidate = `${datePart}T${timePart}`
+  const parsed = new Date(candidate)
+  return Number.isNaN(parsed.getTime()) ? rawDate : parsed.toISOString()
+}
+
+function normalizeAppointment(raw: any): Appointment {
+  const vetUser = raw?.vet?.user ?? {}
+  const vet: AppointmentVet = {
+    ...(raw?.vet ?? {}),
+    firstName: raw?.vet?.firstName ?? vetUser.firstName,
+    lastName: raw?.vet?.lastName ?? vetUser.lastName,
+    avatar: raw?.vet?.avatar ?? vetUser.avatar,
+    tier: raw?.vet?.tier ?? 'FREE',
+    rating: Number(raw?.vet?.rating ?? 0),
+  }
+
+  const amount = Number(raw?.amount ?? raw?.amountCop ?? 0)
+
+  return {
+    ...raw,
+    vet,
+    serviceType: raw?.serviceType ?? raw?.serviceName ?? '',
+    serviceName: raw?.serviceName ?? raw?.serviceType ?? '',
+    date: typeof raw?.date === 'string' ? raw.date : String(raw?.date ?? ''),
+    time: raw?.time ?? '',
+    scheduledAt: raw?.scheduledAt ?? toScheduledAt(raw?.date, raw?.time),
+    amount,
+    amountCop: Number(raw?.amountCop ?? amount),
+  } as Appointment
 }
 
 class AppointmentService {
@@ -90,12 +158,12 @@ class AppointmentService {
     endDate?: string
   }): Promise<Appointment[]> {
     const response = await apiClient.get('/appointments', { params: filters })
-    return response.data
+    return (response.data as any[]).map(normalizeAppointment)
   }
 
   async getAppointmentById(appointmentId: string): Promise<Appointment> {
     const response = await apiClient.get(`/appointments/${appointmentId}`)
-    return response.data
+    return normalizeAppointment(response.data)
   }
 
   async createAppointment(data: CreateAppointmentData): Promise<Appointment> {
@@ -105,20 +173,20 @@ class AppointmentService {
         ? { 'Idempotency-Key': idempotencyKey }
         : undefined,
     })
-    return response.data
+    return normalizeAppointment(response.data)
   }
 
   async updateAppointment(
     appointmentId: string,
     data: Partial<{
-      status: AppointmentStatus
-      diagnosis: string
-      treatment: string
+      date: string
+      time: string
+      address: string
       notes: string
-    }>
+    }>,
   ): Promise<Appointment> {
     const response = await apiClient.patch(`/appointments/${appointmentId}`, data)
-    return response.data
+    return normalizeAppointment(response.data)
   }
 
   async cancelAppointment(appointmentId: string, reason?: string): Promise<void> {
@@ -129,18 +197,33 @@ class AppointmentService {
 
   async getAppointmentTracking(appointmentId: string): Promise<AppointmentTracking> {
     const response = await apiClient.get(`/appointments/${appointmentId}/tracking`)
-    return response.data
+    const raw = response.data as any
+    return {
+      ...raw,
+      appointmentId: raw.appointmentId ?? appointmentId,
+      currentStatus: raw.currentStatus ?? raw.status ?? 'PENDING',
+      status: raw.status ?? raw.currentStatus,
+      vetLocation: raw.vetLocation ?? raw.location ?? null,
+      location: raw.location ?? raw.vetLocation ?? undefined,
+      estimatedArrival: raw.estimatedArrival ?? raw.eta ?? null,
+      statusHistory: raw.statusHistory ?? raw.timeline ?? [],
+      timeline:
+        raw.timeline ??
+        (raw.statusHistory ?? []).map((item: any) => ({
+          ...item,
+          completed: true,
+        })),
+    }
   }
 
-  // Métodos específicos para veterinarios
   async updateAppointmentStatus(
     appointmentId: string,
-    status: AppointmentStatus
+    status: AppointmentStatus,
   ): Promise<Appointment> {
     const response = await apiClient.patch(`/appointments/${appointmentId}/status`, {
       status,
     })
-    return response.data
+    return normalizeAppointment(response.data)
   }
 
   async addClinicalNotes(
@@ -149,18 +232,18 @@ class AppointmentService {
       diagnosis: string
       treatment: string
       notes?: string
-    }
+    },
   ): Promise<Appointment> {
-    const response = await apiClient.post(`/appointments/${appointmentId}/clinical-notes`, data)
-    return response.data
+    const response = await apiClient.post(
+      `/appointments/${appointmentId}/clinical-notes`,
+      data,
+    )
+    return normalizeAppointment(response.data)
   }
 
   async getTodayAppointments(): Promise<Appointment[]> {
-    const today = new Date().toISOString().split('T')[0]
-    return this.getAppointments({
-      startDate: today,
-      endDate: today,
-    })
+    const response = await apiClient.get('/appointments/today')
+    return (response.data as any[]).map(normalizeAppointment)
   }
 
   async getUpcomingAppointments(): Promise<Appointment[]> {
