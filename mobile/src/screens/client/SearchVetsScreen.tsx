@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   View,
   Text,
@@ -8,30 +8,16 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  FlatList,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { FlatList } from 'react-native'
 
 import VetCard, { VetCardData } from '../../components/vet/VetCard'
-import { Badge, Skeleton, EmptyState, UI_COLORS } from '../../components/ui/primitives'
+import { Skeleton, EmptyState, UI_COLORS } from '../../components/ui/primitives'
 import { useInfiniteVetSearchQuery } from '../../hooks/queries/useMobileQueries'
-
-/**
- * SearchVetsScreen — descubrimiento de veterinarios con filtros y scroll infinito.
- *
- * Tradeoff sobre `FlashList`:
- *  - Sería ideal para listas largas, pero requiere `@shopify/flash-list` como
- *    dependencia adicional. Por ahora usamos `FlatList` con `windowSize`,
- *    `removeClippedSubviews` y `getItemLayout` (cuando posible) para
- *    performance aceptable. Migración a FlashList trivial cuando se instale.
- *
- * Estados manejados:
- *  - Initial loading: skeletons (5 cards)
- *  - Empty (no results): EmptyState con CTA limpiar filtros
- *  - Loading next page: ActivityIndicator en footer
- *  - Error: EmptyState con CTA retry
- *  - Refreshing (pull-to-refresh): refetch primera página
- */
+import liveLocationService, {
+  Coordinates,
+} from '../../services/live-location.service'
 
 const SPECIALTIES = [
   'Medicina general',
@@ -65,16 +51,40 @@ export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) 
   const [activeSpecialty, setActiveSpecialty] = useState<string | null>(null)
   const [availableNow, setAvailableNow] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('relevance')
+  const [deviceLocation, setDeviceLocation] = useState<Coordinates | null>(null)
+  const [locationResolved, setLocationResolved] = useState(false)
 
-  // Filtros derivados — reactivos al state
+  useEffect(() => {
+    let mounted = true
+    liveLocationService
+      .getDeviceCoordinates()
+      .then((coords) => {
+        if (!mounted) return
+        setDeviceLocation(coords)
+        setLocationResolved(true)
+      })
+      .catch(() => {
+        if (!mounted) return
+        setDeviceLocation(null)
+        setLocationResolved(true)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   const filters = useMemo(
     () => ({
       search: searchText.trim() || undefined,
       specialty: activeSpecialty ?? undefined,
       availableNow: availableNow || undefined,
       sortBy,
+      latitude: deviceLocation?.latitude,
+      longitude: deviceLocation?.longitude,
+      radiusKm: deviceLocation ? 20 : undefined,
     }),
-    [searchText, activeSpecialty, availableNow, sortBy],
+    [searchText, activeSpecialty, availableNow, sortBy, deviceLocation],
   )
 
   const {
@@ -89,7 +99,6 @@ export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) 
     isRefetching,
   } = useInfiniteVetSearchQuery(filters)
 
-  // Aplanar las páginas en una sola lista
   const allVets: VetCardData[] = useMemo(() => {
     if (!data?.pages) return []
     return data.pages.flatMap((page: any) => {
@@ -114,11 +123,8 @@ export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) 
 
   const totalCount = data?.pages?.[0]?.total ?? 0
 
-  // Handlers memoizados
   const handleVetPress = useCallback(
-    (vetId: string) => {
-      navigation.navigate('VetDetail', { vetId })
-    },
+    (vetId: string) => navigation.navigate('VetDetail', { vetId }),
     [navigation],
   )
 
@@ -133,13 +139,19 @@ export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) 
     if (hasNextPage && !isFetchingNextPage) fetchNextPage()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+  const retryLocation = useCallback(async () => {
+    setLocationResolved(false)
+    try {
+      const coords = await liveLocationService.getDeviceCoordinates()
+      setDeviceLocation(coords)
+      if (coords) setSortBy('distance')
+    } finally {
+      setLocationResolved(true)
+    }
+  }, [])
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header con search */}
       <View style={styles.header}>
         <Text style={styles.title}>Veterinarios</Text>
         {totalCount > 0 && !isPending && (
@@ -147,6 +159,22 @@ export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) 
             {totalCount} {totalCount === 1 ? 'profesional' : 'profesionales'} disponibles
           </Text>
         )}
+
+        <Pressable
+          onPress={retryLocation}
+          style={styles.locationRow}
+          accessibilityRole="button"
+          accessibilityLabel="Actualizar ubicación para búsqueda de veterinarios cercanos"
+        >
+          <Text style={styles.locationIcon}>⌖</Text>
+          <Text style={styles.locationText}>
+            {!locationResolved
+              ? 'Obteniendo ubicación…'
+              : deviceLocation
+                ? 'Ubicación activa · resultados por proximidad disponibles'
+                : 'Activa ubicación para ordenar veterinarios por cercanía'}
+          </Text>
+        </Pressable>
 
         <View style={styles.searchBox}>
           <Text style={styles.searchIcon}>⌕</Text>
@@ -174,7 +202,6 @@ export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) 
         </View>
       </View>
 
-      {/* Filtros */}
       <View style={styles.filtersWrapper}>
         <ScrollView
           horizontal
@@ -189,46 +216,57 @@ export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) 
             accent="success"
             icon="●"
           />
-          {SPECIALTIES.map((s) => (
+          {SPECIALTIES.map((specialty) => (
             <FilterChip
-              key={s}
-              label={s}
-              active={activeSpecialty === s}
-              onPress={() => setActiveSpecialty(activeSpecialty === s ? null : s)}
+              key={specialty}
+              label={specialty}
+              active={activeSpecialty === specialty}
+              onPress={() =>
+                setActiveSpecialty(activeSpecialty === specialty ? null : specialty)
+              }
             />
           ))}
         </ScrollView>
 
-        {/* Sort selector */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={[styles.chipRow, { paddingTop: 4 }]}
           accessibilityLabel="Ordenar resultados"
         >
-          {SORT_OPTIONS.map((opt) => (
-            <Pressable
-              key={opt.value}
-              onPress={() => setSortBy(opt.value)}
-              style={[styles.sortChip, sortBy === opt.value && styles.sortChipActive]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: sortBy === opt.value }}
-              accessibilityLabel={`Ordenar por ${opt.label}`}
-            >
-              <Text
+          {SORT_OPTIONS.map((option) => {
+            const distanceDisabled = option.value === 'distance' && !deviceLocation
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => !distanceDisabled && setSortBy(option.value)}
+                disabled={distanceDisabled}
                 style={[
-                  styles.sortChipText,
-                  sortBy === opt.value && styles.sortChipTextActive,
+                  styles.sortChip,
+                  sortBy === option.value && styles.sortChipActive,
+                  distanceDisabled && styles.sortChipDisabled,
                 ]}
+                accessibilityRole="radio"
+                accessibilityState={{
+                  selected: sortBy === option.value,
+                  disabled: distanceDisabled,
+                }}
+                accessibilityLabel={`Ordenar por ${option.label}`}
               >
-                {opt.label}
-              </Text>
-            </Pressable>
-          ))}
+                <Text
+                  style={[
+                    styles.sortChipText,
+                    sortBy === option.value && styles.sortChipTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            )
+          })}
         </ScrollView>
       </View>
 
-      {/* Lista */}
       {isPending ? (
         <View style={styles.listContainer}>
           {[0, 1, 2, 3, 4].map((i) => (
@@ -283,7 +321,6 @@ export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) 
               <Text style={styles.footerEnd}>— Fin de los resultados —</Text>
             ) : null
           }
-          // Performance hints
           removeClippedSubviews
           windowSize={11}
           maxToRenderPerBatch={10}
@@ -293,10 +330,6 @@ export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) 
     </SafeAreaView>
   )
 }
-
-// ============================================================
-// SUBCOMPONENTS
-// ============================================================
 
 interface FilterChipProps {
   label: string
@@ -319,10 +352,7 @@ function FilterChip({
       onPress={onPress}
       style={[
         styles.chip,
-        active && {
-          backgroundColor: accentColor,
-          borderColor: accentColor,
-        },
+        active && { backgroundColor: accentColor, borderColor: accentColor },
       ]}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
@@ -340,26 +370,30 @@ function FilterChip({
 
 function SkeletonVetCard() {
   return (
-    <View style={[styles.skelCard]}>
+    <View style={styles.skelCard}>
       <Skeleton width={56} height={56} borderRadius={14} />
       <View style={{ flex: 1, marginLeft: 12, gap: 6 }}>
-        <Skeleton width={'70%'} height={16} />
-        <Skeleton width={'50%'} height={12} />
-        <Skeleton width={'40%'} height={12} />
+        <Skeleton width="70%" height={16} />
+        <Skeleton width="50%" height={12} />
+        <Skeleton width="40%" height={12} />
       </View>
     </View>
   )
 }
 
-// ============================================================
-// STYLES
-// ============================================================
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: UI_COLORS.bg },
   header: { padding: 16, paddingBottom: 8 },
   title: { fontSize: 26, fontWeight: '700', color: UI_COLORS.text },
-  subtitle: { fontSize: 13, color: UI_COLORS.muted, marginTop: 2, marginBottom: 12 },
+  subtitle: { fontSize: 13, color: UI_COLORS.muted, marginTop: 2, marginBottom: 8 },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  locationIcon: { fontSize: 16, color: UI_COLORS.sage },
+  locationText: { flex: 1, fontSize: 11, color: UI_COLORS.muted },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -371,12 +405,7 @@ const styles = StyleSheet.create({
     borderColor: UI_COLORS.border,
   },
   searchIcon: { fontSize: 18, color: UI_COLORS.muted, marginRight: 8 },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: UI_COLORS.text,
-    height: '100%',
-  },
+  searchInput: { flex: 1, fontSize: 15, color: UI_COLORS.text, height: '100%' },
   clearIcon: { fontSize: 16, color: UI_COLORS.muted, paddingHorizontal: 4 },
   filtersWrapper: {
     paddingBottom: 8,
@@ -406,6 +435,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   sortChipActive: { backgroundColor: '#5B75531a' },
+  sortChipDisabled: { opacity: 0.4 },
   sortChipText: { fontSize: 12, fontWeight: '600', color: UI_COLORS.muted },
   sortChipTextActive: { color: UI_COLORS.sage },
   listContainer: { padding: 16, paddingBottom: 32 },
@@ -418,11 +448,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: UI_COLORS.borderLight,
   },
-  footer: {
-    paddingVertical: 24,
-    alignItems: 'center',
-    gap: 8,
-  },
+  footer: { paddingVertical: 24, alignItems: 'center', gap: 8 },
   footerText: { fontSize: 12, color: UI_COLORS.muted },
   footerEnd: {
     textAlign: 'center',
