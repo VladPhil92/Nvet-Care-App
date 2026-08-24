@@ -104,9 +104,10 @@ describe('AuthService.refreshToken (reuse detection)', () => {
       },
     };
     prisma.userSession.findUnique.mockResolvedValue(session);
+    // refreshToken() firma primero el refresh token y luego el access token.
     jwtService.signAsync
-      .mockResolvedValueOnce('new.access.jwt')
-      .mockResolvedValueOnce('new.refresh.jwt');
+      .mockResolvedValueOnce('new.refresh.jwt')
+      .mockResolvedValueOnce('new.access.jwt');
 
     const result = await service.refreshToken(incomingToken, {
       ipAddress: '1.1.1.1',
@@ -144,8 +145,8 @@ describe('AuthService.refreshToken (reuse detection)', () => {
     };
     prisma.userSession.findUnique.mockResolvedValue(session);
     jwtService.signAsync
-      .mockResolvedValueOnce('new.access')
-      .mockResolvedValueOnce('new.refresh');
+      .mockResolvedValueOnce('new.refresh')
+      .mockResolvedValueOnce('new.access');
 
     await service.refreshToken(incomingToken);
 
@@ -162,7 +163,6 @@ describe('AuthService.refreshToken (reuse detection)', () => {
 
   it('detecta reuse: hash matchea previousTokenHashes → revoca TODAS + audit CRITICAL', async () => {
     const stolenToken = 'old.refresh.jwt';
-    const stolenHash = hashOf(stolenToken);
     jwtService.verifyAsync.mockResolvedValue({ sub: USER_ID, type: 'refresh' });
 
     // Hash actual NO matchea (porque ya rotó)

@@ -3,19 +3,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs'
 import type { CompositeScreenProps } from '@react-navigation/native'
 
-/**
- * Param lists tipadas — el corazón del type-safety en React Navigation.
- *
- * Cada navigator declara su propio Param List. Cuando un screen necesita
- * tipo seguro de su `route` y `navigation` props, importa el helper
- * correspondiente de este archivo (ej. `LoginScreenProps`).
- *
- * Beneficios:
- *  - Auto-completado en IDE para `navigation.navigate('NombreRuta', { params })`
- *  - Errores de compilación si pasas params incorrectos
- *  - Refactor seguro: renombrar una ruta lo detecta TypeScript en todos sus usos
- */
-
 // ============================================================
 // AUTH STACK (público)
 // ============================================================
@@ -23,25 +10,9 @@ export type AuthStackParamList = {
   Login: undefined
   Register: { role?: 'CLIENT' | 'VET' } | undefined
   ForgotPassword: undefined
-  /**
-   * Step de verificación TOTP durante login. Se navega automáticamente
-   * cuando el backend retorna `error: 'TWO_FACTOR_REQUIRED'`.
-   * Recibe email+password para reintentar el login con el código TOTP.
-   */
   TwoFactorVerify: { email: string; password: string }
-  /**
-   * Login alternativo cuando el usuario perdió el autenticador.
-   */
   TwoFactorRecovery: { email: string; password: string }
-  /**
-   * Reset de password vía deep link recibido por email
-   * (`nvetcare://reset-password?token=...`).
-   */
   ResetPassword: { token: string }
-  /**
-   * Verificación de email vía deep link
-   * (`nvetcare://verify-email?token=...`).
-   */
   VerifyEmail: { token: string }
 }
 
@@ -55,13 +26,11 @@ export type ClientTabParamList = {
   ClientProfile: undefined
 }
 
-// Stack interno de cada tab (para navegar a detalles dentro del tab)
 export type ClientHomeStackParamList = {
   HomeMain: undefined
   AppointmentDetail: { appointmentId: string }
   AppointmentTracking: { appointmentId: string }
   Emergency: undefined
-  /** Tienda de productos veterinarios (estado: Coming Soon) */
   Store: { category?: string } | undefined
 }
 
@@ -96,6 +65,7 @@ export type VetDashboardStackParamList = {
 
 export type VetScheduleStackParamList = {
   ScheduleMain: undefined
+  VetAppointmentDetail: { appointmentId: string }
   PatientHistory: { petId: string }
 }
 
@@ -106,7 +76,7 @@ export type VetEarningsStackParamList = {
 }
 
 // ============================================================
-// SHARED (accesible desde ambos modos)
+// SHARED
 // ============================================================
 export type SharedStackParamList = {
   ProfileMain: undefined
@@ -117,41 +87,27 @@ export type SharedStackParamList = {
   VetVerification: undefined
   UploadVerificationDocs: undefined
   TopUpWallet: undefined
-  /** Gestión de mascotas: lista, crear, editar, eliminar */
   MyPets: undefined
-  /**
-   * Configuración y enrollment de 2FA TOTP. Solo accesible desde Profile
-   * para usuarios autenticados que quieren activar 2FA.
-   */
   TwoFactorEnrollment: undefined
-  /**
-   * Lista de sesiones activas del usuario con revoke individual + revoke-all.
-   */
   ActiveSessions: undefined
-  /**
-   * Solo en VetProfileStack:
-   */
   PriceManagement: undefined
   RequestWithdrawal: undefined
   TransferVerification: { transactionId: string }
 }
 
 // ============================================================
-// ROOT (state machine principal)
+// ROOT
 // ============================================================
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>
   Client: NavigatorScreenParams<ClientTabParamList>
   Vet: NavigatorScreenParams<VetTabParamList>
-  /** Pantalla shared modal-like (presentation: 'modal') */
   ChatModal: { appointmentId: string }
 }
 
 // ============================================================
-// HELPERS DE PROPS PARA CADA SCREEN
+// HELPERS
 // ============================================================
-
-// Auth
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>
 export type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'>
 export type ForgotPasswordScreenProps = NativeStackScreenProps<
@@ -171,7 +127,6 @@ export type VerifyEmailScreenProps = NativeStackScreenProps<
   'VerifyEmail'
 >
 
-// Shared (Profile)
 export type TwoFactorEnrollmentScreenProps = NativeStackScreenProps<
   SharedStackParamList,
   'TwoFactorEnrollment'
@@ -181,7 +136,6 @@ export type ActiveSessionsScreenProps = NativeStackScreenProps<
   'ActiveSessions'
 >
 
-// Client tabs
 export type ClientHomeScreenProps = CompositeScreenProps<
   BottomTabScreenProps<ClientTabParamList, 'ClientHome'>,
   NativeStackScreenProps<RootStackParamList>
@@ -195,7 +149,6 @@ export type ClientAppointmentsScreenProps = BottomTabScreenProps<
   'ClientAppointments'
 >
 
-// Vet tabs
 export type VetDashboardScreenProps = BottomTabScreenProps<
   VetTabParamList,
   'VetDashboard'
