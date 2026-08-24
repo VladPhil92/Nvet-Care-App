@@ -33,7 +33,7 @@
     "zustand": "^5.0.0",
     "react-native-vector-icons": "^10.2.0",
     "@react-native-community/datetimepicker": "^8.2.0",
-    "react-native-maps": "^1.18.0"
+    "react-native-maps": "1.18.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",
