@@ -8,11 +8,6 @@
  *   - Dot accent naranja (T.gold) opcional como "nodo" o indicador
  *
  * Coherente con el símbolo principal de Nvet Care (curva + dot).
- *
- * Uso:
- *   <Icon name="home" size={24} />
- *   <Icon name="bell" size={28} accent />        // bell con dot naranja
- *   <Icon name="emergency" size={32} color="#C53030" />
  */
 
 import React from 'react'
@@ -20,7 +15,6 @@ import Svg, { Circle, Path, Rect, G } from 'react-native-svg'
 import { Colors } from '../../theme/colors'
 
 export type IconName =
-  // ── Navegación principal ───────────────────────────────────────
   | 'home'
   | 'services'
   | 'veterinarians'
@@ -29,7 +23,6 @@ export type IconName =
   | 'chat'
   | 'bell'
   | 'profile'
-  // ── Servicios ──────────────────────────────────────────────────
   | 'vet-home'
   | 'telemedicine'
   | 'consultation'
@@ -38,7 +31,6 @@ export type IconName =
   | 'hospital'
   | 'surgery'
   | 'grooming'
-  // ── Acción / Funciones ────────────────────────────────────────
   | 'search'
   | 'filters'
   | 'location'
@@ -47,7 +39,6 @@ export type IconName =
   | 'share'
   | 'phone'
   | 'arrow-right'
-  // ── Confianza / Seguridad ─────────────────────────────────────
   | 'verified'
   | 'shield'
   | 'secure-payment'
@@ -56,26 +47,25 @@ export type IconName =
   | 'star'
   | 'medal'
   | 'headset'
-  // ── Utilitarios ────────────────────────────────────────────────
   | 'check'
   | 'close'
   | 'arrow-back'
+  | 'arrow-left'
   | 'plus'
+  | 'edit'
+  | 'trash'
+  | 'chevron-up'
+  | 'chevron-down'
 
 interface IconProps {
   name: IconName
   size?: number
   color?: string
-  accent?: boolean // muestra el dot naranja como acento
+  accent?: boolean
   accentColor?: string
   strokeWidth?: number
 }
 
-/**
- * Render principal. Cada icono se dibuja en viewBox 24x24 con stroke
- * configurable. El dot accent se posiciona en la esquina inferior derecha
- * (excepto en iconos donde semanticamente vive en otra parte como `bell`).
- */
 export function Icon({
   name,
   size = 24,
@@ -94,10 +84,6 @@ export function Icon({
   )
 }
 
-/**
- * Posición del dot accent por icono. Para la mayoría es esquina
- * inferior derecha (18, 18). Para algunos como `bell` queda arriba-derecha.
- */
 function accentDotPos(name: IconName): { x: number; y: number } {
   switch (name) {
     case 'bell':
@@ -110,15 +96,12 @@ function accentDotPos(name: IconName): { x: number; y: number } {
   }
 }
 
-// ── Path data por icono ──────────────────────────────────────────
 function renderIcon(name: IconName): React.ReactNode {
   switch (name) {
-    // === Navegación ============================================
     case 'home':
       return (
         <>
           <Path d="M3 11 L12 3 L21 11 L21 20 C21 20.55 20.55 21 20 21 L4 21 C3.45 21 3 20.55 3 20 Z" />
-          {/* Paw mark (4 dots) */}
           <Circle cx="9.5" cy="14" r="0.7" fill={Colors.ink} />
           <Circle cx="11" cy="13.2" r="0.7" fill={Colors.ink} />
           <Circle cx="12.5" cy="13.2" r="0.7" fill={Colors.ink} />
@@ -127,7 +110,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'services':
-      // Maletín médico con cruz +
       return (
         <>
           <Rect x="3" y="7" width="18" height="13" rx="2" />
@@ -136,7 +118,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'veterinarians':
-      // Persona con estetoscopio (avatar + curva)
       return (
         <>
           <Circle cx="12" cy="7" r="3.2" />
@@ -146,7 +127,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'store':
-      // Bolsa de compras con paw
       return (
         <>
           <Path d="M5 8 H19 L18 21 H6 Z" />
@@ -157,7 +137,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'emergency':
-      // Sirena con líneas radiales
       return (
         <>
           <Path d="M7 14 V12 C7 9 9 7 12 7 C15 7 17 9 17 12 V14" />
@@ -166,7 +145,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'chat':
-      // Burbuja de mensaje con 3 dots
       return (
         <>
           <Path d="M4 6 C4 5 5 4 6 4 H18 C19 4 20 5 20 6 V14 C20 15 19 16 18 16 H10 L6 20 V16 C5 16 4 15 4 14 Z" />
@@ -176,7 +154,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'bell':
-      // Campana
       return (
         <>
           <Path d="M6 16 V11 C6 8 8 6 12 6 C16 6 18 8 18 11 V16 L19 18 H5 Z" />
@@ -185,17 +162,13 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'profile':
-      // Avatar simple
       return (
         <>
           <Circle cx="12" cy="9" r="3.5" />
           <Path d="M5 21 C5 17 8 15 12 15 C16 15 19 17 19 21" />
         </>
       )
-
-    // === Servicios =============================================
     case 'vet-home':
-      // Casa + paw
       return (
         <>
           <Path d="M4 11 L12 4 L20 11 V20 H4 Z" />
@@ -207,7 +180,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'telemedicine':
-      // Estetoscopio con dot
       return (
         <>
           <Path d="M7 4 V10 C7 13 9 15 12 15 C15 15 17 13 17 10 V4" />
@@ -217,7 +189,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'consultation':
-      // Burbuja con cruz médica
       return (
         <>
           <Path d="M4 6 C4 5 5 4 6 4 H18 C19 4 20 5 20 6 V14 C20 15 19 16 18 16 H10 L6 20 V16 C5 16 4 15 4 14 Z" />
@@ -225,7 +196,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'vaccination':
-      // Jeringa
       return (
         <>
           <Path d="M14 4 L20 10" />
@@ -236,7 +206,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'laboratory':
-      // Tubo de ensayo
       return (
         <>
           <Path d="M9 3 H15" />
@@ -247,7 +216,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'hospital':
-      // Cruz médica con círculo
       return (
         <>
           <Circle cx="12" cy="12" r="9" />
@@ -255,7 +223,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'surgery':
-      // Bisturí
       return (
         <>
           <Path d="M14 4 L20 10 L18 12 L4 21 V20 L17 7 Z" />
@@ -263,7 +230,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'grooming':
-      // Tijeras
       return (
         <>
           <Circle cx="6" cy="7" r="2.5" />
@@ -271,8 +237,6 @@ function renderIcon(name: IconName): React.ReactNode {
           <Path d="M8 8.5 L20 16 M8 15.5 L20 8" />
         </>
       )
-
-    // === Acción ================================================
     case 'search':
       return (
         <>
@@ -281,7 +245,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'filters':
-      // Tres líneas con dots-control deslizante
       return (
         <>
           <Path d="M3 7 H21 M3 12 H21 M3 17 H21" />
@@ -294,7 +257,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'location':
-      // Pin
       return (
         <>
           <Path d="M12 21 C12 21 19 14 19 9 C19 5 16 2 12 2 C8 2 5 5 5 9 C5 14 12 21 12 21 Z" />
@@ -328,8 +290,6 @@ function renderIcon(name: IconName): React.ReactNode {
       return <Path d="M5 4 C5 3 6 2 7 2 H9 L11 6 L9 7.5 C10 10 12 12 14.5 13 L16 11 L20 13 V15 C20 16 19 17 18 17 C12 17 5 12 5 6 Z" transform="translate(0 1)" />
     case 'arrow-right':
       return <Path d="M5 12 H19 M14 7 L19 12 L14 17" />
-
-    // === Confianza ==============================================
     case 'verified':
       return (
         <>
@@ -354,7 +314,6 @@ function renderIcon(name: IconName): React.ReactNode {
         </>
       )
     case 'history':
-      // Historial con paw
       return (
         <>
           <Path d="M5 4 H17 L19 6 V20 H5 Z" />
@@ -392,27 +351,38 @@ function renderIcon(name: IconName): React.ReactNode {
           <Path d="M19 20 V21 C19 22 18 22.5 17 22.5 H13" />
         </>
       )
-
-    // === Utilitarios ===========================================
     case 'check':
       return <Path d="M5 12 L10 17 L19 7" />
     case 'close':
       return <Path d="M6 6 L18 18 M6 18 L18 6" />
     case 'arrow-back':
+    case 'arrow-left':
       return <Path d="M19 12 H5 M10 17 L5 12 L10 7" />
     case 'plus':
       return <Path d="M12 5 V19 M5 12 H19" />
-
+    case 'edit':
+      return (
+        <>
+          <Path d="M4 20 H8 L19 9 L15 5 L4 16 Z" />
+          <Path d="M13.5 6.5 L17.5 10.5" />
+        </>
+      )
+    case 'trash':
+      return (
+        <>
+          <Path d="M4 7 H20 M9 7 V4 H15 V7 M7 7 L8 21 H16 L17 7" />
+          <Path d="M10 11 V17 M14 11 V17" />
+        </>
+      )
+    case 'chevron-up':
+      return <Path d="M6 15 L12 9 L18 15" />
+    case 'chevron-down':
+      return <Path d="M6 9 L12 15 L18 9" />
     default:
       return null
   }
 }
 
-/**
- * Helper para envolver un icono en un círculo "node" estilo brand kit
- * (verde claro de fondo + icono verde principal). Usado en quick-actions
- * y feature highlights.
- */
 export function IconNode({
   name,
   size = 56,
@@ -430,7 +400,6 @@ export function IconNode({
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <Circle cx={size / 2} cy={size / 2} r={size / 2} fill={bg} />
-      {/* Re-render del icono escalado y centrado */}
       <G transform={`translate(${(size - iconSize) / 2}, ${(size - iconSize) / 2})`}>
         <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
           <G stroke={iconColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
