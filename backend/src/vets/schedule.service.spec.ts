@@ -57,6 +57,34 @@ describe('ScheduleService', () => {
     });
   });
 
+  it('puede excluir la propia cita al revalidar una reprogramación', async () => {
+    prisma.vetProfile.findFirst.mockResolvedValue({
+      id: 'vet-1',
+      timezone: 'America/Bogota',
+    });
+    prisma.scheduleException.findFirst.mockResolvedValue(null);
+    prisma.vetSchedule.findUnique.mockResolvedValue({
+      dayOfWeek: DayOfWeek.MONDAY,
+      startTime: '09:00',
+      endTime: '11:00',
+      slotDuration: 60,
+      isActive: true,
+    });
+    prisma.appointment.findMany.mockResolvedValue([]);
+
+    await service.getAvailability('vet-1', '2099-01-05', {
+      excludeAppointmentId: 'appointment-1',
+    });
+
+    expect(prisma.appointment.findMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        vetId: 'vet-1',
+        id: { not: 'appointment-1' },
+      }),
+      select: { time: true },
+    });
+  });
+
   it('una excepción no disponible cierra por completo la fecha', async () => {
     prisma.vetProfile.findFirst.mockResolvedValue({
       id: 'vet-1',
