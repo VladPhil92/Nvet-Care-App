@@ -1,15 +1,13 @@
 # CI workflow for Nvet Care Platform monorepo.
 #
 # 3 paquetes en paralelo (jobs concurrentes):
-#   - backend  → lint + prisma generate + test
-#   - mobile   → lint + typecheck + test (jest unit + MSW)
-#   - dashboard → lint + build (Vite incluye tsc)
+#   - backend   → install + prisma generate + lint + build + test
+#   - mobile    → install + lint + typecheck + test (jest unit + MSW)
+#   - dashboard → install + lint + build (Vite incluye tsc)
 #
-# Triggers:
-#   - push a main
-#   - pull_request a main
-#
-# Concurrency: cancela runs anteriores del mismo branch para ahorrar minutos.
+# Nota: el repositorio aún no versiona package-lock.json por workspace.
+# Mientras se consolida el lockfile del monorepo, CI usa npm install sin cache
+# para evitar fallos falsos en setup-node/npm ci.
 name: CI
 
 on:
@@ -23,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '22.x'
 
 jobs:
   backend:
@@ -40,11 +38,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Generate Prisma client
         run: npm run prisma:generate
@@ -83,11 +79,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: mobile/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
@@ -121,11 +115,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: dashboard/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
@@ -141,7 +133,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Job final que requiere los 3 anteriores — útil como required check en branch protection
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
