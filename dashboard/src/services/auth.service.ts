@@ -10,7 +10,8 @@ export interface RegisterData {
   password: string
   firstName: string
   lastName: string
-  role: 'CLIENT' | 'VET' | 'ADMIN'
+  phone?: string
+  role?: 'CLIENT' | 'VET' | 'ADMIN'
 }
 
 export interface AuthResponse {
@@ -26,11 +27,20 @@ export interface AuthResponse {
 }
 
 class AuthService {
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await apiClient.post('/auth/login', credentials)
+  async login(credentials: LoginCredentials): Promise<AuthResponse>
+  async login(email: string, password: string): Promise<AuthResponse>
+  async login(
+    credentialsOrEmail: LoginCredentials | string,
+    password?: string,
+  ): Promise<AuthResponse> {
+    const credentials =
+      typeof credentialsOrEmail === 'string'
+        ? { email: credentialsOrEmail, password: password ?? '' }
+        : credentialsOrEmail
+
+    const response = await apiClient.post<AuthResponse>('/auth/login', credentials)
     const { accessToken, refreshToken, user } = response.data
 
-    // Guardar tokens en localStorage
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('user', JSON.stringify(user))
@@ -39,10 +49,9 @@ class AuthService {
   }
 
   async register(data: RegisterData): Promise<AuthResponse> {
-    const response = await apiClient.post('/auth/register', data)
+    const response = await apiClient.post<AuthResponse>('/auth/register', data)
     const { accessToken, refreshToken, user } = response.data
 
-    // Guardar tokens en localStorage
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('user', JSON.stringify(user))
@@ -54,7 +63,6 @@ class AuthService {
     try {
       await apiClient.post('/auth/logout')
     } finally {
-      // Limpiar tokens independientemente de si la llamada API falla
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('user')
@@ -78,9 +86,9 @@ class AuthService {
     return accessToken
   }
 
-  getCurrentUser() {
+  getCurrentUser(): AuthResponse['user'] | null {
     const userStr = localStorage.getItem('user')
-    return userStr ? JSON.parse(userStr) : null
+    return userStr ? (JSON.parse(userStr) as AuthResponse['user']) : null
   }
 
   getAccessToken(): string | null {
@@ -93,3 +101,4 @@ class AuthService {
 }
 
 export const authService = new AuthService()
+export default authService
