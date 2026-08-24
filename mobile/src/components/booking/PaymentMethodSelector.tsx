@@ -53,11 +53,19 @@ const METHODS: MethodInfo[] = [
   },
 ]
 
+/**
+ * CTG aún no tiene ledger de saldo de cliente y PSE conserva un adapter
+ * sandbox. Hasta que ambos flujos tengan settlement real, se muestran como
+ * próximos pero no se pueden seleccionar por defecto. TRANSFER permanece como
+ * el método productizable del MVP.
+ */
+const DEFAULT_DISABLED_METHODS: PaymentMethod[] = ['CTG', 'PSE']
+
 export default function PaymentMethodSelector({
   amountCop,
   selected,
   onSelect,
-  disabledMethods = [],
+  disabledMethods = DEFAULT_DISABLED_METHODS,
 }: Props) {
   const balanceQuery = useBalanceQuery()
   const ctgRateQuery = useCtgRateQuery()
