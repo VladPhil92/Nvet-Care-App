@@ -20,6 +20,17 @@ def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAl
 
 def mapsApiKey = System.getenv("GOOGLE_MAPS_ANDROID_API_KEY") ?: ""
 
+// RN 0.75.4 ships on the Android 34 / AGP 8.5 baseline. Some transitive
+// dependencies use open AndroidX ranges and can otherwise drift to Core 1.16,
+// which requires API 35 + AGP 8.6. Keep the native graph on the compatible
+// AndroidX Core line until the React Native toolchain itself is upgraded.
+configurations.configureEach {
+    resolutionStrategy {
+        force "androidx.core:core:1.13.1"
+        force "androidx.core:core-ktx:1.13.1"
+    }
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
