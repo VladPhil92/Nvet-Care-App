@@ -42,7 +42,7 @@ export class ScheduleService {
         isVerified: true,
         verificationStatus: VerificationStatus.APPROVED,
       },
-      select: { id: true },
+      select: { id: true, timezone: true },
     });
 
     if (!vet) {
@@ -102,7 +102,8 @@ export class ScheduleService {
     return slots.map((time) => ({
       date,
       time,
-      available: !bookedTimes.has(time) && !this.isPastSlot(dayStart, time),
+      available:
+        !bookedTimes.has(time) && !this.isPastSlot(date, time, vet.timezone),
     }));
   }
 
@@ -141,17 +142,25 @@ export class ScheduleService {
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   }
 
-  private isPastSlot(dayStart: Date, time: string): boolean {
-    const now = new Date();
-    const todayUtc = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-    );
+  private isPastSlot(date: string, time: string, timezone: string): boolean {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date());
 
-    if (dayStart.getTime() < todayUtc.getTime()) return true;
-    if (dayStart.getTime() > todayUtc.getTime()) return false;
+    const get = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value ?? '';
 
-    const slot = this.toMinutes(time);
-    const current = now.getUTCHours() * 60 + now.getUTCMinutes();
-    return slot <= current;
+    const currentDate = `${get('year')}-${get('month')}-${get('day')}`;
+    if (date < currentDate) return true;
+    if (date > currentDate) return false;
+
+    const currentMinutes = Number(get('hour')) * 60 + Number(get('minute'));
+    return this.toMinutes(time) <= currentMinutes;
   }
 }
