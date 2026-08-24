@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AppointmentStatus, UserRole } from '@prisma/client';
+import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateLiveLocationDto } from './dto/update-live-location.dto';
 
@@ -14,6 +14,15 @@ const TRACKABLE_STATUSES = new Set<AppointmentStatus>([
 ]);
 
 const LOCATION_STALE_AFTER_MS = 2 * 60 * 1000;
+
+interface LiveLocationRow {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  heading: number | null;
+  speed_mps: number | null;
+  updated_at: Date;
+}
 
 @Injectable()
 export class LiveLocationService {
@@ -33,9 +42,6 @@ export class LiveLocationService {
         vet: {
           select: {
             userId: true,
-            latitude: true,
-            longitude: true,
-            updatedAt: true,
             user: {
               select: {
                 firstName: true,
@@ -73,24 +79,36 @@ export class LiveLocationService {
       };
     }
 
-    const hasCoordinates =
-      appointment.vet.latitude !== null && appointment.vet.longitude !== null;
-    const ageMs = Date.now() - appointment.vet.updatedAt.getTime();
+    const rows = await this.prisma.$queryRaw<LiveLocationRow[]>(
+      Prisma.sql`
+        SELECT latitude, longitude, accuracy, heading, speed_mps, updated_at
+        FROM appointment_live_locations
+        WHERE appointment_id = ${appointmentId}::uuid
+        LIMIT 1
+      `,
+    );
+    const location = rows[0] ?? null;
+    const ageMs = location
+      ? Date.now() - new Date(location.updated_at).getTime()
+      : 0;
 
     return {
       appointmentId,
       status: appointment.status,
       trackingActive: true,
-      vetLocation: hasCoordinates
+      vetLocation: location
         ? {
-            latitude: appointment.vet.latitude,
-            longitude: appointment.vet.longitude,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            heading: location.heading,
+            speedMps: location.speed_mps,
           }
         : null,
-      locationUpdatedAt: hasCoordinates
-        ? appointment.vet.updatedAt.toISOString()
+      locationUpdatedAt: location
+        ? new Date(location.updated_at).toISOString()
         : null,
-      isStale: hasCoordinates ? ageMs > LOCATION_STALE_AFTER_MS : false,
+      isStale: location ? ageMs > LOCATION_STALE_AFTER_MS : false,
       vet: appointment.vet.user,
     };
   }
@@ -107,7 +125,6 @@ export class LiveLocationService {
         status: true,
         vet: {
           select: {
-            id: true,
             userId: true,
           },
         },
@@ -130,32 +147,59 @@ export class LiveLocationService {
       );
     }
 
-    const vet = await this.prisma.vetProfile.update({
-      where: { id: appointment.vet.id },
-      data: {
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-      },
-      select: {
-        latitude: true,
-        longitude: true,
-        updatedAt: true,
-      },
-    });
+    const updatedAt = new Date();
+    await this.prisma.$executeRaw(
+      Prisma.sql`
+        INSERT INTO appointment_live_locations (
+          appointment_id,
+          latitude,
+          longitude,
+          accuracy,
+          heading,
+          speed_mps,
+          updated_at
+        ) VALUES (
+          ${appointmentId}::uuid,
+          ${dto.latitude},
+          ${dto.longitude},
+          ${dto.accuracy ?? null},
+          ${dto.heading ?? null},
+          ${dto.speedMps ?? null},
+          ${updatedAt}
+        )
+        ON CONFLICT (appointment_id)
+        DO UPDATE SET
+          latitude = EXCLUDED.latitude,
+          longitude = EXCLUDED.longitude,
+          accuracy = EXCLUDED.accuracy,
+          heading = EXCLUDED.heading,
+          speed_mps = EXCLUDED.speed_mps,
+          updated_at = EXCLUDED.updated_at
+      `,
+    );
 
     return {
       appointmentId,
       status: appointment.status,
       trackingActive: true,
       vetLocation: {
-        latitude: vet.latitude,
-        longitude: vet.longitude,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
         accuracy: dto.accuracy ?? null,
         heading: dto.heading ?? null,
         speedMps: dto.speedMps ?? null,
       },
-      locationUpdatedAt: vet.updatedAt.toISOString(),
+      locationUpdatedAt: updatedAt.toISOString(),
       isStale: false,
     };
+  }
+
+  async clearLiveLocation(appointmentId: string): Promise<void> {
+    await this.prisma.$executeRaw(
+      Prisma.sql`
+        DELETE FROM appointment_live_locations
+        WHERE appointment_id = ${appointmentId}::uuid
+      `,
+    );
   }
 }
