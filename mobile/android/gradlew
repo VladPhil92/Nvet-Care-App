@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+APP_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+WRAPPER_JAR="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+if [ ! -f "$WRAPPER_JAR" ]; then
+  echo "Gradle wrapper JAR is missing: $WRAPPER_JAR" >&2
+  echo "Restore it from the React Native 0.75.4 upstream wrapper before building." >&2
+  exit 1
+fi
+exec "${JAVA_HOME:+$JAVA_HOME/bin/}java" -Dorg.gradle.appname=gradlew -classpath "$WRAPPER_JAR" org.gradle.wrapper.GradleWrapperMain "$@"
