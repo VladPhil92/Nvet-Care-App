@@ -2,7 +2,7 @@ import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
 import type { VetScheduleStackParamList } from '../types'
-import AppointmentDetailPlaceholder from '../../screens/client/AppointmentDetailPlaceholder'
+import VetAppointmentDetailScreen from '../../screens/vet/VetAppointmentDetailScreen'
 import { lazyScreen } from '../lazyScreen'
 
 const VetScheduleScreen = lazyScreen<any>(
@@ -23,7 +23,7 @@ export default function VetScheduleStack() {
       <Stack.Screen name="ScheduleMain" component={VetScheduleScreen} />
       <Stack.Screen
         name="VetAppointmentDetail"
-        component={AppointmentDetailPlaceholder}
+        component={VetAppointmentDetailScreen}
       />
     </Stack.Navigator>
   )
