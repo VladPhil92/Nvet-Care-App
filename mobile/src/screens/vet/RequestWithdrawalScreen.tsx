@@ -11,12 +11,7 @@ import {
   Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import {
-  Card,
-  Button,
-  Badge,
-  UI_COLORS,
-} from '../../components/ui/primitives'
+import { Card, Button, UI_COLORS } from '../../components/ui/primitives'
 import {
   useEarningsQuery,
   useBalanceQuery,
@@ -26,16 +21,8 @@ import { formatCOP } from '../../utils/format'
 
 /**
  * RequestWithdrawalScreen — flujo de retiro de saldo del vet.
- *
- * Capacidades:
- *  - Hero card con saldo disponible para retiro (de useEarningsQuery)
- *  - Selector de método: Transferencia bancaria / Nequi / Daviplata
- *  - Form dinámico según método:
- *    * BANK: bankName + accountNumber + accountType (savings/checking)
- *    * NEQUI/DAVIPLATA: phoneNumber
- *  - Quick amounts: 25%, 50%, 75%, 100% del saldo disponible
- *  - Validación de monto mínimo (50.000 COP) y máximo (saldo disponible)
- *  - Tras éxito → navigation.goBack()
+ * El documento del titular se solicita siempre porque el contrato del backend
+ * lo usa para validar la titularidad del destino del retiro.
  */
 
 interface Props {
@@ -67,6 +54,7 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
 
   const [method, setMethod] = useState<WithdrawalMethod>('BANK_TRANSFER')
   const [amount, setAmount] = useState('')
+  const [documentId, setDocumentId] = useState('')
   const [bankName, setBankName] = useState('Bancolombia')
   const [accountNumber, setAccountNumber] = useState('')
   const [accountType, setAccountType] = useState<'SAVINGS' | 'CHECKING'>('SAVINGS')
@@ -94,12 +82,17 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
       errs.amount = `Monto máximo: ${formatCOP(available)}`
     }
 
+    const normalizedDocumentId = documentId.trim()
+    if (normalizedDocumentId.length < 6 || normalizedDocumentId.length > 20) {
+      errs.documentId = 'Documento inválido (6-20 caracteres)'
+    }
+
     if (method === 'BANK_TRANSFER') {
-      if (!accountNumber.match(/^\d{6,16}$/))
+      if (!accountNumber.match(/^\d{6,16}$/)) {
         errs.accountNumber = 'Número de cuenta inválido (6-16 dígitos)'
-    } else {
-      if (!phoneNumber.match(/^3\d{9}$/))
-        errs.phoneNumber = 'Número celular inválido (10 dígitos, debe empezar en 3)'
+      }
+    } else if (!phoneNumber.match(/^3\d{9}$/)) {
+      errs.phoneNumber = 'Número celular inválido (10 dígitos, debe empezar en 3)'
     }
 
     setErrors(errs)
@@ -111,8 +104,16 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
         paymentMethod: method,
         accountInfo:
           method === 'BANK_TRANSFER'
-            ? { bankName, accountNumber, accountType }
-            : { phoneNumber },
+            ? {
+                bankName,
+                accountNumber,
+                accountType,
+                documentId: normalizedDocumentId,
+              }
+            : {
+                phoneNumber,
+                documentId: normalizedDocumentId,
+              },
       })
       Alert.alert(
         'Retiro solicitado',
@@ -126,7 +127,18 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
           'No pudimos procesar tu retiro. Intenta de nuevo.',
       )
     }
-  }, [amountNum, available, method, accountNumber, phoneNumber, bankName, accountType, withdrawMutation, navigation])
+  }, [
+    amountNum,
+    available,
+    documentId,
+    method,
+    accountNumber,
+    phoneNumber,
+    bankName,
+    accountType,
+    withdrawMutation,
+    navigation,
+  ])
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -147,13 +159,11 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.content}>
-          {/* Available */}
           <Card variant="elevated" style={styles.heroCard}>
             <Text style={styles.heroLabel}>DISPONIBLE PARA RETIRO</Text>
             <Text style={styles.heroAmount}>{formatCOP(available)}</Text>
           </Card>
 
-          {/* Amount */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Monto a retirar</Text>
             <TextInput
@@ -191,12 +201,10 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
             </Text>
           </View>
 
-          {/* Method */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Método de retiro</Text>
             <View style={{ gap: 8 }}>
               <MethodOption
-                id="BANK_TRANSFER"
                 glyph="🏦"
                 label="Transferencia bancaria"
                 subtitle="A cuenta de ahorros o corriente"
@@ -204,7 +212,6 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
                 onSelect={() => setMethod('BANK_TRANSFER')}
               />
               <MethodOption
-                id="NEQUI"
                 glyph="📱"
                 label="Nequi"
                 subtitle="A tu cuenta Nequi"
@@ -212,7 +219,6 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
                 onSelect={() => setMethod('NEQUI')}
               />
               <MethodOption
-                id="DAVIPLATA"
                 glyph="📲"
                 label="Daviplata"
                 subtitle="A tu cuenta Daviplata"
@@ -222,7 +228,27 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
             </View>
           </View>
 
-          {/* Account info */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Titular del retiro</Text>
+            <Text style={styles.fieldLabel}>Documento de identidad</Text>
+            <TextInput
+              value={documentId}
+              onChangeText={setDocumentId}
+              placeholder="Número de documento"
+              placeholderTextColor={UI_COLORS.muted}
+              style={[styles.input, errors.documentId && styles.inputError]}
+              autoCapitalize="characters"
+              maxLength={20}
+              accessibilityLabel="Documento del titular"
+            />
+            {errors.documentId && (
+              <Text style={styles.errorText}>{errors.documentId}</Text>
+            )}
+            <Text style={styles.helper}>
+              Debe corresponder al titular de la cuenta o billetera de destino.
+            </Text>
+          </View>
+
           {method === 'BANK_TRANSFER' ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Datos bancarios</Text>
@@ -347,14 +373,12 @@ export default function RequestWithdrawalScreen({ navigation }: Props) {
 }
 
 function MethodOption({
-  id,
   glyph,
   label,
   subtitle,
   isSelected,
   onSelect,
 }: {
-  id: WithdrawalMethod
   glyph: string
   label: string
   subtitle: string
@@ -486,7 +510,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
-  // Method
   methodCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -519,7 +542,6 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: UI_COLORS.gold,
   },
-  // Bank chips
   banksRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   bankChip: {
     paddingHorizontal: 10,
