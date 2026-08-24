@@ -35,14 +35,8 @@ android {
         manifestPlaceholders = [GOOGLE_MAPS_API_KEY: mapsApiKey]
     }
 
-    signingConfigs {
-        debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
-        }
-        if (hasReleaseSigning) {
+    if (hasReleaseSigning) {
+        signingConfigs {
             release {
                 storeFile file(releaseStoreFile)
                 storePassword releaseStorePassword
@@ -54,7 +48,7 @@ android {
 
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            // Android Gradle Plugin creates/uses the standard ~/.android/debug.keystore.
         }
         release {
             if (hasReleaseSigning) {
