@@ -9,24 +9,20 @@ import {
 } from '../services/admin.service'
 
 interface AdminState {
-  // Data
   metrics: AdminMetrics | null
   transactions: Transaction[]
   appointments: Appointment[]
   transferTracking: TransferTracking[]
   paymentStats: PaymentMethodStats[]
 
-  // Loading states
   isLoadingMetrics: boolean
   isLoadingTransactions: boolean
   isLoadingAppointments: boolean
   isLoadingTransfers: boolean
   isLoadingPaymentStats: boolean
 
-  // Error
   error: string | null
 
-  // Actions
   fetchMetrics: () => Promise<void>
   fetchTransactions: (filters?: any) => Promise<void>
   fetchAppointments: (filters?: any) => Promise<void>
@@ -39,7 +35,6 @@ interface AdminState {
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
-  // Initial state
   metrics: null,
   transactions: [],
   appointments: [],
@@ -54,7 +49,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   error: null,
 
-  // Actions
   fetchMetrics: async () => {
     set({ isLoadingMetrics: true, error: null })
     try {
@@ -123,16 +117,17 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   verifyTransfer: async (transactionId, verified) => {
     try {
       await adminService.verifyTransfer(transactionId, verified)
-      
-      // Actualizar la transacción en el estado local
-      const transactions = get().transactions.map((t) =>
+
+      const transactions: Transaction[] = get().transactions.map((t) =>
         t.id === transactionId
-          ? { ...t, status: verified ? 'LIQUIDADO' : 'DISPUTA' as const }
-          : t
+          ? {
+              ...t,
+              status: (verified ? 'LIQUIDADO' : 'DISPUTA') as Transaction['status'],
+            }
+          : t,
       )
       set({ transactions })
-      
-      // Re-fetch transfer tracking
+
       await get().fetchTransferTracking()
     } catch (error: any) {
       set({
@@ -145,10 +140,9 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   resolveDispute: async (transactionId, resolution, notes) => {
     try {
       await adminService.resolveDispute(transactionId, resolution as any, notes)
-      
-      // Actualizar la transacción en el estado local
-      const transactions = get().transactions.map((t) =>
-        t.id === transactionId ? { ...t, status: 'LIQUIDADO' as const } : t
+
+      const transactions: Transaction[] = get().transactions.map((t) =>
+        t.id === transactionId ? { ...t, status: 'LIQUIDADO' as const } : t,
       )
       set({ transactions })
     } catch (error: any) {
