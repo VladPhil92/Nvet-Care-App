@@ -16,11 +16,10 @@ import { ScheduleService } from '../vets/schedule.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 
-// Tier commission rates
 const TIER_COMMISSIONS = {
-  [VetTier.FREE]: 0.1, // 10%
-  [VetTier.PRO]: 0.08, // 8%
-  [VetTier.ELITE]: 0.03, // 3%
+  [VetTier.FREE]: 0.1,
+  [VetTier.PRO]: 0.08,
+  [VetTier.ELITE]: 0.03,
 };
 
 @Injectable()
@@ -30,9 +29,6 @@ export class AppointmentsService {
     private readonly scheduleService: ScheduleService,
   ) {}
 
-  /**
-   * Get appointments with filters
-   */
   async getAppointments(
     userId: string,
     userRole: UserRole,
@@ -44,7 +40,6 @@ export class AppointmentsService {
   ) {
     const where: Prisma.AppointmentWhereInput = {};
 
-    // Filter by role
     if (userRole === UserRole.CLIENT) {
       where.clientId = userId;
     } else if (userRole === UserRole.VET) {
@@ -55,9 +50,7 @@ export class AppointmentsService {
         where.vetId = vetProfile.id;
       }
     }
-    // ADMIN sees all
 
-    // Apply filters
     if (filters.status) {
       where.status = filters.status as AppointmentStatus;
     }
@@ -97,9 +90,6 @@ export class AppointmentsService {
     });
   }
 
-  /**
-   * Get today's appointments for a vet
-   */
   async getTodayAppointments(vetProfileId: string) {
     if (!vetProfileId) {
       throw new BadRequestException('Vet profile not found');
@@ -135,9 +125,6 @@ export class AppointmentsService {
     });
   }
 
-  /**
-   * Get appointment by ID
-   */
   async getAppointmentById(id: string) {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id },
@@ -161,12 +148,9 @@ export class AppointmentsService {
   }
 
   /**
-   * Create new appointment.
-   *
-   * El slot se valida contra la agenda real antes del write. La restricción
-   * parcial de base de datos `appointments_active_slot_unique` actúa como
-   * segunda barrera ante dos requests concurrentes que pasen la validación
-   * al mismo tiempo.
+   * El slot se valida contra agenda real antes del write. La restricción
+   * parcial `appointments_active_slot_unique` es la barrera definitiva frente
+   * a dos requests concurrentes que intenten reservar el mismo slot.
    */
   async createAppointment(clientId: string, data: CreateAppointmentDto) {
     const vet = await this.prisma.vetProfile.findUnique({
@@ -176,11 +160,9 @@ export class AppointmentsService {
     if (!vet) {
       throw new NotFoundException('Veterinarian not found');
     }
-
     if (!vet.isActive) {
       throw new BadRequestException('Veterinarian is not active');
     }
-
     if (!vet.isVerified) {
       throw new BadRequestException('Veterinarian is not verified');
     }
@@ -192,7 +174,6 @@ export class AppointmentsService {
     if (!pet) {
       throw new NotFoundException('Pet not found');
     }
-
     if (pet.ownerId !== clientId) {
       throw new ForbiddenException('Pet does not belong to you');
     }
@@ -210,7 +191,7 @@ export class AppointmentsService {
           clientId,
           petId: data.petId,
           serviceType: data.serviceType,
-          date: new Date(data.date),
+          date: this.toUtcDateOnly(data.date),
           time: data.time,
           address: data.address,
           amount: data.amount,
@@ -252,8 +233,9 @@ export class AppointmentsService {
   }
 
   /**
-   * Update appointment. Reprogramar fecha u hora vuelve a validar el slot
-   * ignorando la propia cita para evitar un falso conflicto.
+   * Reprogramar fecha u hora vuelve a validar disponibilidad. La cita actual
+   * se excluye del cálculo para que mantener el mismo slot no sea un falso
+   * conflicto.
    */
   async updateAppointment(id: string, data: UpdateAppointmentDto) {
     const appointment = await this.getAppointmentById(id);
@@ -285,7 +267,7 @@ export class AppointmentsService {
       return await this.prisma.appointment.update({
         where: { id },
         data: {
-          ...(data.date && { date: new Date(data.date) }),
+          ...(data.date && { date: this.toUtcDateOnly(data.date) }),
           ...(data.time && { time: data.time }),
           ...(data.address && { address: data.address }),
           ...(data.notes !== undefined && { notes: data.notes }),
@@ -303,9 +285,6 @@ export class AppointmentsService {
     }
   }
 
-  /**
-   * Cancel appointment
-   */
   async cancelAppointment(id: string, reason?: string) {
     const appointment = await this.getAppointmentById(id);
 
@@ -324,9 +303,6 @@ export class AppointmentsService {
     });
   }
 
-  /**
-   * Get appointment tracking
-   */
   async getAppointmentTracking(id: string) {
     const appointment = await this.getAppointmentById(id);
 
@@ -346,9 +322,6 @@ export class AppointmentsService {
     };
   }
 
-  /**
-   * Update appointment status (vets only)
-   */
   async updateAppointmentStatus(id: string, status: string) {
     const appointment = await this.getAppointmentById(id);
 
@@ -370,9 +343,6 @@ export class AppointmentsService {
     });
   }
 
-  /**
-   * Add clinical notes (vets only)
-   */
   async addClinicalNotes(id: string, diagnosis: string, treatment: string) {
     await this.getAppointmentById(id);
 
@@ -418,6 +388,11 @@ export class AppointmentsService {
     return parsed.toISOString().slice(0, 10);
   }
 
+  private toUtcDateOnly(value: string | Date): Date {
+    const dateOnly = this.toDateOnly(value);
+    return new Date(`${dateOnly}T00:00:00.000Z`);
+  }
+
   private rethrowBookingConflict(error: unknown): void {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -429,9 +404,6 @@ export class AppointmentsService {
     }
   }
 
-  /**
-   * Validate status transition
-   */
   private validateStatusTransition(
     current: AppointmentStatus,
     next: AppointmentStatus,
