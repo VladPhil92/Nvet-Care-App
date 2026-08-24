@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { qk, invalidateAfterBooking } from '../../lib/queryKeys'
-import appointmentService from '../../services/appointment.service'
+import appointmentService, { AppointmentStatus } from '../../services/appointment.service'
 import paymentService from '../../services/payment.service'
 import authService from '../../services/auth.service'
 import petService, { CreatePetData, Pet } from '../../services/pet.service'
 import reviewService, { CreateReviewPayload, UpdateReviewPayload } from '../../services/review.service'
-import vetService from '../../services/vet.service'
+import vetService, { VetPrice } from '../../services/vet.service'
 
 /**
  * Mutations de la app móvil con optimistic updates para UX instantánea.
@@ -79,7 +79,6 @@ export function useBookAppointmentMutation() {
       appointmentService.createAppointment(vars),
 
     onSuccess: async (newAppointment: any) => {
-      // Prime el cache con el nuevo appointment
       qc.setQueryData(qk.appointments.detail(newAppointment.id), newAppointment)
       await invalidateAfterBooking(qc, newAppointment.id)
     },
@@ -109,7 +108,6 @@ export function useCancelAppointmentMutation() {
       const previousLists = qc.getQueriesData({ queryKey: qk.appointments.all })
       const previousDetail = qc.getQueryData(qk.appointments.detail(id))
 
-      // Optimistic update: marcar como CANCELLED en la lista
       qc.setQueriesData(
         { queryKey: qk.appointments.all },
         (old: any) => {
@@ -122,7 +120,6 @@ export function useCancelAppointmentMutation() {
         },
       )
 
-      // En el detalle también
       if (previousDetail) {
         qc.setQueryData(qk.appointments.detail(id), {
           ...(previousDetail as any),
@@ -157,7 +154,7 @@ export function useCancelAppointmentMutation() {
 
 interface UpdateStatusVars {
   id: string
-  status: string
+  status: AppointmentStatus
 }
 
 export function useUpdateAppointmentStatusMutation() {
@@ -173,7 +170,6 @@ export function useUpdateAppointmentStatusMutation() {
 
       const snapshots = qc.getQueriesData({ queryKey: qk.appointments.all })
 
-      // Update optimista en todas las listas que contengan este appointment
       qc.setQueriesData({ queryKey: qk.appointments.all }, (old: any) => {
         if (!Array.isArray(old)) {
           if (old?.id === id) return { ...old, status, _optimistic: true }
@@ -215,7 +211,6 @@ interface ProcessPaymentVars {
   paymentMethod: 'CTG' | 'PSE' | 'TRANSFER'
   amountCop: number
   amountCtg?: number
-  /** Idempotency key generada por el cliente (UUID v4 recomendado) */
   idempotencyKey?: string
 }
 
@@ -240,7 +235,7 @@ export function useProcessPaymentMutation() {
 }
 
 // ============================================================
-// PAYMENTS - verify transfer (vet sube comprobante)
+// PAYMENTS - verify transfer
 // ============================================================
 
 interface VerifyTransferVars {
@@ -256,7 +251,7 @@ export function useVerifyTransferMutation() {
   return useMutation({
     mutationKey: ['payments', 'verifyTransfer'],
     mutationFn: (vars: VerifyTransferVars) =>
-      paymentService.verifyTransfer(vars.transactionId, vars.file as any, {
+      paymentService.verifyTransfer(vars.transactionId, vars.file, {
         transferCode: vars.transferCode,
         transferDate: vars.transferDate,
       }),
@@ -271,7 +266,7 @@ export function useVerifyTransferMutation() {
 }
 
 // ============================================================
-// PETS - create new pet (durante booking flow)
+// PETS - create new pet
 // ============================================================
 
 export function useCreatePetMutation() {
@@ -282,9 +277,9 @@ export function useCreatePetMutation() {
     mutationFn: (data: CreatePetData) => petService.createPet(data),
 
     onSuccess: (newPet: Pet) => {
-      // Optimistic prepend a la lista cacheada
-      qc.setQueryData<Pet[] | undefined>(qk.pets.list(), (prev) =>
-        prev ? [newPet, ...prev] : [newPet],
+      qc.setQueryData<Pet[] | undefined>(
+        qk.pets.list(),
+        (prev: Pet[] | undefined) => (prev ? [newPet, ...prev] : [newPet]),
       )
       qc.setQueryData(qk.pets.detail(newPet.id), newPet)
     },
@@ -292,7 +287,7 @@ export function useCreatePetMutation() {
 }
 
 // ============================================================
-// PRICES (gestión de servicios y precios del vet)
+// PRICES
 // ============================================================
 
 interface CreatePriceVars {
@@ -308,9 +303,11 @@ export function useCreatePriceMutation() {
     mutationKey: ['prices', 'create'],
     mutationFn: (data: CreatePriceVars) => vetService.createPrice(data),
 
-    onSuccess: (newPrice: any) => {
-      qc.setQueryData<any[] | undefined>(qk.vets.me.prices(), (prev) =>
-        prev ? [newPrice, ...prev] : [newPrice],
+    onSuccess: (newPrice: VetPrice) => {
+      qc.setQueryData<VetPrice[] | undefined>(
+        qk.vets.me.prices(),
+        (prev: VetPrice[] | undefined) =>
+          prev ? [newPrice, ...prev] : [newPrice],
       )
     },
   })
@@ -336,13 +333,14 @@ export function useUpdatePriceMutation() {
 
     onMutate: async ({ priceId, data }) => {
       await qc.cancelQueries({ queryKey: qk.vets.me.prices() })
-      const previous = qc.getQueryData<any[]>(qk.vets.me.prices())
+      const previous = qc.getQueryData<VetPrice[]>(qk.vets.me.prices())
 
-      // Optimistic update
-      qc.setQueryData<any[] | undefined>(qk.vets.me.prices(), (prev) =>
-        prev?.map((p) =>
-          p.id === priceId ? { ...p, ...data, _optimistic: true } : p,
-        ),
+      qc.setQueryData<VetPrice[] | undefined>(
+        qk.vets.me.prices(),
+        (prev: VetPrice[] | undefined) =>
+          prev?.map((p: VetPrice) =>
+            p.id === priceId ? { ...p, ...data } : p,
+          ),
       )
 
       return { previous }
@@ -361,7 +359,7 @@ export function useUpdatePriceMutation() {
 }
 
 // ============================================================
-// PETS - update + delete (create ya existe más arriba)
+// PETS - update + delete
 // ============================================================
 
 interface UpdatePetVars {
@@ -379,8 +377,10 @@ export function useUpdatePetMutation() {
 
     onSuccess: (updatedPet: Pet) => {
       qc.setQueryData(qk.pets.detail(updatedPet.id), updatedPet)
-      qc.setQueryData<Pet[] | undefined>(qk.pets.list(), (prev) =>
-        prev?.map((p) => (p.id === updatedPet.id ? updatedPet : p)),
+      qc.setQueryData<Pet[] | undefined>(
+        qk.pets.list(),
+        (prev: Pet[] | undefined) =>
+          prev?.map((p: Pet) => (p.id === updatedPet.id ? updatedPet : p)),
       )
     },
   })
@@ -396,9 +396,10 @@ export function useDeletePetMutation() {
     onMutate: async (petId) => {
       await qc.cancelQueries({ queryKey: qk.pets.all })
       const previous = qc.getQueryData<Pet[]>(qk.pets.list())
-      // Optimistic remove
-      qc.setQueryData<Pet[] | undefined>(qk.pets.list(), (prev) =>
-        prev?.filter((p) => p.id !== petId),
+      qc.setQueryData<Pet[] | undefined>(
+        qk.pets.list(),
+        (prev: Pet[] | undefined) =>
+          prev?.filter((p: Pet) => p.id !== petId),
       )
       return { previous }
     },
@@ -428,11 +429,8 @@ export function useCreateReviewMutation() {
       reviewService.createReview(payload),
 
     onSuccess: (review: any) => {
-      // Cachear la review de la cita para que LeaveReviewScreen la muestre
       qc.setQueryData(qk.reviews.forAppointment(review.appointmentId), review)
-      // Invalidar reviews del vet para reflejar el nuevo rating
       qc.invalidateQueries({ queryKey: qk.reviews.all })
-      // Invalidar detalle del vet para actualizar rating promedio visible
       qc.invalidateQueries({ queryKey: qk.vets.all })
     },
   })
@@ -476,11 +474,12 @@ export function useDeletePriceMutation() {
 
     onMutate: async (priceId) => {
       await qc.cancelQueries({ queryKey: qk.vets.me.prices() })
-      const previous = qc.getQueryData<any[]>(qk.vets.me.prices())
+      const previous = qc.getQueryData<VetPrice[]>(qk.vets.me.prices())
 
-      // Optimistic remove
-      qc.setQueryData<any[] | undefined>(qk.vets.me.prices(), (prev) =>
-        prev?.filter((p) => p.id !== priceId),
+      qc.setQueryData<VetPrice[] | undefined>(
+        qk.vets.me.prices(),
+        (prev: VetPrice[] | undefined) =>
+          prev?.filter((p: VetPrice) => p.id !== priceId),
       )
 
       return { previous }
@@ -495,11 +494,10 @@ export function useDeletePriceMutation() {
 }
 
 // ============================================================
-// VERIFICATION (vet sube documentos)
+// VERIFICATION
 // ============================================================
 
 interface UploadVerificationVars {
-  /** FormData con los archivos: licenseDocument, diploma, idDocument, etc. */
   formData: FormData
 }
 
@@ -518,7 +516,7 @@ export function useUploadVerificationMutation() {
 }
 
 // ============================================================
-// WITHDRAWAL (vet solicita retiro)
+// WITHDRAWAL
 // ============================================================
 
 interface WithdrawalVars {
@@ -529,6 +527,7 @@ interface WithdrawalVars {
     accountNumber?: string
     accountType?: 'SAVINGS' | 'CHECKING'
     phoneNumber?: string
+    documentId: string
   }
 }
 
@@ -550,7 +549,7 @@ export function useRequestWithdrawalMutation() {
 }
 
 // ============================================================
-// PROFILE (actualizar datos del usuario)
+// PROFILE
 // ============================================================
 
 interface UpdateProfileVars {
@@ -571,7 +570,6 @@ export function useUpdateProfileMutation() {
       await qc.cancelQueries({ queryKey: qk.auth.me() })
       const previous = qc.getQueryData(qk.auth.me())
 
-      // Optimistic update local
       qc.setQueryData(qk.auth.me(), (prev: any) =>
         prev ? { ...prev, ...vars, _optimistic: true } : prev,
       )
@@ -592,7 +590,7 @@ export function useUpdateProfileMutation() {
 }
 
 // ============================================================
-// PSE (initiate payment for top-up)
+// PSE
 // ============================================================
 
 interface InitiatePseVars {
