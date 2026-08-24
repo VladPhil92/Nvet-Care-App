@@ -50,8 +50,12 @@ async function requestLocationPermission(): Promise<boolean> {
   }
 
   if (Platform.OS === 'ios') {
-    const result = await Geolocation.requestAuthorization('whenInUse')
-    return result === 'granted'
+    return new Promise<boolean>((resolve) => {
+      Geolocation.requestAuthorization(
+        () => resolve(true),
+        () => resolve(false),
+      )
+    })
   }
 
   return true
