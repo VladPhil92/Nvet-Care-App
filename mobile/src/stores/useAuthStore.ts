@@ -99,7 +99,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (user) {
       const updated = { ...user, ...userData }
       set({ user: updated })
-      void authService.updateUserData(userData)
+      authService.updateUserData(userData).catch(() => {
+        // El estado remoto/local se reconciliará en el siguiente checkAuth.
+      })
     }
   },
 
