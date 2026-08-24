@@ -44,8 +44,6 @@ export interface AuthResponse {
 }
 
 class AuthService {
-  async login(credentials: LoginCredentials): Promise<AuthResponse>
-  async login(email: string, password: string): Promise<AuthResponse>
   async login(
     credentialsOrEmail: LoginCredentials | string,
     password?: string,
