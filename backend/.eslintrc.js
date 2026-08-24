@@ -27,5 +27,6 @@ module.exports = {
       { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
     ],
     'no-useless-catch': 'warn',
+    'prefer-const': 'warn',
   },
 };
