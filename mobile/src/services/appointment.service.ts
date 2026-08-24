@@ -25,6 +25,7 @@ export interface AppointmentVet {
   lastName?: string
   tier: 'FREE' | 'PRO' | 'ELITE'
   rating: number
+  reviewCount?: number
   avatar?: string
 }
 
@@ -134,6 +135,7 @@ function normalizeAppointment(raw: any): Appointment {
     avatar: raw?.vet?.avatar ?? vetUser.avatar,
     tier: raw?.vet?.tier ?? 'FREE',
     rating: Number(raw?.vet?.rating ?? 0),
+    reviewCount: raw?.vet?.reviewCount ?? raw?.vet?.totalReviews,
   }
 
   const amount = Number(raw?.amount ?? raw?.amountCop ?? 0)
