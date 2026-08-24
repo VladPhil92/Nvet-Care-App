@@ -16,22 +16,6 @@ import {
 } from '../../components/ui/primitives'
 import { formatRelativeTime } from '../../utils/format'
 
-/**
- * NotificationsScreen — centro de notificaciones con FCM placeholder.
- *
- * Estado actual: usa datos mock locales hasta integrar `@react-native-firebase/messaging`.
- *
- * Capacidades:
- *  - Banner de permiso de notificaciones (granted / denied / undetermined)
- *  - Lista de notificaciones por tipo (APPOINTMENT, PAYMENT, SYSTEM, REVIEW)
- *  - Tap en una notificación → marca como leída + navega al detalle
- *  - Botón "Marcar todas como leídas"
- *  - Badge unread con dot indicator
- *
- * Migración: cuando se integre FCM, reemplazar `mockNotifications` con
- * `useNotificationsQuery` + suscripción a tokens y mensajes en background.
- */
-
 interface Props {
   navigation: any
 }
@@ -46,11 +30,9 @@ interface Notification {
   body: string
   timestamp: string
   read: boolean
-  /** Acción de navegación al hacer tap */
   navigateTo?: { screen: string; params?: any }
 }
 
-// Mock data; reemplazar con FCM + backend persistence
 const MOCK_NOTIFICATIONS: Notification[] = [
   {
     id: 'n1',
@@ -102,7 +84,6 @@ const TYPE_LABELS: Record<NotifType, string> = {
 
 export default function NotificationsScreen({ navigation }: Props) {
   const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS)
-  // En una integración real, esto vendría de FCM API
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('undetermined')
 
   const unreadCount = useMemo(
@@ -124,15 +105,11 @@ export default function NotificationsScreen({ navigation }: Props) {
   }, [navigation])
 
   const handleRequestPermission = useCallback(() => {
-    // Cuando se integre FCM:
-    //   import messaging from '@react-native-firebase/messaging'
-    //   const status = await messaging().requestPermission()
     setPermissionStatus('granted')
   }, [])
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable
           onPress={() => navigation.goBack()}
@@ -145,9 +122,7 @@ export default function NotificationsScreen({ navigation }: Props) {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Notificaciones</Text>
           {unreadCount > 0 && (
-            <Text style={styles.subtitle}>
-              {unreadCount} sin leer
-            </Text>
+            <Text style={styles.subtitle}>{unreadCount} sin leer</Text>
           )}
         </View>
         {unreadCount > 0 && (
@@ -162,12 +137,9 @@ export default function NotificationsScreen({ navigation }: Props) {
         )}
       </View>
 
-      {/* Permission banner */}
       {permissionStatus === 'undetermined' && (
         <Card variant="flat" style={styles.permissionCard}>
-          <Text style={styles.permissionTitle}>
-            🔔 Activa las notificaciones
-          </Text>
+          <Text style={styles.permissionTitle}>🔔 Activa las notificaciones</Text>
           <Text style={styles.permissionText}>
             Recibe avisos en tiempo real sobre tus citas, pagos y reseñas.
           </Text>
@@ -182,17 +154,20 @@ export default function NotificationsScreen({ navigation }: Props) {
       )}
 
       {permissionStatus === 'denied' && (
-        <Card variant="flat" style={[styles.permissionCard, { borderColor: UI_COLORS.error }]}>
-          <Text style={styles.permissionTitle}>
-            ⚠️ Notificaciones desactivadas
-          </Text>
+        <Card
+          variant="flat"
+          style={StyleSheet.flatten([
+            styles.permissionCard,
+            { borderColor: UI_COLORS.error },
+          ])}
+        >
+          <Text style={styles.permissionTitle}>⚠️ Notificaciones desactivadas</Text>
           <Text style={styles.permissionText}>
             Activa las notificaciones desde la configuración del sistema.
           </Text>
         </Card>
       )}
 
-      {/* Lista */}
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
@@ -298,7 +273,6 @@ const styles = StyleSheet.create({
   permissionText: { fontSize: 13, color: UI_COLORS.muted, lineHeight: 18 },
   listContent: { padding: 16 },
   emptyBox: { paddingTop: 60 },
-  // Notif card
   notifCard: {
     flexDirection: 'row',
     backgroundColor: UI_COLORS.card,
