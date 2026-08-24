@@ -66,18 +66,15 @@ export class PseSettlementService {
       return;
     }
 
-    // Exact replay: target state was already persisted.
     if (transaction.status === target) {
       return;
     }
 
-    // Never let a late decline downgrade a payment already confirmed/settled.
-    if (
-      target === TransactionStatus.FAILED &&
-      [TransactionStatus.CONFIRMED, TransactionStatus.LIQUIDATED].includes(
-        transaction.status,
-      )
-    ) {
+    const paymentAlreadySettled =
+      transaction.status === TransactionStatus.CONFIRMED ||
+      transaction.status === TransactionStatus.LIQUIDATED;
+
+    if (target === TransactionStatus.FAILED && paymentAlreadySettled) {
       this.logger.warn(
         `PSE late failure ignored transaction=${transactionId} current=${transaction.status}`,
       );
