@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   Query,
+  Headers,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -12,12 +13,14 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { UserRole } from '@prisma/client';
+import { IdempotencyService } from '../common/security/idempotency.service';
+import { PaymentMethod, UserRole } from '@prisma/client';
 
 import { PaymentsService } from './payments.service';
 import {
@@ -28,44 +31,62 @@ import {
   TransactionFiltersDto,
 } from './dto/payment.dto';
 
-/**
- * PaymentsController — todos los endpoints requieren autenticación.
- *
- * Convenciones:
- *  - `/payments/me/*`: el usuario autenticado actúa sobre sus propios recursos
- *  - `/payments/transactions/*`: lista o consulta de transacciones (con ownership check)
- *  - `/payments/admin/*`: acciones administrativas (rol ADMIN)
- *  - Webhooks PSE NO van aquí (son endpoints públicos sin JWT, se exponen en otro controller)
- */
 @Controller('payments')
 @UseGuards(JwtAuthGuard)
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
-
-  // ============================================================
-  // PROCESS PAYMENT (cliente paga su cita)
-  // ============================================================
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly idempotencyService: IdempotencyService,
+  ) {}
 
   /**
-   * POST /payments/process — procesar pago de una cita.
-   * Solo el cliente dueño de la cita puede iniciar el pago.
+   * POST /payments/process
+   *
+   * La idempotencia persistente reemplaza la dependencia exclusiva del cache
+   * en memoria del service. Funciona a través de reinicios y múltiples
+   * instancias. CTG permanece cerrado mientras no exista un ledger de saldo
+   * del cliente: confirmar una cita sin débito real sería un fallo financiero.
    */
   @Post('process')
   @UseGuards(RolesGuard)
   @Roles(UserRole.CLIENT)
   @HttpCode(HttpStatus.CREATED)
-  async processPayment(@Request() req, @Body() dto: ProcessPaymentDto) {
-    return this.paymentsService.processPayment(req.user.id, dto);
+  async processPayment(
+    @Request() req,
+    @Body() dto: ProcessPaymentDto,
+    @Headers('idempotency-key') headerKey?: string,
+  ) {
+    if (dto.paymentMethod === PaymentMethod.CTG) {
+      throw new ServiceUnavailableException(
+        'CTG payments are temporarily unavailable until the client wallet ledger is enabled',
+      );
+    }
+
+    const key = headerKey ?? dto.idempotencyKey;
+    if (!key) {
+      return this.paymentsService.processPayment(req.user.id, dto);
+    }
+
+    const replay = await this.idempotencyService.execute({
+      key: `payments:process:${req.user.id}:${key}`,
+      endpoint: 'POST /payments/process',
+      userId: req.user.id,
+      requestBody: dto,
+      operation: async () => {
+        const transaction = await this.paymentsService.processPayment(
+          req.user.id,
+          dto,
+        );
+        return {
+          status: HttpStatus.CREATED,
+          body: JSON.parse(JSON.stringify(transaction)),
+        };
+      },
+    });
+
+    return replay.result;
   }
 
-  // ============================================================
-  // VERIFY TRANSFER (vet sube comprobante)
-  // ============================================================
-
-  /**
-   * POST /payments/transactions/:id/verify-transfer — vet sube comprobante de transferencia.
-   * Acepta multipart/form-data con `file` (jpg/png/pdf máx 10 MB).
-   */
   @Post('transactions/:id/verify-transfer')
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)
@@ -80,53 +101,63 @@ export class PaymentsController {
     return this.paymentsService.verifyTransfer(req.user.id, id, file, dto);
   }
 
-  // ============================================================
-  // BALANCE & TRANSACTIONS (usuario actual)
-  // ============================================================
-
-  /**
-   * GET /payments/me/balance — saldo del usuario autenticado.
-   */
   @Get('me/balance')
   async getMyBalance(@Request() req) {
     return this.paymentsService.getBalance(req.user.id);
   }
 
-  /**
-   * GET /payments/transactions — historial de transacciones del usuario.
-   */
   @Get('transactions')
-  async getTransactions(@Request() req, @Query() filters: TransactionFiltersDto) {
+  async getTransactions(
+    @Request() req,
+    @Query() filters: TransactionFiltersDto,
+  ) {
     return this.paymentsService.getTransactions(req.user.id, filters);
   }
 
-  /**
-   * GET /payments/transactions/:id — detalle de una transacción (con ownership check).
-   */
   @Get('transactions/:id')
-  async getTransactionById(@Request() req, @Param('id', ParseUUIDPipe) id: string) {
+  async getTransactionById(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.paymentsService.getTransactionById(req.user.id, id);
   }
 
-  // ============================================================
-  // PSE
-  // ============================================================
-
   /**
-   * POST /payments/pse/initiate — iniciar pago PSE.
-   * Retorna URL del banco para redirección.
+   * PSE initiation is also replay-safe. The provider adapter is still sandbox
+   * code in PaymentsService; production deployment must configure a real
+   * gateway before exposing this method to end users.
    */
   @Post('pse/initiate')
   @UseGuards(RolesGuard)
   @Roles(UserRole.CLIENT)
   @HttpCode(HttpStatus.CREATED)
-  async initiatePse(@Request() req, @Body() dto: InitiatePsePaymentDto) {
-    return this.paymentsService.initiatePse(req.user.id, dto);
+  async initiatePse(
+    @Request() req,
+    @Body() dto: InitiatePsePaymentDto,
+    @Headers('idempotency-key') headerKey?: string,
+  ) {
+    const key = headerKey ?? dto.idempotencyKey;
+    if (!key) {
+      return this.paymentsService.initiatePse(req.user.id, dto);
+    }
+
+    const replay = await this.idempotencyService.execute({
+      key: `payments:pse:initiate:${req.user.id}:${key}`,
+      endpoint: 'POST /payments/pse/initiate',
+      userId: req.user.id,
+      requestBody: dto,
+      operation: async () => {
+        const result = await this.paymentsService.initiatePse(req.user.id, dto);
+        return {
+          status: HttpStatus.CREATED,
+          body: JSON.parse(JSON.stringify(result)),
+        };
+      },
+    });
+
+    return replay.result;
   }
 
-  /**
-   * GET /payments/pse/status/:transactionId — verificar estado de pago PSE.
-   */
   @Get('pse/status/:transactionId')
   async checkPseStatus(
     @Request() req,
@@ -135,25 +166,11 @@ export class PaymentsController {
     return this.paymentsService.checkPseStatus(req.user.id, transactionId);
   }
 
-  // ============================================================
-  // CTG TOKEN
-  // ============================================================
-
-  /**
-   * GET /payments/ctg/rate — tasa de cambio CTG ↔ COP actual.
-   */
   @Get('ctg/rate')
   async getCtgRate() {
     return this.paymentsService.getCtgRate();
   }
 
-  // ============================================================
-  // EARNINGS (vets)
-  // ============================================================
-
-  /**
-   * GET /payments/me/earnings — resumen de ingresos (solo vets).
-   */
   @Get('me/earnings')
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)
@@ -162,19 +179,21 @@ export class PaymentsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.paymentsService.getEarningsSummary(req.user.id, {
-      startDate,
-      endDate,
-    });
+    const [summary, balance] = await Promise.all([
+      this.paymentsService.getEarningsSummary(req.user.id, {
+        startDate,
+        endDate,
+      }),
+      this.paymentsService.getBalance(req.user.id),
+    ]);
+
+    return {
+      ...summary,
+      pendingBalance: balance.pendingCop,
+      availableBalance: balance.copBalance,
+    };
   }
 
-  // ============================================================
-  // WITHDRAWAL (vets)
-  // ============================================================
-
-  /**
-   * POST /payments/withdrawals — solicitar retiro de saldo (solo vets).
-   */
   @Post('withdrawals')
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)
@@ -183,13 +202,6 @@ export class PaymentsController {
     return this.paymentsService.requestWithdrawal(req.user.id, dto);
   }
 
-  // ============================================================
-  // ADMIN
-  // ============================================================
-
-  /**
-   * POST /payments/admin/transactions/:id/confirm-transfer — admin confirma transferencia.
-   */
   @Post('admin/transactions/:id/confirm-transfer')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -201,9 +213,6 @@ export class PaymentsController {
     return this.paymentsService.adminConfirmTransfer(req.user.id, id);
   }
 
-  /**
-   * POST /payments/admin/transactions/:id/reject-transfer — admin rechaza transferencia.
-   */
   @Post('admin/transactions/:id/reject-transfer')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
