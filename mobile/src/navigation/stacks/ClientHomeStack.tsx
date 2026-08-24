@@ -10,13 +10,6 @@ import StoreScreen from '../../screens/client/StoreScreen'
 
 const Stack = createNativeStackNavigator<ClientHomeStackParamList>()
 
-/**
- * Stack interno del tab de Inicio. Permite navegar de la home a detalle/tracking
- * /emergency sin perder la tab bar (que vive un nivel arriba en `ClientNavigator`).
- *
- * `Emergency` se presenta con `slide_from_bottom` para semantic emphasis del flujo
- * de emergencia (consistente con el mockup oficial "Emergencias 24/7").
- */
 export default function ClientHomeStack() {
   return (
     <Stack.Navigator
@@ -30,10 +23,14 @@ export default function ClientHomeStack() {
         name="AppointmentDetail"
         component={AppointmentDetailPlaceholder}
       />
-      <Stack.Screen
-        name="AppointmentTracking"
-        component={AppointmentTrackingScreen}
-      />
+      <Stack.Screen name="AppointmentTracking">
+        {({ navigation, route }) => (
+          <AppointmentTrackingScreen
+            navigation={navigation}
+            route={{ params: { id: route.params.appointmentId } }}
+          />
+        )}
+      </Stack.Screen>
       <Stack.Screen
         name="Emergency"
         component={EmergencyScreen}
@@ -42,11 +39,6 @@ export default function ClientHomeStack() {
           gestureEnabled: true,
         }}
       />
-      {/*
-        Store: pantalla "Próximamente" de la tienda de productos.
-        Accesible desde HomeScreenV2 (card de tienda y sección de productos).
-        Presenta con slide_from_bottom para un feel de modal exploratorio.
-      */}
       <Stack.Screen
         name="Store"
         component={StoreScreen}
