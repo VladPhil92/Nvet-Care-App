@@ -2,7 +2,7 @@ import {
   IsEmail,
   IsString,
   IsOptional,
-  IsEnum,
+  IsIn,
   Matches,
   MinLength,
   MaxLength,
@@ -10,6 +10,12 @@ import {
   IsBoolean,
 } from 'class-validator';
 import { UserRole } from '@prisma/client';
+
+// Only these roles are self-assignable at public registration. ADMIN must
+// never be reachable through this DTO — it's provisioned out-of-band
+// (direct DB) — so it's deliberately excluded here rather than validated
+// with @IsEnum(UserRole), which would accept it.
+const SELF_REGISTERABLE_ROLES = [UserRole.CLIENT, UserRole.VET] as const;
 
 /**
  * Regex de password fuerte:
@@ -71,7 +77,7 @@ export class RegisterDto {
   })
   phone?: string;
 
-  @IsEnum(UserRole, { message: 'Rol inválido' })
+  @IsIn(SELF_REGISTERABLE_ROLES, { message: 'Rol inválido' })
   @IsOptional()
   role?: UserRole = UserRole.CLIENT;
 }
