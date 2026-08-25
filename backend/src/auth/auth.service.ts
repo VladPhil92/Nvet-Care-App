@@ -92,7 +92,10 @@ export class AuthService {
         firstName: dto.firstName,
         lastName: dto.lastName,
         phone: dto.phone,
-        role: dto.role || UserRole.CLIENT,
+        // Defense in depth: even if RegisterDto's role validation is ever
+        // loosened, this path must never grant ADMIN from user input —
+        // ADMIN is provisioned out-of-band only.
+        role: dto.role === UserRole.ADMIN ? UserRole.CLIENT : dto.role || UserRole.CLIENT,
         passwordChangedAt: new Date(),
         // emailVerified: false (default)
       },
