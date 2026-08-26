@@ -1,15 +1,21 @@
 import { ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { AuthService } from './auth.service';
 
 /**
- * Tests focalizados en `exchangeCtgIdentity()` (Fase 2, docs/identity/ADR-001
- * en ctg_one_website). CtgIdentityService se mockea aquí -- su propia
- * verificación JWKS real ya está cubierta por ctg-identity.service.spec.ts.
+ * Tests focalizados en `exchangeCtgIdentity()` (Fases 2-3,
+ * docs/identity/ADR-001 en ctg_one_website). CtgIdentityService se
+ * mockea aquí -- su propia verificación JWKS real ya está cubierta por
+ * ctg-identity.service.spec.ts.
  *
  * Escenarios:
  *  - Gate NVET_CTG_IDENTITY_EXCHANGE_ENABLED apagado → 404, sin verificar nada
  *  - Token de Supabase inválido → 401
- *  - ctgUserId sin User vinculado → 401 CTG_IDENTITY_NOT_LINKED (provisioning es Fase 3)
+ *  - Token sin claim email → 401 (no hay con qué provisionar)
+ *  - ctgUserId sin User vinculado, sin colisión de email → provisiona CLIENT nuevo
+ *  - ctgUserId sin User vinculado, email ya registrado → 401 CTG_IDENTITY_EMAIL_COLLISION, sin crear
+ *  - Race en create() (P2002) resuelta por ctgUserId → sesión emitida igual
+ *  - Race en create() (P2002) no resuelta por ctgUserId (chocó por email) → CTG_IDENTITY_EMAIL_COLLISION
  *  - User vinculado pero desactivado → 403
  *  - User con 2FA habilitado y sin código → 401 TWO_FACTOR_REQUIRED
  *  - User con 2FA habilitado y código correcto → sesión emitida
@@ -25,6 +31,7 @@ describe('AuthService.exchangeCtgIdentity', () => {
   let originalEnv: NodeJS.ProcessEnv;
 
   const CTG_USER_ID = '11111111-1111-4111-8111-111111111111';
+  const CTG_EMAIL = 'newcomer@example.com';
   const LINKED_USER = {
     id: 'user-1',
     email: 'owner@example.com',
@@ -36,6 +43,14 @@ describe('AuthService.exchangeCtgIdentity', () => {
     failedLoginAttempts: 0,
   };
 
+  const uniqueConstraintError = () => {
+    const err: any = new Error('Unique constraint failed');
+    err.code = 'P2002';
+    err.clientVersion = 'test';
+    Object.setPrototypeOf(err, Prisma.PrismaClientKnownRequestError.prototype);
+    return err;
+  };
+
   beforeEach(() => {
     originalEnv = { ...process.env };
     process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED = 'true';
@@ -44,6 +59,7 @@ describe('AuthService.exchangeCtgIdentity', () => {
       user: {
         findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
+        create: jest.fn(),
       },
       userSession: {
         create: jest.fn().mockResolvedValue({}),
@@ -94,15 +110,101 @@ describe('AuthService.exchangeCtgIdentity', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('rejects when the ctgUserId has no linked Nvet account (provisioning is Phase 3)', async () => {
-    ctgIdentityService.verify.mockResolvedValue({ sub: CTG_USER_ID });
-    prisma.user.findUnique.mockResolvedValue(null);
+  it('rejects provisioning when the verified token has no email claim', async () => {
+    ctgIdentityService.verify.mockResolvedValue({ sub: CTG_USER_ID }); // no email
+    prisma.user.findUnique.mockResolvedValue(null); // ctgUserId lookup: unlinked
 
     await expect(
       service.exchangeCtgIdentity({ supabaseAccessToken: 'good-token' } as any),
     ).rejects.toThrow(UnauthorizedException);
 
+    expect(prisma.user.create).not.toHaveBeenCalled();
     expect(prisma.userSession.create).not.toHaveBeenCalled();
+  });
+
+  it('provisions a new CLIENT account for an unlinked ctgUserId with no email collision', async () => {
+    ctgIdentityService.verify.mockResolvedValue({ sub: CTG_USER_ID, email: CTG_EMAIL });
+    prisma.user.findUnique.mockImplementation(({ where }: any) =>
+      Promise.resolve(where.ctgUserId ? null : where.email ? null : null),
+    );
+    const created = {
+      id: 'new-user-1',
+      email: CTG_EMAIL,
+      role: 'CLIENT',
+      ctgUserId: CTG_USER_ID,
+      isActive: true,
+      twoFactorEnabled: false,
+      emailVerified: true,
+      failedLoginAttempts: 0,
+    };
+    prisma.user.create.mockResolvedValue(created);
+
+    const result = await service.exchangeCtgIdentity({
+      supabaseAccessToken: 'good-token',
+    } as any);
+
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: CTG_EMAIL,
+          ctgUserId: CTG_USER_ID,
+          role: 'CLIENT',
+          emailVerified: true,
+        }),
+      }),
+    );
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'ctg_identity_provisioned' }),
+    );
+    expect(result.user.id).toBe('new-user-1');
+    expect(result.requiresEmailVerification).toBe(false);
+    expect(result.accessToken).toBe('signed.jwt');
+  });
+
+  it('rejects with CTG_IDENTITY_EMAIL_COLLISION when the email already belongs to another Nvet account', async () => {
+    ctgIdentityService.verify.mockResolvedValue({ sub: CTG_USER_ID, email: CTG_EMAIL });
+    prisma.user.findUnique.mockImplementation(({ where }: any) =>
+      Promise.resolve(where.ctgUserId ? null : where.email ? { ...LINKED_USER, email: CTG_EMAIL } : null),
+    );
+
+    await expect(
+      service.exchangeCtgIdentity({ supabaseAccessToken: 'good-token' } as any),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'CTG_IDENTITY_EMAIL_COLLISION' }),
+    });
+
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it('recovers from a concurrent create() race by re-reading the row a parallel exchange won', async () => {
+    ctgIdentityService.verify.mockResolvedValue({ sub: CTG_USER_ID, email: CTG_EMAIL });
+    const raceWinner = { ...LINKED_USER, id: 'race-winner', email: CTG_EMAIL };
+    prisma.user.findUnique
+      .mockResolvedValueOnce(null) // initial lookup by ctgUserId: unlinked
+      .mockResolvedValueOnce(null) // provisionCtgUser's email collision check: none yet
+      .mockResolvedValueOnce(raceWinner); // retry by ctgUserId after P2002: a parallel request won
+    prisma.user.create.mockRejectedValue(uniqueConstraintError());
+
+    const result = await service.exchangeCtgIdentity({
+      supabaseAccessToken: 'good-token',
+    } as any);
+
+    expect(result.user.id).toBe('race-winner');
+  });
+
+  it('treats a create() race with no ctgUserId winner as an email collision', async () => {
+    ctgIdentityService.verify.mockResolvedValue({ sub: CTG_USER_ID, email: CTG_EMAIL });
+    prisma.user.findUnique
+      .mockResolvedValueOnce(null) // initial lookup by ctgUserId: unlinked
+      .mockResolvedValueOnce(null) // provisionCtgUser's email collision check: none yet
+      .mockResolvedValueOnce(null); // retry by ctgUserId after P2002: still nobody -- the P2002 was on email
+    prisma.user.create.mockRejectedValue(uniqueConstraintError());
+
+    await expect(
+      service.exchangeCtgIdentity({ supabaseAccessToken: 'good-token' } as any),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'CTG_IDENTITY_EMAIL_COLLISION' }),
+    });
   });
 
   it('rejects a linked but deactivated account', async () => {
