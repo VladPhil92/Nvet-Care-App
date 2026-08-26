@@ -60,7 +60,7 @@ Deuda conocida: no existe `package-lock.json` comprometido en el repo (ni raíz 
 
 ## Fase 2 — Mobile native · PARCIAL
 
-- Android: `mobile/android` existe, compila en CI (`Android Native (Gradle)`), genera `app-debug.apk` + `app-debug-androidTest.apk`. Falta un AAB/APK **release** firmado con keystore productivo, probado en dispositivo físico — el criterio de salida sigue siendo ese, no un build debug.
+- Android: `mobile/android` existe, compila en CI (`Android Native (Gradle)`), genera `app-debug.apk` + `app-debug-androidTest.apk`. `.github/workflows/release-android.yml` (manual, `workflow_dispatch`) ya construye y firma el AAB de producción vía `bundleRelease` -- solo espera los 4 secrets del keystore (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`), que el equipo debe generar y custodiar deliberadamente (ideal vía Google Play App Signing) -- no algo para automatizar sin intervención humana. Falta correrlo una vez con esos secrets y probar el AAB resultante en dispositivo físico — el criterio de salida sigue siendo ese, no un build debug.
 - iOS: `mobile/ios` **no existe**. Detox y `mobile-e2e.yml` ya están configurados esperando `ios/NvetCare.xcworkspace` y `ios/Podfile.lock` — apuntan a un proyecto que aún no se ha creado.
 
 ## Fase 3 — Staging · PENDIENTE

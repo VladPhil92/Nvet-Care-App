@@ -1,0 +1,106 @@
+# Release Android → AAB firmado
+#
+# Construye un Android App Bundle (.aab) de producción, firmado con el
+# keystore real, y lo publica como artifact del run. No sube nada a
+# Google Play — ese es un paso deliberadamente separado (requiere
+# credenciales de Play Console API, fuera del alcance de este workflow).
+#
+# Solo manual (workflow_dispatch) — un release no se dispara por accidente
+# en cada push.
+#
+# Secrets requeridos en el repo (Settings → Secrets and variables →
+# Actions → Repository secrets):
+#   ANDROID_KEYSTORE_BASE64   → keystore .jks/.keystore codificado en base64
+#                                (`base64 -i release.keystore | pbcopy` o
+#                                equivalente)
+#   ANDROID_KEYSTORE_PASSWORD → contraseña del keystore
+#   ANDROID_KEY_ALIAS         → alias de la clave dentro del keystore
+#   ANDROID_KEY_PASSWORD      → contraseña de la clave (puede ser igual a
+#                                la del keystore, según cómo se generó)
+#   GOOGLE_MAPS_ANDROID_API_KEY → clave de Maps productiva (ya usada en
+#                                otros workflows de este repo)
+#
+# El keystore de producción NO se genera aquí. Generarlo (y decidir su
+# custodia -- idealmente vía Google Play App Signing, que permite
+# reemplazar la upload key si se pierde) es una decisión deliberada del
+# equipo, no de este workflow.
+name: Release Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escribe "release" para confirmar que este build es intencional'
+        required: true
+        type: string
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  build-signed-aab:
+    name: Build signed AAB
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'release' }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Verify Gradle wrapper integrity
+        run: |
+          test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
+          ./android/gradlew --version
+
+      - name: Validate signing secrets are all present
+        run: |
+          missing=""
+          [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] && missing="$missing ANDROID_KEYSTORE_BASE64"
+          [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] && missing="$missing ANDROID_KEYSTORE_PASSWORD"
+          [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] && missing="$missing ANDROID_KEY_ALIAS"
+          [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ] && missing="$missing ANDROID_KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltan secrets de firma:$missing — ver los comentarios de este workflow. Sin los 4, Gradle construiría un bundle SIN FIRMAR y este workflow lo subiría igual bajo un nombre que implica que sí está firmado."
+            exit 1
+          fi
+
+      - name: Decode release keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+      - name: Build signed AAB
+        working-directory: mobile/android
+        env:
+          NVET_ANDROID_KEYSTORE_FILE: release.keystore
+          NVET_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NVET_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          NVET_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+        run: ./gradlew bundleRelease --no-daemon --stacktrace
+
+      - name: Remove decoded keystore
+        if: always()
+        run: rm -f mobile/android/app/release.keystore
+
+      - name: Upload signed AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: nvetcare-release-${{ github.run_number }}
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
