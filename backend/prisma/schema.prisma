@@ -102,6 +102,8 @@ enum AuditAction {
   TWO_FACTOR_DISABLED
   EMAIL_VERIFICATION_SENT
   EMAIL_VERIFIED
+  // CTG One identity exchange (docs/identity/ADR-001 in ctg_one_website)
+  NVET_IDENTITY_EXCHANGE_FAILURE
   // Vet management
   VET_VERIFICATION_APPROVED
   VET_VERIFICATION_REJECTED
