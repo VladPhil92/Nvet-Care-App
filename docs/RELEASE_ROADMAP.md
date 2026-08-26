@@ -5,6 +5,16 @@
 
 Este roadmap sustituye el roadmap histórico del README. Su objetivo es llevar el producto actual a un release real y verificable. La revisión anterior (baseline `30252c9c`) quedó desactualizada varios merges atrás — este estado está verificado contra CI, workflows y el árbol de archivos reales en la fecha de revisión, no reconstruido de memoria.
 
+## Plataformas y arquitectura de producto
+
+Decisión de producto (2026-08-26): **la única plataforma web de Nvet Care es `ctgone.com/nvetcareapp`**, implementada en el repo `ctg_one_website` (Next.js, `src/app/nvetcareapp/**` + `src/app/api/nvetcareapp/**` como BFF contra el `backend/` de este repo). Todo desarrollo web de Nvet Care se orienta a vivir ahí.
+
+Consecuencias concretas para este repo:
+
+- El paquete `dashboard/` (Vite + React, "Admin SaaS Dashboard" standalone) queda **deprecado como plataforma web**. Duplicaba superficie ya cubierta por `ctgone.com/nvetcareapp` (login, veterinarios, transacciones, disputas, transferencias, contabilidad, chat), construida por separado sin que ninguna de las dos supiera de la otra. No se elimina el código todavía — puede contener lógica de referencia útil — pero no se despliega ni se desarrolla más como producto.
+- `.github/workflows/deploy-dashboard.yml` se retira en consecuencia (ver más abajo) — desplegarlo a Vercel construiría una segunda plataforma web que la decisión de producto descarta explícitamente.
+- Próximo hito de plataforma: apps nativas Android/iOS (paquete `mobile/`, Fase 2/13/14) — **deben sincronizar contra el mismo `backend/`** que ya consume `ctgone.com/nvetcareapp`, no contra una API o modelo de datos aparte. `backend/` es la única fuente de verdad de dominio, compartida por la web (`ctgone.com`) y por el futuro móvil.
+
 ## Estado por fase
 
 | Fase | Objetivo | Estado |
@@ -17,7 +27,7 @@ Este roadmap sustituye el roadmap histórico del README. Su objetivo es llevar e
 | 5 | Geolocalización/Cartagena | AVANZADA |
 | 6 | Chat + notificaciones | PARCIAL — chat sí, push no |
 | 7 | Pagos productivos | PARCIAL — dominio avanzado, rails externos pendientes |
-| 8 | Dashboard operativo | PARCIAL — build y deploy funcionan, operación sin verificar |
+| 8 | Dashboard operativo | REUBICADA — el dashboard web vive en `ctgone.com/nvetcareapp`, no en este repo |
 | 9 | Seguridad/privacidad | PARCIAL — fix en código confirmado, estado en producción sin confirmar |
 | 10 | Observabilidad/backups | PENDIENTE |
 | 11 | Release Candidate | PENDIENTE |
@@ -81,7 +91,7 @@ Prioridad: métodos tradicionales. CTG Token no debe bloquear el MVP. Dominio fi
 
 ## Fases 8–10 — Operación
 
-- **Fase 8 (Dashboard) — PARCIAL:** build y typecheck pasan en CI; `Deploy Dashboard` estaba roto el 100% de sus corridas por el mismo bug de lockfile que Fase 1, corregido en PR #16. Operación real (RBAC, auditoría admin, métricas) sin verificar en esta revisión.
+- **Fase 8 (Dashboard) — REUBICADA:** ver "Plataformas y arquitectura de producto" arriba. El dashboard operativo real es `ctgone.com/nvetcareapp` (repo `ctg_one_website`), ya en producción, con sesión, refresco de token, panel admin (veterinarios, transacciones, disputas, transferencias, contabilidad) y chat verificados contra el backend real. El paquete `dashboard/` de este repo queda deprecado; su workflow de deploy a Vercel se retiró — no tenía sentido corregirlo para desplegar una segunda plataforma web que la decisión de producto descarta.
 - **Fase 9 (Seguridad) — PARCIAL:** el fix de escalación a rol ADMIN (PR #15) está en `main`, pero `Deploy Backend` nunca ha completado un despliegue exitoso registrado (falla por `DATABASE_URL` vacía en el environment `production`). No confirmar que el fix está en producción hasta correr un smoke test real contra la URL productiva.
 - **Fase 10 (Observabilidad/backups) — PENDIENTE:** sin evidencia de logging estructurado, alertas o backups verificados en esta revisión.
 

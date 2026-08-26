@@ -31,7 +31,7 @@ API oficial. Contiene autenticación, usuarios/veterinarios, mascotas, citas, pa
 Las migraciones de base de datos y el schema Prisma deben mantenerse únicamente aquí.
 
 ### `dashboard/`
-Dashboard administrativo oficial. La entrada de aplicación es `dashboard/src/main.tsx` y la composición principal vive en `dashboard/src/App.tsx`.
+Dashboard administrativo standalone (Vite + React). **Deprecado como plataforma web** — ver `docs/RELEASE_ROADMAP.md` § Plataformas y arquitectura de producto: la única plataforma web de Nvet Care es `ctgone.com/nvetcareapp` (repo `ctg_one_website`). Este paquete se conserva en el repo pero no se despliega ni se desarrolla más como producto.
 
 Los prototipos JSX monolíticos no forman parte del runtime del dashboard.
 
@@ -41,7 +41,6 @@ Automatización oficial del proyecto:
 - `ci.yml`: validación backend/mobile/dashboard.
 - `mobile-e2e.yml`: E2E móvil.
 - `deploy-backend.yml`: despliegue backend.
-- `deploy-dashboard.yml`: despliegue dashboard.
 
 La existencia de un workflow no implica por sí sola que producción esté habilitada; cada pipeline debe validarse contra infraestructura y secrets reales.
 
