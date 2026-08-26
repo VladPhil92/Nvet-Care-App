@@ -68,13 +68,21 @@ jobs:
           test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
           ./android/gradlew --version
 
-      - name: Decode release keystore
+      - name: Validate signing secrets are all present
         run: |
-          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 no está configurado. Ver los comentarios de este workflow para generarlo y cargarlo como secret."
+          missing=""
+          [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] && missing="$missing ANDROID_KEYSTORE_BASE64"
+          [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] && missing="$missing ANDROID_KEYSTORE_PASSWORD"
+          [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] && missing="$missing ANDROID_KEY_ALIAS"
+          [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ] && missing="$missing ANDROID_KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltan secrets de firma:$missing — ver los comentarios de este workflow. Sin los 4, Gradle construiría un bundle SIN FIRMAR y este workflow lo subiría igual bajo un nombre que implica que sí está firmado."
             exit 1
           fi
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/release.keystore
+
+      - name: Decode release keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
 
       - name: Build signed AAB
         working-directory: mobile/android
@@ -88,7 +96,7 @@ jobs:
 
       - name: Remove decoded keystore
         if: always()
-        run: rm -f mobile/android/release.keystore
+        run: rm -f mobile/android/app/release.keystore
 
       - name: Upload signed AAB
         uses: actions/upload-artifact@v4
