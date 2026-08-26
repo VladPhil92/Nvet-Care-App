@@ -58,11 +58,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: dashboard/package-lock.json
 
+      # No hay package-lock.json comprometido en el repo (ni raíz ni por
+      # paquete), así que `cache: npm` no resuelve ninguna ruta y `npm ci`
+      # no puede correr. Mismo criterio que ya usan ci.yml y deploy-backend.yml.
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
