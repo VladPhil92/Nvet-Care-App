@@ -54,6 +54,7 @@ describe('AuthService.refreshToken (reuse detection)', () => {
       {} as any, // passwordService — no usado en refreshToken
       {} as any, // twoFactorService — no usado
       auditService as any,
+      {} as any, // ctgIdentityService — no usado
     );
     jest.spyOn((service as any).logger, 'log').mockImplementation(() => {});
     jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});

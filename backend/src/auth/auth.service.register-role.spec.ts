@@ -44,6 +44,7 @@ describe('AuthService.register (role escalation guard)', () => {
       passwordService as any,
       {} as any, // twoFactorService — no usado en register
       auditService as any,
+      {} as any, // ctgIdentityService — no usado en register
     );
   });
 

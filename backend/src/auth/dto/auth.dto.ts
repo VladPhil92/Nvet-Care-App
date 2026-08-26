@@ -117,6 +117,31 @@ export class LoginDto {
 }
 
 // ============================================================
+// CTG ONE IDENTITY EXCHANGE
+// ============================================================
+// See docs/identity/ADR-001-unified-identity-for-nvet-care.md and
+// THREAT_MODEL.md in ctg_one_website. Called only server-to-server
+// (Next.js BFF or a native app holding its own Supabase session) —
+// never a bare fetch from a browser tab.
+
+export class CtgIdentityExchangeDto {
+  @IsString()
+  @MinLength(20, { message: 'Token de sesión CTG One inválido' })
+  @MaxLength(4096)
+  supabaseAccessToken: string;
+
+  /**
+   * Código TOTP opcional, para completar el desafío 2FA en la misma
+   * llamada cuando el `User` vinculado ya tiene 2FA habilitado —
+   * mismo contrato que `LoginDto.twoFactorCode`.
+   */
+  @IsString()
+  @IsOptional()
+  @Length(6, 8, { message: 'El código del autenticador debe tener entre 6 y 8 dígitos' })
+  twoFactorCode?: string;
+}
+
+// ============================================================
 // FORGOT PASSWORD
 // ============================================================
 

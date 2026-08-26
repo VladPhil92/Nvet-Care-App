@@ -10,6 +10,7 @@ import { PasswordResetService } from './services/password-reset.service';
 import { EmailVerificationService } from './services/email-verification.service';
 import { TokenBlacklistService } from './services/token-blacklist.service';
 import { TwoFactorService } from './services/two-factor.service';
+import { CtgIdentityService } from './services/ctg-identity.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { EmailVerifiedGuard } from './guards/email-verified.guard';
@@ -24,6 +25,7 @@ import { WsJwtGuard, WsEmailVerifiedGuard } from './guards/ws-jwt.guard';
  *  - PasswordService       → Argon2id + validación de fortaleza
  *  - PasswordResetService  → flujo de reset por email
  *  - TwoFactorService      → TOTP (Google Authenticator) + recovery codes
+ *  - CtgIdentityService    → verifica tokens de Supabase (CTG One) contra su JWKS
  *  - TokenBlacklistService → revocación de JWT (Redis-backed en prod)
  *  - JwtStrategy           → validación de JWT en requests
  *  - JwtAuthGuard          → protege rutas autenticadas
@@ -52,6 +54,7 @@ import { WsJwtGuard, WsEmailVerifiedGuard } from './guards/ws-jwt.guard';
     EmailVerificationService,
     TokenBlacklistService,
     TwoFactorService,
+    CtgIdentityService,
     JwtStrategy,
     JwtAuthGuard,
     EmailVerifiedGuard,
