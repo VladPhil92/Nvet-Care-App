@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
-import { AuditAction, AuditSeverity, UserRole } from '@prisma/client';
+import { AuditAction, AuditSeverity, Prisma, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
@@ -350,9 +350,11 @@ export class AuthService {
     }
 
     let ctgUserId: string;
+    let ctgEmail: string | undefined;
     try {
       const claims = await this.ctgIdentityService.verify(dto.supabaseAccessToken);
       ctgUserId = claims.sub;
+      ctgEmail = claims.email;
     } catch {
       await this.auditService.log({
         actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
@@ -363,22 +365,13 @@ export class AuthService {
       throw new UnauthorizedException('Sesión de CTG One inválida o expirada');
     }
 
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { ctgUserId },
       include: { vetProfile: true },
     });
 
     if (!user) {
-      await this.auditService.log({
-        actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
-        action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
-        severity: AuditSeverity.INFO,
-        reason: 'ctg_identity_not_linked',
-      });
-      throw new UnauthorizedException({
-        message: 'Esta cuenta CTG One todavía no tiene un perfil de Nvet Care vinculado.',
-        error: 'CTG_IDENTITY_NOT_LINKED',
-      });
+      user = await this.provisionCtgUser(ctgUserId, ctgEmail, ctx);
     }
 
     // Misma regla que JwtStrategy para una sesión normal: una cuenta
@@ -441,6 +434,103 @@ export class AuthService {
       ...tokens,
       requiresEmailVerification: !user.emailVerified,
     };
+  }
+
+  /**
+   * Provisioning-on-first-visit (Fase 3, docs/identity/ADR-001 en
+   * ctg_one_website): crea un `User` CLIENT nuevo para un `ctgUserId`
+   * que todavía no tiene perfil de Nvet Care.
+   *
+   * Nunca vincula por email -- un email ya existente en Nvet (con o sin
+   * password) responde apuntando al login existente, no crea la cuenta
+   * ni la enlaza (la vinculación explícita y autenticada es Fase 5,
+   * diferida indefinidamente; ver THREAT_MODEL.md § Account
+   * linking/takeover).
+   *
+   * Race-safe: dos exchanges concurrentes para el mismo `ctgUserId` (o
+   * un `POST /auth/register` concurrente con el mismo email) pueden
+   * chocar contra el `create` -- se recupera reconsultando en vez de
+   * fallar con un 500.
+   */
+  private async provisionCtgUser(ctgUserId: string, email: string | undefined, ctx: LoginContext) {
+    if (!email) {
+      await this.auditService.log({
+        actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
+        severity: AuditSeverity.WARN,
+        reason: 'ctg_identity_missing_email_claim',
+      });
+      throw new UnauthorizedException('Sesión de CTG One inválida o expirada');
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const existingByEmail = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+    if (existingByEmail) {
+      await this.auditService.log({
+        actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
+        severity: AuditSeverity.INFO,
+        reason: 'ctg_identity_email_collision',
+      });
+      throw new UnauthorizedException({
+        message:
+          'Ya existe una cuenta de Nvet Care con este correo. Inicia sesión con tu contraseña o recupérala si la olvidaste.',
+        error: 'CTG_IDENTITY_EMAIL_COLLISION',
+      });
+    }
+
+    try {
+      const created = await this.prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          ctgUserId,
+          role: UserRole.CLIENT,
+          // Supabase ya verificó este email -- no se re-verifica.
+          emailVerified: true,
+        },
+        include: { vetProfile: true },
+      });
+
+      await this.auditService.log({
+        actor: { id: created.id, role: created.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        action: AuditAction.NVET_PROFILE_CREATED,
+        severity: AuditSeverity.INFO,
+        targetType: 'User',
+        targetId: created.id,
+        reason: 'ctg_identity_provisioned',
+        metadata: { ctgUserId },
+      });
+
+      return created;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        // Otro exchange concurrente (mismo ctgUserId) ya creó la fila.
+        const raceWinner = await this.prisma.user.findUnique({
+          where: { ctgUserId },
+          include: { vetProfile: true },
+        });
+        if (raceWinner) {
+          return raceWinner;
+        }
+        // El choque fue por email, no por ctgUserId -- alguien registró
+        // ese correo en el mismo instante. Mismo resultado que la
+        // colisión detectada arriba.
+        await this.auditService.log({
+          actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
+          action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
+          severity: AuditSeverity.INFO,
+          reason: 'ctg_identity_email_collision_race',
+        });
+        throw new UnauthorizedException({
+          message:
+            'Ya existe una cuenta de Nvet Care con este correo. Inicia sesión con tu contraseña o recupérala si la olvidaste.',
+          error: 'CTG_IDENTITY_EMAIL_COLLISION',
+        });
+      }
+      throw err;
+    }
   }
 
   // ============================================================
