@@ -1,7 +1,7 @@
 # Nvet Care — Production Roadmap v1.0
 
-**Baseline:** `main` @ `643b7e5` (merge de PR #19 — decisión de plataforma web canónica)
-**Revisión:** 2026-08-26 (actualizada tras verificación en vivo de Fase 9 y conexión de Railway)
+**Baseline:** `main` @ `0128264` (merge de PR #24 — Fase 3 del enlace de identidad CTG One)
+**Revisión:** 2026-08-26 (actualizada tras el merge de las 4 fases de identidad CTG One y el incidente de producción que destapó)
 
 Este roadmap sustituye el roadmap histórico del README. Su objetivo es llevar el producto actual a un release real y verificable. La revisión anterior (baseline `30252c9c`) quedó desactualizada varios merges atrás — este estado está verificado contra CI, workflows y el árbol de archivos reales en la fecha de revisión, no reconstruido de memoria.
 
@@ -14,6 +14,45 @@ Consecuencias concretas para este repo:
 - El paquete `dashboard/` (Vite + React, "Admin SaaS Dashboard" standalone) queda **deprecado como plataforma web**. Duplicaba superficie ya cubierta por `ctgone.com/nvetcareapp` (login, veterinarios, transacciones, disputas, transferencias, contabilidad, chat), construida por separado sin que ninguna de las dos supiera de la otra. No se elimina el código todavía — puede contener lógica de referencia útil — pero no se despliega ni se desarrolla más como producto.
 - `.github/workflows/deploy-dashboard.yml` se retira en consecuencia (ver más abajo) — desplegarlo a Vercel construiría una segunda plataforma web que la decisión de producto descarta explícitamente.
 - Próximo hito de plataforma: apps nativas Android/iOS (paquete `mobile/`, Fase 2/13/14) — **deben sincronizar contra el mismo `backend/`** que ya consume `ctgone.com/nvetcareapp`, no contra una API o modelo de datos aparte. `backend/` es la única fuente de verdad de dominio, compartida por la web (`ctgone.com`) y por el futuro móvil.
+
+## Identidad unificada CTG One (cross-cutting, fuera de las 15 fases numeradas)
+
+Iniciativa completa: docs/identity/ (repo `ctg_one_website`), empezando por
+`ADR-001-unified-identity-for-nvet-care.md` y `CTG_ONE_IDENTITY.md`. Las 4
+fases del alcance aceptado están mergeadas:
+
+| Fase | Qué hace | PR |
+|---|---|---|
+| 0 | Auditoría + ADR + threat model | `ctg_one_website` #205, #206, #208 |
+| 1 | `User.ctgUserId` (nullable, único) + `passwordHash` nullable + auditoría de null-safety | `Nvet-Care-App` #22 |
+| 2 | Verificación JWKS de Supabase + `POST /auth/ctg-identity-exchange`, gateado por `NVET_CTG_IDENTITY_EXCHANGE_ENABLED` | `Nvet-Care-App` #23 |
+| 3 | Provisioning-on-first-visit para `ctgUserId` sin vincular (sin auto-link por email) | `Nvet-Care-App` #24 |
+| 4 | Botón "Continuar con mi cuenta CTG One" en `/nvetcareapp/iniciar-sesion` | `ctg_one_website` #209 |
+
+**🔴 Incidente activo (2026-08-26, no resuelto a la fecha de esta revisión):**
+Este `main` auto-despliega a Railway en cada push, así que el cambio de
+schema de la Fase 1 (`ctgUserId` + `passwordHash` nullable) y el nuevo valor
+de `AuditAction` de la Fase 3 quedaron compilados en el Prisma Client de
+producción sin que nadie corriera `prisma db push` contra la base de datos
+real. Resultado: **cualquier query sobre `User` sin `select` explícito
+falla** — incluido `POST /auth/login`, que hoy responde `500
+{"error":"PrismaError","message":"Error en la base de datos"}` en vez de
+autenticar. Esto empezó quieta, sin alertar a nadie, apenas se mergeó la
+Fase 3; se detectó recién al verificar el endpoint de intercambio después de
+la Fase 4.
+
+Arreglo (aditivo, sin pérdida de datos, ya diseñado desde la Fase 1 — solo
+falta ejecutarlo): desde `backend/`, con el `DATABASE_URL` real de
+producción,
+
+```
+npx prisma db push
+```
+
+Hasta que esto corra, **el login normal de Nvet Care está caído en
+producción**, no solo el botón nuevo. Es el ítem P0 más urgente de este
+roadmap — por delante de cualquier otra prioridad de la tabla de abajo hasta
+que se confirme resuelto.
 
 ## Estado por fase
 
