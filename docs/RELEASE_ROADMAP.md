@@ -1,7 +1,7 @@
 # Nvet Care — Production Roadmap v1.0
 
-**Baseline:** `main` @ `31ace8b` (merge de PR #16, sobre PR #15 — fix de escalación a rol ADMIN)
-**Revisión:** 2026-08-26
+**Baseline:** `main` @ `643b7e5` (merge de PR #19 — decisión de plataforma web canónica)
+**Revisión:** 2026-08-26 (actualizada tras verificación en vivo de Fase 9 y conexión de Railway)
 
 Este roadmap sustituye el roadmap histórico del README. Su objetivo es llevar el producto actual a un release real y verificable. La revisión anterior (baseline `30252c9c`) quedó desactualizada varios merges atrás — este estado está verificado contra CI, workflows y el árbol de archivos reales en la fecha de revisión, no reconstruido de memoria.
 
@@ -19,7 +19,7 @@ Consecuencias concretas para este repo:
 
 | Fase | Objetivo | Estado |
 |---|---|---|
-| 0 | Consolidación del repositorio | PARCIAL — deuda de limpieza documental |
+| 0 | Consolidación del repositorio | COMPLETA — pendiente reverificar ausencia de secretos |
 | 1 | Baseline técnico + CI verde | COMPLETA |
 | 2 | Build móvil nativo Android/iOS | PARCIAL — Android avanzado, iOS no iniciado |
 | 3 | Infraestructura staging | PENDIENTE |
@@ -28,20 +28,20 @@ Consecuencias concretas para este repo:
 | 6 | Chat + notificaciones | PARCIAL — chat sí, push no |
 | 7 | Pagos productivos | PARCIAL — dominio avanzado, rails externos pendientes |
 | 8 | Dashboard operativo | REUBICADA — el dashboard web vive en `ctgone.com/nvetcareapp`, no en este repo |
-| 9 | Seguridad/privacidad | PARCIAL — fix en código confirmado, estado en producción sin confirmar |
+| 9 | Seguridad/privacidad | AVANZADA — fix de ADMIN verificado en vivo en producción |
 | 10 | Observabilidad/backups | PENDIENTE |
 | 11 | Release Candidate | PENDIENTE |
 | 12 | Beta cerrada Cartagena | PENDIENTE |
 | 13 | Android Production | PENDIENTE — base técnica lista (signing template, `bundleRelease`) |
 | 14 | iOS Production | PENDIENTE — bloqueada por Fase 2 |
 
-## Fase 0 — Consolidación · PARCIAL
+## Fase 0 — Consolidación · COMPLETA
 
 Criterios de salida:
 
-- [x] arquitectura canónica documentada — `mobile`, `backend`, `dashboard` como monorepo npm workspaces;
+- [x] arquitectura canónica documentada — `mobile`, `backend` (+ `dashboard` deprecado, ver arriba) como monorepo npm workspaces;
 - [x] paquetes oficiales inequívocos;
-- [ ] documentación histórica separada de documentación vigente — siguen 17 archivos `*_AUDIT.md` / `*_COMPLETE.md` / `MOBILE_*.md` / etc. en la raíz del repo, sin mover a un directorio de histórico. No bloquea el runtime, pero es deuda pendiente antes del RC.
+- [x] documentación histórica separada de documentación vigente — los 17 archivos `*_AUDIT.md` / `*_COMPLETE.md` / `MOBILE_*.md` / etc. se movieron a `docs/history/` (PR #18).
 - [ ] ausencia de secretos versionados — no reverificado en esta revisión.
 
 ## Fase 1 — Baseline técnico · COMPLETA
@@ -92,7 +92,7 @@ Prioridad: métodos tradicionales. CTG Token no debe bloquear el MVP. Dominio fi
 ## Fases 8–10 — Operación
 
 - **Fase 8 (Dashboard) — REUBICADA:** ver "Plataformas y arquitectura de producto" arriba. El dashboard operativo real es `ctgone.com/nvetcareapp` (repo `ctg_one_website`), ya en producción, con sesión, refresco de token, panel admin (veterinarios, transacciones, disputas, transferencias, contabilidad) y chat verificados contra el backend real. El paquete `dashboard/` de este repo queda deprecado; su workflow de deploy a Vercel se retiró — no tenía sentido corregirlo para desplegar una segunda plataforma web que la decisión de producto descarta.
-- **Fase 9 (Seguridad) — PARCIAL:** el fix de escalación a rol ADMIN (PR #15) está en `main`, pero `Deploy Backend` nunca ha completado un despliegue exitoso registrado (falla por `DATABASE_URL` vacía en el environment `production`). No confirmar que el fix está en producción hasta correr un smoke test real contra la URL productiva.
+- **Fase 9 (Seguridad) — AVANZADA:** el fix de escalación a rol ADMIN (PR #15) está verificado **en vivo en producción**, no solo en código: `POST https://backend-production-a476.up.railway.app/api/auth/register` con `role: "ADMIN"` responde `400 {"message":["Rol inválido"]}` — la validación de `RegisterDto` (`@IsIn([CLIENT, VET])`) rechaza la petición antes de tocar la base de datos, sin crear ningún usuario. Railway ahora tiene auto-deploy nativo conectado a `main` (antes no lo tenía — producción estuvo congelada más de un día en un commit anterior a este fix). `Deploy Backend` (GitHub Actions) sigue fallando por `DATABASE_URL` vacía en el environment `production`, pero ya no es la única vía de despliegue; sigue siendo necesario corregirlo porque es el único mecanismo que aplica los guards SQL manuales (`booking_integrity_v1.sql`, `live_location_v1.sql`) antes del deploy — a diferencia de `deploy-dashboard.yml`, no es redundante y no debe retirarse.
 - **Fase 10 (Observabilidad/backups) — PENDIENTE:** sin evidencia de logging estructurado, alertas o backups verificados en esta revisión.
 
 ## Fases 11–14 — Release
