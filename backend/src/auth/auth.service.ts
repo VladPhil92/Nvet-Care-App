@@ -176,6 +176,15 @@ export class AuthService {
       throw new ForbiddenException('Esta cuenta está desactivada. Contacta soporte.');
     }
 
+    // 3.b Cuenta provisionada vía CTG One sin password propio (ver
+    // docs/identity/ADR-001 en ctg_one_website) — no hay nada que verificar
+    // con este flujo de login.
+    if (!user.passwordHash) {
+      throw new UnauthorizedException(
+        'Esta cuenta no tiene contraseña configurada. Inicia sesión con tu cuenta CTG One o restablece tu contraseña.',
+      );
+    }
+
     // 4. Verificar password (con auto-rehash de bcrypt → Argon2id)
     const verifyResult = await this.passwordService.verify(dto.password, user.passwordHash);
     if (!verifyResult.isValid) {
@@ -277,6 +286,9 @@ export class AuthService {
     }
     if (!user.twoFactorEnabled) {
       throw new BadRequestException('2FA no está habilitado');
+    }
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('Credenciales inválidas');
     }
 
     const verifyResult = await this.passwordService.verify(dto.password, user.passwordHash);
@@ -507,6 +519,11 @@ export class AuthService {
       select: { id: true, passwordHash: true },
     });
     if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'Esta cuenta no tiene contraseña configurada todavía. Usa "olvidé mi contraseña" para crear una.',
+      );
+    }
 
     const verifyResult = await this.passwordService.verify(
       dto.currentPassword,

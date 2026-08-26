@@ -132,7 +132,15 @@ enum AuditSeverity {
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
-  passwordHash  String    @map("password_hash")
+  // Nullable: a CTG One-provisioned account (see docs/identity/ADR-001 in
+  // ctg_one_website) has no independent Nvet password until the user
+  // deliberately sets one via password reset.
+  passwordHash  String?   @map("password_hash")
+  // Optional link to the shared CTG One identity (Supabase auth.users.id).
+  // Derived only from a verified token's `sub` claim during the identity
+  // exchange (Phase 2) — never accepted as caller input. See
+  // docs/identity/ADR-001-unified-identity-for-nvet-care.md.
+  ctgUserId     String?   @unique @db.Uuid @map("ctg_user_id")
   role          UserRole  @default(CLIENT)
   firstName     String?   @map("first_name")
   lastName      String?   @map("last_name")
