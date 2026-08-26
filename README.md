@@ -1,10 +1,10 @@
 # Nvet Care Platform
 
-Plataforma de servicios veterinarios domiciliarios con aplicación móvil unificada para clientes y veterinarios, API backend y dashboard administrativo.
+Plataforma de servicios veterinarios domiciliarios con aplicación móvil unificada para clientes y veterinarios y API backend. El dashboard administrativo web vive en `ctgone.com/nvetcareapp` (repo `ctg_one_website`), no en este repositorio — ver nota de arquitectura más abajo.
 
 **Estado del producto:** productización / preparación de release  
 **Versión objetivo:** Nvet Care 1.0  
-**Arquitectura oficial:** `mobile` + `backend` + `dashboard`
+**Arquitectura oficial:** `mobile` + `backend` (el paquete `dashboard/` de este repo está deprecado — ver [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md) § Plataformas y arquitectura de producto)
 
 > El roadmap histórico de abril de 2026 quedó superado por la evolución del código. El estado vigente y la ruta a producción se mantienen en [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md).
 
@@ -14,7 +14,7 @@ Plataforma de servicios veterinarios domiciliarios con aplicación móvil unific
 Nvet-Care-App/
 ├── mobile/       # React Native + TypeScript
 ├── backend/      # NestJS + Prisma + PostgreSQL
-├── dashboard/    # React + Vite + TypeScript
+├── dashboard/    # React + Vite + TypeScript — deprecado, no desplegado (ver docs/RELEASE_ROADMAP.md)
 ├── docs/         # Arquitectura y roadmap vigentes
 ├── .github/      # CI/CD
 └── package.json  # npm workspaces
@@ -123,7 +123,9 @@ npm run start
 
 Android/iOS dependen de que los proyectos nativos estén presentes y correctamente configurados; su verificación es un bloqueante explícito del roadmap de release.
 
-### Dashboard
+### Dashboard (deprecado)
+
+`dashboard/` es el "Admin SaaS Dashboard" standalone original de este repo. **Ya no se desarrolla ni se despliega como producto** — el dashboard administrativo web vigente es `ctgone.com/nvetcareapp` (repo `ctg_one_website`). Ver `docs/RELEASE_ROADMAP.md` § Plataformas y arquitectura de producto para el porqué. El código sigue aquí como referencia; los comandos de abajo solo sirven para explorarlo localmente, no para desarrollo activo:
 
 ```bash
 cd dashboard
