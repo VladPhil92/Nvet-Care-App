@@ -23,9 +23,9 @@ El token `NvetCare/src/theme/colors.ts` provenía del prototipo `nvet-care-v4.js
 - Si es necesario consultar una implementación histórica, debe recuperarse desde Git history o una tag, no reintroducirse en la raíz.
 - Cualquier referencia visual útil debe migrarse explícitamente a `mobile/src/theme`, `dashboard/src/theme` o documentación de diseño.
 
-## Documentación histórica en raíz
+## Documentación histórica
 
-El repositorio conserva varios informes de auditoría/progreso anteriores (`*_AUDIT.md`, `*_COMPLETE.md`, `MOBILE_*.md`, etc.). Durante esta primera intervención de Fase 0 no se eliminan porque pueden contener evidencia técnica útil. Se consideran **snapshots históricos** hasta que sean clasificados y, cuando corresponda, trasladados a `docs/history/` en una intervención posterior.
+El repositorio conservaba varios informes de auditoría/progreso anteriores (`*_AUDIT.md`, `*_COMPLETE.md`, `MOBILE_*.md`, etc.) sueltos en la raíz. Se conservan como **snapshots históricos** — pueden contener evidencia técnica útil — pero ya no compiten con la documentación vigente en la raíz: viven en `docs/history/`.
 
 La documentación normativa vigente para decisiones de arquitectura y release es:
 
