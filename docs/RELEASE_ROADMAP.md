@@ -31,15 +31,17 @@ fases del alcance aceptado están mergeadas:
 
 **🔴 Incidente activo (2026-08-26, no resuelto a la fecha de esta revisión):**
 Este `main` auto-despliega a Railway en cada push, así que el cambio de
-schema de la Fase 1 (`ctgUserId` + `passwordHash` nullable) y el nuevo valor
-de `AuditAction` de la Fase 3 quedaron compilados en el Prisma Client de
-producción sin que nadie corriera `prisma db push` contra la base de datos
-real. Resultado: **cualquier query sobre `User` sin `select` explícito
-falla** — incluido `POST /auth/login`, que hoy responde `500
-{"error":"PrismaError","message":"Error en la base de datos"}` en vez de
-autenticar. Esto empezó quieta, sin alertar a nadie, apenas se mergeó la
-Fase 3; se detectó recién al verificar el endpoint de intercambio después de
-la Fase 4.
+schema de la Fase 1 (`ctgUserId` + `passwordHash` nullable) quedó compilado
+en el Prisma Client de producción sin que nadie corriera `prisma db push`
+contra la base de datos real. Resultado: **cualquier query sobre `User` sin
+`select` explícito falla** — incluido `POST /auth/login`, que hoy responde
+`500 {"error":"PrismaError","message":"Error en la base de datos"}` en vez
+de autenticar. Esto empezó apenas se mergeó y desplegó la Fase 1 (PR #22,
+`2026-08-26T05:54:48Z`) — no en la Fase 3 como decía una revisión anterior
+de esta nota (Codex, PR #25): la Fase 3 solo agregó un valor nuevo al enum
+`AuditAction`, que no rompe queries sobre `User` por sí solo. Se detectó
+recién al verificar el endpoint de intercambio después de la Fase 4, pero
+para entonces el login ya llevaba caído desde la Fase 1.
 
 Arreglo (aditivo, sin pérdida de datos, ya diseñado desde la Fase 1 — solo
 falta ejecutarlo): desde `backend/`, con el `DATABASE_URL` real de
