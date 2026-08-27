@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Linking,
+  Alert,
 } from 'react-native'
 import MapView, { Marker, Region } from 'react-native-maps'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -164,6 +165,20 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
   }, [navigation, id])
 
   const handleCall = useCallback(() => {
+    const phone = appt?.vet?.phone
+    if (!phone) {
+      Alert.alert('Sin teléfono', 'El veterinario no tiene número registrado.')
+      return
+    }
+    const url = `tel:${phone.replace(/\s+/g, '')}`
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url)
+      } else {
+        Alert.alert('No disponible', 'Tu dispositivo no puede realizar llamadas.')
+      }
+    })
+  }, [appt])
     const phone = live?.vet?.phone
     if (phone) void Linking.openURL(`tel:${phone}`)
   }, [live?.vet?.phone])

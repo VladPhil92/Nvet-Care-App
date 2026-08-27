@@ -281,6 +281,50 @@ export class AppointmentsService {
     });
   }
 
+  /**
+   * Get appointment tracking with GPS location and ETA
+   */
+  async getAppointmentTracking(id: string) {
+    const appointment = await this.getAppointmentById(id);
+
+    // Build status history from stored timestamps
+    const statusHistory: { status: string; timestamp: string }[] = [
+      { status: 'PENDING', timestamp: appointment.createdAt.toISOString() },
+    ];
+
+    const apt = appointment as any;
+    if (apt.confirmedAt) statusHistory.push({ status: 'CONFIRMED', timestamp: apt.confirmedAt.toISOString() });
+    if (apt.inProgressAt) statusHistory.push({ status: 'IN_PROGRESS', timestamp: apt.inProgressAt.toISOString() });
+    if (apt.completedAt) statusHistory.push({ status: 'COMPLETED', timestamp: apt.completedAt.toISOString() });
+
+    // GPS location
+    const vetLocation =
+      apt.vetLatitude != null && apt.vetLongitude != null
+        ? { latitude: apt.vetLatitude, longitude: apt.vetLongitude, updatedAt: apt.vetLocationAt }
+        : null;
+
+    // ETA: use stored value if available, otherwise estimate from appointment time
+    let estimatedArrival: string | null = apt.etaMinutes != null
+      ? new Date(Date.now() + apt.etaMinutes * 60 * 1000).toISOString()
+      : null;
+
+    if (!estimatedArrival && appointment.status === AppointmentStatus.CONFIRMED) {
+      const [hours, minutes] = appointment.time.split(':').map(Number);
+      const scheduled = new Date(appointment.date);
+      scheduled.setHours(hours, minutes, 0, 0);
+      if (scheduled > new Date()) {
+        estimatedArrival = scheduled.toISOString();
+      }
+    }
+
+    return {
+      appointmentId: id,
+      currentStatus: appointment.status,
+      vetLocation,
+      estimatedArrival,
+      etaMinutes: apt.etaMinutes ?? null,
+      scheduledAt: apt.scheduledAt ?? appointment.date,
+      lastStatusChangeAt: apt.lastStatusChangeAt ?? appointment.updatedAt,
   async getAppointmentTracking(id: string) {
     const appointment = await this.getAppointmentById(id);
 
@@ -300,9 +344,56 @@ export class AppointmentsService {
     };
   }
 
-  async updateAppointmentStatus(id: string, status: string) {
+  /**
+   * Update vet GPS location for an in-progress appointment
+   */
+  async updateVetLocation(
+    id: string,
+    vetUserId: string,
+    latitude: number,
+    longitude: number,
+    etaMinutes?: number,
+  ) {
     const appointment = await this.getAppointmentById(id);
 
+    if (appointment.vet.userId !== vetUserId) {
+      throw new ForbiddenException('Only the assigned vet can update location');
+    }
+
+    if (appointment.status !== AppointmentStatus.IN_PROGRESS) {
+      throw new BadRequestException('Location updates only allowed for in-progress appointments');
+    }
+
+    return this.prisma.appointment.update({
+      where: { id },
+      data: {
+        vetLatitude: latitude,
+        vetLongitude: longitude,
+        vetLocationAt: new Date(),
+        ...(etaMinutes != null && { etaMinutes }),
+      },
+      select: { id: true, vetLatitude: true, vetLongitude: true, vetLocationAt: true, etaMinutes: true },
+    });
+  }
+
+  /**
+   * Update appointment status (vets only) — records per-status timestamps
+   */
+  async updateAppointmentStatus(id: string, status: string) {
+    const appointment = await this.getAppointmentById(id);
+    const next = status as AppointmentStatus;
+
+    // Validate state transition
+    this.validateStatusTransition(appointment.status, next);
+
+    const now = new Date();
+    const timestampField: Partial<Record<string, Date>> = {
+      lastStatusChangeAt: now,
+    };
+
+    if (next === AppointmentStatus.CONFIRMED) timestampField.confirmedAt = now;
+    if (next === AppointmentStatus.IN_PROGRESS) timestampField.inProgressAt = now;
+    if (next === AppointmentStatus.COMPLETED) timestampField.completedAt = now;
     this.validateStatusTransition(
       appointment.status,
       status as AppointmentStatus,
@@ -311,7 +402,8 @@ export class AppointmentsService {
     return this.prisma.appointment.update({
       where: { id },
       data: {
-        status: status as AppointmentStatus,
+        status: next,
+        ...timestampField,
       },
       include: {
         vet: { include: { user: true } },

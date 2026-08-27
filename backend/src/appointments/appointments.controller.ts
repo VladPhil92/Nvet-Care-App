@@ -181,6 +181,31 @@ export class AppointmentsController {
     );
   }
 
+  /**
+   * PATCH /appointments/:id/location
+   * Update vet GPS location during an in-progress appointment
+   */
+  @Patch(':id/location')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.VET)
+  async updateVetLocation(
+    @Param('id') id: string,
+    @Body() body: { latitude: number; longitude: number; etaMinutes?: number },
+    @Request() req,
+  ) {
+    return this.appointmentsService.updateVetLocation(
+      id,
+      req.user.id,
+      body.latitude,
+      body.longitude,
+      body.etaMinutes,
+    );
+  }
+
+  /**
+   * POST /appointments/:id/clinical-notes
+   * Add clinical notes (diagnosis, treatment) - vets only
+   */
   @Post(':id/clinical-notes')
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)

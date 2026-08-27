@@ -4,10 +4,10 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
-  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../common/storage/storage.service';
 import {
   PaymentMethod,
   TransactionStatus,
@@ -15,9 +15,6 @@ import {
   VetTier,
   Prisma,
 } from '@prisma/client';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import * as crypto from 'crypto';
 
 // ============================================================
 // TYPES
@@ -94,14 +91,14 @@ const PSE_BANKS: Record<string, string> = {
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  private readonly uploadDir: string;
   /** Cache de idempotency keys (en producción usar Redis con TTL 24h) */
   private readonly idempotencyCache = new Map<string, { result: any; ts: number }>();
   private readonly IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
-  constructor(private prisma: PrismaService) {
-    this.uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-  }
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService,
+  ) {}
 
   // ============================================================
   // PROCESS PAYMENT
@@ -270,16 +267,16 @@ export class PaymentsService {
 
     this.validateStateTransition(transaction.status, TransactionStatus.VERIFYING);
 
-    // Guardar archivo
-    const savedPath = await this.saveProofFile(file, transactionId);
+    // Guardar archivo vía StorageService (local o Cloudinary según STORAGE_DRIVER)
+    const uploaded = await this.storage.upload(file, `transfers/${transactionId}`);
 
     return this.prisma.transaction.update({
       where: { id: transactionId },
       data: {
         status: TransactionStatus.VERIFYING,
         transferCode: dto.transferCode,
-        // Guardamos la ruta del comprobante en hashOnchain como placeholder (en producción: campo dedicado)
-        hashOnchain: savedPath,
+        // Guardamos la URL del comprobante en hashOnchain como placeholder (en producción: campo dedicado)
+        hashOnchain: uploaded.url,
       },
     });
   }
@@ -377,9 +374,9 @@ export class PaymentsService {
       };
     }
 
-    // Cliente: solo CTG balance
+    // Cliente: CTG balance desde campo User.ctgBalance
     return {
-      ctgBalance: 0, // TODO: tabla `WalletBalance` o columna en User para clientes
+      ctgBalance: user.ctgBalance,
       copBalance: 0,
       pendingCtg: 0,
       pendingCop: 0,
@@ -777,20 +774,6 @@ export class PaymentsService {
 
   private copToCtg(cop: number): number {
     return Math.round(cop / CTG_TO_COP_RATE);
-  }
-
-  private async saveProofFile(file: Express.Multer.File, transactionId: string): Promise<string> {
-    try {
-      const ext = path.extname(file.originalname).toLowerCase();
-      const hash = crypto.randomBytes(12).toString('hex');
-      const fileName = `${transactionId}_${hash}${ext}`;
-      const dir = path.join(this.uploadDir, 'transfers', transactionId);
-      await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(path.join(dir, fileName), file.buffer);
-      return `/uploads/transfers/${transactionId}/${fileName}`;
-    } catch (e) {
-      throw new InternalServerErrorException('No se pudo guardar el comprobante');
-    }
   }
 
   private getIdempotencyResult(key: string) {

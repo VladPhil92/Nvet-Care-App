@@ -3,7 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
 import type { ClientAppointmentsStackParamList } from '../types'
 import MyAppointmentsScreen from '../../screens/client/MyAppointmentsScreen'
-import AppointmentDetailPlaceholder from '../../screens/client/AppointmentDetailPlaceholder'
+import AppointmentDetailScreen from '../../screens/client/AppointmentDetailScreen'
 import AppointmentTrackingScreen from '../../screens/client/AppointmentTrackingScreen'
 import ChatScreen from '../../screens/shared/ChatScreen'
 
@@ -23,7 +23,7 @@ export default function ClientAppointmentsStack() {
       />
       <Stack.Screen
         name="AppointmentDetail"
-        component={AppointmentDetailPlaceholder}
+        component={AppointmentDetailScreen}
       />
       <Stack.Screen name="AppointmentTracking">
         {({ navigation, route }) => (

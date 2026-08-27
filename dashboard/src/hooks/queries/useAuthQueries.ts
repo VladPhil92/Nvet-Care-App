@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { qk } from '../../lib/queryKeys'
 import { STALE_TIMES } from '../../lib/queryClient'
-import authService from '../../services/auth.service'
+import { authService } from '../../services/auth.service'
 
 /**
  * Hooks de autenticación.
@@ -43,7 +43,7 @@ export function useLoginMutation() {
   return useMutation({
     mutationKey: ['auth', 'login'],
     mutationFn: ({ email, password }: LoginVars) =>
-      authService.login(email, password),
+      authService.login({ email, password }),
 
     onSuccess: (data) => {
       // Prime el cache con el usuario recién autenticado
@@ -70,7 +70,7 @@ interface RegisterVars {
   firstName: string
   lastName: string
   phone?: string
-  role?: 'CLIENT' | 'VET'
+  role: 'CLIENT' | 'VET' | 'ADMIN'
 }
 
 export function useRegisterMutation() {

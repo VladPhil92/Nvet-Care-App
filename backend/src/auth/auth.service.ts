@@ -8,6 +8,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { StringValue } from 'ms';
 import * as crypto from 'crypto';
 import { AuditAction, AuditSeverity, Prisma, UserRole } from '@prisma/client';
 
@@ -81,8 +82,8 @@ export class AuthService {
 
     // 2. Validación EXTRA de fortaleza (anti common passwords + diversidad)
     const strength = this.passwordService.validateStrength(dto.password);
-    if (!strength.isValid) {
-      throw new BadRequestException(`Contraseña débil: ${strength.reasons.join(', ')}`);
+    if (!strength.valid) {
+      throw new BadRequestException(`Contraseña débil: ${strength.issues.join(', ')}`);
     }
 
     // 3. Hash con Argon2id
@@ -191,7 +192,7 @@ export class AuthService {
 
     // 4. Verificar password (con auto-rehash de bcrypt → Argon2id)
     const verifyResult = await this.passwordService.verify(dto.password, user.passwordHash);
-    if (!verifyResult.isValid) {
+    if (!verifyResult.valid) {
       await this.recordFailedAttempt(user.id, user.failedLoginAttempts + 1);
       await this.auditService.log({
         actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
@@ -296,7 +297,7 @@ export class AuthService {
     }
 
     const verifyResult = await this.passwordService.verify(dto.password, user.passwordHash);
-    if (!verifyResult.isValid) {
+    if (!verifyResult.valid) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
@@ -603,6 +604,7 @@ export class AuthService {
     }
 
     // ----- Caso C: Rotation normal
+    const accessToken = await this.signAccessToken(session.user);
     const newRefreshToken = await this.signRefreshToken(session.user);
     const newRefreshHash = this.hashToken(newRefreshToken);
 
@@ -625,8 +627,6 @@ export class AuthService {
         expiresAt: this.refreshExpiresAt(),
       },
     });
-
-    const accessToken = await this.signAccessToken(session.user);
 
     return { accessToken, refreshToken: newRefreshToken };
   }
@@ -741,17 +741,17 @@ export class AuthService {
       dto.currentPassword,
       user.passwordHash,
     );
-    if (!verifyResult.isValid) {
+    if (!verifyResult.valid) {
       throw new UnauthorizedException('Contraseña actual incorrecta');
     }
 
     const strength = this.passwordService.validateStrength(dto.newPassword);
-    if (!strength.isValid) {
-      throw new BadRequestException(`Contraseña débil: ${strength.reasons.join(', ')}`);
+    if (!strength.valid) {
+      throw new BadRequestException(`Contraseña débil: ${strength.issues.join(', ')}`);
     }
 
     const sameAsCurrent = await this.passwordService.verify(dto.newPassword, user.passwordHash);
-    if (sameAsCurrent.isValid) {
+    if (sameAsCurrent.valid) {
       throw new BadRequestException(
         'La nueva contraseña no puede ser igual a la actual',
       );
@@ -918,7 +918,7 @@ export class AuthService {
       },
       {
         secret: process.env.JWT_SECRET,
-        expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+        expiresIn: (process.env.JWT_EXPIRES_IN || '15m') as StringValue,
       },
     );
   }
@@ -928,7 +928,7 @@ export class AuthService {
       { sub: user.id, type: 'refresh' },
       {
         secret: process.env.JWT_REFRESH_SECRET,
-        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+        expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as StringValue,
       },
     );
   }

@@ -13,15 +13,18 @@ import { visualizer } from 'rollup-plugin-visualizer'
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
-    process.env.ANALYZE === 'true' &&
-      visualizer({
-        filename: 'dist/bundle-stats.html',
-        gzipSize: true,
-        brotliSize: true,
-        template: 'treemap',
-        open: false,
-      }),
-  ].filter(Boolean) as never,
+    ...(process.env.ANALYZE === 'true'
+      ? [
+          visualizer({
+            filename: 'dist/bundle-stats.html',
+            gzipSize: true,
+            brotliSize: true,
+            template: 'treemap',
+            open: false,
+          }),
+        ]
+      : []),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

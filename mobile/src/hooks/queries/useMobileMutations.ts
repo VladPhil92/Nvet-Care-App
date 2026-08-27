@@ -203,6 +203,32 @@ export function useUpdateAppointmentStatusMutation() {
 }
 
 // ============================================================
+// APPOINTMENTS - add clinical notes (vet)
+// ============================================================
+
+interface AddClinicalNotesVars {
+  id: string
+  diagnosis: string
+  treatment: string
+  notes?: string
+}
+
+export function useAddClinicalNotesMutation() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationKey: ['appointments', 'clinicalNotes'],
+    mutationFn: ({ id, diagnosis, treatment, notes }: AddClinicalNotesVars) =>
+      appointmentService.addClinicalNotes(id, { diagnosis, treatment, notes }),
+
+    onSuccess: (updated: any) => {
+      qc.setQueryData(qk.appointments.detail(updated.id), updated)
+      qc.invalidateQueries({ queryKey: qk.appointments.all })
+    },
+  })
+}
+
+// ============================================================
 // PAYMENTS - process payment
 // ============================================================
 

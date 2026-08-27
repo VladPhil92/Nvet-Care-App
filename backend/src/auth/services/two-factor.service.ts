@@ -171,7 +171,7 @@ export class TwoFactorService {
         recoveryCode,
         user.recoveryCodesHash[i],
       );
-      if (valid.isValid) {
+      if (valid.valid) {
         matchedIndex = i;
         break;
       }
@@ -213,7 +213,7 @@ export class TwoFactorService {
 
     // 1. Verificar password
     const passwordCheck = await this.passwordService.verify(password, user.passwordHash);
-    if (!passwordCheck.isValid) {
+    if (!passwordCheck.valid) {
       throw new UnauthorizedException('Contraseña incorrecta');
     }
 

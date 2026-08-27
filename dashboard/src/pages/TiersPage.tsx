@@ -5,7 +5,7 @@ import { useResponsive } from '../hooks/useResponsive'
 
 export default function TiersPage() {
   const [current, setCurrent] = useState<'free' | 'pro' | 'elite'>('pro')
-  const { isMobile, isTablet, isDesktop } = useResponsive()
+  const { isMobile, isTablet } = useResponsive()
 
   const containerPadding = isMobile ? `${SPACING.mobile.gutter}px` : isTablet ? `${SPACING.tablet.gutter}px` : `${SPACING.desktop.gutter}px`
   const tiersColumns = isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : '1fr 1.15fr 1.3fr'
@@ -51,7 +51,7 @@ export default function TiersPage() {
         alignItems: 'start',
       }}>
         {/* En tablet, Elite va solo en la tercera fila */}
-        {Object.values(TIERS).map((tier, idx) => {
+        {Object.values(TIERS).map((tier, _idx) => {
           const active = current === tier.id
           const isElite = tier.id === 'elite'
           return (

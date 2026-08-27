@@ -62,12 +62,12 @@
     "msw": "^2.4.9",
     "prettier": "^3.3.0",
     "ts-jest": "^29.2.5",
-    "typescript": "5.0.4",
+    "typescript": "^5.7.3",
     "undici": "^6.20.1"
   },
   "jest": {
     "preset": "react-native",
-    "setupFilesAfterEach": [
+    "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ],
     "testPathIgnorePatterns": [

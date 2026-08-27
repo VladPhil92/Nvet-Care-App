@@ -8,9 +8,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
+import authService from '../../services/auth.service.v2'
+import { getErrorMessage } from '../../services/api'
 import type { ForgotPasswordScreenProps } from '../../navigation/types'
 
 const COLORS = {
@@ -26,15 +29,27 @@ export default function ForgotPasswordScreen({
 }: ForgotPasswordScreenProps) {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       Alert.alert('Correo inválido', 'Ingresa un correo electrónico válido')
       return
     }
-    // TODO: integrar con `POST /auth/forgot-password` cuando esté implementado.
-    // El backend genera un token de reset de 1h y envía email con link.
-    // Por seguridad, siempre respondemos OK (no revelar si el correo existe).
+    setLoading(true)
+    try {
+      await authService.forgotPassword(email.trim())
+    } catch (err) {
+      // Backend always returns 200 for security; only show error on network failure
+      const msg = getErrorMessage(err)
+      if (msg.includes('conexión') || msg.includes('servidor')) {
+        Alert.alert('Sin conexión', msg)
+        setLoading(false)
+        return
+      }
+    } finally {
+      setLoading(false)
+    }
     setSubmitted(true)
   }
 
@@ -96,14 +111,18 @@ export default function ForgotPasswordScreen({
 
               <Pressable
                 onPress={handleSubmit}
+                disabled={loading}
                 style={({ pressed }) => [
                   styles.submitBtn,
-                  pressed && { opacity: 0.85 },
+                  (pressed || loading) && { opacity: 0.75 },
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel="Enviar enlace de recuperación"
               >
-                <Text style={styles.submitText}>Enviar enlace</Text>
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.submitText}>Enviar enlace</Text>
+                }
               </Pressable>
             </>
           )}

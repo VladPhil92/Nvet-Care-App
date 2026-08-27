@@ -1,7 +1,7 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { qk } from '../../lib/queryKeys'
 import { STALE_TIMES } from '../../lib/queryClient'
-import adminService from '../../services/admin.service'
+import { adminService } from '../../services/admin.service'
 
 /**
  * Hooks de queries para el dominio Admin.
@@ -27,7 +27,7 @@ interface MetricsFilters {
 export function useMetricsQuery(filters: MetricsFilters = {}) {
   return useQuery({
     queryKey: qk.admin.metrics(filters),
-    queryFn: () => adminService.getMetrics(filters),
+    queryFn: () => adminService.getMetrics(),
     staleTime: STALE_TIMES.REAL_TIME,
     placeholderData: keepPreviousData,
   })
@@ -36,7 +36,7 @@ export function useMetricsQuery(filters: MetricsFilters = {}) {
 export function usePaymentMethodStatsQuery(filters: MetricsFilters = {}) {
   return useQuery({
     queryKey: qk.admin.paymentStats(filters),
-    queryFn: () => adminService.getPaymentMethodStats(filters),
+    queryFn: () => adminService.getPaymentMethodStats(),
     staleTime: STALE_TIMES.SHORT,
     placeholderData: keepPreviousData,
   })
@@ -47,6 +47,7 @@ export function usePaymentMethodStatsQuery(filters: MetricsFilters = {}) {
 // ============================================================
 
 interface TransactionFilters {
+  [key: string]: unknown
   status?: string
   paymentMethod?: string
   startDate?: string
@@ -88,6 +89,7 @@ export function useTransferTrackingQuery(options?: {
 // ============================================================
 
 interface AdminAppointmentFilters {
+  [key: string]: unknown
   status?: string
   startDate?: string
   endDate?: string
@@ -109,6 +111,7 @@ export function useAdminAppointmentsQuery(filters: AdminAppointmentFilters = {})
 // ============================================================
 
 interface VetsFilters {
+  [key: string]: unknown
   tier?: string
   verificationStatus?: string
   search?: string
@@ -119,7 +122,7 @@ interface VetsFilters {
 export function useVeterinariansQuery(filters: VetsFilters = {}) {
   return useQuery({
     queryKey: qk.admin.veterinarians.list(filters),
-    queryFn: () => adminService.getVeterinarians(filters),
+    queryFn: () => adminService.getVeterinarians(filters as Parameters<typeof adminService.getVeterinarians>[0]),
     staleTime: STALE_TIMES.MEDIUM,
     placeholderData: keepPreviousData,
   })

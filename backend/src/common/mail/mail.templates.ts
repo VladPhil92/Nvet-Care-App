@@ -135,6 +135,44 @@ Si no creaste esta cuenta, ignora este correo.
 }
 
 // ============================================================
+// VET VERIFICATION APPROVED
+// ============================================================
+
+export function vetApprovalTemplate(params: {
+  firstName: string;
+  dashboardLink?: string;
+}): RenderedMail {
+  const subject = '¡Tu verificación fue aprobada! Ya puedes recibir citas';
+  const dashboardUrl = params.dashboardLink ?? 'https://app.nvetcare.co/vet/dashboard';
+  const html = shell(
+    `<h1 style="margin:0 0 12px;font-size:22px;color:${BRAND.blue};">¡Felicitaciones, ${escapeHtml(params.firstName)}!</h1>
+    <div style="margin:16px 0;padding:16px;background:${BRAND.greenSoft};border-left:4px solid ${BRAND.green};border-radius:6px;">
+      <strong style="color:${BRAND.green};">Tu cuenta de veterinario ha sido verificada exitosamente.</strong>
+    </div>
+    <p style="margin:0 0 12px;">A partir de ahora puedes:</p>
+    <ul style="margin:0 0 16px;padding-left:20px;line-height:1.8;">
+      <li>Recibir citas a domicilio de clientes en tu área</li>
+      <li>Configurar tu agenda y tarifas</li>
+      <li>Recibir pagos vía CTG Token, PSE y transferencia</li>
+      <li>Acceder al chat arbitrado con tus clientes</li>
+    </ul>
+    ${ctaButton('Ir a mi panel', dashboardUrl)}
+    <p style="margin:0;color:${BRAND.textMuted};font-size:13px;">Si tienes preguntas, responde este correo o contáctanos en soporte@nvetcare.co.</p>`,
+    'Este correo confirma la aprobación de tu cuenta profesional en Nvet Care.',
+  );
+  const text = `¡Felicitaciones, ${params.firstName}!
+
+Tu cuenta de veterinario en Nvet Care ha sido verificada exitosamente.
+
+Ya puedes recibir citas, configurar tu agenda y tarifas, y recibir pagos.
+
+Accede a tu panel: ${dashboardUrl}
+
+— Nvet Care`;
+  return { subject, html, text };
+}
+
+// ============================================================
 // HELPER: escape HTML básico
 // ============================================================
 

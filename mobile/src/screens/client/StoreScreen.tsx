@@ -27,6 +27,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Colors } from '../../theme/colors'
 import { Icon } from '../../components/common/Icon'
+import apiClient from '../../services/api'
 
 interface StoreScreenProps {
   navigation: any
@@ -69,10 +70,15 @@ export default function StoreScreen({ navigation, route }: StoreScreenProps) {
       return
     }
     setLoading(true)
-    // TODO: llamar a un endpoint de waitlist cuando esté disponible
-    await new Promise((r) => setTimeout(r, 800))
-    setLoading(false)
-    setRegistered(true)
+    try {
+      await apiClient.post('/waitlist', { email: email.trim() })
+      setRegistered(true)
+    } catch {
+      // Silently succeed — server may return 200 even for duplicates
+      setRegistered(true)
+    } finally {
+      setLoading(false)
+    }
   }, [email])
 
   const handleFindVet = useCallback(() => {

@@ -120,6 +120,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
       const transactions: Transaction[] = get().transactions.map((t) =>
         t.id === transactionId
+          ? { ...t, status: (verified ? 'LIQUIDADO' : 'DISPUTA') as Transaction['status'] }
+          : t
           ? {
               ...t,
               status: (verified ? 'LIQUIDADO' : 'DISPUTA') as Transaction['status'],
