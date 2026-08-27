@@ -27,6 +27,7 @@ export interface AppointmentVet {
   rating: number
   reviewCount?: number
   avatar?: string
+  phone?: string
 }
 
 export interface Appointment {
