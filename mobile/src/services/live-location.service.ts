@@ -89,7 +89,7 @@ export const liveLocationService = {
     onError?: (error: Error) => void,
   ): number {
     return Geolocation.watchPosition(
-      (position) =>
+      (position: GeolocationResponse) =>
         onLocation({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -97,7 +97,7 @@ export const liveLocationService = {
           heading: position.coords.heading,
           speedMps: position.coords.speed,
         }),
-      (error) => onError?.(new Error(error.message)),
+      (error: { message: string }) => onError?.(new Error(error.message)),
       {
         enableHighAccuracy: true,
         distanceFilter: 20,

@@ -121,7 +121,6 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
 
   useEffect(() => {
     let mounted = true
-    let timer: ReturnType<typeof setInterval> | undefined
 
     const refresh = async () => {
       try {
@@ -134,11 +133,11 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
     }
 
     void refresh()
-    timer = setInterval(refresh, 15_000)
+    const timer = setInterval(refresh, 15_000)
 
     return () => {
       mounted = false
-      if (timer) clearInterval(timer)
+      clearInterval(timer)
     }
   }, [id])
 
@@ -179,9 +178,6 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
       }
     })
   }, [appt])
-    const phone = live?.vet?.phone
-    if (phone) void Linking.openURL(`tel:${phone}`)
-  }, [live?.vet?.phone])
 
   const handleHelp = useCallback(() => {
     navigation.navigate('Help')

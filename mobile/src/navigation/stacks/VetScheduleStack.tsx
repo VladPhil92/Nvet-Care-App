@@ -1,7 +1,6 @@
 import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
-import AppointmentDetailScreen from '../../screens/client/AppointmentDetailScreen'
 import type { VetScheduleStackParamList } from '../types'
 import VetAppointmentDetailScreen from '../../screens/vet/VetAppointmentDetailScreen'
 import { lazyScreen } from '../lazyScreen'
@@ -24,7 +23,6 @@ export default function VetScheduleStack() {
       <Stack.Screen name="ScheduleMain" component={VetScheduleScreen} />
       <Stack.Screen
         name="VetAppointmentDetail"
-        component={AppointmentDetailScreen}
         component={VetAppointmentDetailScreen}
       />
     </Stack.Navigator>
