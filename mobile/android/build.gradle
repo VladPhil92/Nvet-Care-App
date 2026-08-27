@@ -1,0 +1,33 @@
+buildscript {
+    ext {
+        // AndroidX Core resolves to 1.16.x in this dependency graph (react-native-gesture-handler
+        // and other transitive deps), which requires compileSdk 35 + AGP 8.6+. Forcing Core back to
+        // an older version to match a lower compileSdk breaks Kotlin binary compatibility elsewhere
+        // (react-native-gesture-handler's compiled classes expect the newer Core APIs) — so the
+        // toolchain is bumped to match what the dependency graph already needs, instead of pinning
+        // Core down.
+        buildToolsVersion = "35.0.0"
+        minSdkVersion = 23
+        compileSdkVersion = 35
+        targetSdkVersion = 34
+        ndkVersion = "26.1.10909125"
+        kotlinVersion = "1.9.24"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.6.0")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+allprojects {
+    repositories {
+        maven { url("$rootDir/../../node_modules/detox/Detox-android") }
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"

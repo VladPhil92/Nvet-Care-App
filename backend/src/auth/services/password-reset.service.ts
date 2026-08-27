@@ -136,7 +136,10 @@ export class PasswordResetService {
       );
     }
 
-    // Validar que no sea la MISMA contraseña actual
+    // Validar que no sea la MISMA contraseña actual. Si la cuenta fue
+    // provisionada vía CTG One y nunca tuvo password (user.passwordHash
+    // null), passwordService.verify degrada a isValid: false — no hay nada
+    // que comparar, así que se permite establecer la primera contraseña.
     const sameAsCurrent = await this.passwordService.verify(newPassword, user.passwordHash);
     if (sameAsCurrent.valid) {
       throw new BadRequestException(

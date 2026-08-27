@@ -2,7 +2,7 @@ import {
   IsEmail,
   IsString,
   IsOptional,
-  IsEnum,
+  IsIn,
   Matches,
   MinLength,
   MaxLength,
@@ -10,6 +10,12 @@ import {
   IsBoolean,
 } from 'class-validator';
 import { UserRole } from '@prisma/client';
+
+// Only these roles are self-assignable at public registration. ADMIN must
+// never be reachable through this DTO — it's provisioned out-of-band
+// (direct DB) — so it's deliberately excluded here rather than validated
+// with @IsEnum(UserRole), which would accept it.
+const SELF_REGISTERABLE_ROLES = [UserRole.CLIENT, UserRole.VET] as const;
 
 /**
  * Regex de password fuerte:
@@ -71,7 +77,7 @@ export class RegisterDto {
   })
   phone?: string;
 
-  @IsEnum(UserRole, { message: 'Rol inválido' })
+  @IsIn(SELF_REGISTERABLE_ROLES, { message: 'Rol inválido' })
   @IsOptional()
   role?: UserRole = UserRole.CLIENT;
 }
@@ -108,6 +114,31 @@ export class LoginDto {
   @IsOptional()
   @MaxLength(100)
   deviceLabel?: string;
+}
+
+// ============================================================
+// CTG ONE IDENTITY EXCHANGE
+// ============================================================
+// See docs/identity/ADR-001-unified-identity-for-nvet-care.md and
+// THREAT_MODEL.md in ctg_one_website. Called only server-to-server
+// (Next.js BFF or a native app holding its own Supabase session) —
+// never a bare fetch from a browser tab.
+
+export class CtgIdentityExchangeDto {
+  @IsString()
+  @MinLength(20, { message: 'Token de sesión CTG One inválido' })
+  @MaxLength(4096)
+  supabaseAccessToken: string;
+
+  /**
+   * Código TOTP opcional, para completar el desafío 2FA en la misma
+   * llamada cuando el `User` vinculado ya tiene 2FA habilitado —
+   * mismo contrato que `LoginDto.twoFactorCode`.
+   */
+  @IsString()
+  @IsOptional()
+  @Length(6, 8, { message: 'El código del autenticador debe tener entre 6 y 8 dígitos' })
+  twoFactorCode?: string;
 }
 
 // ============================================================

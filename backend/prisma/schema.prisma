@@ -102,6 +102,9 @@ enum AuditAction {
   TWO_FACTOR_DISABLED
   EMAIL_VERIFICATION_SENT
   EMAIL_VERIFIED
+  // CTG One identity exchange (docs/identity/ADR-001 in ctg_one_website)
+  NVET_IDENTITY_EXCHANGE_FAILURE
+  NVET_PROFILE_CREATED
   // Vet management
   VET_VERIFICATION_APPROVED
   VET_VERIFICATION_REJECTED
@@ -140,6 +143,22 @@ model User {
   avatar       String?
 
   ctgBalance Float @default(0) @map("ctg_balance")
+  id            String    @id @default(uuid())
+  email         String    @unique
+  // Nullable: a CTG One-provisioned account (see docs/identity/ADR-001 in
+  // ctg_one_website) has no independent Nvet password until the user
+  // deliberately sets one via password reset.
+  passwordHash  String?   @map("password_hash")
+  // Optional link to the shared CTG One identity (Supabase auth.users.id).
+  // Derived only from a verified token's `sub` claim during the identity
+  // exchange (Phase 2) — never accepted as caller input. See
+  // docs/identity/ADR-001-unified-identity-for-nvet-care.md.
+  ctgUserId     String?   @unique @db.Uuid @map("ctg_user_id")
+  role          UserRole  @default(CLIENT)
+  firstName     String?   @map("first_name")
+  lastName      String?   @map("last_name")
+  phone         String?
+  avatar        String?
 
   // ============================================
   // SECURITY: email verification

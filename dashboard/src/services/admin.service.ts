@@ -1,5 +1,10 @@
 import { apiClient } from './api'
 
+export interface MetricsFilters {
+  startDate?: string
+  endDate?: string
+}
+
 export interface AdminMetrics {
   citasHoy: number
   veterinariosActivos: number
@@ -37,6 +42,7 @@ export interface Appointment {
 }
 
 export interface TransferTracking {
+  id?: string
   vet: string
   vetId: string
   tier: 'free' | 'pro' | 'elite'
@@ -51,55 +57,87 @@ export interface PaymentMethodStats {
   amount: number
 }
 
+export interface TransactionFilters {
+  status?: string
+  paymentMethod?: string
+  startDate?: string
+  endDate?: string
+  vetName?: string
+  limit?: number
+  offset?: number
+}
+
+export interface AppointmentFilters {
+  status?: string
+  startDate?: string
+  endDate?: string
+  limit?: number
+  offset?: number
+}
+
+export interface VeterinarianFilters {
+  tier?: string
+  verificationStatus?: string
+  search?: string
+  isActive?: boolean
+  isVerified?: boolean
+  limit?: number
+  offset?: number
+}
+
+export type DisputeResolution = 'CONFIRM' | 'REFUND' | 'CANCEL'
+export type VetTierInput = 'free' | 'pro' | 'elite' | 'FREE' | 'PRO' | 'ELITE'
+export type ExportFormat = 'csv' | 'xlsx' | 'CSV' | 'XLSX'
+
 class AdminService {
-  async getMetrics(): Promise<AdminMetrics> {
-    const response = await apiClient.get('/admin/metrics')
+  async getMetrics(filters: MetricsFilters = {}): Promise<AdminMetrics> {
+    const response = await apiClient.get<AdminMetrics>('/admin/metrics', { params: filters })
     return response.data
   }
 
-  async getAppointments(params?: {
-    status?: string
-    startDate?: string
-    endDate?: string
-    limit?: number
-  }): Promise<Appointment[]> {
-    const response = await apiClient.get('/admin/appointments', { params })
+  async getAppointments(params: AppointmentFilters = {}): Promise<Appointment[]> {
+    const response = await apiClient.get<Appointment[]>('/admin/appointments', { params })
     return response.data
   }
 
-  async getTransactions(params?: {
-    status?: string
-    paymentMethod?: string
-    startDate?: string
-    endDate?: string
-    limit?: number
-  }): Promise<Transaction[]> {
-    const response = await apiClient.get('/admin/transactions', { params })
+  async getTransactions(params: TransactionFilters = {}): Promise<Transaction[]> {
+    const response = await apiClient.get<Transaction[]>('/admin/transactions', { params })
     return response.data
   }
 
   async getTransferTracking(): Promise<TransferTracking[]> {
-    const response = await apiClient.get('/admin/transfer-tracking')
+    const response = await apiClient.get<TransferTracking[]>('/admin/transfer-tracking')
     return response.data
   }
 
-  async getPaymentMethodStats(period?: string): Promise<PaymentMethodStats[]> {
-    const response = await apiClient.get('/admin/payment-stats', {
-      params: { period },
-    })
+  async getPaymentMethodStats(
+    filters: MetricsFilters | string = {},
+  ): Promise<PaymentMethodStats[]> {
+    const params = typeof filters === 'string' ? { period: filters } : filters
+    const response = await apiClient.get<PaymentMethodStats[]>('/admin/payment-stats', { params })
     return response.data
   }
 
-  async verifyTransfer(transactionId: string, verified: boolean): Promise<void> {
-    await apiClient.post(`/admin/transactions/${transactionId}/verify`, {
-      verified,
-    })
+  /**
+   * Compatibilidad con la UI legacy. El endpoint se mantiene encapsulado aquí
+   * para que una futura migración a la máquina de estados de disputas no se
+   * propague a los componentes.
+   */
+  async verifyTransfer(
+    transactionId: string,
+    verification: boolean | { action: 'CONFIRM' | 'REJECT'; reason?: string },
+  ): Promise<void> {
+    const payload =
+      typeof verification === 'boolean'
+        ? { verified: verification }
+        : verification
+    await apiClient.post(`/admin/transactions/${transactionId}/verify`, payload)
   }
 
   async resolveDispute(
     transactionId: string,
-    resolution: 'FAVOR_VET' | 'FAVOR_CLIENT' | 'PARTIAL_REFUND',
-    notes?: string
+    resolution: DisputeResolution,
+    notes = '',
   ): Promise<void> {
     await apiClient.post(`/admin/transactions/${transactionId}/resolve-dispute`, {
       resolution,
@@ -107,23 +145,28 @@ class AdminService {
     })
   }
 
-  async getVeterinarians(params?: {
-    tier?: 'free' | 'pro' | 'elite'
-    isActive?: boolean
-    isVerified?: boolean
-    limit?: number
-  }) {
-    const response = await apiClient.get('/admin/veterinarians', { params })
+  async getVeterinarians(params: VeterinarianFilters = {}) {
+    const normalized = {
+      ...params,
+      tier: params.tier?.toUpperCase(),
+    }
+    const response = await apiClient.get('/admin/veterinarians', { params: normalized })
     return response.data
   }
 
-  async updateVetTier(vetId: string, tier: 'free' | 'pro' | 'elite'): Promise<void> {
-    await apiClient.patch(`/admin/veterinarians/${vetId}/tier`, { tier })
+  async updateVetTier(vetId: string, tier: VetTierInput, reason?: string): Promise<void> {
+    await apiClient.patch(`/admin/veterinarians/${vetId}/tier`, {
+      tier: tier.toUpperCase(),
+      ...(reason ? { reason } : {}),
+    })
   }
 
-  async exportTransactions(format: 'csv' | 'xlsx', filters?: any): Promise<Blob> {
-    const response = await apiClient.get('/admin/transactions/export', {
-      params: { format, ...filters },
+  async exportTransactions(
+    format: ExportFormat,
+    filters: TransactionFilters = {},
+  ): Promise<Blob> {
+    const response = await apiClient.get('/admin/exports/transactions', {
+      params: { format: format.toUpperCase(), ...filters },
       responseType: 'blob',
     })
     return response.data
@@ -131,3 +174,4 @@ class AdminService {
 }
 
 export const adminService = new AdminService()
+export default adminService

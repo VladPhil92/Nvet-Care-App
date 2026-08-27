@@ -27,6 +27,7 @@ import {
   TwoFactorRecoveryDto,
   RefreshTokenDto,
   VerifyEmailDto,
+  CtgIdentityExchangeDto,
 } from './dto/auth.dto';
 
 /**
@@ -39,6 +40,7 @@ import {
  *   POST   /auth/register                  — Crear cuenta
  *   POST   /auth/login                     — Login (con 2FA opcional)
  *   POST   /auth/login/recovery            — Login con recovery code (perdió TOTP)
+ *   POST   /auth/ctg-identity-exchange     — Login vía sesión CTG One (docs/identity/ADR-001)
  *   POST   /auth/refresh                   — Renovar access token
  *   POST   /auth/logout                    — Cerrar sesión actual
  *   POST   /auth/logout-all                — Cerrar TODAS las sesiones
@@ -85,6 +87,20 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async loginWithRecovery(@Body() dto: TwoFactorRecoveryDto, @Req() req: any) {
     return this.authService.loginWithRecoveryCode(dto, this.extractContext(req));
+  }
+
+  /**
+   * Server-to-server únicamente (BFF de ctgone.com o una app nativa con su
+   * propia sesión Supabase) -- nunca un fetch directo desde una pestaña de
+   * navegador, ver THREAT_MODEL.md § New trust boundary. Rate limit igual
+   * de estricto que login: sigue siendo alcanzable por cualquiera que
+   * tenga un access token de Supabase válido.
+   */
+  @Post('ctg-identity-exchange')
+  @Throttle({ default: { limit: 5, ttl: seconds(60) } })
+  @HttpCode(HttpStatus.OK)
+  async exchangeCtgIdentity(@Body() dto: CtgIdentityExchangeDto, @Req() req: any) {
+    return this.authService.exchangeCtgIdentity(dto, this.extractContext(req));
   }
 
   // ============================================================

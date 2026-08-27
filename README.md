@@ -1,290 +1,194 @@
 # Nvet Care Platform
 
-**Plataforma completa de servicios veterinarios domiciliarios con integración blockchain CTG Token**
+Plataforma de servicios veterinarios domiciliarios con aplicación móvil unificada para clientes y veterinarios y API backend. El dashboard administrativo web vive en `ctgone.com/nvetcareapp` (repo `ctg_one_website`), no en este repositorio — ver nota de arquitectura más abajo.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![License](https://img.shields.io/badge/license-Proprietary-red)
+**Estado del producto:** productización / preparación de release  
+**Versión objetivo:** Nvet Care 1.0  
+**Arquitectura oficial:** `mobile` + `backend` (el paquete `dashboard/` de este repo está deprecado — ver [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md) § Plataformas y arquitectura de producto)
 
-Desarrollado por **CTG One Corporation** | 2026
+> El roadmap histórico de abril de 2026 quedó superado por la evolución del código. El estado vigente y la ruta a producción se mantienen en [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md).
 
----
+## Arquitectura
 
-## 📋 Descripción
-
-Nvet Care es una plataforma integral que conecta veterinarios con dueños de mascotas para servicios domiciliarios, con un sistema de pagos innovador basado en blockchain (CTG Token) y métodos tradicionales (PSE, Transferencias).
-
-### Características Principales
-
-- 🏥 **App Móvil Unificada**: Una sola aplicación con modo Cliente y Veterinario
-- 💰 **Sistema de Tiers**: Free, Pro y Elite con comisiones variables (10%, 8%, 3%)
-- 💬 **Chat Arbitrado**: Protección contra cobros abusivos con precios verificados
-- 🔗 **Blockchain Integration**: CTG Token en Polygon para descuento automático de comisiones
-- 📊 **Dashboard Admin SaaS**: Panel completo de métricas, tracking y contabilidad
-- ✅ **Trazabilidad de Pagos**: Tracking automático de transferencias bancarias
-
----
-
-## 🏗️ Arquitectura del Monorepo
-
-```
-Nvet-Care-Platform/
-├── mobile/           # React Native app (iOS + Android)
-├── backend/          # NestJS API REST + Prisma + PostgreSQL
-├── dashboard/        # React + Vite SaaS admin panel
-└── README.md         # Este archivo
+```text
+Nvet-Care-App/
+├── mobile/       # React Native + TypeScript
+├── backend/      # NestJS + Prisma + PostgreSQL
+├── dashboard/    # React + Vite + TypeScript — deprecado, no desplegado (ver docs/RELEASE_ROADMAP.md)
+├── docs/         # Arquitectura y roadmap vigentes
+├── .github/      # CI/CD
+└── package.json  # npm workspaces
 ```
 
----
+La definición completa de límites y fuentes de verdad está en [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
-## 🚀 Setup Inicial
+## Estado actual
 
-### Prerequisitos
+El repositorio ya contiene implementación material para:
 
-- **Node.js** 18+ y npm 9+
-- **Docker** y Docker Compose (para backend)
-- **React Native CLI** (para mobile)
-- **Android Studio** o **Xcode** (según plataforma)
+- autenticación JWT/refresh, verificación de email, sesiones y 2FA;
+- perfiles de veterinarios;
+- CRUD de mascotas;
+- citas;
+- reviews y recálculo de rating;
+- pagos y webhook PSE;
+- chat/WebSockets;
+- administración;
+- health checks;
+- aplicación móvil React Native;
+- dashboard React/Vite;
+- Jest/MSW/Detox;
+- workflows de CI y despliegue.
 
-### Instalación Rápida
+La existencia de estas capas no implica que producción esté habilitada. La prioridad actual es validar builds reproducibles, CI, staging, integraciones externas y el circuito E2E antes de añadir funcionalidades secundarias.
+
+## Circuito crítico 1.0
+
+```text
+Registro
+  ↓
+Verificación de email
+  ↓
+Mascota
+  ↓
+Búsqueda de veterinario
+  ↓
+Solicitud / aceptación
+  ↓
+Servicio
+  ↓
+Pago
+  ↓
+Finalización
+  ↓
+Review
+```
+
+## Requisitos
+
+- Node.js 18+ (CI usa Node 20)
+- npm 9+
+- Docker / Docker Compose para desarrollo backend
+- PostgreSQL
+- Android Studio para Android
+- Xcode para iOS
+
+## Instalación
+
+Desde la raíz:
 
 ```bash
-# Clonar repositorio
-git clone https://github.com/VladPhil92/Nvet-Care-App.git
-cd Nvet-Care-Platform
+npm install
+```
 
-# Instalar todas las dependencias
+El repositorio utiliza npm workspaces para:
+
+- `mobile`
+- `backend`
+- `dashboard`
+
+También existe el helper histórico:
+
+```bash
 npm run install:all
 ```
 
----
+que será revisado durante la Fase 1 de baseline técnico.
 
-## 📱 Mobile App
+## Desarrollo
 
-**Tecnología**: React Native 0.75.4 + TypeScript
-
-### Características
-
-- Navegación unificada con cambio de modo Usuario ↔ Veterinario
-- Integración con backend via Axios
-- Gestión de estado con Zustand
-- Mapas en tiempo real (react-native-maps)
-- AsyncStorage para persistencia local
-
-### Ejecutar
+### Backend
 
 ```bash
-# Android
-npm run mobile
-
-# iOS
-npm run mobile:ios
-```
-
-**Documentación completa**: [mobile/README.md](./mobile/README.md)
-
----
-
-## 🔧 Backend API
-
-**Tecnología**: NestJS + Prisma + PostgreSQL + Redis
-
-### Características
-
-- API REST con Swagger docs (`/api/docs`)
-- Autenticación JWT con refresh tokens
-- Roles: CLIENT, VET, ADMIN
-- WebSockets para chat en tiempo real
-- Integración Web3.js (Polygon)
-
-### Ejecutar
-
-```bash
-# Levantar servicios (PostgreSQL + Redis)
 cd backend
-docker-compose up -d
-
-# Ejecutar migraciones
-npm run backend:migrate
-
-# Iniciar servidor dev
-npm run backend
+npm install
+npm run prisma:generate
+npm run start:dev
 ```
 
-**Puerto**: http://localhost:3000  
-**Documentación completa**: [backend/README.md](./backend/README.md)
-
----
-
-## 🖥️ Dashboard Admin
-
-**Tecnología**: React 18 + Vite + TypeScript
-
-### Características
-
-- Panel administrativo con métricas en tiempo real
-- Tracking de transferencias con trazabilidad
-- Gestión de tiers y comisiones
-- Ledger contable con filtros avanzados
-- Preview de mobile app
-
-### Ejecutar
-
-```bash
-npm run dashboard
-```
-
-**Puerto**: http://localhost:3001  
-**Documentación completa**: [dashboard/README.md](./dashboard/README.md)
-
----
-
-## 🎨 Design System
-
-### Paleta de Colores
-
-- **Canvas**: `#F8F6F2` (Fondo principal - papel premium)
-- **Sage Green**: `#4A6741` (Brand primary - oliva profundo)
-- **CTG Gold**: `#B8962E` (Acento único - oro cálido)
-- **Ink**: `#1A1915` (Texto primario)
-
-### Tipografía
-
-- **Display**: Cormorant Garamond (elegancia serif)
-- **UI**: DM Sans (legibilidad moderna)
-- **Mono**: DM Mono (código y números)
-
----
-
-## 🔐 Seguridad
-
-- ✅ Passwords hasheados con bcrypt
-- ✅ JWT con refresh tokens
-- ✅ Rate limiting en endpoints críticos
-- ✅ CORS configurado
-- ✅ Validación de inputs (class-validator)
-- ✅ SQL injection protection (Prisma)
-- ✅ Helmet.js para headers seguros
-
----
-
-## 📊 Modelo de Datos Simplificado
-
-```
-User ──1:1── VetProfile (tier: FREE | PRO | ELITE)
- │
- ├──1:N── Pet
- │
- └──1:N── Appointment ──1:1── Transaction (CTG | PSE | TRANSFER)
-             │
-             └──1:N── Message (chat arbitrado)
-```
-
----
-
-## 💳 Sistema de Pagos
-
-### Métodos Soportados
-
-1. **CTG Token** (Recomendado - 5.5% descuento)
-   - Polygon blockchain
-   - Descuento automático de comisiones desde saldo del vet
-
-2. **PSE** (ACH Colombia)
-   - Integración con pasarelas locales
-   - Confirmación automática
-
-3. **Transferencia Bancaria**
-   - Tracking manual con verificación
-   - Sistema de arbitraje en disputas
-
-### Comisiones por Tier
-
-| Tier | Precio Mensual | Comisión | Límite |
-|------|---------------|----------|--------|
-| Free | $0 | 10% | 5 servicios/mes |
-| Pro  | $10 USD | 8% | Ilimitado |
-| Elite| $20 USD | **3%** | Ilimitado + beneficios premium |
-
----
-
-## 🧪 Testing
-
-```bash
-# Backend - Tests unitarios
-npm run backend:test
-
-# Backend - E2E
-cd backend && npm run test:e2e
-
-# Mobile - Jest
-cd mobile && npm run test
-```
-
----
-
-## 🚢 Deploy
-
-### Backend (Railway)
+Para PostgreSQL/Redis local:
 
 ```bash
 cd backend
-railway up
+docker-compose up -d
 ```
 
-### Mobile (Android - Google Play)
+### Mobile
 
 ```bash
-cd mobile/android
-./gradlew bundleRelease
+cd mobile
+npm install
+npm run start
 ```
 
-### Dashboard (Vercel)
+Android/iOS dependen de que los proyectos nativos estén presentes y correctamente configurados; su verificación es un bloqueante explícito del roadmap de release.
+
+### Dashboard (deprecado)
+
+`dashboard/` es el "Admin SaaS Dashboard" standalone original de este repo. **Ya no se desarrolla ni se despliega como producto** — el dashboard administrativo web vigente es `ctgone.com/nvetcareapp` (repo `ctg_one_website`). Ver `docs/RELEASE_ROADMAP.md` § Plataformas y arquitectura de producto para el porqué. El código sigue aquí como referencia; los comandos de abajo solo sirven para explorarlo localmente, no para desarrollo activo:
 
 ```bash
 cd dashboard
-vercel --prod
+npm install
+npm run dev
 ```
 
----
+## Calidad
 
-## 📞 Soporte
+El workflow `.github/workflows/ci.yml` está diseñado para validar:
 
-- **Email**: dev@ctgone.co
-- **GitHub Issues**: [Reportar bug](https://github.com/VladPhil92/Nvet-Care-App/issues)
-- **Documentación**: [docs.nvetcare.com](#)
+### Backend
 
----
+```text
+npm ci → prisma generate → lint → build → tests
+```
 
-## 🤝 Contribución
+### Mobile
 
-Este es un proyecto propietario de **CTG One Corporation**. Para contribuciones internas:
+```text
+npm ci → lint → typecheck → Jest/MSW
+```
 
-1. Fork del repositorio
-2. Crear branch: `git checkout -b feature/nueva-feature`
-3. Commit con co-author: `git commit -m 'Add: nueva feature' --trailer 'Co-Authored-By: Oz <oz-agent@warp.dev>'`
-4. Push: `git push origin feature/nueva-feature`
-5. Abrir Pull Request
+### Dashboard
 
----
+```text
+npm ci → lint → build
+```
 
-## 📄 Licencia
+El siguiente milestone técnico exige que esos checks pasen de forma verificable en `main`.
 
-**Propietario**: CTG One Corporation  
-**Año**: 2026  
-**Tipo**: Proprietary - Todos los derechos reservados
+## Producción
 
----
+El backend incluye [`backend/BOOTSTRAP_PROD.md`](./backend/BOOTSTRAP_PROD.md), que documenta secrets, migraciones, mail transaccional y smoke tests.
 
-## 📈 Roadmap
+Antes de producción deben existir como mínimo:
 
-- [x] Fase 1: Reorganización de monorepo
-- [ ] Fase 2: App móvil unificada (cambio de modo)
-- [ ] Fase 3: Integración backend completa
-- [ ] Fase 4: Sistema de tiers y CTG Token
-- [ ] Fase 5: Chat arbitrado con WebSockets
-- [ ] Fase 6: Deploy a producción
-- [ ] Fase 7: Testing E2E completo
+- CI verde;
+- proyectos nativos móviles compilables;
+- staging separado;
+- PostgreSQL con backups;
+- secrets fuera del repositorio;
+- email transaccional real;
+- CORS de producción;
+- HTTPS;
+- geolocalización real;
+- pruebas E2E del circuito crítico;
+- observabilidad y smoke tests;
+- signing y distribución de builds.
 
----
+## Documentación vigente
 
-**Última actualización**: 21/04/2026
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — arquitectura canónica.
+- [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md) — ruta a producción.
+- [`docs/LEGACY.md`](./docs/LEGACY.md) — artefactos históricos y política de limpieza.
+- [`backend/BOOTSTRAP_PROD.md`](./backend/BOOTSTRAP_PROD.md) — bootstrap backend.
+
+Los informes `*_AUDIT.md`, `*_COMPLETE.md` y `MOBILE_*.md` conservados en raíz son snapshots históricos hasta completar su clasificación.
+
+## Seguridad
+
+No se deben versionar credenciales, claves JWT, API keys, secrets de cifrado ni archivos `.env` reales. La configuración productiva debe residir en el secret manager del proveedor de infraestructura.
+
+## Licencia
+
+Proyecto propietario. Todos los derechos reservados.

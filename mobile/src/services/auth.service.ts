@@ -4,6 +4,8 @@ import { apiClient } from './api'
 export interface LoginCredentials {
   email: string
   password: string
+  twoFactorCode?: string
+  deviceLabel?: string
 }
 
 export interface RegisterData {
@@ -12,31 +14,48 @@ export interface RegisterData {
   firstName: string
   lastName: string
   phone?: string
+  role?: 'CLIENT' | 'VET' | 'ADMIN'
+}
+
+export interface AuthUser {
+  id: string
+  email: string
+  role: 'CLIENT' | 'VET' | 'ADMIN'
+  firstName?: string
+  lastName?: string
+  phone?: string
+  avatar?: string
+  vetProfile?: {
+    id: string
+    licenseNumber?: string
+    specialties?: string[]
+    tier: 'FREE' | 'PRO' | 'ELITE'
+    ctgBalance?: number
+    rating?: number
+    isVerified: boolean
+    verificationStatus?: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED'
+  }
 }
 
 export interface AuthResponse {
   accessToken: string
   refreshToken: string
-  user: {
-    id: string
-    email: string
-    role: 'CLIENT' | 'VET' | 'ADMIN'
-    firstName?: string
-    lastName?: string
-    vetProfile?: {
-      id: string
-      tier: 'FREE' | 'PRO' | 'ELITE'
-      isVerified: boolean
-    }
-  }
+  user: AuthUser
 }
 
 class AuthService {
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await apiClient.post('/auth/login', credentials)
+  async login(
+    credentialsOrEmail: LoginCredentials | string,
+    password?: string,
+  ): Promise<AuthResponse> {
+    const credentials =
+      typeof credentialsOrEmail === 'string'
+        ? { email: credentialsOrEmail, password: password ?? '' }
+        : credentialsOrEmail
+
+    const response = await apiClient.post<AuthResponse>('/auth/login', credentials)
     const { accessToken, refreshToken, user } = response.data
 
-    // Guardar tokens en AsyncStorage
     await AsyncStorage.multiSet([
       ['accessToken', accessToken],
       ['refreshToken', refreshToken],
@@ -47,13 +66,12 @@ class AuthService {
   }
 
   async register(data: RegisterData): Promise<AuthResponse> {
-    const response = await apiClient.post('/auth/register', {
+    const response = await apiClient.post<AuthResponse>('/auth/register', {
       ...data,
-      role: 'CLIENT', // Por defecto todos empiezan como cliente
+      role: data.role ?? 'CLIENT',
     })
     const { accessToken, refreshToken, user } = response.data
 
-    // Guardar tokens en AsyncStorage
     await AsyncStorage.multiSet([
       ['accessToken', accessToken],
       ['refreshToken', refreshToken],
@@ -67,7 +85,6 @@ class AuthService {
     try {
       await apiClient.post('/auth/logout')
     } finally {
-      // Limpiar tokens independientemente de si la llamada API falla
       await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'user'])
     }
   }
@@ -89,13 +106,13 @@ class AuthService {
     return accessToken
   }
 
-  async getCurrentUser() {
+  async getCurrentUser(): Promise<AuthUser | null> {
     const userStr = await AsyncStorage.getItem('user')
-    return userStr ? JSON.parse(userStr) : null
+    return userStr ? (JSON.parse(userStr) as AuthUser) : null
   }
 
   async getAccessToken(): Promise<string | null> {
-    return await AsyncStorage.getItem('accessToken')
+    return AsyncStorage.getItem('accessToken')
   }
 
   async isAuthenticated(): Promise<boolean> {
@@ -103,7 +120,7 @@ class AuthService {
     return !!token
   }
 
-  async updateUserData(userData: Partial<AuthResponse['user']>): Promise<void> {
+  async updateUserData(userData: Partial<AuthUser>): Promise<void> {
     const currentUser = await this.getCurrentUser()
     if (currentUser) {
       const updatedUser = { ...currentUser, ...userData }
@@ -111,17 +128,13 @@ class AuthService {
     }
   }
 
-  /**
-   * Actualiza el perfil del usuario en el backend (PATCH /users/me) y
-   * sincroniza con el cache local de AsyncStorage.
-   */
   async updateProfile(data: {
     firstName?: string
     lastName?: string
     phone?: string
     avatar?: string
-  }): Promise<AuthResponse['user']> {
-    const response = await apiClient.patch('/users/me', data)
+  }): Promise<AuthUser> {
+    const response = await apiClient.patch<AuthUser>('/users/me', data)
     const updatedUser = response.data
     await this.updateUserData(updatedUser)
     return updatedUser

@@ -4,17 +4,19 @@ import {
   ConflictException,
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { StringValue } from 'ms';
 import * as crypto from 'crypto';
-import { AuditAction, AuditSeverity, UserRole } from '@prisma/client';
+import { AuditAction, AuditSeverity, Prisma, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { PasswordService } from './services/password.service';
 import { TwoFactorService } from './services/two-factor.service';
+import { CtgIdentityService } from './services/ctg-identity.service';
 import {
   RegisterDto,
   LoginDto,
@@ -22,6 +24,7 @@ import {
   TwoFactorEnableDto,
   TwoFactorDisableDto,
   TwoFactorRecoveryDto,
+  CtgIdentityExchangeDto,
 } from './dto/auth.dto';
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -56,6 +59,7 @@ export class AuthService {
     private readonly passwordService: PasswordService,
     private readonly twoFactorService: TwoFactorService,
     private readonly auditService: AuditService,
+    private readonly ctgIdentityService: CtgIdentityService,
   ) {}
 
   // ============================================================
@@ -93,7 +97,10 @@ export class AuthService {
         firstName: dto.firstName,
         lastName: dto.lastName,
         phone: dto.phone,
-        role: dto.role || UserRole.CLIENT,
+        // Defense in depth: even if RegisterDto's role validation is ever
+        // loosened, this path must never grant ADMIN from user input —
+        // ADMIN is provisioned out-of-band only.
+        role: dto.role === UserRole.ADMIN ? UserRole.CLIENT : dto.role || UserRole.CLIENT,
         passwordChangedAt: new Date(),
         // emailVerified: false (default)
       },
@@ -172,6 +179,15 @@ export class AuthService {
     // 3. Cuenta desactivada
     if (!user.isActive) {
       throw new ForbiddenException('Esta cuenta está desactivada. Contacta soporte.');
+    }
+
+    // 3.b Cuenta provisionada vía CTG One sin password propio (ver
+    // docs/identity/ADR-001 en ctg_one_website) — no hay nada que verificar
+    // con este flujo de login.
+    if (!user.passwordHash) {
+      throw new UnauthorizedException(
+        'Esta cuenta no tiene contraseña configurada. Inicia sesión con tu cuenta CTG One o restablece tu contraseña.',
+      );
     }
 
     // 4. Verificar password (con auto-rehash de bcrypt → Argon2id)
@@ -276,6 +292,9 @@ export class AuthService {
     if (!user.twoFactorEnabled) {
       throw new BadRequestException('2FA no está habilitado');
     }
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
 
     const verifyResult = await this.passwordService.verify(dto.password, user.passwordHash);
     if (!verifyResult.valid) {
@@ -305,6 +324,214 @@ export class AuthService {
           ? `Tienes solo ${result.remainingCodes} códigos de recuperación restantes. Genera nuevos en tu perfil.`
           : null,
     };
+  }
+
+  // ============================================================
+  // CTG ONE IDENTITY EXCHANGE (docs/identity/ADR-001, ctg_one_website)
+  // ============================================================
+
+  /**
+   * Intercambia un access token de Supabase (la identidad CTG One) por
+   * una sesión Nvet normal, para un `User` ya vinculado por `ctgUserId`.
+   *
+   * Deliberadamente NO provisiona cuentas nuevas ni vincula por email
+   * (eso es Fase 3/5) -- un `ctgUserId` sin `User` vinculado simplemente
+   * no resuelve todavía. Todo lo posterior a la verificación reutiliza
+   * el mismo camino de emisión de sesión que `login()`.
+   *
+   * Gateada por NVET_CTG_IDENTITY_EXCHANGE_ENABLED (default off): el
+   * backend de este repo se despliega automáticamente en cada push a
+   * `main`, así que sin este gate el endpoint quedaría alcanzable en
+   * producción antes del lanzamiento anunciado (Fase 4). Ver
+   * THREAT_MODEL.md § Deployed-but-not-yet-launched exposure.
+   */
+  async exchangeCtgIdentity(dto: CtgIdentityExchangeDto, ctx: LoginContext = {}) {
+    if (process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED !== 'true') {
+      throw new NotFoundException();
+    }
+
+    let ctgUserId: string;
+    let ctgEmail: string | undefined;
+    try {
+      const claims = await this.ctgIdentityService.verify(dto.supabaseAccessToken);
+      ctgUserId = claims.sub;
+      ctgEmail = claims.email;
+    } catch {
+      await this.auditService.log({
+        actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
+        severity: AuditSeverity.WARN,
+        reason: 'supabase_token_verification_failed',
+      });
+      throw new UnauthorizedException('Sesión de CTG One inválida o expirada');
+    }
+
+    let user = await this.prisma.user.findUnique({
+      where: { ctgUserId },
+      include: { vetProfile: true },
+    });
+
+    if (!user) {
+      user = await this.provisionCtgUser(ctgUserId, ctgEmail, ctx);
+    }
+
+    // Misma regla que JwtStrategy para una sesión normal: una cuenta
+    // desactivada no puede iniciar sesión por ningún camino, ni siquiera
+    // con una sesión CTG One válida.
+    if (!user.isActive) {
+      throw new ForbiddenException('Esta cuenta está desactivada. Contacta soporte.');
+    }
+
+    // 2FA enforcement -- mismo shape que login(), reutilizando el mismo
+    // servicio de verificación TOTP.
+    if (user.twoFactorEnabled) {
+      if (!dto.twoFactorCode) {
+        throw new UnauthorizedException({
+          message: 'Se requiere código del autenticador',
+          error: 'TWO_FACTOR_REQUIRED',
+          twoFactorEnabled: true,
+        });
+      }
+      try {
+        await this.twoFactorService.verifyDuringLogin(user.id, dto.twoFactorCode);
+      } catch {
+        await this.auditService.log({
+          actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+          action: AuditAction.LOGIN_FAILED,
+          severity: AuditSeverity.WARN,
+          targetType: 'User',
+          targetId: user.id,
+          reason: 'invalid_2fa_code_ctg_identity_exchange',
+        });
+        throw new UnauthorizedException('Código del autenticador inválido o expirado');
+      }
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+        lastLoginIp: ctx.ipAddress,
+        lastLoginUserAgent: ctx.userAgent,
+      },
+    });
+
+    const tokens = await this.createSessionAndIssueTokens(user, ctx);
+
+    await this.auditService.log({
+      actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+      action: AuditAction.LOGIN_SUCCESS,
+      severity: AuditSeverity.INFO,
+      targetType: 'User',
+      targetId: user.id,
+      reason: 'login_ctg_identity_exchange',
+      metadata: { via: 'ctg_identity_exchange', twoFactorUsed: user.twoFactorEnabled },
+    });
+
+    return {
+      user: this.sanitizeUser(user),
+      ...tokens,
+      requiresEmailVerification: !user.emailVerified,
+    };
+  }
+
+  /**
+   * Provisioning-on-first-visit (Fase 3, docs/identity/ADR-001 en
+   * ctg_one_website): crea un `User` CLIENT nuevo para un `ctgUserId`
+   * que todavía no tiene perfil de Nvet Care.
+   *
+   * Nunca vincula por email -- un email ya existente en Nvet (con o sin
+   * password) responde apuntando al login existente, no crea la cuenta
+   * ni la enlaza (la vinculación explícita y autenticada es Fase 5,
+   * diferida indefinidamente; ver THREAT_MODEL.md § Account
+   * linking/takeover).
+   *
+   * Race-safe: dos exchanges concurrentes para el mismo `ctgUserId` (o
+   * un `POST /auth/register` concurrente con el mismo email) pueden
+   * chocar contra el `create` -- se recupera reconsultando en vez de
+   * fallar con un 500.
+   */
+  private async provisionCtgUser(ctgUserId: string, email: string | undefined, ctx: LoginContext) {
+    if (!email) {
+      await this.auditService.log({
+        actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
+        severity: AuditSeverity.WARN,
+        reason: 'ctg_identity_missing_email_claim',
+      });
+      throw new UnauthorizedException('Sesión de CTG One inválida o expirada');
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const existingByEmail = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+    if (existingByEmail) {
+      await this.auditService.log({
+        actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
+        severity: AuditSeverity.INFO,
+        reason: 'ctg_identity_email_collision',
+      });
+      throw new UnauthorizedException({
+        message:
+          'Ya existe una cuenta de Nvet Care con este correo. Inicia sesión con tu contraseña o recupérala si la olvidaste.',
+        error: 'CTG_IDENTITY_EMAIL_COLLISION',
+      });
+    }
+
+    try {
+      const created = await this.prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          ctgUserId,
+          role: UserRole.CLIENT,
+          // Supabase ya verificó este email -- no se re-verifica.
+          emailVerified: true,
+        },
+        include: { vetProfile: true },
+      });
+
+      await this.auditService.log({
+        actor: { id: created.id, role: created.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        action: AuditAction.NVET_PROFILE_CREATED,
+        severity: AuditSeverity.INFO,
+        targetType: 'User',
+        targetId: created.id,
+        reason: 'ctg_identity_provisioned',
+        metadata: { ctgUserId },
+      });
+
+      return created;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        // Otro exchange concurrente (mismo ctgUserId) ya creó la fila.
+        const raceWinner = await this.prisma.user.findUnique({
+          where: { ctgUserId },
+          include: { vetProfile: true },
+        });
+        if (raceWinner) {
+          return raceWinner;
+        }
+        // El choque fue por email, no por ctgUserId -- alguien registró
+        // ese correo en el mismo instante. Mismo resultado que la
+        // colisión detectada arriba.
+        await this.auditService.log({
+          actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
+          action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
+          severity: AuditSeverity.INFO,
+          reason: 'ctg_identity_email_collision_race',
+        });
+        throw new UnauthorizedException({
+          message:
+            'Ya existe una cuenta de Nvet Care con este correo. Inicia sesión con tu contraseña o recupérala si la olvidaste.',
+          error: 'CTG_IDENTITY_EMAIL_COLLISION',
+        });
+      }
+      throw err;
+    }
   }
 
   // ============================================================
@@ -504,6 +731,11 @@ export class AuthService {
       select: { id: true, passwordHash: true },
     });
     if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'Esta cuenta no tiene contraseña configurada todavía. Usa "olvidé mi contraseña" para crear una.',
+      );
+    }
 
     const verifyResult = await this.passwordService.verify(
       dto.currentPassword,

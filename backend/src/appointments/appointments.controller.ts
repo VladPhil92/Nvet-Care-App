@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  Headers,
   UseGuards,
   Request,
   HttpCode,
@@ -18,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { IdempotencyService } from '../common/security/idempotency.service';
 import { UserRole } from '@prisma/client';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
@@ -27,12 +29,11 @@ import { AddClinicalNotesDto } from './dto/add-clinical-notes.dto';
 @Controller('appointments')
 @UseGuards(JwtAuthGuard)
 export class AppointmentsController {
-  constructor(private readonly appointmentsService: AppointmentsService) {}
+  constructor(
+    private readonly appointmentsService: AppointmentsService,
+    private readonly idempotencyService: IdempotencyService,
+  ) {}
 
-  /**
-   * GET /appointments
-   * Get appointments with optional filters
-   */
   @Get()
   async getAppointments(
     @Request() req,
@@ -50,10 +51,6 @@ export class AppointmentsController {
     });
   }
 
-  /**
-   * GET /appointments/today
-   * Get today's appointments (for vets)
-   */
   @Get('today')
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)
@@ -61,15 +58,9 @@ export class AppointmentsController {
     return this.appointmentsService.getTodayAppointments(req.user.vetProfileId);
   }
 
-  /**
-   * GET /appointments/:id
-   * Get appointment by ID
-   */
   @Get(':id')
   async getAppointmentById(@Param('id') id: string, @Request() req) {
     const appointment = await this.appointmentsService.getAppointmentById(id);
-
-    // Check ownership
     const userId = req.user.id;
     const isOwner =
       appointment.clientId === userId || appointment.vet.userId === userId;
@@ -82,14 +73,10 @@ export class AppointmentsController {
   }
 
   /**
-   * POST /appointments
-   * Create a new appointment (clients only).
-   *
-   * Guards aplicados:
-   *  - JwtAuthGuard (a nivel de clase): debe estar autenticado
-   *  - EmailVerifiedGuard: bloquea hasta que el cliente verifique su email
-   *    (mitigación de fraude con cuentas recién creadas)
-   *  - RolesGuard + @Roles(CLIENT): solo clientes pueden crear citas
+   * Booking replay-safe. Mobile ya envía `Idempotency-Key`; si un cliente
+   * reintenta por timeout/red inestable devolvemos el mismo resultado en vez
+   * de ejecutar nuevamente el booking. Para clientes legacy sin header se
+   * conserva compatibilidad y la unique constraint sigue protegiendo el slot.
    */
   @Post()
   @UseGuards(EmailVerifiedGuard, RolesGuard)
@@ -98,24 +85,41 @@ export class AppointmentsController {
   async createAppointment(
     @Body() createAppointmentDto: CreateAppointmentDto,
     @Request() req,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.appointmentsService.createAppointment(
-      req.user.id,
-      createAppointmentDto,
-    );
+    const create = async () =>
+      this.appointmentsService.createAppointment(
+        req.user.id,
+        createAppointmentDto,
+      );
+
+    if (!idempotencyKey) {
+      return create();
+    }
+
+    const replay = await this.idempotencyService.execute({
+      key: `appointments:create:${req.user.id}:${idempotencyKey}`,
+      endpoint: 'POST /appointments',
+      userId: req.user.id,
+      requestBody: createAppointmentDto,
+      operation: async () => {
+        const appointment = await create();
+        return {
+          status: HttpStatus.CREATED,
+          body: JSON.parse(JSON.stringify(appointment)),
+        };
+      },
+    });
+
+    return replay.result;
   }
 
-  /**
-   * PATCH /appointments/:id
-   * Update appointment details
-   */
   @Patch(':id')
   async updateAppointment(
     @Param('id') id: string,
     @Body() updateAppointmentDto: UpdateAppointmentDto,
     @Request() req,
   ) {
-    // Verify ownership
     const appointment = await this.appointmentsService.getAppointmentById(id);
     if (appointment.clientId !== req.user.id && req.user.role !== UserRole.ADMIN) {
       throw new ForbiddenException('You can only update your own appointments');
@@ -124,10 +128,6 @@ export class AppointmentsController {
     return this.appointmentsService.updateAppointment(id, updateAppointmentDto);
   }
 
-  /**
-   * DELETE /appointments/:id
-   * Cancel appointment
-   */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async cancelAppointment(
@@ -148,10 +148,6 @@ export class AppointmentsController {
     return;
   }
 
-  /**
-   * GET /appointments/:id/tracking
-   * Get appointment tracking (location, ETA, status history)
-   */
   @Get(':id/tracking')
   async getAppointmentTracking(@Param('id') id: string, @Request() req) {
     const appointment = await this.appointmentsService.getAppointmentById(id);
@@ -166,10 +162,6 @@ export class AppointmentsController {
     return this.appointmentsService.getAppointmentTracking(id);
   }
 
-  /**
-   * PATCH /appointments/:id/status
-   * Update appointment status (vets only)
-   */
   @Patch(':id/status')
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)

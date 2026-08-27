@@ -9,12 +9,6 @@ import ChatScreen from '../../screens/shared/ChatScreen'
 
 const Stack = createNativeStackNavigator<ClientAppointmentsStackParamList>()
 
-/**
- * Stack interno del tab de Citas.
- *
- * Flujo:
- *   AppointmentsList (Lista) → AppointmentDetail / Tracking / Chat
- */
 export default function ClientAppointmentsStack() {
   return (
     <Stack.Navigator
@@ -31,10 +25,14 @@ export default function ClientAppointmentsStack() {
         name="AppointmentDetail"
         component={AppointmentDetailScreen}
       />
-      <Stack.Screen
-        name="AppointmentTracking"
-        component={AppointmentTrackingScreen}
-      />
+      <Stack.Screen name="AppointmentTracking">
+        {({ navigation, route }) => (
+          <AppointmentTrackingScreen
+            navigation={navigation}
+            route={{ params: { id: route.params.appointmentId } }}
+          />
+        )}
+      </Stack.Screen>
       <Stack.Screen
         name="ChatScreen"
         component={ChatScreen}

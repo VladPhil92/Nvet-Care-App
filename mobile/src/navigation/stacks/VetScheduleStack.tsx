@@ -2,24 +2,17 @@ import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
 import AppointmentDetailScreen from '../../screens/client/AppointmentDetailScreen'
+import type { VetScheduleStackParamList } from '../types'
+import VetAppointmentDetailScreen from '../../screens/vet/VetAppointmentDetailScreen'
 import { lazyScreen } from '../lazyScreen'
 
-// VetScheduleScreen incluye WeekScheduleEditor (grid 7×11) — carga lazy
-// para evitar montar todo al iniciar el VetNavigator.
-const VetScheduleScreen = lazyScreen(
+const VetScheduleScreen = lazyScreen<any>(
   () => import('../../screens/vet/VetScheduleScreen'),
   { displayName: 'VetScheduleScreen' },
 )
 
-const Stack = createNativeStackNavigator()
+const Stack = createNativeStackNavigator<VetScheduleStackParamList>()
 
-/**
- * Stack del tab "Agenda" del veterinario.
- *
- * Flujo: ScheduleMain → VetAppointmentDetail (al tap en celda reservada)
- * El detalle reusa el placeholder por ahora; tendrá UI específica del vet
- * (notas clínicas, marcar en curso/completado) en el Sprint 3.
- */
 export default function VetScheduleStack() {
   return (
     <Stack.Navigator
@@ -32,6 +25,7 @@ export default function VetScheduleStack() {
       <Stack.Screen
         name="VetAppointmentDetail"
         component={AppointmentDetailScreen}
+        component={VetAppointmentDetailScreen}
       />
     </Stack.Navigator>
   )

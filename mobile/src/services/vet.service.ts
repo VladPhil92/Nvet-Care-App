@@ -1,22 +1,21 @@
 import { apiClient } from './api'
 
-export interface Vet {
+export type VetTier = 'FREE' | 'PRO' | 'ELITE'
+export type VetSortBy =
+  | 'relevance'
+  | 'rating'
+  | 'distance'
+  | 'price_asc'
+  | 'price_desc'
+  | 'experience'
+
+export interface VetUser {
   id: string
-  userId: string
   firstName: string
   lastName: string
-  email: string
+  email?: string
   phone?: string
   avatar?: string
-  licenseNumber: string
-  specialties: string[]
-  tier: 'FREE' | 'PRO' | 'ELITE'
-  rating: number
-  reviewCount: number
-  bio?: string
-  yearsExperience?: number
-  isVerified: boolean
-  isActive: boolean
 }
 
 export interface VetPrice {
@@ -27,13 +26,84 @@ export interface VetPrice {
   isActive: boolean
 }
 
+export interface VetSchedule {
+  id?: string
+  dayOfWeek?: number
+  startTime?: string
+  endTime?: string
+  isActive?: boolean
+  [key: string]: unknown
+}
+
+export interface VetReview {
+  id: string
+  rating: number
+  comment?: string
+  createdAt?: string
+  client?: {
+    firstName?: string
+    lastName?: string
+    avatar?: string
+  }
+}
+
+/**
+ * Shape público canónico devuelto por el backend. Se conservan algunos campos
+ * planos opcionales para compatibilidad con componentes legacy durante Fase 1.
+ */
+export interface Vet {
+  id: string
+  userId: string
+  user?: VetUser
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  avatar?: string
+  licenseNumber: string
+  specialties: string[]
+  tier: VetTier
+  rating: number
+  reviewCount?: number
+  totalReviews?: number
+  completedAppointments?: number
+  bio?: string
+  yearsExperience?: number
+  isVerified: boolean
+  isActive: boolean
+  isAvailableNow?: boolean
+  city?: string
+  department?: string
+  latitude?: number | null
+  longitude?: number | null
+  distance?: number | null
+  prices?: VetPrice[]
+  schedules?: VetSchedule[]
+  reviews?: VetReview[]
+}
+
 export interface VetSearchFilters {
+  latitude?: number
+  longitude?: number
+  radiusKm?: number
   specialty?: string
-  tier?: 'FREE' | 'PRO' | 'ELITE'
+  tier?: VetTier
   minRating?: number
-  location?: string
+  availableNow?: boolean
+  availableDate?: string
+  city?: string
+  search?: string
   limit?: number
   offset?: number
+  sortBy?: VetSortBy
+}
+
+export interface VetSearchResponse {
+  results: Vet[]
+  total: number
+  limit: number
+  offset: number
+  hasMore: boolean
 }
 
 export interface VetScheduleSlot {
@@ -43,18 +113,23 @@ export interface VetScheduleSlot {
 }
 
 class VetService {
-  async searchVets(filters?: VetSearchFilters): Promise<Vet[]> {
-    const response = await apiClient.get('/vets', { params: filters })
+  async searchVets(filters: VetSearchFilters = {}): Promise<VetSearchResponse> {
+    const response = await apiClient.get<VetSearchResponse>('/vets', { params: filters })
     return response.data
   }
 
   async getVetDetails(vetId: string): Promise<Vet> {
-    const response = await apiClient.get(`/vets/${vetId}`)
+    const response = await apiClient.get<Vet>(`/vets/${vetId}`)
+    return response.data
+  }
+
+  async getMyProfile(): Promise<Vet> {
+    const response = await apiClient.get<Vet>('/vets/me')
     return response.data
   }
 
   async getVetPrices(vetId: string): Promise<VetPrice[]> {
-    const response = await apiClient.get(`/vets/${vetId}/prices`)
+    const response = await apiClient.get<VetPrice[]>(`/vets/${vetId}/prices`)
     return response.data
   }
 
@@ -65,22 +140,26 @@ class VetService {
     return response.data
   }
 
-  // Métodos para veterinarios autenticados
-  async getMyEarnings(period?: 'today' | 'week' | 'month'): Promise<{
+  async getMyEarnings(filters?: {
+    startDate?: string
+    endDate?: string
+  }): Promise<{
     totalEarnings: number
-    commission: number
+    totalCommissions?: number
+    commission?: number
     netEarnings: number
     ctgBalance: number
-    appointments: number
+    appointments?: number
+    transactionCount?: number
+    pendingBalance?: number
+    availableBalance?: number
   }> {
-    const response = await apiClient.get('/vets/me/earnings', {
-      params: { period },
-    })
+    const response = await apiClient.get('/vets/me/earnings', { params: filters })
     return response.data
   }
 
   async getMyPrices(): Promise<VetPrice[]> {
-    const response = await apiClient.get('/vets/me/prices')
+    const response = await apiClient.get<VetPrice[]>('/vets/me/prices')
     return response.data
   }
 
@@ -89,30 +168,34 @@ class VetService {
     priceCop: number
     priceCtg: number
   }): Promise<VetPrice> {
-    const response = await apiClient.post('/vets/prices', data)
+    const response = await apiClient.post<VetPrice>('/vets/me/prices', data)
     return response.data
   }
 
   async updatePrice(
     priceId: string,
-    data: Partial<{ serviceName: string; priceCop: number; priceCtg: number; isActive: boolean }>
+    data: Partial<{
+      serviceName: string
+      priceCop: number
+      priceCtg: number
+      isActive: boolean
+    }>,
   ): Promise<VetPrice> {
-    const response = await apiClient.put(`/vets/prices/${priceId}`, data)
+    const response = await apiClient.put<VetPrice>(`/vets/me/prices/${priceId}`, data)
     return response.data
   }
 
   async deletePrice(priceId: string): Promise<void> {
-    await apiClient.delete(`/vets/prices/${priceId}`)
+    await apiClient.delete(`/vets/me/prices/${priceId}`)
   }
 
   async uploadVerificationDocuments(formData: FormData): Promise<{
-    status: 'PENDING' | 'APPROVED' | 'REJECTED'
-    message: string
+    status?: 'PENDING' | 'APPROVED' | 'REJECTED'
+    message?: string
+    [key: string]: unknown
   }> {
-    const response = await apiClient.post('/vets/verification/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    const response = await apiClient.post('/vets/me/verification/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     })
     return response.data
   }
@@ -122,8 +205,9 @@ class VetService {
     submittedAt?: string
     reviewedAt?: string
     notes?: string
+    [key: string]: unknown
   }> {
-    const response = await apiClient.get('/vets/verification/status')
+    const response = await apiClient.get('/vets/me/verification')
     return response.data
   }
 }

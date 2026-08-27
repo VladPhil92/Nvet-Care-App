@@ -207,6 +207,9 @@ export class TwoFactorService {
     if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
       throw new BadRequestException('2FA no está habilitado');
     }
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('Contraseña incorrecta');
+    }
 
     // 1. Verificar password
     const passwordCheck = await this.passwordService.verify(password, user.passwordHash);

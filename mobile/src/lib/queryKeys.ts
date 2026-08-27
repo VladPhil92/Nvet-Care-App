@@ -1,6 +1,6 @@
 /**
- * Query keys mobile — mismo factory pattern que el Dashboard,
- * pero con dominios relevantes para el cliente final y el vet.
+ * Query keys mobile — factory jerárquico para React Query.
+ * Los filtros aceptan objetos tipados sin requerir index signatures.
  */
 
 import type { QueryClient } from '@tanstack/react-query'
@@ -13,14 +13,13 @@ export const qk = {
 
   vets: {
     all: ['vets'] as const,
-    search: (filters: Record<string, unknown>) =>
-      [...qk.vets.all, 'search', filters] as const,
+    search: (filters: object) => [...qk.vets.all, 'search', filters] as const,
     detail: (id: string) => [...qk.vets.all, 'detail', id] as const,
     me: {
       all: () => [...qk.vets.all, 'me'] as const,
       profile: () => [...qk.vets.me.all(), 'profile'] as const,
       verification: () => [...qk.vets.me.all(), 'verification'] as const,
-      earnings: (filters?: Record<string, unknown>) =>
+      earnings: (filters?: object) =>
         [...qk.vets.me.all(), 'earnings', filters ?? {}] as const,
       prices: () => [...qk.vets.me.all(), 'prices'] as const,
     },
@@ -28,20 +27,18 @@ export const qk = {
 
   appointments: {
     all: ['appointments'] as const,
-    list: (filters: Record<string, unknown>) =>
-      [...qk.appointments.all, 'list', filters] as const,
+    list: (filters: object) => [...qk.appointments.all, 'list', filters] as const,
     detail: (id: string) => [...qk.appointments.all, 'detail', id] as const,
     today: () => [...qk.appointments.all, 'today'] as const,
-    tracking: (id: string) =>
-      [...qk.appointments.all, 'tracking', id] as const,
+    tracking: (id: string) => [...qk.appointments.all, 'tracking', id] as const,
   },
 
   payments: {
     all: ['payments'] as const,
     balance: () => [...qk.payments.all, 'balance'] as const,
-    transactions: (filters: Record<string, unknown>) =>
+    transactions: (filters: object) =>
       [...qk.payments.all, 'transactions', filters] as const,
-    earnings: (filters?: Record<string, unknown>) =>
+    earnings: (filters?: object) =>
       [...qk.payments.all, 'earnings', filters ?? {}] as const,
     ctgRate: () => [...qk.payments.all, 'ctg-rate'] as const,
   },
@@ -63,9 +60,9 @@ export const qk = {
 
   reviews: {
     all: ['reviews'] as const,
-    forVet: (vetId: string, filters?: Record<string, unknown>) =>
+    forVet: (vetId: string, filters?: object) =>
       [...qk.reviews.all, 'vet', vetId, filters ?? {}] as const,
-    mine: (filters?: Record<string, unknown>) =>
+    mine: (filters?: object) =>
       [...qk.reviews.all, 'mine', filters ?? {}] as const,
     forAppointment: (appointmentId: string) =>
       [...qk.reviews.all, 'appointment', appointmentId] as const,
@@ -91,9 +88,7 @@ export async function invalidateAfterBooking(
     qc.invalidateQueries({ queryKey: qk.appointments.all }),
     qc.invalidateQueries({ queryKey: qk.payments.balance() }),
     appointmentId
-      ? qc.invalidateQueries({
-          queryKey: qk.appointments.detail(appointmentId),
-        })
+      ? qc.invalidateQueries({ queryKey: qk.appointments.detail(appointmentId) })
       : Promise.resolve(),
   ])
 }

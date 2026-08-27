@@ -10,6 +10,9 @@
     "backend",
     "dashboard"
   ],
+  "overrides": {
+    "react-native-reanimated": "3.15.5"
+  },
   "scripts": {
     "mobile": "cd mobile && npm run android",
     "mobile:ios": "cd mobile && npm run ios",
