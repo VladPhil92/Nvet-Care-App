@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { qk, invalidateAfterPayment, invalidateAfterVetUpdate } from '../../lib/queryKeys'
-import { adminService } from '../../services/admin.service'
+import { adminService, DisputeResolution } from '../../services/admin.service'
 
 /**
  * Mutations para acciones administrativas con optimistic updates.
@@ -20,7 +20,7 @@ import { adminService } from '../../services/admin.service'
 
 interface ResolveDisputeVars {
   transactionId: string
-  resolution: 'FAVOR_VET' | 'FAVOR_CLIENT' | 'PARTIAL_REFUND'
+  resolution: DisputeResolution
   notes: string
 }
 
@@ -50,7 +50,7 @@ export function useResolveDisputeMutation() {
               tx.id === transactionId
                 ? {
                     ...tx,
-                    status: resolution === 'FAVOR_VET' ? 'LIQUIDADO' : 'DISPUTA',
+                    status: resolution === 'CONFIRM' ? 'LIQUIDADO' : 'DISPUTA',
                     _optimistic: true,
                   }
                 : tx,
