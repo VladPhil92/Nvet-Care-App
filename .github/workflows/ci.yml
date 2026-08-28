@@ -33,7 +33,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci --include=dev --legacy-peer-deps
 
       - name: Validate Prisma schema
         working-directory: backend
@@ -89,7 +89,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci --include=dev --legacy-peer-deps
 
       - name: Typecheck
         working-directory: mobile
@@ -133,12 +133,12 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci --include=dev --legacy-peer-deps
 
       - name: Verify native dependency compatibility
         working-directory: mobile
         run: |
-          REANIMATED_VERSION="$(node -p "require('../node_modules/react-native-reanimated/package.json').version")"
+          REANIMATED_VERSION="$(node -p "require('react-native-reanimated/package.json').version")"
           echo "Resolved react-native-reanimated: $REANIMATED_VERSION"
           test "$REANIMATED_VERSION" = "3.15.5"
 
@@ -180,7 +180,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci --include=dev --legacy-peer-deps
 
       - name: Lint
         working-directory: dashboard
