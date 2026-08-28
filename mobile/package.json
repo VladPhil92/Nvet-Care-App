@@ -77,8 +77,15 @@
       "/e2e/"
     ],
     "transformIgnorePatterns": [
-      "node_modules/(?!(react-native|@react-native|@react-navigation|msw)/)"
-    ]
+      "node_modules/(?!(react-native|@react-native|@react-navigation|msw|@mswjs)/)"
+    ],
+    "testEnvironmentOptions": {
+      "customExportConditions": ["node", "require", "default"]
+    },
+    "moduleNameMapper": {
+      "^msw/node$": "<rootDir>/__mocks__/msw/node.js",
+      "^msw$": "<rootDir>/__mocks__/msw.js"
+    }
   },
   "engines": {
     "node": ">=18"

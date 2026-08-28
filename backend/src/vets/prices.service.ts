@@ -4,9 +4,9 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { VetTier } from '@prisma/client';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { VetTier } from "@prisma/client";
 
 // ============================================
 // CONSTANTS
@@ -23,7 +23,7 @@ const TIER_PRICE_LIMITS = {
 const CTG_TO_COP_RATE = 30; // 1 CTG = 30 COP
 
 // Min/Max price (COP)
-const MIN_PRICE_COP = 5000;  // 5,000 COP minimum
+const MIN_PRICE_COP = 5000; // 5,000 COP minimum
 const MAX_PRICE_COP = 10_000_000; // 10M COP maximum
 
 @Injectable()
@@ -39,7 +39,7 @@ export class PricesService {
         vetId: vetProfileId,
         ...(activeOnly && { isActive: true }),
       },
-      orderBy: { priceCop: 'asc' },
+      orderBy: { priceCop: "asc" },
     });
   }
 
@@ -52,7 +52,7 @@ export class PricesService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     return this.getVetPrices(vet.id, activeOnly);
@@ -82,7 +82,7 @@ export class PricesService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     // Check tier limit
@@ -143,12 +143,12 @@ export class PricesService {
     });
 
     if (!price) {
-      throw new NotFoundException('Price not found');
+      throw new NotFoundException("Price not found");
     }
 
     // Ownership verification
     if (price.vet.userId !== userId) {
-      throw new ForbiddenException('You can only update your own prices');
+      throw new ForbiddenException("You can only update your own prices");
     }
 
     if (data.priceCop !== undefined) {
@@ -166,7 +166,7 @@ export class PricesService {
       });
 
       if (duplicate) {
-        throw new ConflictException('Service name already exists');
+        throw new ConflictException("Service name already exists");
       }
     }
 
@@ -197,11 +197,11 @@ export class PricesService {
     });
 
     if (!price) {
-      throw new NotFoundException('Price not found');
+      throw new NotFoundException("Price not found");
     }
 
     if (price.vet.userId !== userId) {
-      throw new ForbiddenException('You can only delete your own prices');
+      throw new ForbiddenException("You can only delete your own prices");
     }
 
     if (hardDelete) {
@@ -234,7 +234,7 @@ export class PricesService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     const limit = TIER_PRICE_LIMITS[vet.tier];
@@ -252,7 +252,7 @@ export class PricesService {
     // Check duplicates within request
     const names = prices.map((p) => p.serviceName);
     if (new Set(names).size !== names.length) {
-      throw new BadRequestException('Duplicate service names in request');
+      throw new BadRequestException("Duplicate service names in request");
     }
 
     // Check existing duplicates
@@ -265,7 +265,7 @@ export class PricesService {
 
     if (existing.length > 0) {
       throw new ConflictException(
-        `Services already exist: ${existing.map((e) => e.serviceName).join(', ')}`,
+        `Services already exist: ${existing.map((e) => e.serviceName).join(", ")}`,
       );
     }
 
@@ -290,7 +290,7 @@ export class PricesService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     const prices = await this.prisma.price.findMany({
@@ -317,8 +317,8 @@ export class PricesService {
       avgPriceCop: Math.round(sum / prices.length),
       minPriceCop: Math.min(...priceCops),
       maxPriceCop: Math.max(...priceCops),
-      tierLimit: limit === Infinity ? 'unlimited' : limit,
-      remaining: limit === Infinity ? 'unlimited' : limit - prices.length,
+      tierLimit: limit === Infinity ? "unlimited" : limit,
+      remaining: limit === Infinity ? "unlimited" : limit - prices.length,
     };
   }
 
@@ -329,13 +329,13 @@ export class PricesService {
   private validatePriceRange(priceCop: number) {
     if (priceCop < MIN_PRICE_COP) {
       throw new BadRequestException(
-        `Minimum price is ${MIN_PRICE_COP.toLocaleString('es-CO')} COP`,
+        `Minimum price is ${MIN_PRICE_COP.toLocaleString("es-CO")} COP`,
       );
     }
 
     if (priceCop > MAX_PRICE_COP) {
       throw new BadRequestException(
-        `Maximum price is ${MAX_PRICE_COP.toLocaleString('es-CO')} COP`,
+        `Maximum price is ${MAX_PRICE_COP.toLocaleString("es-CO")} COP`,
       );
     }
   }

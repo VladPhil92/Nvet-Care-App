@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey, type KeyLike } from 'jose';
+import { Injectable } from "@nestjs/common";
+import {
+  createRemoteJWKSet,
+  jwtVerify,
+  type JWTVerifyGetKey,
+  type KeyLike,
+} from "jose";
 
 /**
  * CtgIdentityService — verifies a Supabase-issued access token against
@@ -26,21 +31,28 @@ export class CtgIdentityService {
   private staticKeyForTesting: KeyLike | Uint8Array | null = null;
 
   async verify(token: string): Promise<CtgIdentityClaims> {
-    const supabaseUrl = this.requireEnv('NVET_CTG_SUPABASE_URL').replace(/\/+$/, '');
-    const audience = process.env.NVET_CTG_SUPABASE_JWT_AUDIENCE || 'authenticated';
+    const supabaseUrl = this.requireEnv("NVET_CTG_SUPABASE_URL").replace(
+      /\/+$/,
+      "",
+    );
+    const audience =
+      process.env.NVET_CTG_SUPABASE_JWT_AUDIENCE || "authenticated";
     const issuer = `${supabaseUrl}/auth/v1`;
 
     const { payload } = this.staticKeyForTesting
       ? await jwtVerify(token, this.staticKeyForTesting, { issuer, audience })
-      : await jwtVerify(token, this.getRemoteKeyResolver(supabaseUrl), { issuer, audience });
+      : await jwtVerify(token, this.getRemoteKeyResolver(supabaseUrl), {
+          issuer,
+          audience,
+        });
 
-    if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
-      throw new Error('Supabase token sin claim sub');
+    if (typeof payload.sub !== "string" || payload.sub.length === 0) {
+      throw new Error("Supabase token sin claim sub");
     }
 
     return {
       sub: payload.sub,
-      email: typeof payload.email === 'string' ? payload.email : undefined,
+      email: typeof payload.email === "string" ? payload.email : undefined,
     };
   }
 
@@ -51,7 +63,7 @@ export class CtgIdentityService {
       // rotation without pinning a key. See THREAT_MODEL.md's Key
       // rotation entry.
       this.remoteKeyResolver = createRemoteJWKSet(
-        new URL('/auth/v1/.well-known/jwks.json', supabaseUrl),
+        new URL("/auth/v1/.well-known/jwks.json", supabaseUrl),
       );
     }
     return this.remoteKeyResolver;

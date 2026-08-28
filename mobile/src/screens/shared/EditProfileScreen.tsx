@@ -93,7 +93,7 @@ export default function EditProfileScreen({ navigation }: Props) {
           'No pudimos guardar tus cambios. Intenta de nuevo.',
       )
     }
-  }, [validate, firstName, lastName, phone, updateMutation, navigation])
+  }, [validate, firstName, lastName, phone, avatarUri, updateMutation, navigation])
 
   const initials = (
     (user?.firstName?.[0] ?? '') + (user?.lastName?.[0] ?? '')

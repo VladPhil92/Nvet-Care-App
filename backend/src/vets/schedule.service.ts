@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { AppointmentStatus, DayOfWeek, VerificationStatus } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  AppointmentStatus,
+  DayOfWeek,
+  VerificationStatus,
+} from "@prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
 
 export interface VetAvailabilitySlot {
   date: string;
@@ -55,7 +59,7 @@ export class ScheduleService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Veterinarian not found');
+      throw new NotFoundException("Veterinarian not found");
     }
 
     const [exception, weeklySchedule, appointments] = await Promise.all([
@@ -146,35 +150,35 @@ export class ScheduleService {
   }
 
   private toMinutes(time: string): number {
-    const [hours, minutes] = time.split(':').map(Number);
+    const [hours, minutes] = time.split(":").map(Number);
     return hours * 60 + minutes;
   }
 
   private fromMinutes(total: number): string {
     const hours = Math.floor(total / 60);
     const minutes = total % 60;
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
   }
 
   private isPastSlot(date: string, time: string, timezone: string): boolean {
-    const parts = new Intl.DateTimeFormat('en-CA', {
+    const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
     }).formatToParts(new Date());
 
     const get = (type: Intl.DateTimeFormatPartTypes) =>
-      parts.find((part) => part.type === type)?.value ?? '';
+      parts.find((part) => part.type === type)?.value ?? "";
 
-    const currentDate = `${get('year')}-${get('month')}-${get('day')}`;
+    const currentDate = `${get("year")}-${get("month")}-${get("day")}`;
     if (date < currentDate) return true;
     if (date > currentDate) return false;
 
-    const currentMinutes = Number(get('hour')) * 60 + Number(get('minute'));
+    const currentMinutes = Number(get("hour")) * 60 + Number(get("minute"));
     return this.toMinutes(time) <= currentMinutes;
   }
 }

@@ -1,7 +1,11 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PrismaService } from '../../prisma/prisma.service';
+import {
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+} from "@nestjs/common";
+import { PassportStrategy } from "@nestjs/passport";
+import { ExtractJwt, Strategy } from "passport-jwt";
+import { PrismaService } from "../../prisma/prisma.service";
 
 interface JwtPayload {
   sub: string; // user id
@@ -35,10 +39,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException("User not found");
     }
     if (!user.isActive) {
-      throw new ForbiddenException('Account deactivated');
+      throw new ForbiddenException("Account deactivated");
     }
 
     // Si la contraseña cambió tras emitir el token (passwordChangedAt > iat),
@@ -48,7 +52,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       payload.iat &&
       user.passwordChangedAt.getTime() / 1000 > payload.iat
     ) {
-      throw new UnauthorizedException('Token invalidated by password change');
+      throw new UnauthorizedException("Token invalidated by password change");
     }
 
     // Return user object (attached to request.user)

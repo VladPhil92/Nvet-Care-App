@@ -11,10 +11,10 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
-} from '@nestjs/common';
-import { PetsService } from './pets.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CreatePetDto, UpdatePetDto } from './dto/pet.dto';
+} from "@nestjs/common";
+import { PetsService } from "./pets.service";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { CreatePetDto, UpdatePetDto } from "./dto/pet.dto";
 
 /**
  * PetsController — gestión de mascotas del cliente.
@@ -31,7 +31,7 @@ import { CreatePetDto, UpdatePetDto } from './dto/pet.dto';
  *   PATCH  /pets/:id     — actualizar (solo dueño)
  *   DELETE /pets/:id     — eliminar (solo dueño, sin citas activas)
  */
-@Controller('pets')
+@Controller("pets")
 @UseGuards(JwtAuthGuard)
 export class PetsController {
   constructor(private readonly petsService: PetsService) {}
@@ -40,7 +40,7 @@ export class PetsController {
    * GET /pets/me
    * Lista todas las mascotas del usuario autenticado.
    */
-  @Get('me')
+  @Get("me")
   async getMyPets(@Request() req) {
     return this.petsService.getMyPets(req.user.id);
   }
@@ -50,11 +50,8 @@ export class PetsController {
    * Obtiene el detalle de una mascota.
    * Accesible por el dueño o por el vet asignado a una cita de esa mascota.
    */
-  @Get(':id')
-  async getPetById(
-    @Request() req,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  @Get(":id")
+  async getPetById(@Request() req, @Param("id", ParseUUIDPipe) id: string) {
     return this.petsService.getPetById(req.user.id, id);
   }
 
@@ -72,10 +69,10 @@ export class PetsController {
    * PATCH /pets/:id
    * Actualiza los datos de una mascota. Solo el dueño.
    */
-  @Patch(':id')
+  @Patch(":id")
   async updatePet(
     @Request() req,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() dto: UpdatePetDto,
   ) {
     return this.petsService.updatePet(req.user.id, id, dto);
@@ -85,12 +82,9 @@ export class PetsController {
    * DELETE /pets/:id
    * Elimina una mascota. Solo el dueño y sin citas activas.
    */
-  @Delete(':id')
+  @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deletePet(
-    @Request() req,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  async deletePet(@Request() req, @Param("id", ParseUUIDPipe) id: string) {
     await this.petsService.deletePet(req.user.id, id);
   }
 }

@@ -4,12 +4,12 @@ import {
   UnauthorizedException,
   Logger,
   ConflictException,
-} from '@nestjs/common';
-import * as crypto from 'crypto';
-import { PrismaService } from '../../prisma/prisma.service';
-import { AuditService } from '../../common/audit/audit.service';
-import { MailService } from '../../common/mail/mail.service';
-import { AuditAction, AuditSeverity } from '@prisma/client';
+} from "@nestjs/common";
+import * as crypto from "crypto";
+import { PrismaService } from "../../prisma/prisma.service";
+import { AuditService } from "../../common/audit/audit.service";
+import { MailService } from "../../common/mail/mail.service";
+import { AuditAction, AuditSeverity } from "@prisma/client";
 
 /**
  * EmailVerificationService — flujo de verificación de email vía token único.
@@ -56,14 +56,14 @@ export class EmailVerificationService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Usuario no encontrado o inactivo');
+      throw new UnauthorizedException("Usuario no encontrado o inactivo");
     }
 
     if (user.emailVerified) {
-      throw new ConflictException('Tu correo electrónico ya está verificado');
+      throw new ConflictException("Tu correo electrónico ya está verificado");
     }
 
-    const rawToken = crypto.randomBytes(this.TOKEN_BYTES).toString('hex');
+    const rawToken = crypto.randomBytes(this.TOKEN_BYTES).toString("hex");
     const tokenHash = this.hashToken(rawToken);
     const expiresAt = new Date(
       Date.now() + this.TOKEN_TTL_HOURS * 60 * 60 * 1000,
@@ -80,7 +80,7 @@ export class EmailVerificationService {
     const publicToken = `${user.id}.${rawToken}`;
     await this.sendVerificationEmail(
       user.email,
-      user.firstName ?? 'usuario',
+      user.firstName ?? "usuario",
       publicToken,
     );
 
@@ -88,14 +88,14 @@ export class EmailVerificationService {
       actor: { id: user.id, ip: ctx.ip, userAgent: ctx.userAgent },
       action: AuditAction.EMAIL_VERIFICATION_SENT,
       severity: AuditSeverity.INFO,
-      targetType: 'User',
+      targetType: "User",
       targetId: user.id,
-      reason: 'verification_email_dispatched',
+      reason: "verification_email_dispatched",
     });
 
     return {
       message:
-        'Te enviamos un enlace de verificación a tu correo. Revisa tu bandeja de entrada.',
+        "Te enviamos un enlace de verificación a tu correo. Revisa tu bandeja de entrada.",
       expiresInHours: this.TOKEN_TTL_HOURS,
     };
   }
@@ -109,9 +109,9 @@ export class EmailVerificationService {
     publicToken: string,
     ctx: { ip?: string; userAgent?: string } = {},
   ): Promise<{ message: string; emailVerified: boolean }> {
-    const parts = publicToken.split('.');
+    const parts = publicToken.split(".");
     if (parts.length !== 2) {
-      throw new BadRequestException('Token de verificación inválido');
+      throw new BadRequestException("Token de verificación inválido");
     }
     const [userId, rawToken] = parts;
     const tokenHash = this.hashToken(rawToken);
@@ -129,20 +129,20 @@ export class EmailVerificationService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Token inválido o expirado');
+      throw new UnauthorizedException("Token inválido o expirado");
     }
 
     // Idempotente: si ya estaba verificado, retornamos OK sin error.
     if (user.emailVerified) {
       return {
-        message: 'Tu correo ya estaba verificado.',
+        message: "Tu correo ya estaba verificado.",
         emailVerified: true,
       };
     }
 
     if (!user.emailVerificationTokenHash || !user.emailVerificationExpiresAt) {
       throw new UnauthorizedException(
-        'No hay solicitud de verificación pendiente. Solicita un nuevo enlace.',
+        "No hay solicitud de verificación pendiente. Solicita un nuevo enlace.",
       );
     }
 
@@ -152,11 +152,11 @@ export class EmailVerificationService {
     const tokenMatches = a.length === b.length && crypto.timingSafeEqual(a, b);
 
     if (!tokenMatches) {
-      throw new UnauthorizedException('Token inválido o expirado');
+      throw new UnauthorizedException("Token inválido o expirado");
     }
     if (user.emailVerificationExpiresAt.getTime() < Date.now()) {
       throw new UnauthorizedException(
-        'El enlace de verificación expiró. Solicita uno nuevo.',
+        "El enlace de verificación expiró. Solicita uno nuevo.",
       );
     }
 
@@ -174,15 +174,15 @@ export class EmailVerificationService {
       actor: { id: userId, ip: ctx.ip, userAgent: ctx.userAgent },
       action: AuditAction.EMAIL_VERIFIED,
       severity: AuditSeverity.INFO,
-      targetType: 'User',
+      targetType: "User",
       targetId: userId,
-      reason: 'email_verification_completed',
+      reason: "email_verification_completed",
     });
 
     this.logger.log(`Email verificado userId=${userId}`);
 
     return {
-      message: '¡Tu correo electrónico fue verificado correctamente!',
+      message: "¡Tu correo electrónico fue verificado correctamente!",
       emailVerified: true,
     };
   }
@@ -192,7 +192,7 @@ export class EmailVerificationService {
   // ============================================================
 
   private hashToken(rawToken: string): string {
-    return crypto.createHash('sha256').update(rawToken).digest('hex');
+    return crypto.createHash("sha256").update(rawToken).digest("hex");
   }
 
   /**
@@ -204,7 +204,7 @@ export class EmailVerificationService {
     firstName: string,
     publicToken: string,
   ): Promise<void> {
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://app.nvetcare.co';
+    const frontendUrl = process.env.FRONTEND_URL ?? "https://app.nvetcare.co";
     const verifyLink = `${frontendUrl}/verify-email?token=${encodeURIComponent(
       publicToken,
     )}`;
@@ -223,7 +223,7 @@ export class EmailVerificationService {
     } else {
       this.logger.log(
         `Verification email enviado (driver=${result.driver}, providerId=${
-          result.providerMessageId ?? '-'
+          result.providerMessageId ?? "-"
         }, to=${email})`,
       );
     }

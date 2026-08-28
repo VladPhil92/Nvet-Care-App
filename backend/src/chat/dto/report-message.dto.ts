@@ -1,10 +1,10 @@
-import { IsEnum, IsString, IsOptional, MaxLength } from 'class-validator';
+import { IsEnum, IsString, IsOptional, MaxLength } from "class-validator";
 
 export enum ReportReason {
-  ABUSIVE_PRICING = 'ABUSIVE_PRICING',
-  INAPPROPRIATE = 'INAPPROPRIATE',
-  SPAM = 'SPAM',
-  OTHER = 'OTHER',
+  ABUSIVE_PRICING = "ABUSIVE_PRICING",
+  INAPPROPRIATE = "INAPPROPRIATE",
+  SPAM = "SPAM",
+  OTHER = "OTHER",
 }
 
 export class ReportMessageDto {

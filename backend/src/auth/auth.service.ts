@@ -6,17 +6,17 @@ import {
   ForbiddenException,
   NotFoundException,
   Logger,
-} from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import type { StringValue } from 'ms';
-import * as crypto from 'crypto';
-import { AuditAction, AuditSeverity, Prisma, UserRole } from '@prisma/client';
+} from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import type { StringValue } from "ms";
+import * as crypto from "crypto";
+import { AuditAction, AuditSeverity, Prisma, UserRole } from "@prisma/client";
 
-import { PrismaService } from '../prisma/prisma.service';
-import { AuditService } from '../common/audit/audit.service';
-import { PasswordService } from './services/password.service';
-import { TwoFactorService } from './services/two-factor.service';
-import { CtgIdentityService } from './services/ctg-identity.service';
+import { PrismaService } from "../prisma/prisma.service";
+import { AuditService } from "../common/audit/audit.service";
+import { PasswordService } from "./services/password.service";
+import { TwoFactorService } from "./services/two-factor.service";
+import { CtgIdentityService } from "./services/ctg-identity.service";
 import {
   RegisterDto,
   LoginDto,
@@ -25,7 +25,7 @@ import {
   TwoFactorDisableDto,
   TwoFactorRecoveryDto,
   CtgIdentityExchangeDto,
-} from './dto/auth.dto';
+} from "./dto/auth.dto";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
@@ -76,14 +76,16 @@ export class AuthService {
     });
     if (existing) {
       throw new ConflictException(
-        'Este correo ya está registrado. ¿Olvidaste tu contraseña?',
+        "Este correo ya está registrado. ¿Olvidaste tu contraseña?",
       );
     }
 
     // 2. Validación EXTRA de fortaleza (anti common passwords + diversidad)
     const strength = this.passwordService.validateStrength(dto.password);
     if (!strength.valid) {
-      throw new BadRequestException(`Contraseña débil: ${strength.issues.join(', ')}`);
+      throw new BadRequestException(
+        `Contraseña débil: ${strength.issues.join(", ")}`,
+      );
     }
 
     // 3. Hash con Argon2id
@@ -100,7 +102,10 @@ export class AuthService {
         // Defense in depth: even if RegisterDto's role validation is ever
         // loosened, this path must never grant ADMIN from user input —
         // ADMIN is provisioned out-of-band only.
-        role: dto.role === UserRole.ADMIN ? UserRole.CLIENT : dto.role || UserRole.CLIENT,
+        role:
+          dto.role === UserRole.ADMIN
+            ? UserRole.CLIENT
+            : dto.role || UserRole.CLIENT,
         passwordChangedAt: new Date(),
         // emailVerified: false (default)
       },
@@ -112,12 +117,17 @@ export class AuthService {
 
     // 6. Audit log: registro exitoso
     await this.auditService.log({
-      actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+      actor: {
+        id: user.id,
+        role: user.role,
+        ip: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+      },
       action: AuditAction.REGISTER_SUCCESS,
       severity: AuditSeverity.INFO,
-      targetType: 'User',
+      targetType: "User",
       targetId: user.id,
-      reason: 'user_registered',
+      reason: "user_registered",
       metadata: { role: user.role },
     });
 
@@ -145,16 +155,19 @@ export class AuthService {
     //    Pero igual gastamos tiempo de verify (constant-time)
     if (!user) {
       // Hashear un dummy para igualar el tiempo
-      await this.passwordService.verify(dto.password, '$argon2id$v=19$m=65536,t=3,p=4$dummy$dummy');
+      await this.passwordService.verify(
+        dto.password,
+        "$argon2id$v=19$m=65536,t=3,p=4$dummy$dummy",
+      );
       // Audit con email para detectar intentos sobre cuentas inexistentes
       await this.auditService.log({
         actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
         action: AuditAction.LOGIN_FAILED,
         severity: AuditSeverity.WARN,
-        reason: 'user_not_found',
+        reason: "user_not_found",
         metadata: { emailAttempted: normalizedEmail },
       });
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException("Credenciales inválidas");
     }
 
     // 2. Cuenta bloqueada por brute force
@@ -163,12 +176,17 @@ export class AuthService {
         (user.lockedUntil.getTime() - Date.now()) / 60000,
       );
       await this.auditService.log({
-        actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        actor: {
+          id: user.id,
+          role: user.role,
+          ip: ctx.ipAddress,
+          userAgent: ctx.userAgent,
+        },
         action: AuditAction.LOGIN_LOCKED,
         severity: AuditSeverity.WARN,
-        targetType: 'User',
+        targetType: "User",
         targetId: user.id,
-        reason: 'account_locked',
+        reason: "account_locked",
         metadata: { remainingMinutes },
       });
       throw new ForbiddenException(
@@ -178,7 +196,9 @@ export class AuthService {
 
     // 3. Cuenta desactivada
     if (!user.isActive) {
-      throw new ForbiddenException('Esta cuenta está desactivada. Contacta soporte.');
+      throw new ForbiddenException(
+        "Esta cuenta está desactivada. Contacta soporte.",
+      );
     }
 
     // 3.b Cuenta provisionada vía CTG One sin password propio (ver
@@ -186,24 +206,32 @@ export class AuthService {
     // con este flujo de login.
     if (!user.passwordHash) {
       throw new UnauthorizedException(
-        'Esta cuenta no tiene contraseña configurada. Inicia sesión con tu cuenta CTG One o restablece tu contraseña.',
+        "Esta cuenta no tiene contraseña configurada. Inicia sesión con tu cuenta CTG One o restablece tu contraseña.",
       );
     }
 
     // 4. Verificar password (con auto-rehash de bcrypt → Argon2id)
-    const verifyResult = await this.passwordService.verify(dto.password, user.passwordHash);
+    const verifyResult = await this.passwordService.verify(
+      dto.password,
+      user.passwordHash,
+    );
     if (!verifyResult.valid) {
       await this.recordFailedAttempt(user.id, user.failedLoginAttempts + 1);
       await this.auditService.log({
-        actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        actor: {
+          id: user.id,
+          role: user.role,
+          ip: ctx.ipAddress,
+          userAgent: ctx.userAgent,
+        },
         action: AuditAction.LOGIN_FAILED,
         severity: AuditSeverity.WARN,
-        targetType: 'User',
+        targetType: "User",
         targetId: user.id,
-        reason: 'wrong_password',
+        reason: "wrong_password",
         metadata: { attempts: user.failedLoginAttempts + 1 },
       });
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException("Credenciales inválidas");
     }
 
     // 4.b Migración automática a Argon2id si el hash era bcrypt
@@ -221,24 +249,34 @@ export class AuthService {
       if (!dto.twoFactorCode) {
         // Indicar al cliente que falta TOTP
         throw new UnauthorizedException({
-          message: 'Se requiere código del autenticador',
-          error: 'TWO_FACTOR_REQUIRED',
+          message: "Se requiere código del autenticador",
+          error: "TWO_FACTOR_REQUIRED",
           twoFactorEnabled: true,
         });
       }
       try {
-        await this.twoFactorService.verifyDuringLogin(user.id, dto.twoFactorCode);
+        await this.twoFactorService.verifyDuringLogin(
+          user.id,
+          dto.twoFactorCode,
+        );
       } catch {
         await this.recordFailedAttempt(user.id, user.failedLoginAttempts + 1);
         await this.auditService.log({
-          actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+          actor: {
+            id: user.id,
+            role: user.role,
+            ip: ctx.ipAddress,
+            userAgent: ctx.userAgent,
+          },
           action: AuditAction.LOGIN_FAILED,
           severity: AuditSeverity.WARN,
-          targetType: 'User',
+          targetType: "User",
           targetId: user.id,
-          reason: 'invalid_2fa_code',
+          reason: "invalid_2fa_code",
         });
-        throw new UnauthorizedException('Código del autenticador inválido o expirado');
+        throw new UnauthorizedException(
+          "Código del autenticador inválido o expirado",
+        );
       }
     }
 
@@ -255,16 +293,25 @@ export class AuthService {
     });
 
     // 7. Crear sesión + emitir tokens
-    const tokens = await this.createSessionAndIssueTokens(user, ctx, dto.deviceLabel);
+    const tokens = await this.createSessionAndIssueTokens(
+      user,
+      ctx,
+      dto.deviceLabel,
+    );
 
     // 8. Audit log: login exitoso
     await this.auditService.log({
-      actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+      actor: {
+        id: user.id,
+        role: user.role,
+        ip: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+      },
       action: AuditAction.LOGIN_SUCCESS,
       severity: AuditSeverity.INFO,
-      targetType: 'User',
+      targetType: "User",
       targetId: user.id,
-      reason: 'login_password_ok',
+      reason: "login_password_ok",
       metadata: {
         twoFactorUsed: user.twoFactorEnabled,
         deviceLabel: dto.deviceLabel ?? null,
@@ -281,37 +328,55 @@ export class AuthService {
   /**
    * Login alternativo cuando el usuario perdió el TOTP: usa un recovery code one-time.
    */
-  async loginWithRecoveryCode(dto: TwoFactorRecoveryDto, ctx: LoginContext = {}) {
+  async loginWithRecoveryCode(
+    dto: TwoFactorRecoveryDto,
+    ctx: LoginContext = {},
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.trim().toLowerCase() },
       include: { vetProfile: true },
     });
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException("Credenciales inválidas");
     }
     if (!user.twoFactorEnabled) {
-      throw new BadRequestException('2FA no está habilitado');
+      throw new BadRequestException("2FA no está habilitado");
     }
     if (!user.passwordHash) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException("Credenciales inválidas");
     }
 
-    const verifyResult = await this.passwordService.verify(dto.password, user.passwordHash);
+    const verifyResult = await this.passwordService.verify(
+      dto.password,
+      user.passwordHash,
+    );
     if (!verifyResult.valid) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException("Credenciales inválidas");
     }
 
-    const result = await this.twoFactorService.verifyRecoveryCode(user.id, dto.recoveryCode);
+    const result = await this.twoFactorService.verifyRecoveryCode(
+      user.id,
+      dto.recoveryCode,
+    );
 
-    const tokens = await this.createSessionAndIssueTokens(user, ctx, 'recovery');
+    const tokens = await this.createSessionAndIssueTokens(
+      user,
+      ctx,
+      "recovery",
+    );
 
     await this.auditService.log({
-      actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+      actor: {
+        id: user.id,
+        role: user.role,
+        ip: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+      },
       action: AuditAction.LOGIN_SUCCESS,
       severity: AuditSeverity.WARN, // recovery code = severity elevada
-      targetType: 'User',
+      targetType: "User",
       targetId: user.id,
-      reason: 'login_with_recovery_code',
+      reason: "login_with_recovery_code",
       metadata: { remainingRecoveryCodes: result.remainingCodes },
     });
 
@@ -345,15 +410,20 @@ export class AuthService {
    * producción antes del lanzamiento anunciado (Fase 4). Ver
    * THREAT_MODEL.md § Deployed-but-not-yet-launched exposure.
    */
-  async exchangeCtgIdentity(dto: CtgIdentityExchangeDto, ctx: LoginContext = {}) {
-    if (process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED !== 'true') {
+  async exchangeCtgIdentity(
+    dto: CtgIdentityExchangeDto,
+    ctx: LoginContext = {},
+  ) {
+    if (process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED !== "true") {
       throw new NotFoundException();
     }
 
     let ctgUserId: string;
     let ctgEmail: string | undefined;
     try {
-      const claims = await this.ctgIdentityService.verify(dto.supabaseAccessToken);
+      const claims = await this.ctgIdentityService.verify(
+        dto.supabaseAccessToken,
+      );
       ctgUserId = claims.sub;
       ctgEmail = claims.email;
     } catch {
@@ -361,9 +431,9 @@ export class AuthService {
         actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
         action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
         severity: AuditSeverity.WARN,
-        reason: 'supabase_token_verification_failed',
+        reason: "supabase_token_verification_failed",
       });
-      throw new UnauthorizedException('Sesión de CTG One inválida o expirada');
+      throw new UnauthorizedException("Sesión de CTG One inválida o expirada");
     }
 
     let user = await this.prisma.user.findUnique({
@@ -379,7 +449,9 @@ export class AuthService {
     // desactivada no puede iniciar sesión por ningún camino, ni siquiera
     // con una sesión CTG One válida.
     if (!user.isActive) {
-      throw new ForbiddenException('Esta cuenta está desactivada. Contacta soporte.');
+      throw new ForbiddenException(
+        "Esta cuenta está desactivada. Contacta soporte.",
+      );
     }
 
     // 2FA enforcement -- mismo shape que login(), reutilizando el mismo
@@ -387,23 +459,33 @@ export class AuthService {
     if (user.twoFactorEnabled) {
       if (!dto.twoFactorCode) {
         throw new UnauthorizedException({
-          message: 'Se requiere código del autenticador',
-          error: 'TWO_FACTOR_REQUIRED',
+          message: "Se requiere código del autenticador",
+          error: "TWO_FACTOR_REQUIRED",
           twoFactorEnabled: true,
         });
       }
       try {
-        await this.twoFactorService.verifyDuringLogin(user.id, dto.twoFactorCode);
+        await this.twoFactorService.verifyDuringLogin(
+          user.id,
+          dto.twoFactorCode,
+        );
       } catch {
         await this.auditService.log({
-          actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+          actor: {
+            id: user.id,
+            role: user.role,
+            ip: ctx.ipAddress,
+            userAgent: ctx.userAgent,
+          },
           action: AuditAction.LOGIN_FAILED,
           severity: AuditSeverity.WARN,
-          targetType: 'User',
+          targetType: "User",
           targetId: user.id,
-          reason: 'invalid_2fa_code_ctg_identity_exchange',
+          reason: "invalid_2fa_code_ctg_identity_exchange",
         });
-        throw new UnauthorizedException('Código del autenticador inválido o expirado');
+        throw new UnauthorizedException(
+          "Código del autenticador inválido o expirado",
+        );
       }
     }
 
@@ -421,13 +503,21 @@ export class AuthService {
     const tokens = await this.createSessionAndIssueTokens(user, ctx);
 
     await this.auditService.log({
-      actor: { id: user.id, role: user.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+      actor: {
+        id: user.id,
+        role: user.role,
+        ip: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+      },
       action: AuditAction.LOGIN_SUCCESS,
       severity: AuditSeverity.INFO,
-      targetType: 'User',
+      targetType: "User",
       targetId: user.id,
-      reason: 'login_ctg_identity_exchange',
-      metadata: { via: 'ctg_identity_exchange', twoFactorUsed: user.twoFactorEnabled },
+      reason: "login_ctg_identity_exchange",
+      metadata: {
+        via: "ctg_identity_exchange",
+        twoFactorUsed: user.twoFactorEnabled,
+      },
     });
 
     return {
@@ -453,15 +543,19 @@ export class AuthService {
    * chocar contra el `create` -- se recupera reconsultando en vez de
    * fallar con un 500.
    */
-  private async provisionCtgUser(ctgUserId: string, email: string | undefined, ctx: LoginContext) {
+  private async provisionCtgUser(
+    ctgUserId: string,
+    email: string | undefined,
+    ctx: LoginContext,
+  ) {
     if (!email) {
       await this.auditService.log({
         actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
         action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
         severity: AuditSeverity.WARN,
-        reason: 'ctg_identity_missing_email_claim',
+        reason: "ctg_identity_missing_email_claim",
       });
-      throw new UnauthorizedException('Sesión de CTG One inválida o expirada');
+      throw new UnauthorizedException("Sesión de CTG One inválida o expirada");
     }
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -473,12 +567,12 @@ export class AuthService {
         actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
         action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
         severity: AuditSeverity.INFO,
-        reason: 'ctg_identity_email_collision',
+        reason: "ctg_identity_email_collision",
       });
       throw new UnauthorizedException({
         message:
-          'Ya existe una cuenta de Nvet Care con este correo. Inicia sesión con tu contraseña o recupérala si la olvidaste.',
-        error: 'CTG_IDENTITY_EMAIL_COLLISION',
+          "Ya existe una cuenta de Nvet Care con este correo. Inicia sesión con tu contraseña o recupérala si la olvidaste.",
+        error: "CTG_IDENTITY_EMAIL_COLLISION",
       });
     }
 
@@ -495,18 +589,26 @@ export class AuthService {
       });
 
       await this.auditService.log({
-        actor: { id: created.id, role: created.role, ip: ctx.ipAddress, userAgent: ctx.userAgent },
+        actor: {
+          id: created.id,
+          role: created.role,
+          ip: ctx.ipAddress,
+          userAgent: ctx.userAgent,
+        },
         action: AuditAction.NVET_PROFILE_CREATED,
         severity: AuditSeverity.INFO,
-        targetType: 'User',
+        targetType: "User",
         targetId: created.id,
-        reason: 'ctg_identity_provisioned',
+        reason: "ctg_identity_provisioned",
         metadata: { ctgUserId },
       });
 
       return created;
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002"
+      ) {
         // Otro exchange concurrente (mismo ctgUserId) ya creó la fila.
         const raceWinner = await this.prisma.user.findUnique({
           where: { ctgUserId },
@@ -522,12 +624,12 @@ export class AuthService {
           actor: { ip: ctx.ipAddress, userAgent: ctx.userAgent },
           action: AuditAction.NVET_IDENTITY_EXCHANGE_FAILURE,
           severity: AuditSeverity.INFO,
-          reason: 'ctg_identity_email_collision_race',
+          reason: "ctg_identity_email_collision_race",
         });
         throw new UnauthorizedException({
           message:
-            'Ya existe una cuenta de Nvet Care con este correo. Inicia sesión con tu contraseña o recupérala si la olvidaste.',
-          error: 'CTG_IDENTITY_EMAIL_COLLISION',
+            "Ya existe una cuenta de Nvet Care con este correo. Inicia sesión con tu contraseña o recupérala si la olvidaste.",
+          error: "CTG_IDENTITY_EMAIL_COLLISION",
         });
       }
       throw err;
@@ -551,15 +653,15 @@ export class AuthService {
    *  3. Si el hash no matchea nada → token inválido (no robado, solo basura).
    */
   async refreshToken(refreshToken: string, ctx: LoginContext = {}) {
-    if (!refreshToken) throw new BadRequestException('Refresh token requerido');
+    if (!refreshToken) throw new BadRequestException("Refresh token requerido");
 
-    let payload: any;
+    let _payload: any;
     try {
-      payload = await this.jwtService.verifyAsync(refreshToken, {
+      _payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: process.env.JWT_REFRESH_SECRET,
       });
     } catch {
-      throw new UnauthorizedException('Refresh token inválido');
+      throw new UnauthorizedException("Refresh token inválido");
     }
 
     const refreshTokenHash = this.hashToken(refreshToken);
@@ -588,19 +690,19 @@ export class AuthService {
           ctx,
         );
         throw new UnauthorizedException(
-          'Sesión revocada por seguridad. Inicia sesión nuevamente.',
+          "Sesión revocada por seguridad. Inicia sesión nuevamente.",
         );
       }
 
-      throw new UnauthorizedException('Sesión inválida o expirada');
+      throw new UnauthorizedException("Sesión inválida o expirada");
     }
 
     // ----- Caso B: Sesión existe pero ya fue revocada / expirada
     if (session.revokedAt || session.expiresAt.getTime() < Date.now()) {
-      throw new UnauthorizedException('Sesión inválida o expirada');
+      throw new UnauthorizedException("Sesión inválida o expirada");
     }
     if (!session.user.isActive) {
-      throw new ForbiddenException('Cuenta desactivada');
+      throw new ForbiddenException("Cuenta desactivada");
     }
 
     // ----- Caso C: Rotation normal
@@ -646,22 +748,22 @@ export class AuthService {
       where: { userId, revokedAt: null },
       data: {
         revokedAt: new Date(),
-        revokedReason: 'refresh_token_reuse_detected',
+        revokedReason: "refresh_token_reuse_detected",
       },
     });
 
     this.logger.error(
       `🚨 REFRESH TOKEN REUSE detectado: userId=${userId} sessionId=${suspiciousSessionId} ` +
-        `revokedSessions=${result.count} ip=${ctx.ipAddress ?? '-'}`,
+        `revokedSessions=${result.count} ip=${ctx.ipAddress ?? "-"}`,
     );
 
     await this.auditService.log({
       actor: { id: userId, ip: ctx.ipAddress, userAgent: ctx.userAgent },
       action: AuditAction.TOKEN_REVOKED,
       severity: AuditSeverity.CRITICAL,
-      targetType: 'UserSession',
+      targetType: "UserSession",
       targetId: suspiciousSessionId,
-      reason: 'refresh_token_reuse_detected',
+      reason: "refresh_token_reuse_detected",
       metadata: {
         suspiciousHashPrefix: suspiciousHash.slice(0, 12),
         revokedSessionsCount: result.count,
@@ -679,14 +781,14 @@ export class AuthService {
       const refreshTokenHash = this.hashToken(refreshToken);
       const r = await this.prisma.userSession.updateMany({
         where: { userId, refreshTokenHash, revokedAt: null },
-        data: { revokedAt: new Date(), revokedReason: 'user_logout' },
+        data: { revokedAt: new Date(), revokedReason: "user_logout" },
       });
       revokedCount = r.count;
     } else {
       // Si no se pasa refresh token, revocar TODAS las sesiones (logout-all)
       const r = await this.prisma.userSession.updateMany({
         where: { userId, revokedAt: null },
-        data: { revokedAt: new Date(), revokedReason: 'user_logout_all' },
+        data: { revokedAt: new Date(), revokedReason: "user_logout_all" },
       });
       revokedCount = r.count;
     }
@@ -695,9 +797,9 @@ export class AuthService {
       actor: { id: userId },
       action: AuditAction.LOGOUT,
       severity: AuditSeverity.INFO,
-      targetType: 'User',
+      targetType: "User",
       targetId: userId,
-      reason: refreshToken ? 'session_logout' : 'session_logout_all',
+      reason: refreshToken ? "session_logout" : "session_logout_all",
       metadata: { revokedCount },
     });
   }
@@ -705,16 +807,16 @@ export class AuthService {
   async logoutAllSessions(userId: string): Promise<{ revoked: number }> {
     const result = await this.prisma.userSession.updateMany({
       where: { userId, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: 'user_logout_all' },
+      data: { revokedAt: new Date(), revokedReason: "user_logout_all" },
     });
 
     await this.auditService.log({
       actor: { id: userId },
       action: AuditAction.TOKEN_REVOKED,
       severity: AuditSeverity.WARN,
-      targetType: 'User',
+      targetType: "User",
       targetId: userId,
-      reason: 'all_sessions_revoked',
+      reason: "all_sessions_revoked",
       metadata: { revokedCount: result.count },
     });
 
@@ -730,7 +832,7 @@ export class AuthService {
       where: { id: userId },
       select: { id: true, passwordHash: true },
     });
-    if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (!user) throw new UnauthorizedException("Usuario no encontrado");
     if (!user.passwordHash) {
       throw new BadRequestException(
         'Esta cuenta no tiene contraseña configurada todavía. Usa "olvidé mi contraseña" para crear una.',
@@ -742,18 +844,23 @@ export class AuthService {
       user.passwordHash,
     );
     if (!verifyResult.valid) {
-      throw new UnauthorizedException('Contraseña actual incorrecta');
+      throw new UnauthorizedException("Contraseña actual incorrecta");
     }
 
     const strength = this.passwordService.validateStrength(dto.newPassword);
     if (!strength.valid) {
-      throw new BadRequestException(`Contraseña débil: ${strength.issues.join(', ')}`);
+      throw new BadRequestException(
+        `Contraseña débil: ${strength.issues.join(", ")}`,
+      );
     }
 
-    const sameAsCurrent = await this.passwordService.verify(dto.newPassword, user.passwordHash);
+    const sameAsCurrent = await this.passwordService.verify(
+      dto.newPassword,
+      user.passwordHash,
+    );
     if (sameAsCurrent.valid) {
       throw new BadRequestException(
-        'La nueva contraseña no puede ser igual a la actual',
+        "La nueva contraseña no puede ser igual a la actual",
       );
     }
 
@@ -768,7 +875,7 @@ export class AuthService {
       }),
       this.prisma.userSession.updateMany({
         where: { userId, revokedAt: null },
-        data: { revokedAt: new Date(), revokedReason: 'password_changed' },
+        data: { revokedAt: new Date(), revokedReason: "password_changed" },
       }),
     ]);
 
@@ -776,9 +883,9 @@ export class AuthService {
       actor: { id: userId },
       action: AuditAction.PASSWORD_CHANGED,
       severity: AuditSeverity.WARN,
-      targetType: 'User',
+      targetType: "User",
       targetId: userId,
-      reason: 'password_changed_self',
+      reason: "password_changed_self",
     });
   }
 
@@ -791,11 +898,15 @@ export class AuthService {
       where: { id: userId },
       select: { email: true },
     });
-    if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (!user) throw new UnauthorizedException("Usuario no encontrado");
     return this.twoFactorService.startEnrollment(userId, user.email);
   }
 
-  async confirmTwoFactorEnrollment(userId: string, encryptedSecret: string, dto: TwoFactorEnableDto) {
+  async confirmTwoFactorEnrollment(
+    userId: string,
+    encryptedSecret: string,
+    dto: TwoFactorEnableDto,
+  ) {
     const result = await this.twoFactorService.confirmEnrollment(
       userId,
       encryptedSecret,
@@ -805,9 +916,9 @@ export class AuthService {
       actor: { id: userId },
       action: AuditAction.TWO_FACTOR_ENABLED,
       severity: AuditSeverity.WARN,
-      targetType: 'User',
+      targetType: "User",
       targetId: userId,
-      reason: 'two_factor_enabled',
+      reason: "two_factor_enabled",
     });
     return result;
   }
@@ -818,9 +929,9 @@ export class AuthService {
       actor: { id: userId },
       action: AuditAction.TWO_FACTOR_DISABLED,
       severity: AuditSeverity.CRITICAL,
-      targetType: 'User',
+      targetType: "User",
       targetId: userId,
-      reason: 'two_factor_disabled',
+      reason: "two_factor_disabled",
     });
   }
 
@@ -833,14 +944,14 @@ export class AuthService {
       where: { id: userId },
       include: { vetProfile: true },
     });
-    if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (!user) throw new UnauthorizedException("Usuario no encontrado");
     return this.sanitizeUser(user);
   }
 
   async listSessions(userId: string) {
     const sessions = await this.prisma.userSession.findMany({
       where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
-      orderBy: { lastUsedAt: 'desc' },
+      orderBy: { lastUsedAt: "desc" },
       select: {
         id: true,
         userAgent: true,
@@ -857,16 +968,16 @@ export class AuthService {
   async revokeSession(userId: string, sessionId: string) {
     const result = await this.prisma.userSession.updateMany({
       where: { id: sessionId, userId, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: 'user_revoked' },
+      data: { revokedAt: new Date(), revokedReason: "user_revoked" },
     });
     if (result.count > 0) {
       await this.auditService.log({
         actor: { id: userId },
         action: AuditAction.TOKEN_REVOKED,
         severity: AuditSeverity.INFO,
-        targetType: 'UserSession',
+        targetType: "UserSession",
         targetId: sessionId,
-        reason: 'session_revoked_by_user',
+        reason: "session_revoked_by_user",
       });
     }
   }
@@ -875,11 +986,16 @@ export class AuthService {
   // INTERNAL
   // ============================================================
 
-  private async recordFailedAttempt(userId: string, attempts: number): Promise<void> {
+  private async recordFailedAttempt(
+    userId: string,
+    attempts: number,
+  ): Promise<void> {
     const data: any = { failedLoginAttempts: attempts };
     if (attempts >= MAX_FAILED_ATTEMPTS) {
       data.lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
-      this.logger.warn(`Account lockout activated for userId=${userId} (${attempts} attempts)`);
+      this.logger.warn(
+        `Account lockout activated for userId=${userId} (${attempts} attempts)`,
+      );
     }
     await this.prisma.user.update({ where: { id: userId }, data });
   }
@@ -899,7 +1015,7 @@ export class AuthService {
         refreshTokenHash,
         userAgent: ctx.userAgent,
         ipAddress: ctx.ipAddress,
-        deviceLabel: deviceLabel ?? 'Dispositivo desconocido',
+        deviceLabel: deviceLabel ?? "Dispositivo desconocido",
         expiresAt: this.refreshExpiresAt(),
       },
     });
@@ -918,37 +1034,37 @@ export class AuthService {
       },
       {
         secret: process.env.JWT_SECRET,
-        expiresIn: (process.env.JWT_EXPIRES_IN || '15m') as StringValue,
+        expiresIn: (process.env.JWT_EXPIRES_IN || "15m") as StringValue,
       },
     );
   }
 
   private async signRefreshToken(user: any): Promise<string> {
     return this.jwtService.signAsync(
-      { sub: user.id, type: 'refresh' },
+      { sub: user.id, type: "refresh" },
       {
         secret: process.env.JWT_REFRESH_SECRET,
-        expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as StringValue,
+        expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || "7d") as StringValue,
       },
     );
   }
 
   private hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex');
+    return crypto.createHash("sha256").update(token).digest("hex");
   }
 
   private refreshExpiresAt(): Date {
-    const days = parseInt(process.env.JWT_REFRESH_EXPIRES_DAYS ?? '7', 10);
+    const days = parseInt(process.env.JWT_REFRESH_EXPIRES_DAYS ?? "7", 10);
     return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   }
 
   private sanitizeUser(user: any) {
     const {
-      passwordHash,
-      twoFactorSecret,
-      recoveryCodesHash,
-      passwordResetTokenHash,
-      emailVerificationTokenHash,
+      passwordHash: _passwordHash,
+      twoFactorSecret: _twoFactorSecret,
+      recoveryCodesHash: _recoveryCodesHash,
+      passwordResetTokenHash: _passwordResetTokenHash,
+      emailVerificationTokenHash: _emailVerificationTokenHash,
       ...safe
     } = user;
     return safe;

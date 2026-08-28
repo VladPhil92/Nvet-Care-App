@@ -2,8 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
 import {
   Prisma,
   AppointmentStatus,
@@ -12,8 +12,8 @@ import {
   VetTier,
   AuditAction,
   AuditSeverity,
-} from '@prisma/client';
-import { AuditService } from '../common/audit/audit.service';
+} from "@prisma/client";
+import { AuditService } from "../common/audit/audit.service";
 import {
   MetricsFiltersDto,
   AdminTransactionFiltersDto,
@@ -22,7 +22,7 @@ import {
   ExportFiltersDto,
   AdminVetsFiltersDto,
   AdminAppointmentsFiltersDto,
-} from './dto/admin.dto';
+} from "./dto/admin.dto";
 
 /**
  * Contexto del admin que ejecuta la acción. Lo recibimos del controller
@@ -86,7 +86,9 @@ export class AdminService {
       }),
       this.prisma.transaction.aggregate({
         where: {
-          status: { in: [TransactionStatus.CONFIRMED, TransactionStatus.LIQUIDATED] },
+          status: {
+            in: [TransactionStatus.CONFIRMED, TransactionStatus.LIQUIDATED],
+          },
           ...(dateRange && { createdAt: dateRange }),
         },
         _sum: { amountCop: true, commissionAmount: true },
@@ -95,14 +97,16 @@ export class AdminService {
       this.prisma.transaction.count({
         where: {
           paymentMethod: PaymentMethod.TRANSFER,
-          status: { in: [TransactionStatus.PENDING, TransactionStatus.VERIFYING] },
+          status: {
+            in: [TransactionStatus.PENDING, TransactionStatus.VERIFYING],
+          },
         },
       }),
       this.prisma.transaction.count({
         where: { status: TransactionStatus.DISPUTED },
       }),
       this.prisma.vetProfile.groupBy({
-        by: ['tier'],
+        by: ["tier"],
         _count: true,
       }),
     ]);
@@ -154,8 +158,8 @@ export class AdminService {
         vet: {
           user: {
             OR: [
-              { firstName: { contains: filters.vetName, mode: 'insensitive' } },
-              { lastName: { contains: filters.vetName, mode: 'insensitive' } },
+              { firstName: { contains: filters.vetName, mode: "insensitive" } },
+              { lastName: { contains: filters.vetName, mode: "insensitive" } },
             ],
           },
         },
@@ -171,23 +175,38 @@ export class AdminService {
         include: {
           appointment: {
             include: {
-              client: { select: { id: true, firstName: true, lastName: true, email: true } },
+              client: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
               vet: {
                 include: {
-                  user: { select: { id: true, firstName: true, lastName: true } },
+                  user: {
+                    select: { id: true, firstName: true, lastName: true },
+                  },
                 },
               },
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         take: limit,
         skip: offset,
       }),
       this.prisma.transaction.count({ where }),
     ]);
 
-    return { results, total, limit, offset, hasMore: offset + results.length < total };
+    return {
+      results,
+      total,
+      limit,
+      offset,
+      hasMore: offset + results.length < total,
+    };
   }
 
   // ============================================================
@@ -198,12 +217,21 @@ export class AdminService {
     const transfers = await this.prisma.transaction.findMany({
       where: {
         paymentMethod: PaymentMethod.TRANSFER,
-        status: { in: [TransactionStatus.PENDING, TransactionStatus.VERIFYING] },
+        status: {
+          in: [TransactionStatus.PENDING, TransactionStatus.VERIFYING],
+        },
       },
       include: {
         appointment: {
           include: {
-            client: { select: { id: true, firstName: true, lastName: true, phone: true } },
+            client: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+              },
+            },
             vet: {
               include: {
                 user: { select: { id: true, firstName: true, lastName: true } },
@@ -212,7 +240,7 @@ export class AdminService {
           },
         },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: "asc" },
     });
 
     // Agregar métrica de tiempo en cola
@@ -231,7 +259,7 @@ export class AdminService {
     const dateRange = this.buildDateRange(filters.startDate, filters.endDate);
 
     const stats = await this.prisma.transaction.groupBy({
-      by: ['paymentMethod', 'status'],
+      by: ["paymentMethod", "status"],
       where: dateRange ? { createdAt: dateRange } : undefined,
       _count: true,
       _sum: { amountCop: true },
@@ -270,9 +298,9 @@ export class AdminService {
     if (filters.search) {
       where.user = {
         OR: [
-          { firstName: { contains: filters.search, mode: 'insensitive' } },
-          { lastName: { contains: filters.search, mode: 'insensitive' } },
-          { email: { contains: filters.search, mode: 'insensitive' } },
+          { firstName: { contains: filters.search, mode: "insensitive" } },
+          { lastName: { contains: filters.search, mode: "insensitive" } },
+          { email: { contains: filters.search, mode: "insensitive" } },
         ],
       };
     }
@@ -302,14 +330,20 @@ export class AdminService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         take: limit,
         skip: offset,
       }),
       this.prisma.vetProfile.count({ where }),
     ]);
 
-    return { results, total, limit, offset, hasMore: offset + results.length < total };
+    return {
+      results,
+      total,
+      limit,
+      offset,
+      hasMore: offset + results.length < total,
+    };
   }
 
   async updateVetTier(
@@ -318,8 +352,10 @@ export class AdminService {
     dto: UpdateVetTierDto,
     ctx: AdminActionContext = {},
   ) {
-    const vet = await this.prisma.vetProfile.findUnique({ where: { id: vetId } });
-    if (!vet) throw new NotFoundException('Veterinario no encontrado');
+    const vet = await this.prisma.vetProfile.findUnique({
+      where: { id: vetId },
+    });
+    if (!vet) throw new NotFoundException("Veterinario no encontrado");
 
     // No-op si el tier no cambia: evita ruido en el audit log
     if (vet.tier === dto.tier) {
@@ -332,12 +368,17 @@ export class AdminService {
     });
 
     await this.auditService.logMutation(
-      { id: adminUserId, role: ctx.role ?? 'ADMIN', ip: ctx.ip, userAgent: ctx.userAgent },
+      {
+        id: adminUserId,
+        role: ctx.role ?? "ADMIN",
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+      },
       AuditAction.VET_TIER_CHANGED,
-      { type: 'VetProfile', id: vetId },
+      { type: "VetProfile", id: vetId },
       { tier: vet.tier },
       { tier: dto.tier },
-      dto.reason ?? 'admin_tier_update',
+      dto.reason ?? "admin_tier_update",
     );
 
     return updated;
@@ -361,23 +402,33 @@ export class AdminService {
       this.prisma.appointment.findMany({
         where,
         include: {
-          client: { select: { id: true, firstName: true, lastName: true, email: true } },
+          client: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
           vet: {
             include: {
               user: { select: { id: true, firstName: true, lastName: true } },
             },
           },
           pet: { select: { id: true, name: true, species: true } },
-          transaction: { select: { id: true, status: true, paymentMethod: true } },
+          transaction: {
+            select: { id: true, status: true, paymentMethod: true },
+          },
         },
-        orderBy: { date: 'desc' },
+        orderBy: { date: "desc" },
         take: limit,
         skip: offset,
       }),
       this.prisma.appointment.count({ where }),
     ]);
 
-    return { results, total, limit, offset, hasMore: offset + results.length < total };
+    return {
+      results,
+      total,
+      limit,
+      offset,
+      hasMore: offset + results.length < total,
+    };
   }
 
   // ============================================================
@@ -395,9 +446,11 @@ export class AdminService {
       include: { appointment: true },
     });
 
-    if (!tx) throw new NotFoundException('Transacción no encontrada');
+    if (!tx) throw new NotFoundException("Transacción no encontrada");
     if (tx.status !== TransactionStatus.DISPUTED) {
-      throw new BadRequestException('Solo se pueden resolver transacciones en disputa');
+      throw new BadRequestException(
+        "Solo se pueden resolver transacciones en disputa",
+      );
     }
 
     const updated = await this.prisma.$transaction(async (prisma) => {
@@ -405,31 +458,36 @@ export class AdminService {
       let appointmentStatus: AppointmentStatus | null = null;
 
       switch (dto.resolution) {
-        case 'CONFIRM':
+        case "CONFIRM":
           newStatus = TransactionStatus.LIQUIDATED;
           appointmentStatus = AppointmentStatus.COMPLETED;
           break;
-        case 'REFUND':
-        case 'CANCEL':
+        case "REFUND":
+        case "CANCEL":
           newStatus = TransactionStatus.FAILED;
           appointmentStatus = AppointmentStatus.CANCELLED;
           break;
         default:
-          throw new BadRequestException('Resolución inválida');
+          throw new BadRequestException("Resolución inválida");
       }
 
       const result = await prisma.transaction.update({
         where: { id: transactionId },
         data: {
           status: newStatus,
-          ...(newStatus === TransactionStatus.LIQUIDATED && { liquidatedAt: new Date() }),
+          ...(newStatus === TransactionStatus.LIQUIDATED && {
+            liquidatedAt: new Date(),
+          }),
         },
       });
 
       if (appointmentStatus) {
         await prisma.appointment.update({
           where: { id: tx.appointmentId },
-          data: { status: appointmentStatus, notes: `[Admin: ${dto.resolution}] ${dto.notes}` },
+          data: {
+            status: appointmentStatus,
+            notes: `[Admin: ${dto.resolution}] ${dto.notes}`,
+          },
         });
       }
 
@@ -439,10 +497,15 @@ export class AdminService {
     // Audit fuera de la transaction (no queremos que un fallo del audit
     // rollback la resolución; AuditService ya silencia errores internos).
     await this.auditService.log({
-      actor: { id: adminUserId, role: ctx.role ?? 'ADMIN', ip: ctx.ip, userAgent: ctx.userAgent },
+      actor: {
+        id: adminUserId,
+        role: ctx.role ?? "ADMIN",
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+      },
       action: AuditAction.DISPUTE_RESOLVED,
       severity: AuditSeverity.CRITICAL,
-      targetType: 'Transaction',
+      targetType: "Transaction",
       targetId: transactionId,
       beforeData: { status: tx.status },
       afterData: { status: updated.status },
@@ -488,7 +551,9 @@ export class AdminService {
       include: {
         appointment: {
           include: {
-            client: { select: { firstName: true, lastName: true, email: true } },
+            client: {
+              select: { firstName: true, lastName: true, email: true },
+            },
             vet: {
               include: {
                 user: { select: { firstName: true, lastName: true } },
@@ -497,22 +562,27 @@ export class AdminService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 10000, // hard cap export
     });
 
-    if (filters.format === 'CSV') {
+    if (filters.format === "CSV") {
       const csv = this.toCsv(transactions);
 
       // Audit data exfiltration: ¡importante para compliance Habeas Data!
       // Sabemos quién descargó qué rango de datos y desde dónde.
       if (adminUserId) {
         await this.auditService.log({
-          actor: { id: adminUserId, role: ctx.role ?? 'ADMIN', ip: ctx.ip, userAgent: ctx.userAgent },
+          actor: {
+            id: adminUserId,
+            role: ctx.role ?? "ADMIN",
+            ip: ctx.ip,
+            userAgent: ctx.userAgent,
+          },
           action: AuditAction.CONFIG_CHANGED,
           severity: AuditSeverity.WARN,
-          targetType: 'Transaction',
-          reason: 'transactions_export_csv',
+          targetType: "Transaction",
+          reason: "transactions_export_csv",
           metadata: {
             recordCount: transactions.length,
             filters: {
@@ -527,14 +597,14 @@ export class AdminService {
 
       return {
         filename: `transacciones_${Date.now()}.csv`,
-        contentType: 'text/csv; charset=utf-8',
+        contentType: "text/csv; charset=utf-8",
         body: csv,
       };
     }
 
     // XLSX placeholder
     throw new BadRequestException(
-      'Export XLSX no disponible aún. Use format=CSV (XLSX requiere paquete exceljs).',
+      "Export XLSX no disponible aún. Use format=CSV (XLSX requiere paquete exceljs).",
     );
   }
 
@@ -556,22 +626,22 @@ export class AdminService {
    */
   private toCsv(transactions: any[]): string {
     const headers = [
-      'id',
-      'fecha',
-      'cliente',
-      'email_cliente',
-      'veterinario',
-      'monto_cop',
-      'monto_ctg',
-      'comision_pct',
-      'comision_cop',
-      'metodo_pago',
-      'status',
-      'transfer_code',
+      "id",
+      "fecha",
+      "cliente",
+      "email_cliente",
+      "veterinario",
+      "monto_cop",
+      "monto_ctg",
+      "comision_pct",
+      "comision_cop",
+      "metodo_pago",
+      "status",
+      "transfer_code",
     ];
 
     const escape = (v: any): string => {
-      if (v === null || v === undefined) return '';
+      if (v === null || v === undefined) return "";
       const s = String(v);
       if (/[",\n\r]/.test(s)) {
         return `"${s.replace(/"/g, '""')}"`;
@@ -579,7 +649,7 @@ export class AdminService {
       return s;
     };
 
-    const lines = [headers.join(',')];
+    const lines = [headers.join(",")];
 
     for (const tx of transactions) {
       const client = tx.appointment?.client;
@@ -588,22 +658,26 @@ export class AdminService {
         [
           tx.id,
           tx.createdAt.toISOString(),
-          client ? `${client.firstName ?? ''} ${client.lastName ?? ''}`.trim() : '',
-          client?.email ?? '',
-          vetUser ? `${vetUser.firstName ?? ''} ${vetUser.lastName ?? ''}`.trim() : '',
+          client
+            ? `${client.firstName ?? ""} ${client.lastName ?? ""}`.trim()
+            : "",
+          client?.email ?? "",
+          vetUser
+            ? `${vetUser.firstName ?? ""} ${vetUser.lastName ?? ""}`.trim()
+            : "",
           tx.amountCop,
-          tx.amountCtg ?? '',
+          tx.amountCtg ?? "",
           tx.commissionPct,
           tx.commissionAmount,
           tx.paymentMethod,
           tx.status,
-          tx.transferCode ?? '',
+          tx.transferCode ?? "",
         ]
           .map(escape)
-          .join(','),
+          .join(","),
       );
     }
 
-    return lines.join('\n');
+    return lines.join("\n");
   }
 }

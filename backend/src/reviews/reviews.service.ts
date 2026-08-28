@@ -5,10 +5,14 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { AppointmentStatus } from '@prisma/client';
-import { CreateReviewDto, UpdateReviewDto, VetReviewsFilterDto } from './dto/review.dto';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { AppointmentStatus } from "@prisma/client";
+import {
+  CreateReviewDto,
+  UpdateReviewDto,
+  VetReviewsFilterDto,
+} from "./dto/review.dto";
 
 /**
  * ReviewsService — sistema de calificaciones de veterinarios.
@@ -40,13 +44,13 @@ export class ReviewsService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Cita no encontrada');
+      throw new NotFoundException("Cita no encontrada");
     }
 
     // 2. Solo el cliente de la cita puede calificar
     if (appointment.clientId !== clientId) {
       throw new ForbiddenException(
-        'Solo el cliente de la cita puede dejar una calificación',
+        "Solo el cliente de la cita puede dejar una calificación",
       );
     }
 
@@ -60,7 +64,7 @@ export class ReviewsService {
     // 4. Una sola review por cita
     if (appointment.review) {
       throw new ConflictException(
-        'Ya dejaste una calificación para esta cita. Puedes editarla.',
+        "Ya dejaste una calificación para esta cita. Puedes editarla.",
       );
     }
 
@@ -99,9 +103,11 @@ export class ReviewsService {
       where: { id: reviewId },
     });
 
-    if (!review) throw new NotFoundException('Calificación no encontrada');
+    if (!review) throw new NotFoundException("Calificación no encontrada");
     if (review.clientId !== clientId) {
-      throw new ForbiddenException('Solo puedes editar tus propias calificaciones');
+      throw new ForbiddenException(
+        "Solo puedes editar tus propias calificaciones",
+      );
     }
 
     const updated = await this.prisma.review.update({
@@ -130,15 +136,19 @@ export class ReviewsService {
       where: { id: reviewId },
     });
 
-    if (!review) throw new NotFoundException('Calificación no encontrada');
+    if (!review) throw new NotFoundException("Calificación no encontrada");
 
     if (!isAdmin && review.clientId !== requesterId) {
-      throw new ForbiddenException('Solo puedes eliminar tus propias calificaciones');
+      throw new ForbiddenException(
+        "Solo puedes eliminar tus propias calificaciones",
+      );
     }
 
     await this.prisma.review.delete({ where: { id: reviewId } });
     await this.recalculateVetRating(review.vetId);
-    this.logger.log(`Review eliminada: id=${reviewId} por userId=${requesterId}`);
+    this.logger.log(
+      `Review eliminada: id=${reviewId} por userId=${requesterId}`,
+    );
   }
 
   // ============================================================
@@ -162,7 +172,7 @@ export class ReviewsService {
       },
     });
 
-    if (!vetProfile) throw new NotFoundException('Veterinario no encontrado');
+    if (!vetProfile) throw new NotFoundException("Veterinario no encontrado");
 
     const where: any = { vetId: vetProfile.id };
     if (filters.minRating) {
@@ -182,7 +192,7 @@ export class ReviewsService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         take: limit,
         skip: offset,
       }),
@@ -191,7 +201,7 @@ export class ReviewsService {
 
     // Distribución de ratings (para mostrar barras en la UI)
     const ratingDistribution = await this.prisma.review.groupBy({
-      by: ['rating'],
+      by: ["rating"],
       where: { vetId: vetProfile.id },
       _count: true,
     });
@@ -229,11 +239,11 @@ export class ReviewsService {
       select: { clientId: true },
     });
 
-    if (!appointment) throw new NotFoundException('Cita no encontrada');
+    if (!appointment) throw new NotFoundException("Cita no encontrada");
 
     // Solo el cliente puede ver su propia review
     if (appointment.clientId !== clientId) {
-      throw new ForbiddenException('No tienes acceso a esta calificación');
+      throw new ForbiddenException("No tienes acceso a esta calificación");
     }
 
     const review = await this.prisma.review.findUnique({
@@ -267,20 +277,28 @@ export class ReviewsService {
               date: true,
               vet: {
                 include: {
-                  user: { select: { firstName: true, lastName: true, avatar: true } },
+                  user: {
+                    select: { firstName: true, lastName: true, avatar: true },
+                  },
                 },
               },
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         take: limit,
         skip: offset,
       }),
       this.prisma.review.count({ where: { clientId } }),
     ]);
 
-    return { results, total, limit, offset, hasMore: offset + results.length < total };
+    return {
+      results,
+      total,
+      limit,
+      offset,
+      hasMore: offset + results.length < total,
+    };
   }
 
   // ============================================================

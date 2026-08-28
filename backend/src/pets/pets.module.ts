@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { PetsController } from './pets.controller';
-import { PetsService } from './pets.service';
-import { AuthModule } from '../auth/auth.module';
+import { Module } from "@nestjs/common";
+import { PetsController } from "./pets.controller";
+import { PetsService } from "./pets.service";
+import { AuthModule } from "../auth/auth.module";
 
 /**
  * PetsModule — gestión de mascotas del sistema Nvet Care.

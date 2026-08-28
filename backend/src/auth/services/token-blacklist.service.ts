@@ -1,5 +1,5 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common'
-import { createHash } from 'crypto'
+import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
+import { createHash } from "crypto";
 
 /**
  * TokenBlacklistService — invalidación de refresh tokens (logout, rotation, theft).
@@ -21,9 +21,9 @@ import { createHash } from 'crypto'
  */
 
 interface KvStore {
-  set(key: string, value: string, ttlSeconds: number): Promise<void>
-  has(key: string): Promise<boolean>
-  delete(key: string): Promise<void>
+  set(key: string, value: string, ttlSeconds: number): Promise<void>;
+  has(key: string): Promise<boolean>;
+  delete(key: string): Promise<void>;
 }
 
 // ============================================================
@@ -31,51 +31,54 @@ interface KvStore {
 // ============================================================
 
 class InMemoryKvStore implements KvStore {
-  private readonly store = new Map<string, { value: string; expiresAt: number }>()
-  private readonly timers = new Map<string, NodeJS.Timeout>()
+  private readonly store = new Map<
+    string,
+    { value: string; expiresAt: number }
+  >();
+  private readonly timers = new Map<string, NodeJS.Timeout>();
 
   async set(key: string, value: string, ttlSeconds: number): Promise<void> {
-    const expiresAt = Date.now() + ttlSeconds * 1000
-    this.store.set(key, { value, expiresAt })
+    const expiresAt = Date.now() + ttlSeconds * 1000;
+    this.store.set(key, { value, expiresAt });
 
     // Cancelar timer previo si existe
-    const prev = this.timers.get(key)
-    if (prev) clearTimeout(prev)
+    const prev = this.timers.get(key);
+    if (prev) clearTimeout(prev);
 
     // Programar expiración automática
     const timer = setTimeout(() => {
-      this.store.delete(key)
-      this.timers.delete(key)
-    }, ttlSeconds * 1000)
+      this.store.delete(key);
+      this.timers.delete(key);
+    }, ttlSeconds * 1000);
     // Permite al proceso terminar aunque haya timers pendientes
-    timer.unref?.()
-    this.timers.set(key, timer)
+    timer.unref?.();
+    this.timers.set(key, timer);
   }
 
   async has(key: string): Promise<boolean> {
-    const entry = this.store.get(key)
-    if (!entry) return false
+    const entry = this.store.get(key);
+    if (!entry) return false;
     if (entry.expiresAt < Date.now()) {
-      this.store.delete(key)
-      const t = this.timers.get(key)
-      if (t) clearTimeout(t)
-      this.timers.delete(key)
-      return false
+      this.store.delete(key);
+      const t = this.timers.get(key);
+      if (t) clearTimeout(t);
+      this.timers.delete(key);
+      return false;
     }
-    return true
+    return true;
   }
 
   async delete(key: string): Promise<void> {
-    this.store.delete(key)
-    const t = this.timers.get(key)
-    if (t) clearTimeout(t)
-    this.timers.delete(key)
+    this.store.delete(key);
+    const t = this.timers.get(key);
+    if (t) clearTimeout(t);
+    this.timers.delete(key);
   }
 
   destroy(): void {
-    for (const timer of this.timers.values()) clearTimeout(timer)
-    this.timers.clear()
-    this.store.clear()
+    for (const timer of this.timers.values()) clearTimeout(timer);
+    this.timers.clear();
+    this.store.clear();
   }
 }
 
@@ -85,8 +88,8 @@ class InMemoryKvStore implements KvStore {
 
 @Injectable()
 export class TokenBlacklistService implements OnModuleDestroy {
-  private readonly logger = new Logger(TokenBlacklistService.name)
-  private readonly store: KvStore
+  private readonly logger = new Logger(TokenBlacklistService.name);
+  private readonly store: KvStore;
 
   constructor() {
     // En producción, condicionalmente inicializar Redis:
@@ -98,13 +101,13 @@ export class TokenBlacklistService implements OnModuleDestroy {
     //   }
     //
     // Por ahora, in-memory con warning si NODE_ENV=production
-    this.store = new InMemoryKvStore()
+    this.store = new InMemoryKvStore();
 
-    if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL) {
+    if (process.env.NODE_ENV === "production" && !process.env.REDIS_URL) {
       this.logger.warn(
-        'TokenBlacklistService: usando in-memory en producción. ' +
-          'Para deployments multi-instancia, configurar REDIS_URL.',
-      )
+        "TokenBlacklistService: usando in-memory en producción. " +
+          "Para deployments multi-instancia, configurar REDIS_URL.",
+      );
     }
   }
 
@@ -114,18 +117,18 @@ export class TokenBlacklistService implements OnModuleDestroy {
    * @param ttlSeconds — TTL = tiempo restante hasta el `exp` del token
    */
   async revoke(jti: string, ttlSeconds: number): Promise<void> {
-    if (!jti) return
-    if (ttlSeconds <= 0) return // ya expiró por sí solo
-    const key = this.makeKey(jti)
-    await this.store.set(key, '1', ttlSeconds)
+    if (!jti) return;
+    if (ttlSeconds <= 0) return; // ya expiró por sí solo
+    const key = this.makeKey(jti);
+    await this.store.set(key, "1", ttlSeconds);
   }
 
   /**
    * Verifica si un token está en la blacklist.
    */
   async isRevoked(jti: string): Promise<boolean> {
-    if (!jti) return false
-    return this.store.has(this.makeKey(jti))
+    if (!jti) return false;
+    return this.store.has(this.makeKey(jti));
   }
 
   /**
@@ -133,13 +136,13 @@ export class TokenBlacklistService implements OnModuleDestroy {
    * Hashea el token (SHA-256) si no tiene `jti` claim.
    */
   async revokeRaw(token: string, ttlSeconds: number): Promise<void> {
-    const id = this.tokenToId(token)
-    await this.revoke(id, ttlSeconds)
+    const id = this.tokenToId(token);
+    await this.revoke(id, ttlSeconds);
   }
 
   async isRawRevoked(token: string): Promise<boolean> {
-    const id = this.tokenToId(token)
-    return this.isRevoked(id)
+    const id = this.tokenToId(token);
+    return this.isRevoked(id);
   }
 
   // ----------------------------------------------------------
@@ -151,16 +154,16 @@ export class TokenBlacklistService implements OnModuleDestroy {
    * Usar SHA-256 evita guardar el token completo en memoria.
    */
   private tokenToId(token: string): string {
-    return createHash('sha256').update(token).digest('hex')
+    return createHash("sha256").update(token).digest("hex");
   }
 
   private makeKey(jti: string): string {
-    return `blacklist:${jti}`
+    return `blacklist:${jti}`;
   }
 
   onModuleDestroy() {
     if (this.store instanceof InMemoryKvStore) {
-      this.store.destroy()
+      this.store.destroy();
     }
   }
 }

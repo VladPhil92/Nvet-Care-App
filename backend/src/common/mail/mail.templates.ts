@@ -17,13 +17,13 @@ export interface RenderedMail {
 }
 
 const BRAND = {
-  blue: '#0D1B2A',
-  green: '#34B27A',
-  greenSoft: '#E7F6EF',
-  orange: '#FF8A3D',
-  textMuted: '#5C6B7A',
-  bg: '#F5F7F9',
-  border: '#E2E8EC',
+  blue: "#0D1B2A",
+  green: "#34B27A",
+  greenSoft: "#E7F6EF",
+  orange: "#FF8A3D",
+  textMuted: "#5C6B7A",
+  bg: "#F5F7F9",
+  border: "#E2E8EC",
 };
 
 function shell(bodyHtml: string, footerNote: string): string {
@@ -75,17 +75,17 @@ export function passwordResetTemplate(params: {
   resetLink: string;
   expiresInMinutes: number;
 }): RenderedMail {
-  const subject = 'Recupera tu contraseña de Nvet Care';
+  const subject = "Recupera tu contraseña de Nvet Care";
   const html = shell(
     `<h1 style="margin:0 0 12px;font-size:22px;color:${BRAND.blue};">Hola ${escapeHtml(params.firstName)},</h1>
     <p style="margin:0 0 12px;">Recibimos una solicitud para restablecer tu contraseña. Haz clic en el botón para crear una nueva. Este enlace expira en <strong>${params.expiresInMinutes} minutos</strong>.</p>
-    ${ctaButton('Restablecer contraseña', params.resetLink)}
+    ${ctaButton("Restablecer contraseña", params.resetLink)}
     <p style="margin:0 0 8px;color:${BRAND.textMuted};font-size:13px;">Si el botón no funciona, copia este enlace en tu navegador:</p>
     <p style="margin:0 0 16px;word-break:break-all;font-size:12px;background:${BRAND.bg};padding:10px;border-radius:6px;border:1px solid ${BRAND.border};">${params.resetLink}</p>
     <div style="margin-top:24px;padding:12px 16px;background:#FFF6EE;border-left:4px solid ${BRAND.orange};border-radius:6px;">
       <strong style="color:${BRAND.orange};">Importante:</strong> Si tú no solicitaste este cambio, ignora este correo. Tu contraseña actual seguirá funcionando y nadie podrá acceder a tu cuenta.
     </div>`,
-    'Recibiste este correo porque alguien solicitó recuperar la contraseña asociada a tu cuenta.',
+    "Recibiste este correo porque alguien solicitó recuperar la contraseña asociada a tu cuenta.",
   );
   const text = `Hola ${params.firstName},
 
@@ -109,17 +109,17 @@ export function emailVerificationTemplate(params: {
   verifyLink: string;
   expiresInHours: number;
 }): RenderedMail {
-  const subject = 'Verifica tu correo electrónico';
+  const subject = "Verifica tu correo electrónico";
   const html = shell(
     `<h1 style="margin:0 0 12px;font-size:22px;color:${BRAND.blue};">¡Bienvenida/o, ${escapeHtml(params.firstName)}!</h1>
     <p style="margin:0 0 12px;">Para completar el registro y desbloquear todas las funciones de Nvet Care (agendar citas, pagos, chat con vets), confirma tu correo haciendo clic en el botón.</p>
-    ${ctaButton('Verificar mi correo', params.verifyLink)}
+    ${ctaButton("Verificar mi correo", params.verifyLink)}
     <p style="margin:0 0 8px;color:${BRAND.textMuted};font-size:13px;">Este enlace expira en <strong>${params.expiresInHours} horas</strong>. Si no funciona, copia esta URL:</p>
     <p style="margin:0 0 16px;word-break:break-all;font-size:12px;background:${BRAND.bg};padding:10px;border-radius:6px;border:1px solid ${BRAND.border};">${params.verifyLink}</p>
     <div style="margin-top:24px;padding:12px 16px;background:${BRAND.greenSoft};border-left:4px solid ${BRAND.green};border-radius:6px;">
       <strong style="color:${BRAND.green};">¿Por qué verificar?</strong> Para proteger tu cuenta, evitar suplantación y asegurar que solo tú recibes recordatorios de citas y comprobantes de pago.
     </div>`,
-    'Recibiste este correo porque te registraste en Nvet Care con esta dirección.',
+    "Recibiste este correo porque te registraste en Nvet Care con esta dirección.",
   );
   const text = `Hola ${params.firstName},
 
@@ -142,8 +142,9 @@ export function vetApprovalTemplate(params: {
   firstName: string;
   dashboardLink?: string;
 }): RenderedMail {
-  const subject = '¡Tu verificación fue aprobada! Ya puedes recibir citas';
-  const dashboardUrl = params.dashboardLink ?? 'https://app.nvetcare.co/vet/dashboard';
+  const subject = "¡Tu verificación fue aprobada! Ya puedes recibir citas";
+  const dashboardUrl =
+    params.dashboardLink ?? "https://app.nvetcare.co/vet/dashboard";
   const html = shell(
     `<h1 style="margin:0 0 12px;font-size:22px;color:${BRAND.blue};">¡Felicitaciones, ${escapeHtml(params.firstName)}!</h1>
     <div style="margin:16px 0;padding:16px;background:${BRAND.greenSoft};border-left:4px solid ${BRAND.green};border-radius:6px;">
@@ -156,9 +157,9 @@ export function vetApprovalTemplate(params: {
       <li>Recibir pagos vía CTG Token, PSE y transferencia</li>
       <li>Acceder al chat arbitrado con tus clientes</li>
     </ul>
-    ${ctaButton('Ir a mi panel', dashboardUrl)}
+    ${ctaButton("Ir a mi panel", dashboardUrl)}
     <p style="margin:0;color:${BRAND.textMuted};font-size:13px;">Si tienes preguntas, responde este correo o contáctanos en soporte@nvetcare.co.</p>`,
-    'Este correo confirma la aprobación de tu cuenta profesional en Nvet Care.',
+    "Este correo confirma la aprobación de tu cuenta profesional en Nvet Care.",
   );
   const text = `¡Felicitaciones, ${params.firstName}!
 
@@ -178,9 +179,9 @@ Accede a tu panel: ${dashboardUrl}
 
 function escapeHtml(s: string): string {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

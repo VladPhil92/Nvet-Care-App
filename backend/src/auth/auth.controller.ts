@@ -9,13 +9,13 @@ import {
   Req,
   HttpCode,
   HttpStatus,
-} from '@nestjs/common';
-import { Throttle, seconds } from '@nestjs/throttler';
+} from "@nestjs/common";
+import { Throttle, seconds } from "@nestjs/throttler";
 
-import { AuthService } from './auth.service';
-import { PasswordResetService } from './services/password-reset.service';
-import { EmailVerificationService } from './services/email-verification.service';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { AuthService } from "./auth.service";
+import { PasswordResetService } from "./services/password-reset.service";
+import { EmailVerificationService } from "./services/email-verification.service";
+import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import {
   RegisterDto,
   LoginDto,
@@ -28,7 +28,7 @@ import {
   RefreshTokenDto,
   VerifyEmailDto,
   CtgIdentityExchangeDto,
-} from './dto/auth.dto';
+} from "./dto/auth.dto";
 
 /**
  * AuthController — endpoints de autenticación production-grade.
@@ -56,7 +56,7 @@ import {
  *   GET    /auth/sessions                  — Listar sesiones activas
  *   DELETE /auth/sessions/:id              — Revocar sesión específica
  */
-@Controller('auth')
+@Controller("auth")
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -68,25 +68,28 @@ export class AuthController {
   // REGISTER + LOGIN
   // ============================================================
 
-  @Post('register')
+  @Post("register")
   @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   @HttpCode(HttpStatus.CREATED)
   async register(@Body() dto: RegisterDto, @Req() req: any) {
     return this.authService.register(dto, this.extractContext(req));
   }
 
-  @Post('login')
+  @Post("login")
   @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Req() req: any) {
     return this.authService.login(dto, this.extractContext(req));
   }
 
-  @Post('login/recovery')
+  @Post("login/recovery")
   @Throttle({ default: { limit: 3, ttl: seconds(300) } })
   @HttpCode(HttpStatus.OK)
   async loginWithRecovery(@Body() dto: TwoFactorRecoveryDto, @Req() req: any) {
-    return this.authService.loginWithRecoveryCode(dto, this.extractContext(req));
+    return this.authService.loginWithRecoveryCode(
+      dto,
+      this.extractContext(req),
+    );
   }
 
   /**
@@ -96,10 +99,13 @@ export class AuthController {
    * de estricto que login: sigue siendo alcanzable por cualquiera que
    * tenga un access token de Supabase válido.
    */
-  @Post('ctg-identity-exchange')
+  @Post("ctg-identity-exchange")
   @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   @HttpCode(HttpStatus.OK)
-  async exchangeCtgIdentity(@Body() dto: CtgIdentityExchangeDto, @Req() req: any) {
+  async exchangeCtgIdentity(
+    @Body() dto: CtgIdentityExchangeDto,
+    @Req() req: any,
+  ) {
     return this.authService.exchangeCtgIdentity(dto, this.extractContext(req));
   }
 
@@ -107,21 +113,24 @@ export class AuthController {
   // TOKEN MANAGEMENT
   // ============================================================
 
-  @Post('refresh')
+  @Post("refresh")
   @Throttle({ default: { limit: 30, ttl: seconds(60) } })
   @HttpCode(HttpStatus.OK)
   async refresh(@Body() dto: RefreshTokenDto, @Req() req: any) {
-    return this.authService.refreshToken(dto.refreshToken, this.extractContext(req));
+    return this.authService.refreshToken(
+      dto.refreshToken,
+      this.extractContext(req),
+    );
   }
 
-  @Post('logout')
+  @Post("logout")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@Req() req: any, @Body('refreshToken') refreshToken?: string) {
+  async logout(@Req() req: any, @Body("refreshToken") refreshToken?: string) {
     await this.authService.logout(req.user.id, refreshToken);
   }
 
-  @Post('logout-all')
+  @Post("logout-all")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async logoutAll(@Req() req: any) {
@@ -136,7 +145,7 @@ export class AuthController {
    * Inicia el flujo de recuperación. Rate limit muy estricto:
    * 3 intentos por 15min por IP → mitiga email-enumeration y email-bombing.
    */
-  @Post('forgot-password')
+  @Post("forgot-password")
   @Throttle({ default: { limit: 3, ttl: seconds(900) } })
   @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body() dto: ForgotPasswordDto, @Req() req: any) {
@@ -148,21 +157,24 @@ export class AuthController {
    * Completa el flujo: usuario llega del email con `token` + nueva password.
    * Rate limit medio: 5 intentos por 15min para tolerar tokens copiados mal.
    */
-  @Post('reset-password')
+  @Post("reset-password")
   @Throttle({ default: { limit: 5, ttl: seconds(900) } })
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.passwordResetService.resetPassword(dto.token, dto.newPassword);
-    return { message: 'Contraseña actualizada correctamente. Inicia sesión con tu nueva contraseña.' };
+    return {
+      message:
+        "Contraseña actualizada correctamente. Inicia sesión con tu nueva contraseña.",
+    };
   }
 
-  @Post('change-password')
+  @Post("change-password")
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 5, ttl: seconds(300) } })
   @HttpCode(HttpStatus.OK)
   async changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
     await this.authService.changePassword(req.user.id, dto);
-    return { message: 'Contraseña actualizada. Inicia sesión nuevamente.' };
+    return { message: "Contraseña actualizada. Inicia sesión nuevamente." };
   }
 
   // ============================================================
@@ -174,7 +186,7 @@ export class AuthController {
    * El frontend convierte `otpauthUrl` en QR y guarda `encryptedSecret`
    * temporalmente para enviarlo en /confirm.
    */
-  @Post('2fa/enroll')
+  @Post("2fa/enroll")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async startTwoFactorEnrollment(@Req() req: any) {
@@ -186,7 +198,7 @@ export class AuthController {
    * el autenticador + el `encryptedSecret` recibido en /enroll.
    * Si el código es válido, habilita 2FA y retorna 10 recovery codes.
    */
-  @Post('2fa/confirm')
+  @Post("2fa/confirm")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async confirmTwoFactorEnrollment(
@@ -195,7 +207,7 @@ export class AuthController {
   ) {
     const { encryptedSecret, code } = body;
     if (!encryptedSecret || !code) {
-      throw new Error('encryptedSecret y code son requeridos');
+      throw new Error("encryptedSecret y code son requeridos");
     }
     const result = await this.authService.confirmTwoFactorEnrollment(
       req.user.id,
@@ -205,16 +217,16 @@ export class AuthController {
     return {
       ...result,
       message:
-        'GUARDA estos códigos de recuperación en un lugar seguro. Cada uno funciona una sola vez en caso de perder tu autenticador.',
+        "GUARDA estos códigos de recuperación en un lugar seguro. Cada uno funciona una sola vez en caso de perder tu autenticador.",
     };
   }
 
-  @Post('2fa/disable')
+  @Post("2fa/disable")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async disableTwoFactor(@Req() req: any, @Body() dto: TwoFactorDisableDto) {
     await this.authService.disableTwoFactor(req.user.id, dto);
-    return { message: 'Autenticación de 2 factores deshabilitada.' };
+    return { message: "Autenticación de 2 factores deshabilitada." };
   }
 
   // ============================================================
@@ -226,7 +238,7 @@ export class AuthController {
    * para evitar abuso (atacantes generando spam contra cualquier email).
    * Rate limit estricto: 3 emails por 15 min por IP.
    */
-  @Post('send-verification-email')
+  @Post("send-verification-email")
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 3, ttl: seconds(900) } })
   @HttpCode(HttpStatus.OK)
@@ -243,7 +255,7 @@ export class AuthController {
    * Endpoint público (cualquiera con el link puede activar la cuenta).
    * Rate limit medio: 5 intentos por 15 min para tolerar copy-paste erróneo.
    */
-  @Post('verify-email')
+  @Post("verify-email")
   @Throttle({ default: { limit: 5, ttl: seconds(900) } })
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Body() dto: VerifyEmailDto, @Req() req: any) {
@@ -258,22 +270,22 @@ export class AuthController {
   // CURRENT USER + SESSION MGMT
   // ============================================================
 
-  @Get('me')
+  @Get("me")
   @UseGuards(JwtAuthGuard)
   async getCurrentUser(@Req() req: any) {
     return this.authService.getUserById(req.user.id);
   }
 
-  @Get('sessions')
+  @Get("sessions")
   @UseGuards(JwtAuthGuard)
   async listSessions(@Req() req: any) {
     return this.authService.listSessions(req.user.id);
   }
 
-  @Delete('sessions/:id')
+  @Delete("sessions/:id")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async revokeSession(@Req() req: any, @Param('id') sessionId: string) {
+  async revokeSession(@Req() req: any, @Param("id") sessionId: string) {
     await this.authService.revokeSession(req.user.id, sessionId);
   }
 
@@ -283,10 +295,10 @@ export class AuthController {
 
   private extractContext(req: any): { ipAddress?: string; userAgent?: string } {
     const ipAddress =
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
       req.ip ||
       req.connection?.remoteAddress;
-    const userAgent = req.headers['user-agent'];
+    const userAgent = req.headers["user-agent"];
     return { ipAddress, userAgent };
   }
 }

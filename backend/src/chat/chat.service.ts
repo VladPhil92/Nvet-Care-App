@@ -3,9 +3,9 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { MessageType, ReportReason } from '@prisma/client';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { MessageType, ReportReason } from "@prisma/client";
 
 interface PriceData {
   serviceName: string;
@@ -29,14 +29,14 @@ export class ChatService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Appointment not found');
+      throw new NotFoundException("Appointment not found");
     }
 
     const isClient = appointment.clientId === userId;
     const isVet = appointment.vet.userId === userId;
 
     if (!isClient && !isVet) {
-      throw new ForbiddenException('You are not a participant in this chat');
+      throw new ForbiddenException("You are not a participant in this chat");
     }
 
     return appointment;
@@ -59,7 +59,7 @@ export class ChatService {
           },
         },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: "asc" },
     });
   }
 
@@ -68,7 +68,7 @@ export class ChatService {
    */
   async sendMessage(appointmentId: string, senderId: string, content: string) {
     if (!content || content.trim().length === 0) {
-      throw new BadRequestException('Message content cannot be empty');
+      throw new BadRequestException("Message content cannot be empty");
     }
 
     return this.prisma.message.create({
@@ -106,7 +106,7 @@ export class ChatService {
     });
 
     if (!vet) {
-      throw new ForbiddenException('Only veterinarians can share prices');
+      throw new ForbiddenException("Only veterinarians can share prices");
     }
 
     // Check if this is an official price from vet's price list
@@ -121,9 +121,9 @@ export class ChatService {
     const isVerified = !!officialPrice;
 
     // Build content string
-    const content = `💰 ${priceData.serviceName}: ${priceData.priceCop.toLocaleString('es-CO')} COP${
-      priceData.priceCtg ? ` (${priceData.priceCtg} CTG)` : ''
-    }${isVerified ? ' ✓ Precio oficial' : ''}`;
+    const content = `💰 ${priceData.serviceName}: ${priceData.priceCop.toLocaleString("es-CO")} COP${
+      priceData.priceCtg ? ` (${priceData.priceCtg} CTG)` : ""
+    }${isVerified ? " ✓ Precio oficial" : ""}`;
 
     return this.prisma.message.create({
       data: {
@@ -183,13 +183,13 @@ export class ChatService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Appointment not found');
+      throw new NotFoundException("Appointment not found");
     }
 
     // Get last message
     const lastMessage = await this.prisma.message.findFirst({
       where: { appointmentId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       include: {
         sender: {
           select: {
@@ -216,11 +216,11 @@ export class ChatService {
       participants: [
         {
           ...appointment.vet.user,
-          role: 'VET',
+          role: "VET",
         },
         {
           ...appointment.client,
-          role: 'CLIENT',
+          role: "CLIENT",
         },
       ],
       isMonitored: true, // All chats are monitored for arbitration
@@ -242,7 +242,7 @@ export class ChatService {
       data: { readAt: new Date() },
     });
 
-    return { message: 'Messages marked as read', count: result.count };
+    return { message: "Messages marked as read", count: result.count };
   }
 
   /**
@@ -259,11 +259,13 @@ export class ChatService {
     });
 
     if (!message) {
-      throw new NotFoundException('Message not found');
+      throw new NotFoundException("Message not found");
     }
 
     // Map string reason to enum; default to OTHER if unrecognised
-    const reasonEnum = Object.values(ReportReason).includes(reason as ReportReason)
+    const reasonEnum = Object.values(ReportReason).includes(
+      reason as ReportReason,
+    )
       ? (reason as ReportReason)
       : ReportReason.OTHER;
 
@@ -278,7 +280,7 @@ export class ChatService {
 
     return {
       success: true,
-      message: 'Report submitted successfully',
+      message: "Report submitted successfully",
     };
   }
 
@@ -293,17 +295,17 @@ export class ChatService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException("User not found");
     }
 
     // Get appointments where user is participant and status is active
     const where: any = {
-      status: { in: ['CONFIRMED', 'IN_PROGRESS'] },
+      status: { in: ["CONFIRMED", "IN_PROGRESS"] },
     };
 
-    if (user.role === 'VET' && user.vetProfile) {
+    if (user.role === "VET" && user.vetProfile) {
       where.vetId = user.vetProfile.id;
-    } else if (user.role === 'CLIENT') {
+    } else if (user.role === "CLIENT") {
       where.clientId = userId;
     }
 
@@ -331,7 +333,7 @@ export class ChatService {
           },
         },
         messages: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           take: 1,
         },
       },
@@ -351,8 +353,8 @@ export class ChatService {
         return {
           appointmentId: apt.id,
           participants: [
-            { ...apt.vet.user, role: 'VET' },
-            { ...apt.client, role: 'CLIENT' },
+            { ...apt.vet.user, role: "VET" },
+            { ...apt.client, role: "CLIENT" },
           ],
           isMonitored: true,
           lastMessage: apt.messages[0] || null,
@@ -371,7 +373,7 @@ export class ChatService {
     });
 
     if (!message) {
-      throw new NotFoundException('Message not found');
+      throw new NotFoundException("Message not found");
     }
 
     return message;
@@ -393,7 +395,9 @@ export class ChatService {
    */
   async searchMessages(appointmentId: string, query: string) {
     if (!query || query.trim().length < 2) {
-      throw new BadRequestException('Search query must be at least 2 characters');
+      throw new BadRequestException(
+        "Search query must be at least 2 characters",
+      );
     }
 
     return this.prisma.message.findMany({
@@ -401,7 +405,7 @@ export class ChatService {
         appointmentId,
         content: {
           contains: query.trim(),
-          mode: 'insensitive',
+          mode: "insensitive",
         },
       },
       include: {
@@ -415,7 +419,7 @@ export class ChatService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -454,7 +458,7 @@ export class ChatService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: limit + 1, // Fetch one extra to check hasMore
       ...(cursor && { cursor, skip: 1 }),
     });

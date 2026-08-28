@@ -1,10 +1,10 @@
-import { Global, Module } from '@nestjs/common'
-import { PasswordService } from '../auth/services/password.service'
-import { TokenBlacklistService } from '../auth/services/token-blacklist.service'
-import { AuditService } from './audit/audit.service'
-import { MagicBytesValidator } from './security/magic-bytes.service'
-import { IdempotencyService } from './security/idempotency.service'
-import { SagaOrchestratorService } from './saga/saga-orchestrator.service'
+import { Global, Module } from "@nestjs/common";
+import { PasswordService } from "../auth/services/password.service";
+import { TokenBlacklistService } from "../auth/services/token-blacklist.service";
+import { AuditService } from "./audit/audit.service";
+import { MagicBytesValidator } from "./security/magic-bytes.service";
+import { IdempotencyService } from "./security/idempotency.service";
+import { SagaOrchestratorService } from "./saga/saga-orchestrator.service";
 
 /**
  * ResilienceModule — agrupa servicios de seguridad y resiliencia que

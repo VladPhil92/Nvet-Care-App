@@ -3,10 +3,10 @@ import {
   BadRequestException,
   ConflictException,
   UnauthorizedException,
-} from '@nestjs/common';
-import * as crypto from 'crypto';
-import { PrismaService } from '../../prisma/prisma.service';
-import { PasswordService } from './password.service';
+} from "@nestjs/common";
+import * as crypto from "crypto";
+import { PrismaService } from "../../prisma/prisma.service";
+import { PasswordService } from "./password.service";
 
 /**
  * TwoFactorService — autenticación de 2 factores con TOTP (RFC 6238).
@@ -41,13 +41,17 @@ export class TwoFactorService {
   ) {
     // La master key viene de env, fallback a una derivación del JWT_SECRET.
     // En producción DEBE ser una key dedicada de 32 bytes (256 bits).
-    const keySource = process.env.TWO_FACTOR_ENCRYPTION_KEY ?? process.env.JWT_SECRET ?? '';
+    const keySource =
+      process.env.TWO_FACTOR_ENCRYPTION_KEY ?? process.env.JWT_SECRET ?? "";
     if (!keySource) {
       throw new Error(
-        'TWO_FACTOR_ENCRYPTION_KEY o JWT_SECRET deben estar configurados en producción',
+        "TWO_FACTOR_ENCRYPTION_KEY o JWT_SECRET deben estar configurados en producción",
       );
     }
-    this.ENCRYPTION_KEY = crypto.createHash('sha256').update(keySource).digest();
+    this.ENCRYPTION_KEY = crypto
+      .createHash("sha256")
+      .update(keySource)
+      .digest();
   }
 
   // ============================================================
@@ -63,22 +67,25 @@ export class TwoFactorService {
    *   - otpauthUrl: URI estándar otpauth:// que el cliente convierte en QR
    *   - encryptedSecret: para persistir tras `confirmEnrollment` exitoso
    */
-  async startEnrollment(userId: string, userEmail: string): Promise<{
+  async startEnrollment(
+    userId: string,
+    userEmail: string,
+  ): Promise<{
     secret: string;
     otpauthUrl: string;
     encryptedSecret: string;
   }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new BadRequestException('Usuario no encontrado');
+    if (!user) throw new BadRequestException("Usuario no encontrado");
     if (user.twoFactorEnabled) {
-      throw new ConflictException('2FA ya está habilitado para esta cuenta');
+      throw new ConflictException("2FA ya está habilitado para esta cuenta");
     }
 
     // Secret random de 20 bytes (160 bits) — recomendación RFC 6238
     const secretBytes = crypto.randomBytes(20);
     const secret = this.base32Encode(secretBytes);
 
-    const issuer = encodeURIComponent('Nvet Care');
+    const issuer = encodeURIComponent("Nvet Care");
     const accountName = encodeURIComponent(userEmail);
     const otpauthUrl = `otpauth://totp/${issuer}:${accountName}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=${this.TOTP_DIGITS}&period=${this.TOTP_PERIOD}`;
 
@@ -99,13 +106,14 @@ export class TwoFactorService {
     const decryptedSecret = this.decrypt(encryptedSecret);
     if (!this.verifyTotpCode(decryptedSecret, code)) {
       throw new UnauthorizedException(
-        'Código TOTP inválido. Verifica que la hora de tu dispositivo esté sincronizada.',
+        "Código TOTP inválido. Verifica que la hora de tu dispositivo esté sincronizada.",
       );
     }
 
     // Generar 10 códigos de recuperación (formato: XXXX-XXXX-XX, 10 chars sin guiones)
-    const rawRecoveryCodes = Array.from({ length: this.RECOVERY_CODE_COUNT }, () =>
-      this.generateRecoveryCode(),
+    const rawRecoveryCodes = Array.from(
+      { length: this.RECOVERY_CODE_COUNT },
+      () => this.generateRecoveryCode(),
     );
 
     // Hash con Argon2id (mismo algoritmo que passwords)
@@ -140,12 +148,12 @@ export class TwoFactorService {
       select: { twoFactorSecret: true, twoFactorEnabled: true },
     });
     if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
-      throw new BadRequestException('2FA no está habilitado');
+      throw new BadRequestException("2FA no está habilitado");
     }
 
     const secret = this.decrypt(user.twoFactorSecret);
     if (!this.verifyTotpCode(secret, code)) {
-      throw new UnauthorizedException('Código TOTP inválido o expirado');
+      throw new UnauthorizedException("Código TOTP inválido o expirado");
     }
   }
 
@@ -153,7 +161,10 @@ export class TwoFactorService {
    * Verifica un código de recuperación (alternativa cuando se pierde el TOTP).
    * Tras éxito, INVALIDA ese código (single-use) y retorna cuántos quedan.
    */
-  async verifyRecoveryCode(userId: string, recoveryCode: string): Promise<{
+  async verifyRecoveryCode(
+    userId: string,
+    recoveryCode: string,
+  ): Promise<{
     remainingCodes: number;
   }> {
     const user = await this.prisma.user.findUnique({
@@ -161,7 +172,9 @@ export class TwoFactorService {
       select: { recoveryCodesHash: true },
     });
     if (!user || user.recoveryCodesHash.length === 0) {
-      throw new UnauthorizedException('No hay códigos de recuperación disponibles');
+      throw new UnauthorizedException(
+        "No hay códigos de recuperación disponibles",
+      );
     }
 
     // Buscar el primer hash que matchee el código (timing-safe)
@@ -178,11 +191,13 @@ export class TwoFactorService {
     }
 
     if (matchedIndex === -1) {
-      throw new UnauthorizedException('Código de recuperación inválido');
+      throw new UnauthorizedException("Código de recuperación inválido");
     }
 
     // Remover el hash usado (single-use)
-    const remainingHashes = user.recoveryCodesHash.filter((_, i) => i !== matchedIndex);
+    const remainingHashes = user.recoveryCodesHash.filter(
+      (_, i) => i !== matchedIndex,
+    );
     await this.prisma.user.update({
       where: { id: userId },
       data: { recoveryCodesHash: remainingHashes },
@@ -205,22 +220,25 @@ export class TwoFactorService {
       },
     });
     if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
-      throw new BadRequestException('2FA no está habilitado');
+      throw new BadRequestException("2FA no está habilitado");
     }
     if (!user.passwordHash) {
-      throw new UnauthorizedException('Contraseña incorrecta');
+      throw new UnauthorizedException("Contraseña incorrecta");
     }
 
     // 1. Verificar password
-    const passwordCheck = await this.passwordService.verify(password, user.passwordHash);
+    const passwordCheck = await this.passwordService.verify(
+      password,
+      user.passwordHash,
+    );
     if (!passwordCheck.valid) {
-      throw new UnauthorizedException('Contraseña incorrecta');
+      throw new UnauthorizedException("Contraseña incorrecta");
     }
 
     // 2. Verificar código TOTP actual
     const secret = this.decrypt(user.twoFactorSecret);
     if (!this.verifyTotpCode(secret, code)) {
-      throw new UnauthorizedException('Código TOTP inválido');
+      throw new UnauthorizedException("Código TOTP inválido");
     }
 
     await this.prisma.user.update({
@@ -243,7 +261,7 @@ export class TwoFactorService {
    * Esto acomoda clock skew típico de teléfonos (~30s).
    */
   private verifyTotpCode(secret: string, code: string): boolean {
-    const cleanCode = code.replace(/\s/g, '');
+    const cleanCode = code.replace(/\s/g, "");
     if (!/^\d{6,8}$/.test(cleanCode)) return false;
 
     const now = Math.floor(Date.now() / 1000 / this.TOTP_PERIOD);
@@ -266,7 +284,10 @@ export class TwoFactorService {
     counterBytes.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
     counterBytes.writeUInt32BE(counter & 0xffffffff, 4);
 
-    const hmac = crypto.createHmac('sha1', secretBytes).update(counterBytes).digest();
+    const hmac = crypto
+      .createHmac("sha1", secretBytes)
+      .update(counterBytes)
+      .digest();
     // Dynamic truncation (RFC 4226 sec 5.3)
     const offset = hmac[hmac.length - 1] & 0x0f;
     const code =
@@ -276,7 +297,7 @@ export class TwoFactorService {
       (hmac[offset + 3] & 0xff);
 
     const otp = code % Math.pow(10, this.TOTP_DIGITS);
-    return otp.toString().padStart(this.TOTP_DIGITS, '0');
+    return otp.toString().padStart(this.TOTP_DIGITS, "0");
   }
 
   // ============================================================
@@ -285,22 +306,36 @@ export class TwoFactorService {
 
   private encrypt(plaintext: string): string {
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', this.ENCRYPTION_KEY, iv);
-    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const cipher = crypto.createCipheriv(
+      "aes-256-gcm",
+      this.ENCRYPTION_KEY,
+      iv,
+    );
+    const encrypted = Buffer.concat([
+      cipher.update(plaintext, "utf8"),
+      cipher.final(),
+    ]);
     const authTag = cipher.getAuthTag();
     // Format: base64(iv || authTag || ciphertext)
-    return Buffer.concat([iv, authTag, encrypted]).toString('base64');
+    return Buffer.concat([iv, authTag, encrypted]).toString("base64");
   }
 
   private decrypt(payload: string): string {
-    const buf = Buffer.from(payload, 'base64');
+    const buf = Buffer.from(payload, "base64");
     const iv = buf.subarray(0, 12);
     const authTag = buf.subarray(12, 28);
     const ciphertext = buf.subarray(28);
-    const decipher = crypto.createDecipheriv('aes-256-gcm', this.ENCRYPTION_KEY, iv);
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      this.ENCRYPTION_KEY,
+      iv,
+    );
     decipher.setAuthTag(authTag);
-    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-    return decrypted.toString('utf8');
+    const decrypted = Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final(),
+    ]);
+    return decrypted.toString("utf8");
   }
 
   // ============================================================
@@ -309,8 +344,8 @@ export class TwoFactorService {
 
   private generateRecoveryCode(): string {
     // 10 caracteres alfanuméricos sin chars ambiguos (0/O, 1/I/l)
-    const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-    let code = '';
+    const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let code = "";
     const bytes = crypto.randomBytes(10);
     for (let i = 0; i < 10; i++) {
       code += alphabet[bytes[i] % alphabet.length];
@@ -324,10 +359,10 @@ export class TwoFactorService {
   }
 
   private base32Encode(buffer: Buffer): string {
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
     let bits = 0;
     let value = 0;
-    let output = '';
+    let output = "";
     for (let i = 0; i < buffer.length; i++) {
       value = (value << 8) | buffer[i];
       bits += 8;
@@ -341,14 +376,14 @@ export class TwoFactorService {
   }
 
   private base32Decode(encoded: string): Buffer {
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    const cleanInput = encoded.replace(/=+$/, '').toUpperCase();
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    const cleanInput = encoded.replace(/=+$/, "").toUpperCase();
     let bits = 0;
     let value = 0;
     const output: number[] = [];
     for (let i = 0; i < cleanInput.length; i++) {
       const idx = alphabet.indexOf(cleanInput[i]);
-      if (idx < 0) throw new Error('Carácter inválido en Base32');
+      if (idx < 0) throw new Error("Carácter inválido en Base32");
       value = (value << 5) | idx;
       bits += 5;
       if (bits >= 8) {

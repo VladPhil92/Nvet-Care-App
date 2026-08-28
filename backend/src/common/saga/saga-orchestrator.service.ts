@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger } from "@nestjs/common";
 
 /**
  * SagaOrchestratorService — patrón Saga para transacciones distribuidas.
@@ -25,35 +25,35 @@ import { Injectable, Logger } from '@nestjs/common'
  */
 
 interface SagaStep<TIn, TOut> {
-  name: string
+  name: string;
   /** La operación principal del paso. Recibe el input acumulado, retorna su output. */
-  action: (input: TIn) => Promise<TOut>
+  action: (input: TIn) => Promise<TOut>;
   /**
    * Compensación que revierte el efecto de `action` si un paso posterior falla.
    * Recibe el output del propio paso (lo que produjo) más el input acumulado.
    * Debe ser idempotente: puede llamarse múltiples veces.
    */
-  compensate?: (output: TOut, input: TIn) => Promise<void>
+  compensate?: (output: TOut, input: TIn) => Promise<void>;
   /** Si true, una falla del paso NO dispara compensaciones (best-effort) */
-  optional?: boolean
+  optional?: boolean;
 }
 
 interface SagaResult<T> {
-  success: boolean
-  result?: T
-  failedStep?: string
-  error?: Error
+  success: boolean;
+  result?: T;
+  failedStep?: string;
+  error?: Error;
   /** Pasos completados antes de la falla (en orden) */
-  completedSteps: string[]
+  completedSteps: string[];
   /** Compensaciones que se ejecutaron tras la falla */
-  compensatedSteps: string[]
+  compensatedSteps: string[];
   /** Compensaciones que también fallaron (orphans peligrosos) */
-  orphans: Array<{ step: string; error: string }>
+  orphans: Array<{ step: string; error: string }>;
 }
 
 @Injectable()
 export class SagaOrchestratorService {
-  private readonly logger = new Logger(SagaOrchestratorService.name)
+  private readonly logger = new Logger(SagaOrchestratorService.name);
 
   /**
    * Ejecuta una saga. Los outputs de cada paso se acumulan en un objeto que
@@ -64,39 +64,42 @@ export class SagaOrchestratorService {
     steps: Array<SagaStep<any, any>>,
     initialContext: Record<string, unknown> = {},
   ): Promise<SagaResult<TFinal>> {
-    const completedSteps: string[] = []
-    const completedOutputs: Array<{ step: SagaStep<any, any>; output: any }> = []
-    let context: Record<string, unknown> = { ...initialContext }
+    const completedSteps: string[] = [];
+    const completedOutputs: Array<{ step: SagaStep<any, any>; output: any }> =
+      [];
+    let context: Record<string, unknown> = { ...initialContext };
 
     for (const step of steps) {
-      const stepStart = Date.now()
+      const stepStart = Date.now();
       try {
-        this.logger.debug(`[saga:${sagaName}] → ${step.name}`)
-        const output = await step.action(context)
+        this.logger.debug(`[saga:${sagaName}] → ${step.name}`);
+        const output = await step.action(context);
 
         // Acumular output bajo la key del paso (si retornó algo asignable)
-        if (output && typeof output === 'object') {
-          context = { ...context, ...output }
+        if (output && typeof output === "object") {
+          context = { ...context, ...output };
         } else {
-          context[step.name] = output
+          context[step.name] = output;
         }
 
-        completedSteps.push(step.name)
-        completedOutputs.push({ step, output })
+        completedSteps.push(step.name);
+        completedOutputs.push({ step, output });
 
-        const ms = Date.now() - stepStart
-        this.logger.log(`[saga:${sagaName}] ✓ ${step.name} (${ms}ms)`)
+        const ms = Date.now() - stepStart;
+        this.logger.log(`[saga:${sagaName}] ✓ ${step.name} (${ms}ms)`);
       } catch (err) {
-        const ms = Date.now() - stepStart
-        const error = err as Error
+        const ms = Date.now() - stepStart;
+        const error = err as Error;
         this.logger.error(
           `[saga:${sagaName}] ✗ ${step.name} (${ms}ms): ${error.message}`,
-        )
+        );
 
         // Si el paso es optional, continuamos sin compensar
         if (step.optional) {
-          this.logger.warn(`[saga:${sagaName}] step ${step.name} marcado optional, continuando`)
-          continue
+          this.logger.warn(
+            `[saga:${sagaName}] step ${step.name} marcado optional, continuando`,
+          );
+          continue;
         }
 
         // Compensar pasos anteriores en orden inverso
@@ -104,7 +107,7 @@ export class SagaOrchestratorService {
           sagaName,
           completedOutputs,
           context,
-        )
+        );
 
         return {
           success: false,
@@ -113,7 +116,7 @@ export class SagaOrchestratorService {
           completedSteps,
           compensatedSteps: compensation.compensated,
           orphans: compensation.orphans,
-        }
+        };
       }
     }
 
@@ -123,7 +126,7 @@ export class SagaOrchestratorService {
       completedSteps,
       compensatedSteps: [],
       orphans: [],
-    }
+    };
   }
 
   /**
@@ -134,30 +137,33 @@ export class SagaOrchestratorService {
     sagaName: string,
     completed: Array<{ step: SagaStep<any, any>; output: any }>,
     context: Record<string, unknown>,
-  ): Promise<{ compensated: string[]; orphans: Array<{ step: string; error: string }> }> {
-    const compensated: string[] = []
-    const orphans: Array<{ step: string; error: string }> = []
+  ): Promise<{
+    compensated: string[];
+    orphans: Array<{ step: string; error: string }>;
+  }> {
+    const compensated: string[] = [];
+    const orphans: Array<{ step: string; error: string }> = [];
 
     // LIFO: el último paso completado se compensa primero
     for (const { step, output } of [...completed].reverse()) {
-      if (!step.compensate) continue
+      if (!step.compensate) continue;
 
       try {
-        this.logger.warn(`[saga:${sagaName}] compensating ${step.name}`)
-        await step.compensate(output, context)
-        compensated.push(step.name)
+        this.logger.warn(`[saga:${sagaName}] compensating ${step.name}`);
+        await step.compensate(output, context);
+        compensated.push(step.name);
       } catch (err) {
-        const error = err as Error
+        const error = err as Error;
         // Critical: una compensación falló. Esto deja un "orphan" en el sistema.
         // Loggear con CRITICAL para alertar a humanos.
         this.logger.error(
           `[saga:${sagaName}] COMPENSATION FAILED for ${step.name}: ${error.message}. ` +
             `Manual intervention required.`,
-        )
-        orphans.push({ step: step.name, error: error.message })
+        );
+        orphans.push({ step: step.name, error: error.message });
       }
     }
 
-    return { compensated, orphans }
+    return { compensated, orphans };
   }
 }

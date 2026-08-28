@@ -8,9 +8,9 @@ import {
   Min,
   Max,
   Length,
-} from 'class-validator';
-import { Type, Transform } from 'class-transformer';
-import { VetTier } from '@prisma/client';
+} from "class-validator";
+import { Type, Transform } from "class-transformer";
+import { VetTier } from "@prisma/client";
 
 /**
  * DTO para búsqueda avanzada de veterinarios.
@@ -24,26 +24,26 @@ import { VetTier } from '@prisma/client';
  */
 
 export type SortBy =
-  | 'relevance'
-  | 'rating'
-  | 'distance'
-  | 'price_asc'
-  | 'price_desc'
-  | 'experience';
+  | "relevance"
+  | "rating"
+  | "distance"
+  | "price_asc"
+  | "price_desc"
+  | "experience";
 
 export class SearchVetsDto {
   // ---------- Geolocalización ----------
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber({}, { message: 'latitude debe ser numérico' })
+  @IsNumber({}, { message: "latitude debe ser numérico" })
   @Min(-90)
   @Max(90)
   latitude?: number;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber({}, { message: 'longitude debe ser numérico' })
+  @IsNumber({}, { message: "longitude debe ser numérico" })
   @Min(-180)
   @Max(180)
   longitude?: number;
@@ -74,7 +74,7 @@ export class SearchVetsDto {
   minRating?: number;
 
   @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
+  @Transform(({ value }) => value === "true" || value === true)
   @IsBoolean()
   availableNow?: boolean;
 

@@ -3,10 +3,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { UpdateLiveLocationDto } from './dto/update-live-location.dto';
+} from "@nestjs/common";
+import { AppointmentStatus, Prisma, UserRole } from "@prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { UpdateLiveLocationDto } from "./dto/update-live-location.dto";
 
 const TRACKABLE_STATUSES = new Set<AppointmentStatus>([
   AppointmentStatus.CONFIRMED,
@@ -56,7 +56,7 @@ export class LiveLocationService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Appointment not found');
+      throw new NotFoundException("Appointment not found");
     }
 
     const isClient = appointment.clientId === requesterId;
@@ -64,7 +64,7 @@ export class LiveLocationService {
     const isAdmin = requesterRole === UserRole.ADMIN;
 
     if (!isClient && !isVet && !isAdmin) {
-      throw new ForbiddenException('You do not have access to this tracking');
+      throw new ForbiddenException("You do not have access to this tracking");
     }
 
     if (!TRACKABLE_STATUSES.has(appointment.status)) {
@@ -132,18 +132,18 @@ export class LiveLocationService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Appointment not found');
+      throw new NotFoundException("Appointment not found");
     }
 
     if (appointment.vet.userId !== vetUserId) {
       throw new ForbiddenException(
-        'Only the veterinarian assigned to this appointment can share location',
+        "Only the veterinarian assigned to this appointment can share location",
       );
     }
 
     if (!TRACKABLE_STATUSES.has(appointment.status)) {
       throw new BadRequestException(
-        'Live location is only allowed for confirmed or in-progress appointments',
+        "Live location is only allowed for confirmed or in-progress appointments",
       );
     }
 

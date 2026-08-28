@@ -8,8 +8,8 @@ import {
   IsUUID,
   Min,
   Matches,
-} from 'class-validator';
-import { PaymentMethod } from '@prisma/client';
+} from "class-validator";
+import { PaymentMethod } from "@prisma/client";
 
 export class CreateAppointmentDto {
   @IsUUID()
@@ -27,7 +27,7 @@ export class CreateAppointmentDto {
 
   @IsString()
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
-    message: 'time debe estar en formato HH:mm',
+    message: "time debe estar en formato HH:mm",
   })
   time: string;
 

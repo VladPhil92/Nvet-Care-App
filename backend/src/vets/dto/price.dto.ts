@@ -11,8 +11,8 @@ import {
   ValidateNested,
   ArrayMaxSize,
   ArrayMinSize,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+} from "class-validator";
+import { Type } from "class-transformer";
 
 /**
  * DTO para crear un precio individual.

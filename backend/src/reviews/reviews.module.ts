@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { ReviewsController } from './reviews.controller';
-import { ReviewsService } from './reviews.service';
-import { AuthModule } from '../auth/auth.module';
+import { Module } from "@nestjs/common";
+import { ReviewsController } from "./reviews.controller";
+import { ReviewsService } from "./reviews.service";
+import { AuthModule } from "../auth/auth.module";
 
 /**
  * ReviewsModule — calificaciones y ratings del sistema Nvet Care.

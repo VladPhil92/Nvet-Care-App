@@ -6,8 +6,8 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
-} from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+} from "@nestjs/common";
+import { PrismaService } from "../../prisma/prisma.service";
 
 /**
  * ChatMembershipGuard — valida que `req.user.id` es el cliente o el vet
@@ -43,11 +43,11 @@ export class ChatMembershipGuard implements CanActivate {
     const user = req.user;
 
     if (!user) {
-      throw new ForbiddenException('Autenticación requerida');
+      throw new ForbiddenException("Autenticación requerida");
     }
 
     // ADMIN siempre puede acceder a cualquier chat (auditoría / arbitraje)
-    if (user.role === 'ADMIN') return true;
+    if (user.role === "ADMIN") return true;
 
     // Resolver appointmentId desde params (caso normal) o desde messageId
     let appointmentId = req.params?.appointmentId as string | undefined;
@@ -58,14 +58,14 @@ export class ChatMembershipGuard implements CanActivate {
         select: { appointmentId: true },
       });
       if (!message) {
-        throw new NotFoundException('Mensaje no encontrado');
+        throw new NotFoundException("Mensaje no encontrado");
       }
       appointmentId = message.appointmentId;
     }
 
     if (!appointmentId) {
       throw new BadRequestException(
-        'appointmentId requerido para validar membresía del chat',
+        "appointmentId requerido para validar membresía del chat",
       );
     }
 
@@ -77,7 +77,7 @@ export class ChatMembershipGuard implements CanActivate {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Cita no encontrada');
+      throw new NotFoundException("Cita no encontrada");
     }
 
     const isClient = appointment.clientId === user.id;
@@ -88,12 +88,12 @@ export class ChatMembershipGuard implements CanActivate {
         `Acceso a chat denegado: userId=${user.id} role=${user.role} ` +
           `appointmentId=${appointmentId}`,
       );
-      throw new ForbiddenException('No eres participante de este chat');
+      throw new ForbiddenException("No eres participante de este chat");
     }
 
     // Cachear en req para evitar re-query en el handler
     req.appointment = appointment;
-    req.chatRole = isClient ? 'CLIENT' : 'VET';
+    req.chatRole = isClient ? "CLIENT" : "VET";
 
     return true;
   }

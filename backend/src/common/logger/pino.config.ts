@@ -1,6 +1,6 @@
-import { Params } from 'nestjs-pino'
-import { randomUUID } from 'crypto'
-import type { IncomingMessage, ServerResponse } from 'http'
+import { Params } from "nestjs-pino";
+import { randomUUID } from "crypto";
+import type { IncomingMessage, ServerResponse } from "http";
 
 /**
  * Configuración del logger estructurado para producción.
@@ -22,8 +22,8 @@ import type { IncomingMessage, ServerResponse } from 'http'
  *  - trace: muy detallado, solo en troubleshooting
  */
 
-const isProd = process.env.NODE_ENV === 'production'
-const logLevel = process.env.LOG_LEVEL || (isProd ? 'info' : 'debug')
+const isProd = process.env.NODE_ENV === "production";
+const logLevel = process.env.LOG_LEVEL || (isProd ? "info" : "debug");
 
 /**
  * Campos a redactar automáticamente en logs.
@@ -35,29 +35,29 @@ const logLevel = process.env.LOG_LEVEL || (isProd ? 'info' : 'debug')
  */
 const REDACT_PATHS = [
   // Headers sensibles
-  'req.headers.authorization',
-  'req.headers.cookie',
+  "req.headers.authorization",
+  "req.headers.cookie",
   'req.headers["x-api-key"]',
 
   // Body / payload PII
-  'req.body.password',
-  'req.body.passwordHash',
-  'req.body.refreshToken',
-  'req.body.accessToken',
+  "req.body.password",
+  "req.body.passwordHash",
+  "req.body.refreshToken",
+  "req.body.accessToken",
 
   // Wildcards profundos
-  '*.password',
-  '*.passwordHash',
-  '*.refreshToken',
-  '*.accessToken',
-  '*.creditCard',
-  '*.cvv',
-  '*.ssn',
-  '*.documentId',
+  "*.password",
+  "*.passwordHash",
+  "*.refreshToken",
+  "*.accessToken",
+  "*.creditCard",
+  "*.cvv",
+  "*.ssn",
+  "*.documentId",
 
   // Response sensitive fields
   'res.headers["set-cookie"]',
-]
+];
 
 export const pinoConfig: Params = {
   pinoHttp: {
@@ -68,11 +68,11 @@ export const pinoConfig: Params = {
       ? {}
       : {
           transport: {
-            target: 'pino-pretty',
+            target: "pino-pretty",
             options: {
               colorize: true,
-              translateTime: 'HH:MM:ss.l',
-              ignore: 'pid,hostname',
+              translateTime: "HH:MM:ss.l",
+              ignore: "pid,hostname",
               singleLine: false,
             },
           },
@@ -80,22 +80,22 @@ export const pinoConfig: Params = {
 
     // Generar / propagar request-id
     genReqId: (req: IncomingMessage) => {
-      const fromHeader = req.headers['x-request-id']
-      if (typeof fromHeader === 'string' && fromHeader.length > 0) {
-        return fromHeader
+      const fromHeader = req.headers["x-request-id"];
+      if (typeof fromHeader === "string" && fromHeader.length > 0) {
+        return fromHeader;
       }
-      return randomUUID()
+      return randomUUID();
     },
 
     // Atributos automáticos en cada log de request
     customProps: (req: IncomingMessage) => {
       const r = req as IncomingMessage & {
-        user?: { id?: string; role?: string }
-      }
+        user?: { id?: string; role?: string };
+      };
       return {
         userId: r.user?.id,
         userRole: r.user?.role,
-      }
+      };
     },
 
     // Request serialization: incluir solo campos relevantes
@@ -105,7 +105,7 @@ export const pinoConfig: Params = {
         method: req.method,
         url: req.url,
         remoteAddress: req.socket?.remoteAddress,
-        userAgent: req.headers['user-agent'],
+        userAgent: req.headers["user-agent"],
       }),
       res: (res: ServerResponse & { statusCode: number }) => ({
         statusCode: res.statusCode,
@@ -122,29 +122,29 @@ export const pinoConfig: Params = {
     // Redaction de campos sensibles
     redact: {
       paths: REDACT_PATHS,
-      censor: '[REDACTED]',
+      censor: "[REDACTED]",
     },
 
     // Custom log level por status code
     customLogLevel: (_req, res, err) => {
-      if (err || (res as any).statusCode >= 500) return 'error'
-      if ((res as any).statusCode >= 400) return 'warn'
-      if ((res as any).statusCode >= 300) return 'info'
-      return 'info'
+      if (err || (res as any).statusCode >= 500) return "error";
+      if ((res as any).statusCode >= 400) return "warn";
+      if ((res as any).statusCode >= 300) return "info";
+      return "info";
     },
 
     // Mensaje custom: resumen humano en una línea
     customSuccessMessage: (req: any, res: any, responseTime: number) => {
-      return `${req.method} ${req.url} ${res.statusCode} (${responseTime}ms)`
+      return `${req.method} ${req.url} ${res.statusCode} (${responseTime}ms)`;
     },
     customErrorMessage: (req: any, res: any, err: Error) => {
-      return `${req.method} ${req.url} failed: ${err.message}`
+      return `${req.method} ${req.url} failed: ${err.message}`;
     },
 
     // No loguear endpoints de health check (ruido)
     autoLogging: {
       ignore: (req: IncomingMessage) =>
-        req.url === '/api/health' || req.url === '/health',
+        req.url === "/api/health" || req.url === "/health",
     },
   },
-}
+};

@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from "@nestjs/common";
 import {
   AppointmentStatus,
   PaymentMethod,
   TransactionStatus,
-} from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import type { PseWebhookPayload } from './payments.service';
+} from "@prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import type { PseWebhookPayload } from "./payments.service";
 
 /**
  * PSE settlement deliberately relies on the persisted transaction state for
@@ -54,7 +54,7 @@ export class PseSettlementService {
 
     const normalized = status.trim().toUpperCase();
 
-    if (normalized === 'PENDING') {
+    if (normalized === "PENDING") {
       return;
     }
 
@@ -118,11 +118,11 @@ export class PseSettlementService {
 
   private targetStatus(status: string): TransactionStatus | null {
     switch (status) {
-      case 'APPROVED':
+      case "APPROVED":
         return TransactionStatus.CONFIRMED;
-      case 'DECLINED':
-      case 'EXPIRED':
-      case 'FAILED':
+      case "DECLINED":
+      case "EXPIRED":
+      case "FAILED":
         return TransactionStatus.FAILED;
       default:
         return null;

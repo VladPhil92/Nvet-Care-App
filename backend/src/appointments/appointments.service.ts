@@ -4,12 +4,12 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
-} from '@nestjs/common';
-import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { ScheduleService } from '../vets/schedule.service';
-import { CreateAppointmentDto } from './dto/create-appointment.dto';
-import { UpdateAppointmentDto } from './dto/update-appointment.dto';
+} from "@nestjs/common";
+import { AppointmentStatus, Prisma, UserRole } from "@prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { ScheduleService } from "../vets/schedule.service";
+import { CreateAppointmentDto } from "./dto/create-appointment.dto";
+import { UpdateAppointmentDto } from "./dto/update-appointment.dto";
 
 @Injectable()
 export class AppointmentsService {
@@ -75,13 +75,13 @@ export class AppointmentsService {
         },
         pet: true,
       },
-      orderBy: { date: 'desc' },
+      orderBy: { date: "desc" },
     });
   }
 
   async getTodayAppointments(vetProfileId: string) {
     if (!vetProfileId) {
-      throw new BadRequestException('Vet profile not found');
+      throw new BadRequestException("Vet profile not found");
     }
 
     const today = new Date();
@@ -110,7 +110,7 @@ export class AppointmentsService {
         },
         pet: true,
       },
-      orderBy: { time: 'asc' },
+      orderBy: { time: "asc" },
     });
   }
 
@@ -130,7 +130,7 @@ export class AppointmentsService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Appointment not found');
+      throw new NotFoundException("Appointment not found");
     }
 
     return appointment;
@@ -148,13 +148,13 @@ export class AppointmentsService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Veterinarian not found');
+      throw new NotFoundException("Veterinarian not found");
     }
     if (!vet.isActive) {
-      throw new BadRequestException('Veterinarian is not active');
+      throw new BadRequestException("Veterinarian is not active");
     }
     if (!vet.isVerified) {
-      throw new BadRequestException('Veterinarian is not verified');
+      throw new BadRequestException("Veterinarian is not verified");
     }
 
     const pet = await this.prisma.pet.findUnique({
@@ -162,10 +162,10 @@ export class AppointmentsService {
     });
 
     if (!pet) {
-      throw new NotFoundException('Pet not found');
+      throw new NotFoundException("Pet not found");
     }
     if (pet.ownerId !== clientId) {
-      throw new ForbiddenException('Pet does not belong to you');
+      throw new ForbiddenException("Pet does not belong to you");
     }
 
     const dateOnly = this.toDateOnly(data.date);
@@ -223,7 +223,7 @@ export class AppointmentsService {
       appointment.status === AppointmentStatus.CANCELLED
     ) {
       throw new BadRequestException(
-        'Cannot update completed or cancelled appointments',
+        "Cannot update completed or cancelled appointments",
       );
     }
 
@@ -267,7 +267,7 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(id);
 
     if (appointment.status === AppointmentStatus.COMPLETED) {
-      throw new BadRequestException('Cannot cancel completed appointment');
+      throw new BadRequestException("Cannot cancel completed appointment");
     }
 
     return this.prisma.appointment.update({
@@ -275,7 +275,7 @@ export class AppointmentsService {
       data: {
         status: AppointmentStatus.CANCELLED,
         notes: reason
-          ? `${appointment.notes || ''}\n[CANCELLED] ${reason}`.trim()
+          ? `${appointment.notes || ""}\n[CANCELLED] ${reason}`.trim()
           : appointment.notes,
       },
     });
@@ -289,27 +289,47 @@ export class AppointmentsService {
 
     // Build status history from stored timestamps
     const statusHistory: { status: string; timestamp: string }[] = [
-      { status: 'PENDING', timestamp: appointment.createdAt.toISOString() },
+      { status: "PENDING", timestamp: appointment.createdAt.toISOString() },
     ];
 
     const apt = appointment as any;
-    if (apt.confirmedAt) statusHistory.push({ status: 'CONFIRMED', timestamp: apt.confirmedAt.toISOString() });
-    if (apt.inProgressAt) statusHistory.push({ status: 'IN_PROGRESS', timestamp: apt.inProgressAt.toISOString() });
-    if (apt.completedAt) statusHistory.push({ status: 'COMPLETED', timestamp: apt.completedAt.toISOString() });
+    if (apt.confirmedAt)
+      statusHistory.push({
+        status: "CONFIRMED",
+        timestamp: apt.confirmedAt.toISOString(),
+      });
+    if (apt.inProgressAt)
+      statusHistory.push({
+        status: "IN_PROGRESS",
+        timestamp: apt.inProgressAt.toISOString(),
+      });
+    if (apt.completedAt)
+      statusHistory.push({
+        status: "COMPLETED",
+        timestamp: apt.completedAt.toISOString(),
+      });
 
     // GPS location
     const vetLocation =
       apt.vetLatitude != null && apt.vetLongitude != null
-        ? { latitude: apt.vetLatitude, longitude: apt.vetLongitude, updatedAt: apt.vetLocationAt }
+        ? {
+            latitude: apt.vetLatitude,
+            longitude: apt.vetLongitude,
+            updatedAt: apt.vetLocationAt,
+          }
         : null;
 
     // ETA: use stored value if available, otherwise estimate from appointment time
-    let estimatedArrival: string | null = apt.etaMinutes != null
-      ? new Date(Date.now() + apt.etaMinutes * 60 * 1000).toISOString()
-      : null;
+    let estimatedArrival: string | null =
+      apt.etaMinutes != null
+        ? new Date(Date.now() + apt.etaMinutes * 60 * 1000).toISOString()
+        : null;
 
-    if (!estimatedArrival && appointment.status === AppointmentStatus.CONFIRMED) {
-      const [hours, minutes] = appointment.time.split(':').map(Number);
+    if (
+      !estimatedArrival &&
+      appointment.status === AppointmentStatus.CONFIRMED
+    ) {
+      const [hours, minutes] = appointment.time.split(":").map(Number);
       const scheduled = new Date(appointment.date);
       scheduled.setHours(hours, minutes, 0, 0);
       if (scheduled > new Date()) {
@@ -325,22 +345,6 @@ export class AppointmentsService {
       etaMinutes: apt.etaMinutes ?? null,
       scheduledAt: apt.scheduledAt ?? appointment.date,
       lastStatusChangeAt: apt.lastStatusChangeAt ?? appointment.updatedAt,
-  async getAppointmentTracking(id: string) {
-    const appointment = await this.getAppointmentById(id);
-
-    const statusHistory = [
-      {
-        status: 'PENDING',
-        timestamp: appointment.createdAt.toISOString(),
-      },
-    ];
-
-    return {
-      appointmentId: id,
-      currentStatus: appointment.status,
-      vetLocation: null,
-      estimatedArrival: null,
-      statusHistory,
     };
   }
 
@@ -357,11 +361,13 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(id);
 
     if (appointment.vet.userId !== vetUserId) {
-      throw new ForbiddenException('Only the assigned vet can update location');
+      throw new ForbiddenException("Only the assigned vet can update location");
     }
 
     if (appointment.status !== AppointmentStatus.IN_PROGRESS) {
-      throw new BadRequestException('Location updates only allowed for in-progress appointments');
+      throw new BadRequestException(
+        "Location updates only allowed for in-progress appointments",
+      );
     }
 
     return this.prisma.appointment.update({
@@ -372,7 +378,13 @@ export class AppointmentsService {
         vetLocationAt: new Date(),
         ...(etaMinutes != null && { etaMinutes }),
       },
-      select: { id: true, vetLatitude: true, vetLongitude: true, vetLocationAt: true, etaMinutes: true },
+      select: {
+        id: true,
+        vetLatitude: true,
+        vetLongitude: true,
+        vetLocationAt: true,
+        etaMinutes: true,
+      },
     });
   }
 
@@ -392,7 +404,8 @@ export class AppointmentsService {
     };
 
     if (next === AppointmentStatus.CONFIRMED) timestampField.confirmedAt = now;
-    if (next === AppointmentStatus.IN_PROGRESS) timestampField.inProgressAt = now;
+    if (next === AppointmentStatus.IN_PROGRESS)
+      timestampField.inProgressAt = now;
     if (next === AppointmentStatus.COMPLETED) timestampField.completedAt = now;
     this.validateStatusTransition(
       appointment.status,
@@ -445,7 +458,7 @@ export class AppointmentsService {
 
     if (!slot?.available) {
       throw new ConflictException(
-        'The selected veterinarian time slot is no longer available',
+        "The selected veterinarian time slot is no longer available",
       );
     }
   }
@@ -453,7 +466,7 @@ export class AppointmentsService {
   private toDateOnly(value: string | Date): string {
     const parsed = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(parsed.getTime())) {
-      throw new BadRequestException('Invalid appointment date');
+      throw new BadRequestException("Invalid appointment date");
     }
     return parsed.toISOString().slice(0, 10);
   }
@@ -466,10 +479,10 @@ export class AppointmentsService {
   private rethrowBookingConflict(error: unknown): void {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
+      error.code === "P2002"
     ) {
       throw new ConflictException(
-        'The selected veterinarian time slot was just booked by another client',
+        "The selected veterinarian time slot was just booked by another client",
       );
     }
   }

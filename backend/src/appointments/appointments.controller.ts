@@ -13,20 +13,20 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
-} from '@nestjs/common';
-import { AppointmentsService } from './appointments.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { IdempotencyService } from '../common/security/idempotency.service';
-import { UserRole } from '@prisma/client';
-import { CreateAppointmentDto } from './dto/create-appointment.dto';
-import { UpdateAppointmentDto } from './dto/update-appointment.dto';
-import { UpdateStatusDto } from './dto/update-status.dto';
-import { AddClinicalNotesDto } from './dto/add-clinical-notes.dto';
+} from "@nestjs/common";
+import { AppointmentsService } from "./appointments.service";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { EmailVerifiedGuard } from "../auth/guards/email-verified.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
+import { IdempotencyService } from "../common/security/idempotency.service";
+import { UserRole } from "@prisma/client";
+import { CreateAppointmentDto } from "./dto/create-appointment.dto";
+import { UpdateAppointmentDto } from "./dto/update-appointment.dto";
+import { UpdateStatusDto } from "./dto/update-status.dto";
+import { AddClinicalNotesDto } from "./dto/add-clinical-notes.dto";
 
-@Controller('appointments')
+@Controller("appointments")
 @UseGuards(JwtAuthGuard)
 export class AppointmentsController {
   constructor(
@@ -37,9 +37,9 @@ export class AppointmentsController {
   @Get()
   async getAppointments(
     @Request() req,
-    @Query('status') status?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
+    @Query("status") status?: string,
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
   ) {
     const userId = req.user.id;
     const userRole = req.user.role;
@@ -51,22 +51,24 @@ export class AppointmentsController {
     });
   }
 
-  @Get('today')
+  @Get("today")
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)
   async getTodayAppointments(@Request() req) {
     return this.appointmentsService.getTodayAppointments(req.user.vetProfileId);
   }
 
-  @Get(':id')
-  async getAppointmentById(@Param('id') id: string, @Request() req) {
+  @Get(":id")
+  async getAppointmentById(@Param("id") id: string, @Request() req) {
     const appointment = await this.appointmentsService.getAppointmentById(id);
     const userId = req.user.id;
     const isOwner =
       appointment.clientId === userId || appointment.vet.userId === userId;
 
     if (!isOwner && req.user.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('You do not have access to this appointment');
+      throw new ForbiddenException(
+        "You do not have access to this appointment",
+      );
     }
 
     return appointment;
@@ -85,7 +87,7 @@ export class AppointmentsController {
   async createAppointment(
     @Body() createAppointmentDto: CreateAppointmentDto,
     @Request() req,
-    @Headers('idempotency-key') idempotencyKey?: string,
+    @Headers("idempotency-key") idempotencyKey?: string,
   ) {
     const create = async () =>
       this.appointmentsService.createAppointment(
@@ -99,7 +101,7 @@ export class AppointmentsController {
 
     const replay = await this.idempotencyService.execute({
       key: `appointments:create:${req.user.id}:${idempotencyKey}`,
-      endpoint: 'POST /appointments',
+      endpoint: "POST /appointments",
       userId: req.user.id,
       requestBody: createAppointmentDto,
       operation: async () => {
@@ -114,26 +116,29 @@ export class AppointmentsController {
     return replay.result;
   }
 
-  @Patch(':id')
+  @Patch(":id")
   async updateAppointment(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() updateAppointmentDto: UpdateAppointmentDto,
     @Request() req,
   ) {
     const appointment = await this.appointmentsService.getAppointmentById(id);
-    if (appointment.clientId !== req.user.id && req.user.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('You can only update your own appointments');
+    if (
+      appointment.clientId !== req.user.id &&
+      req.user.role !== UserRole.ADMIN
+    ) {
+      throw new ForbiddenException("You can only update your own appointments");
     }
 
     return this.appointmentsService.updateAppointment(id, updateAppointmentDto);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
   async cancelAppointment(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Request() req,
-    @Body('reason') reason?: string,
+    @Body("reason") reason?: string,
   ) {
     const appointment = await this.appointmentsService.getAppointmentById(id);
     const userId = req.user.id;
@@ -141,38 +146,38 @@ export class AppointmentsController {
       appointment.clientId === userId || appointment.vet.userId === userId;
 
     if (!isOwner && req.user.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('You can only cancel your own appointments');
+      throw new ForbiddenException("You can only cancel your own appointments");
     }
 
     await this.appointmentsService.cancelAppointment(id, reason);
     return;
   }
 
-  @Get(':id/tracking')
-  async getAppointmentTracking(@Param('id') id: string, @Request() req) {
+  @Get(":id/tracking")
+  async getAppointmentTracking(@Param("id") id: string, @Request() req) {
     const appointment = await this.appointmentsService.getAppointmentById(id);
     const userId = req.user.id;
     const isOwner =
       appointment.clientId === userId || appointment.vet.userId === userId;
 
     if (!isOwner && req.user.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('You do not have access to this tracking');
+      throw new ForbiddenException("You do not have access to this tracking");
     }
 
     return this.appointmentsService.getAppointmentTracking(id);
   }
 
-  @Patch(':id/status')
+  @Patch(":id/status")
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)
   async updateAppointmentStatus(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() updateStatusDto: UpdateStatusDto,
     @Request() req,
   ) {
     const appointment = await this.appointmentsService.getAppointmentById(id);
     if (appointment.vet.userId !== req.user.id) {
-      throw new ForbiddenException('You can only update your own appointments');
+      throw new ForbiddenException("You can only update your own appointments");
     }
 
     return this.appointmentsService.updateAppointmentStatus(
@@ -185,11 +190,11 @@ export class AppointmentsController {
    * PATCH /appointments/:id/location
    * Update vet GPS location during an in-progress appointment
    */
-  @Patch(':id/location')
+  @Patch(":id/location")
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)
   async updateVetLocation(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() body: { latitude: number; longitude: number; etaMinutes?: number },
     @Request() req,
   ) {
@@ -206,18 +211,18 @@ export class AppointmentsController {
    * POST /appointments/:id/clinical-notes
    * Add clinical notes (diagnosis, treatment) - vets only
    */
-  @Post(':id/clinical-notes')
+  @Post(":id/clinical-notes")
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)
   async addClinicalNotes(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() addClinicalNotesDto: AddClinicalNotesDto,
     @Request() req,
   ) {
     const appointment = await this.appointmentsService.getAppointmentById(id);
     if (appointment.vet.userId !== req.user.id) {
       throw new ForbiddenException(
-        'You can only add notes to your own appointments',
+        "You can only add notes to your own appointments",
       );
     }
 

@@ -1,20 +1,20 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { CommonModule } from './common/common.module';
-import { ResilienceModule } from './common/resilience.module';
-import { MailModule } from './common/mail/mail.module';
-import { StorageModule } from './common/storage/storage.module';
-import { PrismaModule } from './prisma/prisma.module';
-import { HealthModule } from './health/health.module';
-import { AuthModule } from './auth/auth.module';
-import { AppointmentsModule } from './appointments/appointments.module';
-import { ChatModule } from './chat/chat.module';
-import { VetsModule } from './vets/vets.module';
-import { PaymentsModule } from './payments/payments.module';
-import { AdminModule } from './admin/admin.module';
-import { ReviewsModule } from './reviews/reviews.module';
-import { PetsModule } from './pets/pets.module';
-import { WaitlistModule } from './waitlist/waitlist.module';
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { CommonModule } from "./common/common.module";
+import { ResilienceModule } from "./common/resilience.module";
+import { MailModule } from "./common/mail/mail.module";
+import { StorageModule } from "./common/storage/storage.module";
+import { PrismaModule } from "./prisma/prisma.module";
+import { HealthModule } from "./health/health.module";
+import { AuthModule } from "./auth/auth.module";
+import { AppointmentsModule } from "./appointments/appointments.module";
+import { ChatModule } from "./chat/chat.module";
+import { VetsModule } from "./vets/vets.module";
+import { PaymentsModule } from "./payments/payments.module";
+import { AdminModule } from "./admin/admin.module";
+import { ReviewsModule } from "./reviews/reviews.module";
+import { PetsModule } from "./pets/pets.module";
+import { WaitlistModule } from "./waitlist/waitlist.module";
 
 /**
  * Orden de imports importante:
@@ -30,7 +30,7 @@ import { WaitlistModule } from './waitlist/waitlist.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ".env",
     }),
     CommonModule,
     PrismaModule,

@@ -12,27 +12,27 @@ import {
   ValidateNested,
   IsDateString,
   IsIn,
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { PaymentMethod, TransactionStatus } from '@prisma/client';
+} from "class-validator";
+import { Type } from "class-transformer";
+import { PaymentMethod, TransactionStatus } from "@prisma/client";
 
 // ============================================================
 // PROCESS PAYMENT
 // ============================================================
 
 export class ProcessPaymentDto {
-  @IsUUID('4')
+  @IsUUID("4")
   appointmentId: string;
 
   @IsEnum(PaymentMethod, {
-    message: 'paymentMethod debe ser CTG, PSE o TRANSFER',
+    message: "paymentMethod debe ser CTG, PSE o TRANSFER",
   })
   paymentMethod: PaymentMethod;
 
   @Type(() => Number)
   @IsNumber()
-  @Min(5000, { message: 'El monto mínimo es 5.000 COP' })
-  @Max(10_000_000, { message: 'El monto máximo es 10.000.000 COP' })
+  @Min(5000, { message: "El monto mínimo es 5.000 COP" })
+  @Max(10_000_000, { message: "El monto máximo es 10.000.000 COP" })
   amountCop: number;
 
   @IsOptional()
@@ -66,10 +66,10 @@ export class VerifyTransferDto {
 // PSE
 // ============================================================
 
-export type PseUserType = 'NATURAL' | 'JURIDICA';
+export type PseUserType = "NATURAL" | "JURIDICA";
 
 export class InitiatePsePaymentDto {
-  @IsUUID('4')
+  @IsUUID("4")
   appointmentId: string;
 
   @Type(() => Number)
@@ -84,7 +84,7 @@ export class InitiatePsePaymentDto {
   bank: string;
 
   @IsString()
-  @IsIn(['NATURAL', 'JURIDICA'])
+  @IsIn(["NATURAL", "JURIDICA"])
   userType: PseUserType;
 
   @IsOptional()
@@ -102,7 +102,7 @@ export class InitiatePsePaymentDto {
 // WITHDRAWAL
 // ============================================================
 
-export type WithdrawalMethod = 'BANK_TRANSFER' | 'NEQUI' | 'DAVIPLATA';
+export type WithdrawalMethod = "BANK_TRANSFER" | "NEQUI" | "DAVIPLATA";
 
 class AccountInfoDto {
   @IsOptional()
@@ -117,7 +117,7 @@ class AccountInfoDto {
 
   @IsOptional()
   @IsString()
-  accountType?: 'SAVINGS' | 'CHECKING';
+  accountType?: "SAVINGS" | "CHECKING";
 
   @IsOptional()
   @IsString()
@@ -133,12 +133,12 @@ class AccountInfoDto {
 export class RequestWithdrawalDto {
   @Type(() => Number)
   @IsNumber()
-  @Min(50000, { message: 'El retiro mínimo es 50.000 COP' })
+  @Min(50000, { message: "El retiro mínimo es 50.000 COP" })
   amountCop: number;
 
   @IsString()
   @IsNotEmpty()
-  @IsIn(['BANK_TRANSFER', 'NEQUI', 'DAVIPLATA'])
+  @IsIn(["BANK_TRANSFER", "NEQUI", "DAVIPLATA"])
   paymentMethod: WithdrawalMethod;
 
   @IsObject()

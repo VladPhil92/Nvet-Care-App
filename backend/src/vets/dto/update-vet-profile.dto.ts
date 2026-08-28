@@ -8,8 +8,8 @@ import {
   Max,
   Length,
   ArrayMaxSize,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+} from "class-validator";
+import { Type } from "class-transformer";
 
 /**
  * DTO para actualización parcial del perfil del veterinario autenticado.

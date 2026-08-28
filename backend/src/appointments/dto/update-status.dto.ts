@@ -1,5 +1,5 @@
-import { IsEnum } from 'class-validator';
-import { AppointmentStatus } from '@prisma/client';
+import { IsEnum } from "class-validator";
+import { AppointmentStatus } from "@prisma/client";
 
 export class UpdateStatusDto {
   @IsEnum(AppointmentStatus)

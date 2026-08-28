@@ -5,8 +5,8 @@ import {
   ForbiddenException,
   Logger,
   SetMetadata,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 
 /**
  * Decorator: marca una ruta como exenta del check de email verificado.
@@ -18,7 +18,7 @@ import { Reflector } from '@nestjs/core';
  *   @SkipEmailVerification()
  *   async getMe() { ... }
  */
-export const SKIP_EMAIL_VERIFICATION_KEY = 'skipEmailVerification';
+export const SKIP_EMAIL_VERIFICATION_KEY = "skipEmailVerification";
 export const SkipEmailVerification = () =>
   SetMetadata(SKIP_EMAIL_VERIFICATION_KEY, true);
 
@@ -62,11 +62,11 @@ export class EmailVerifiedGuard implements CanActivate {
     if (!user) {
       // No debería llegar aquí si JwtAuthGuard se aplica antes,
       // pero defendemos en profundidad.
-      throw new ForbiddenException('Autenticación requerida');
+      throw new ForbiddenException("Autenticación requerida");
     }
 
     // Admins están implícitamente verificados (cuenta interna gestionada).
-    if (user.role === 'ADMIN') return true;
+    if (user.role === "ADMIN") return true;
 
     if (user.emailVerified === true) return true;
 
@@ -77,9 +77,9 @@ export class EmailVerifiedGuard implements CanActivate {
 
     throw new ForbiddenException({
       message:
-        'Debes verificar tu correo electrónico antes de realizar esta acción. Revisa tu bandeja de entrada o solicita un nuevo enlace de verificación.',
-      error: 'EMAIL_NOT_VERIFIED',
-      action: 'send_verification_email',
+        "Debes verificar tu correo electrónico antes de realizar esta acción. Revisa tu bandeja de entrada o solicita un nuevo enlace de verificación.",
+      error: "EMAIL_NOT_VERIFIED",
+      action: "send_verification_email",
     });
   }
 }

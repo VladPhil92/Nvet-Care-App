@@ -1,16 +1,16 @@
-import { BadRequestException, Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { MulterModule } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
+import { BadRequestException, Module } from "@nestjs/common";
+import { APP_INTERCEPTOR } from "@nestjs/core";
+import { MulterModule } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 
-import { VetsController } from './vets.controller';
-import { ScheduleController } from './schedule.controller';
-import { VetsService } from './vets.service';
-import { VerificationService } from './verification.service';
-import { PricesService } from './prices.service';
-import { ScheduleService } from './schedule.service';
-import { PublicVetLocationInterceptor } from './public-location.interceptor';
-import { AuthModule } from '../auth/auth.module';
+import { VetsController } from "./vets.controller";
+import { ScheduleController } from "./schedule.controller";
+import { VetsService } from "./vets.service";
+import { VerificationService } from "./verification.service";
+import { PricesService } from "./prices.service";
+import { ScheduleService } from "./schedule.service";
+import { PublicVetLocationInterceptor } from "./public-location.interceptor";
+import { AuthModule } from "../auth/auth.module";
 
 @Module({
   imports: [
@@ -23,10 +23,10 @@ import { AuthModule } from '../auth/auth.module';
       },
       fileFilter: (_req, file, cb) => {
         const allowed = [
-          'image/jpeg',
-          'image/jpg',
-          'image/png',
-          'application/pdf',
+          "image/jpeg",
+          "image/jpg",
+          "image/png",
+          "application/pdf",
         ];
         if (allowed.includes(file.mimetype)) {
           cb(null, true);
@@ -52,11 +52,6 @@ import { AuthModule } from '../auth/auth.module';
       useClass: PublicVetLocationInterceptor,
     },
   ],
-  exports: [
-    VetsService,
-    VerificationService,
-    PricesService,
-    ScheduleService,
-  ],
+  exports: [VetsService, VerificationService, PricesService, ScheduleService],
 })
 export class VetsModule {}
