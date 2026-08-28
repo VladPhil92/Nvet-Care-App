@@ -249,7 +249,7 @@ export default function VetAppointmentDetailScreen({ navigation, route }: Props)
   }, [appointment])
 
   const handleChat = useCallback(() => {
-    navigation.navigate('Chat', { appointmentId })
+    navigation.navigate('ChatModal', { appointmentId })
   }, [navigation, appointmentId])
 
   if (appointmentQuery.isLoading) {

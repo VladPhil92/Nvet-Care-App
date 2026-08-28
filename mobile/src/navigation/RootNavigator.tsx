@@ -9,7 +9,7 @@ import { useUserMode } from '../hooks/useUserMode'
 import AuthNavigator from './AuthNavigator'
 import ClientNavigator from './ClientNavigator'
 import VetNavigator from './VetNavigator'
-import ChatModalScreen from '../screens/shared/ChatModalPlaceholder'
+import ChatModalScreen from '../screens/shared/ChatScreen'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 
