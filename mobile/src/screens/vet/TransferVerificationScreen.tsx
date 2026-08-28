@@ -21,6 +21,7 @@ import DocumentPickerCard, {
   PickedDocument,
 } from '../../components/common/DocumentPickerCard'
 import { useVerifyTransferMutation } from '../../hooks/queries/useMobileMutations'
+import { pickImage } from '../../utils/imagePicker'
 
 /**
  * TransferVerificationScreen — pantalla del vet para subir comprobante.
@@ -51,15 +52,13 @@ export default function TransferVerificationScreen({ navigation, route }: Props)
 
   const verifyMutation = useVerifyTransferMutation()
 
-  const mockPick = useCallback(() => {
-    setProof({
-      uri: `mock://transfer/${transactionId}/${Date.now()}.jpg`,
-      name: `comprobante_${Date.now()}.jpg`,
-      type: 'image/jpeg',
-      size: 250_000,
-    })
-    setErrors((prev) => ({ ...prev, proof: '' }))
-  }, [transactionId])
+  const handlePickProof = useCallback(async () => {
+    const picked = await pickImage()
+    if (picked) {
+      setProof(picked)
+      setErrors((prev) => ({ ...prev, proof: '' }))
+    }
+  }, [])
 
   const handleSubmit = useCallback(async () => {
     const errs: Record<string, string> = {}
@@ -129,7 +128,7 @@ export default function TransferVerificationScreen({ navigation, route }: Props)
               required
               glyph="🧾"
               document={proof}
-              onPick={mockPick}
+              onPick={handlePickProof}
               onRemove={() => setProof(null)}
               error={errors.proof}
             />

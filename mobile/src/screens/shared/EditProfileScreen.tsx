@@ -9,6 +9,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -18,6 +19,7 @@ import {
 } from '../../components/ui/primitives'
 import { useCurrentUserQuery } from '../../hooks/queries/useMobileQueries'
 import { useUpdateProfileMutation } from '../../hooks/queries/useMobileMutations'
+import { pickImage } from '../../utils/imagePicker'
 
 /**
  * EditProfileScreen — edición de datos del usuario.
@@ -42,6 +44,7 @@ export default function EditProfileScreen({ navigation }: Props) {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [phone, setPhone] = useState('')
+  const [avatarUri, setAvatarUri] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   // Pre-fill al cargar el user
@@ -65,6 +68,11 @@ export default function EditProfileScreen({ navigation }: Props) {
     return Object.keys(errs).length === 0
   }, [firstName, lastName, phone])
 
+  const handlePickAvatar = useCallback(async () => {
+    const picked = await pickImage()
+    if (picked) setAvatarUri(picked.uri)
+  }, [])
+
   const handleSubmit = useCallback(async () => {
     if (!validate()) return
 
@@ -73,6 +81,7 @@ export default function EditProfileScreen({ navigation }: Props) {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: phone.trim() || undefined,
+        avatar: avatarUri ?? undefined,
       })
       Alert.alert('Perfil actualizado', 'Tus datos se guardaron correctamente.', [
         { text: 'OK', onPress: () => navigation.goBack() },
@@ -94,7 +103,8 @@ export default function EditProfileScreen({ navigation }: Props) {
     user &&
     (firstName.trim() !== (user.firstName ?? '') ||
       lastName.trim() !== (user.lastName ?? '') ||
-      phone.trim() !== (user.phone ?? ''))
+      phone.trim() !== (user.phone ?? '') ||
+      avatarUri !== null)
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -117,16 +127,23 @@ export default function EditProfileScreen({ navigation }: Props) {
         <ScrollView contentContainerStyle={styles.content}>
           {/* Avatar header */}
           <View style={styles.avatarSection}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
             <Pressable
-              hitSlop={6}
-              accessibilityRole="link"
+              onPress={handlePickAvatar}
+              accessibilityRole="button"
               accessibilityLabel="Cambiar foto de perfil"
             >
-              <Text style={styles.changePhotoText}>Cambiar foto</Text>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{initials}</Text>
+                </View>
+              )}
+              <View style={styles.cameraOverlay}>
+                <Text style={styles.cameraIcon}>📷</Text>
+              </View>
             </Pressable>
+            <Text style={styles.changePhotoText}>Cambiar foto</Text>
           </View>
 
           {/* Form */}
@@ -233,6 +250,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   avatarText: { fontSize: 32, fontWeight: '800', color: '#FFFFFF' },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: -4,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: UI_COLORS.sage,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: UI_COLORS.bg,
+  },
+  cameraIcon: { fontSize: 12 },
   changePhotoText: {
     fontSize: 13,
     color: UI_COLORS.sage,

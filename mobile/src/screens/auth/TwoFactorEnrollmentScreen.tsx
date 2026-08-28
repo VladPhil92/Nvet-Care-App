@@ -24,7 +24,7 @@ import {
   Clipboard,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import Svg, { Rect } from 'react-native-svg'
+import QRCode from 'react-native-qrcode-svg'
 
 import { Colors } from '../../theme/colors'
 import { Icon } from '../../components/common/Icon'
@@ -177,9 +177,8 @@ function ScanStep({
         Authenticator) y escanea este código:
       </Text>
 
-      {/* QR placeholder. En producción usar `react-native-qrcode-svg` */}
       <View style={styles.qrWrap}>
-        <FauxQR data={otpauthUrl} size={200} />
+        <QRCode value={otpauthUrl} size={200} backgroundColor="#FFFFFF" color="#0D1B2A" />
       </View>
 
       <View style={styles.divider}>
@@ -346,65 +345,6 @@ function RecoveryStep({
         <Icon name="check" size={18} color="#FFFFFF" />
       </Pressable>
     </View>
-  )
-}
-
-// =====================================================================
-// FAUX QR — placeholder hasta integrar `react-native-qrcode-svg`
-// =====================================================================
-
-/**
- * Renderizado falso de QR como matriz 21x21 derivada del hash del data.
- * Para producción, importar:
- *   import QRCode from 'react-native-qrcode-svg'
- *   <QRCode value={data} size={200} backgroundColor="#fff" color="#000" />
- */
-function FauxQR({ data, size }: { data: string; size: number }) {
-  // Derivamos un patrón pseudo-aleatorio del string para simular QR
-  const cells = 21
-  const cellSize = size / cells
-  const grid: boolean[][] = []
-  let h = 0
-  for (let i = 0; i < data.length; i++) h = (h * 31 + data.charCodeAt(i)) >>> 0
-  for (let r = 0; r < cells; r++) {
-    grid[r] = []
-    for (let c = 0; c < cells; c++) {
-      h = (h * 1103515245 + 12345) >>> 0
-      grid[r][c] = (h & 1) === 1
-    }
-  }
-  // Marcadores de posición (esquinas)
-  const setMarker = (cr: number, cc: number) => {
-    for (let r = 0; r < 7; r++)
-      for (let c = 0; c < 7; c++) {
-        const isOuter = r === 0 || r === 6 || c === 0 || c === 6
-        const isInner = r >= 2 && r <= 4 && c >= 2 && c <= 4
-        grid[cr + r][cc + c] = isOuter || isInner
-      }
-  }
-  setMarker(0, 0)
-  setMarker(0, cells - 7)
-  setMarker(cells - 7, 0)
-
-  return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Rect x={0} y={0} width={size} height={size} fill="#FFFFFF" />
-      {grid.map((row, r) =>
-        row.map(
-          (filled, c) =>
-            filled && (
-              <Rect
-                key={`${r}-${c}`}
-                x={c * cellSize}
-                y={r * cellSize}
-                width={cellSize}
-                height={cellSize}
-                fill="#0D1B2A"
-              />
-            ),
-        ),
-      )}
-    </Svg>
   )
 }
 
