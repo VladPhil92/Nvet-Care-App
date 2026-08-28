@@ -441,6 +441,76 @@ export class VetsService {
   }
 
   // ============================================
+  // SCHEDULE EXCEPTIONS
+  // ============================================
+
+  async getScheduleExceptions(
+    userId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException('Vet profile not found');
+
+    return this.prisma.scheduleException.findMany({
+      where: {
+        vetProfileId: vet.id,
+        date: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  async upsertScheduleException(
+    userId: string,
+    dateStr: string,
+    data: { isAvailable?: boolean; reason?: string; startTime?: string; endTime?: string },
+  ) {
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException('Vet profile not found');
+
+    const date = new Date(dateStr);
+
+    return this.prisma.scheduleException.upsert({
+      where: { vetProfileId_date: { vetProfileId: vet.id, date } },
+      create: {
+        vetProfileId: vet.id,
+        date,
+        isAvailable: data.isAvailable ?? false,
+        reason: data.reason,
+        startTime: data.startTime,
+        endTime: data.endTime,
+      },
+      update: {
+        isAvailable: data.isAvailable ?? false,
+        reason: data.reason,
+        startTime: data.startTime,
+        endTime: data.endTime,
+      },
+    });
+  }
+
+  async deleteScheduleException(userId: string, dateStr: string) {
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException('Vet profile not found');
+
+    const date = new Date(dateStr);
+
+    const exception = await this.prisma.scheduleException.findUnique({
+      where: { vetProfileId_date: { vetProfileId: vet.id, date } },
+    });
+
+    if (!exception) throw new NotFoundException('Schedule exception not found');
+
+    await this.prisma.scheduleException.delete({
+      where: { vetProfileId_date: { vetProfileId: vet.id, date } },
+    });
+  }
+
+  // ============================================
   // EARNINGS & ANALYTICS
   // ============================================
 

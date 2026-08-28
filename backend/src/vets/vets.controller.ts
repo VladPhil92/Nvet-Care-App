@@ -28,6 +28,10 @@ import { VerificationService } from './verification.service';
 import { PricesService } from './prices.service';
 
 import { SearchVetsDto } from './dto/search-vets.dto';
+import {
+  GetScheduleExceptionsQueryDto,
+  UpsertScheduleExceptionDto,
+} from './dto/schedule.dto';
 import { UpdateVetProfileDto } from './dto/update-vet-profile.dto';
 import {
   CreatePriceDto,
@@ -129,6 +133,47 @@ export class VetsController {
   @Roles(UserRole.VET)
   async toggleMyAvailability(@Request() req) {
     return this.vetsService.toggleAvailability(req.user.id);
+  }
+
+  // ============================================================
+  // SCHEDULE EXCEPTIONS
+  // ============================================================
+
+  @Get('me/schedule/exceptions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VET)
+  async getScheduleExceptions(
+    @Request() req,
+    @Query() query: GetScheduleExceptionsQueryDto,
+  ) {
+    return this.vetsService.getScheduleExceptions(
+      req.user.id,
+      query.startDate,
+      query.endDate,
+    );
+  }
+
+  @Put('me/schedule/exceptions/:dateStr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VET)
+  @HttpCode(HttpStatus.OK)
+  async upsertScheduleException(
+    @Request() req,
+    @Param('dateStr') dateStr: string,
+    @Body() dto: UpsertScheduleExceptionDto,
+  ) {
+    return this.vetsService.upsertScheduleException(req.user.id, dateStr, dto);
+  }
+
+  @Delete('me/schedule/exceptions/:dateStr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VET)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteScheduleException(
+    @Request() req,
+    @Param('dateStr') dateStr: string,
+  ) {
+    return this.vetsService.deleteScheduleException(req.user.id, dateStr);
   }
 
   /**

@@ -633,3 +633,35 @@ export function useInitiatePseMutation() {
       paymentService.initiatePsePayment(vars),
   })
 }
+
+// ============================================================
+// SCHEDULE EXCEPTIONS
+// ============================================================
+
+export function useUpsertScheduleExceptionMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationKey: ['vets', 'schedule', 'exceptions', 'upsert'],
+    mutationFn: ({
+      dateStr,
+      data,
+    }: {
+      dateStr: string
+      data: { isAvailable?: boolean; reason?: string }
+    }) => vetService.upsertScheduleException(dateStr, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vets', 'me', 'schedule', 'exceptions'] })
+    },
+  })
+}
+
+export function useDeleteScheduleExceptionMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationKey: ['vets', 'schedule', 'exceptions', 'delete'],
+    mutationFn: (dateStr: string) => vetService.deleteScheduleException(dateStr),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vets', 'me', 'schedule', 'exceptions'] })
+    },
+  })
+}
