@@ -79,7 +79,7 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("androidx.appcompat:appcompat:1.7.0")
 
-    androidTestImplementation("com.wix:detox:+")
+    androidTestImplementation project(':detox')
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
