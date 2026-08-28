@@ -6,13 +6,13 @@ import {
   Logger,
   Post,
   UseGuards,
-} from '@nestjs/common';
-import { SkipThrottle, Throttle, seconds } from '@nestjs/throttler';
-import { PseWebhookGuard } from './guards/pse-webhook.guard';
-import type { PseWebhookPayload } from './payments.service';
-import { PseSettlementService } from './pse-settlement.service';
+} from "@nestjs/common";
+import { SkipThrottle, Throttle, seconds } from "@nestjs/throttler";
+import { PseWebhookGuard } from "./guards/pse-webhook.guard";
+import type { PseWebhookPayload } from "./payments.service";
+import { PseSettlementService } from "./pse-settlement.service";
 
-@Controller('webhooks/pse')
+@Controller("webhooks/pse")
 export class PseWebhookController {
   private readonly logger = new Logger(PseWebhookController.name);
 
@@ -32,7 +32,7 @@ export class PseWebhookController {
     return { received: true };
   }
 
-  @Post('ping')
+  @Post("ping")
   @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   async pingWebhook() {

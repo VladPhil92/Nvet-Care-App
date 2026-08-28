@@ -21,6 +21,7 @@ import DocumentPickerCard, {
   PickedDocument,
 } from '../../components/common/DocumentPickerCard'
 import { useUploadVerificationMutation } from '../../hooks/queries/useMobileMutations'
+import { pickImage } from '../../utils/imagePicker'
 
 /**
  * UploadVerificationDocsScreen — subida de documentos para verificación vet.
@@ -64,23 +65,13 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
 
   const uploadMutation = useUploadVerificationMutation()
 
-  // Mock document picker — en producción reemplazar con expo-image-picker
-  const mockPick = useCallback(
-    (key: keyof DocsState, name: string) => {
-      // Simulamos un archivo seleccionado
-      setDocs((prev) => ({
-        ...prev,
-        [key]: {
-          uri: `mock://document/${key}/${Date.now()}.jpg`,
-          name: `${name}.jpg`,
-          type: 'image/jpeg',
-          size: 124_000 + Math.floor(Math.random() * 500_000),
-        },
-      }))
+  const handlePickDoc = useCallback(async (key: keyof DocsState) => {
+    const picked = await pickImage()
+    if (picked) {
+      setDocs((prev) => ({ ...prev, [key]: picked }))
       setErrors((prev) => ({ ...prev, [key]: '' }))
-    },
-    [],
-  )
+    }
+  }, [])
 
   const validate = useCallback((): boolean => {
     const errs: Record<string, string> = {}
@@ -178,7 +169,7 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
               required
               glyph="🆔"
               document={docs.idDocument}
-              onPick={() => mockPick('idDocument', 'cedula_frente')}
+              onPick={() => handlePickDoc('idDocument')}
               onRemove={() =>
                 setDocs((p) => ({ ...p, idDocument: null }))
               }
@@ -193,7 +184,7 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
               required
               glyph="🎓"
               document={docs.licenseDocument}
-              onPick={() => mockPick('licenseDocument', 'tarjeta_profesional')}
+              onPick={() => handlePickDoc('licenseDocument')}
               onRemove={() =>
                 setDocs((p) => ({ ...p, licenseDocument: null }))
               }
@@ -208,7 +199,7 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
               required
               glyph="📜"
               document={docs.diploma}
-              onPick={() => mockPick('diploma', 'diploma_mv')}
+              onPick={() => handlePickDoc('diploma')}
               onRemove={() => setDocs((p) => ({ ...p, diploma: null }))}
               error={errors.diploma}
             />
@@ -220,7 +211,7 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
               description="Aumenta tu confiabilidad ante los clientes"
               glyph="🏥"
               document={docs.backgroundCheck}
-              onPick={() => mockPick('backgroundCheck', 'antecedentes')}
+              onPick={() => handlePickDoc('backgroundCheck')}
               onRemove={() =>
                 setDocs((p) => ({ ...p, backgroundCheck: null }))
               }

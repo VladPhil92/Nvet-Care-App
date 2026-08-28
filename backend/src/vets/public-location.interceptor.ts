@@ -3,11 +3,11 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
-} from '@nestjs/common';
-import { Observable, map } from 'rxjs';
+} from "@nestjs/common";
+import { Observable, map } from "rxjs";
 
 function stripCoordinates<T extends Record<string, any>>(vet: T): T {
-  if (!vet || typeof vet !== 'object') return vet;
+  if (!vet || typeof vet !== "object") return vet;
   const { latitude: _latitude, longitude: _longitude, ...safe } = vet;
   return safe as T;
 }
@@ -22,12 +22,11 @@ export class PublicVetLocationInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
     const method = request.method;
-    const path = String(request.originalUrl ?? request.url ?? '').split('?')[0];
+    const path = String(request.originalUrl ?? request.url ?? "").split("?")[0];
 
-    const isPublicSearch = method === 'GET' && /\/vets\/?$/.test(path);
+    const isPublicSearch = method === "GET" && /\/vets\/?$/.test(path);
     const isPublicDetail =
-      method === 'GET' &&
-      /\/vets\/[0-9a-fA-F-]{36}$/.test(path);
+      method === "GET" && /\/vets\/[0-9a-fA-F-]{36}$/.test(path);
 
     if (!isPublicSearch && !isPublicDetail) {
       return next.handle();
@@ -44,7 +43,7 @@ export class PublicVetLocationInterceptor implements NestInterceptor {
           };
         }
 
-        if (isPublicDetail && body && typeof body === 'object') {
+        if (isPublicDetail && body && typeof body === "object") {
           return stripCoordinates(body);
         }
 

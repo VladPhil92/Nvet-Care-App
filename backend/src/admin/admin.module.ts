@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { AdminController } from './admin.controller';
-import { AdminService } from './admin.service';
-import { AuthModule } from '../auth/auth.module';
+import { Module } from "@nestjs/common";
+import { AdminController } from "./admin.controller";
+import { AdminService } from "./admin.service";
+import { AuthModule } from "../auth/auth.module";
 
 /**
  * AdminModule — superficie HTTP exclusiva para usuarios con rol ADMIN.

@@ -1,3 +1,6 @@
+// Monorepo: react-native is hoisted to root node_modules, tell Reanimated where to find it
+project.ext.REACT_NATIVE_NODE_MODULES_DIR = file("../../../node_modules/react-native").absolutePath
+
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -60,7 +63,6 @@ android {
             }
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-            proguardFile "${rootProject.projectDir}/../../node_modules/detox/android/detox/proguard-rules-app.pro"
         }
     }
 
@@ -76,7 +78,6 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("androidx.appcompat:appcompat:1.7.0")
 
-    androidTestImplementation("com.wix:detox:+")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

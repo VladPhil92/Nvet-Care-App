@@ -2,20 +2,19 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
   ConflictException,
   Logger,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { MailService } from '../common/mail/mail.service';
-import { StorageService } from '../common/storage/storage.service';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { MailService } from "../common/mail/mail.service";
+import { StorageService } from "../common/storage/storage.service";
 import {
   DocumentType,
   DocumentStatus,
   VerificationStatus,
-} from '@prisma/client';
-import * as path from 'path';
-import * as crypto from 'crypto';
+} from "@prisma/client";
+import * as path from "path";
+import * as crypto from "crypto";
 
 // ============================================
 // CONSTANTS
@@ -30,10 +29,10 @@ const REQUIRED_DOCUMENTS: DocumentType[] = [
 
 // Allowed file types
 const ALLOWED_MIME_TYPES = [
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'application/pdf',
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "application/pdf",
 ];
 
 // Max file size (10MB)
@@ -88,14 +87,14 @@ export class VerificationService {
 
     if (!vet) {
       throw new NotFoundException(
-        'Vet profile not found. Create profile first.',
+        "Vet profile not found. Create profile first.",
       );
     }
 
     // Check if already approved
     if (vet.verificationStatus === VerificationStatus.APPROVED) {
       throw new BadRequestException(
-        'Your account is already verified. Contact support to update documents.',
+        "Your account is already verified. Contact support to update documents.",
       );
     }
 
@@ -115,13 +114,11 @@ export class VerificationService {
     }
 
     // Upload file via StorageService (local or Cloudinary depending on STORAGE_DRIVER)
-    const hash = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.randomBytes(16).toString("hex");
     const ext = path.extname(file.originalname).toLowerCase();
-    const uploaded = await this.storage.upload(
-      file,
-      `verification/${vet.id}`,
-      { filename: `${documentType}_${hash}${ext}` },
-    );
+    const uploaded = await this.storage.upload(file, `verification/${vet.id}`, {
+      filename: `${documentType}_${hash}${ext}`,
+    });
     const fileName = path.basename(uploaded.url);
     const fileUrl = uploaded.url;
 
@@ -192,13 +189,13 @@ export class VerificationService {
       where: { userId },
       include: {
         verificationDocuments: {
-          orderBy: { uploadedAt: 'desc' },
+          orderBy: { uploadedAt: "desc" },
         },
       },
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     // Build status for each required document type
@@ -209,13 +206,15 @@ export class VerificationService {
       return {
         type,
         required: true,
-        status: latest?.status || 'NOT_UPLOADED',
+        status: latest?.status || "NOT_UPLOADED",
         documentId: latest?.id,
         fileName: latest?.fileName,
         uploadedAt: latest?.uploadedAt,
         reviewNotes: latest?.reviewNotes,
         rejectionReason:
-          latest?.status === DocumentStatus.REJECTED ? latest.reviewNotes : null,
+          latest?.status === DocumentStatus.REJECTED
+            ? latest.reviewNotes
+            : null,
       };
     });
 
@@ -271,20 +270,18 @@ export class VerificationService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     // Validate all required docs uploaded
-    const uploadedTypes = new Set(
-      vet.verificationDocuments.map((d) => d.type),
-    );
+    const uploadedTypes = new Set(vet.verificationDocuments.map((d) => d.type));
     const missingDocs = REQUIRED_DOCUMENTS.filter(
       (type) => !uploadedTypes.has(type),
     );
 
     if (missingDocs.length > 0) {
       throw new BadRequestException(
-        `Missing required documents: ${missingDocs.join(', ')}`,
+        `Missing required documents: ${missingDocs.join(", ")}`,
       );
     }
 
@@ -315,7 +312,7 @@ export class VerificationService {
     });
 
     if (!doc) {
-      throw new NotFoundException('Document not found');
+      throw new NotFoundException("Document not found");
     }
 
     const updated = await this.prisma.verificationDocument.update({
@@ -348,11 +345,11 @@ export class VerificationService {
     });
 
     if (!doc) {
-      throw new NotFoundException('Document not found');
+      throw new NotFoundException("Document not found");
     }
 
     if (!reason || reason.trim().length === 0) {
-      throw new BadRequestException('Rejection reason is required');
+      throw new BadRequestException("Rejection reason is required");
     }
 
     const updated = await this.prisma.verificationDocument.update({
@@ -407,10 +404,10 @@ export class VerificationService {
             },
           },
           verificationDocuments: {
-            orderBy: { uploadedAt: 'desc' },
+            orderBy: { uploadedAt: "desc" },
           },
         },
-        orderBy: { updatedAt: 'asc' },
+        orderBy: { updatedAt: "asc" },
       }),
       this.prisma.vetProfile.count({ where }),
     ]);
@@ -427,7 +424,7 @@ export class VerificationService {
    */
   private validateFile(file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('File is required');
+      throw new BadRequestException("File is required");
     }
 
     if (file.size > MAX_FILE_SIZE) {
@@ -438,7 +435,7 @@ export class VerificationService {
 
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       throw new BadRequestException(
-        `Invalid file type. Allowed: ${ALLOWED_MIME_TYPES.join(', ')}`,
+        `Invalid file type. Allowed: ${ALLOWED_MIME_TYPES.join(", ")}`,
       );
     }
   }
@@ -449,7 +446,7 @@ export class VerificationService {
   private validateComvezcolNumber(licenseNumber: string) {
     if (!COMVEZCOL_REGEX.test(licenseNumber)) {
       throw new BadRequestException(
-        'Invalid COMVEZCOL format. Expected: XXXXXX-X (e.g., 12345-6)',
+        "Invalid COMVEZCOL format. Expected: XXXXXX-X (e.g., 12345-6)",
       );
     }
 
@@ -528,7 +525,7 @@ export class VerificationService {
 
       const result = await this.mail.sendVetApproval({
         to: vet.user.email,
-        firstName: vet.user.firstName ?? 'Veterinario',
+        firstName: vet.user.firstName ?? "Veterinario",
       });
 
       if (!result.ok) {
@@ -550,44 +547,43 @@ export class VerificationService {
       case VerificationStatus.NONE:
         return [
           `Sube ${REQUIRED_DOCUMENTS.length - uploadedCount} documento(s) restante(s)`,
-          'Asegúrate que las imágenes sean claras y legibles',
+          "Asegúrate que las imágenes sean claras y legibles",
         ];
 
       case VerificationStatus.PENDING:
         return [
-          'Envía tus documentos a revisión',
-          'El tiempo estimado de revisión es 24-48 horas',
+          "Envía tus documentos a revisión",
+          "El tiempo estimado de revisión es 24-48 horas",
         ];
 
       case VerificationStatus.IN_REVIEW:
         return [
-          'Tu verificación está siendo revisada por nuestro equipo',
-          'Te notificaremos por email cuando el proceso termine',
-          'Tiempo estimado: 24-48 horas',
+          "Tu verificación está siendo revisada por nuestro equipo",
+          "Te notificaremos por email cuando el proceso termine",
+          "Tiempo estimado: 24-48 horas",
         ];
 
       case VerificationStatus.APPROVED:
         return [
-          '¡Felicitaciones! Ya puedes ofrecer tus servicios',
-          'Completa tu perfil con especialidades y precios',
-          'Configura tu agenda y disponibilidad',
+          "¡Felicitaciones! Ya puedes ofrecer tus servicios",
+          "Completa tu perfil con especialidades y precios",
+          "Configura tu agenda y disponibilidad",
         ];
 
       case VerificationStatus.REJECTED:
         return [
-          'Uno o más documentos fueron rechazados',
-          'Revisa las notas del admin y vuelve a subir los documentos correctos',
+          "Uno o más documentos fueron rechazados",
+          "Revisa las notas del admin y vuelve a subir los documentos correctos",
         ];
 
       case VerificationStatus.EXPIRED:
         return [
-          'Tus documentos están vencidos',
-          'Sube versiones actualizadas para continuar ofreciendo servicios',
+          "Tus documentos están vencidos",
+          "Sube versiones actualizadas para continuar ofreciendo servicios",
         ];
 
       default:
         return [];
     }
   }
-
 }

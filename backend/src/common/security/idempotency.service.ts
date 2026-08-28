@@ -1,6 +1,6 @@
-import { Injectable, ConflictException, Logger } from '@nestjs/common'
-import { createHash } from 'crypto'
-import { PrismaService } from '../../prisma/prisma.service'
+import { Injectable, ConflictException, Logger } from "@nestjs/common";
+import { createHash } from "crypto";
+import { PrismaService } from "../../prisma/prisma.service";
 
 /**
  * IdempotencyService — replay-safe para POSTs críticos (pagos, citas).
@@ -25,18 +25,18 @@ import { PrismaService } from '../../prisma/prisma.service'
 
 interface IdempotencyResult<T> {
   /** True si la operación ya estaba cacheada (hit) */
-  cached: boolean
+  cached: boolean;
   /** Resultado cacheado o recién computado */
-  result: T
+  result: T;
   /** Status HTTP cacheado */
-  status: number
+  status: number;
 }
 
-const DEFAULT_TTL_HOURS = 24
+const DEFAULT_TTL_HOURS = 24;
 
 @Injectable()
 export class IdempotencyService {
-  private readonly logger = new Logger(IdempotencyService.name)
+  private readonly logger = new Logger(IdempotencyService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -48,32 +48,32 @@ export class IdempotencyService {
    * Si no existió, ejecuta `operation()` y cachea el resultado.
    */
   async execute<T>(params: {
-    key: string
-    endpoint: string
-    userId?: string
-    requestBody: unknown
-    operation: () => Promise<{ status: number; body: T }>
-    ttlHours?: number
+    key: string;
+    endpoint: string;
+    userId?: string;
+    requestBody: unknown;
+    operation: () => Promise<{ status: number; body: T }>;
+    ttlHours?: number;
   }): Promise<IdempotencyResult<T>> {
-    const { key, endpoint, userId, requestBody, operation } = params
-    const ttlHours = params.ttlHours ?? DEFAULT_TTL_HOURS
+    const { key, endpoint, userId, requestBody, operation } = params;
+    const ttlHours = params.ttlHours ?? DEFAULT_TTL_HOURS;
 
     if (!key || key.length < 8) {
-      throw new Error('Idempotency key requerido (min 8 chars)')
+      throw new Error("Idempotency key requerido (min 8 chars)");
     }
 
-    const requestHash = this.hashBody(requestBody)
+    const requestHash = this.hashBody(requestBody);
 
     // 1. Lookup en DB
     const existing = await this.prisma.idempotencyKey.findUnique({
       where: { key },
-    })
+    });
 
     if (existing) {
       // ¿Expiró?
       if (existing.expiresAt < new Date()) {
-        await this.prisma.idempotencyKey.delete({ where: { key } })
-        this.logger.debug(`Expired idempotency key removed: ${key}`)
+        await this.prisma.idempotencyKey.delete({ where: { key } });
+        this.logger.debug(`Expired idempotency key removed: ${key}`);
       } else {
         // Mismo hash → cache hit
         if (existing.requestHash === requestHash) {
@@ -81,27 +81,21 @@ export class IdempotencyService {
             cached: true,
             status: existing.responseStatus,
             result: existing.responseBody as T,
-          }
+          };
         }
         // Hash distinto → mismo key con body diferente: error semántico
         throw new ConflictException(
-          'Idempotency key reutilizada con un body diferente. ' +
-            'Genera una nueva key para esta operación.',
-        )
+          "Idempotency key reutilizada con un body diferente. " +
+            "Genera una nueva key para esta operación.",
+        );
       }
     }
 
     // 2. Ejecutar operación real
-    let result: { status: number; body: T }
-    try {
-      result = await operation()
-    } catch (e) {
-      // No cacheamos errores: el cliente puede reintentar libremente
-      throw e
-    }
+    const result = await operation();
 
     // 3. Persistir resultado
-    const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000)
+    const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
 
     try {
       await this.prisma.idempotencyKey.create({
@@ -114,21 +108,21 @@ export class IdempotencyService {
           responseBody: result.body as any,
           expiresAt,
         },
-      })
+      });
     } catch (e) {
       // Si dos requests concurrentes con la misma key llegan simultáneamente,
       // una de ellas verá un error de constraint único. Este es un caso raro
       // de race condition; loggeamos pero no fallamos la respuesta principal.
       this.logger.warn(
         `Idempotency persist failed (probably race condition): ${(e as Error).message}`,
-      )
+      );
     }
 
     return {
       cached: false,
       status: result.status,
       result: result.body,
-    }
+    };
   }
 
   /**
@@ -140,9 +134,11 @@ export class IdempotencyService {
       where: {
         expiresAt: { lt: new Date() },
       },
-    })
-    this.logger.log(`Cleanup: ${result.count} idempotency keys expiradas eliminadas`)
-    return result.count
+    });
+    this.logger.log(
+      `Cleanup: ${result.count} idempotency keys expiradas eliminadas`,
+    );
+    return result.count;
   }
 
   // ----------------------------------------------------------
@@ -154,28 +150,28 @@ export class IdempotencyService {
    * para que `{a:1, b:2}` y `{b:2, a:1}` produzcan el mismo hash.
    */
   private hashBody(body: unknown): string {
-    const stable = this.stableStringify(body)
-    return createHash('sha256').update(stable).digest('hex')
+    const stable = this.stableStringify(body);
+    return createHash("sha256").update(stable).digest("hex");
   }
 
   private stableStringify(value: unknown): string {
-    if (value === null || value === undefined) return 'null'
-    if (typeof value !== 'object') return JSON.stringify(value)
+    if (value === null || value === undefined) return "null";
+    if (typeof value !== "object") return JSON.stringify(value);
     if (Array.isArray(value)) {
-      return '[' + value.map((v) => this.stableStringify(v)).join(',') + ']'
+      return "[" + value.map((v) => this.stableStringify(v)).join(",") + "]";
     }
-    const keys = Object.keys(value as Record<string, unknown>).sort()
+    const keys = Object.keys(value as Record<string, unknown>).sort();
     return (
-      '{' +
+      "{" +
       keys
         .map(
           (k) =>
             JSON.stringify(k) +
-            ':' +
+            ":" +
             this.stableStringify((value as Record<string, unknown>)[k]),
         )
-        .join(',') +
-      '}'
-    )
+        .join(",") +
+      "}"
+    );
   }
 }

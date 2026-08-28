@@ -1,5 +1,4 @@
 module.exports = {
-  root: true,
   parser: '@typescript-eslint/parser',
   parserOptions: {
     project: 'tsconfig.json',
@@ -7,28 +6,34 @@ module.exports = {
     ecmaVersion: 2022,
     sourceType: 'module',
   },
-  plugins: ['@typescript-eslint'],
+  plugins: ['@typescript-eslint/eslint-plugin'],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
     'plugin:prettier/recommended',
   ],
+  root: true,
   env: {
     node: true,
     jest: true,
     es2022: true,
   },
-  ignorePatterns: ['dist/', 'coverage/', 'node_modules/', '.eslintrc.js'],
+  ignorePatterns: [
+    '.eslintrc.js',
+    'dist/**',
+    'coverage/',
+    'node_modules/',
+    '**/*.spec.ts',
+    '**/*.e2e-spec.ts',
+    'test/**',
+  ],
   rules: {
     '@typescript-eslint/no-explicit-any': 'off',
-    '@typescript-eslint/no-non-null-assertion': 'off',
-    '@typescript-eslint/no-unused-vars': [
-      'warn',
-      { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
-    ],
+    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-require-imports': 'off',
+    '@typescript-eslint/no-non-null-assertion': 'off',
     'no-useless-catch': 'warn',
     'prefer-const': 'warn',
   },

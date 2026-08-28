@@ -6,14 +6,11 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { UseGuards } from '@nestjs/common';
-import {
-  WsJwtGuard,
-  WsEmailVerifiedGuard,
-} from '../auth/guards/ws-jwt.guard';
-import { ChatService } from './chat.service';
+} from "@nestjs/websockets";
+import { Server, Socket } from "socket.io";
+import { UseGuards } from "@nestjs/common";
+import { WsJwtGuard, WsEmailVerifiedGuard } from "../auth/guards/ws-jwt.guard";
+import { ChatService } from "./chat.service";
 
 interface AuthenticatedSocket extends Socket {
   user: {
@@ -36,13 +33,16 @@ interface AuthenticatedSocket extends Socket {
 function getAllowedOrigins(): string[] {
   const raw = process.env.CORS_ORIGIN;
   if (raw) {
-    return raw.split(',').map((o) => o.trim()).filter(Boolean);
+    return raw
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean);
   }
   // Fallback: solo desarrollo local
   return [
-    'http://localhost:5173',  // Dashboard (Vite)
-    'http://localhost:8081',  // Mobile (Metro bundler)
-    'http://localhost:3001',
+    "http://localhost:5173", // Dashboard (Vite)
+    "http://localhost:8081", // Mobile (Metro bundler)
+    "http://localhost:3001",
   ];
 }
 
@@ -50,8 +50,8 @@ function getAllowedOrigins(): string[] {
   cors: {
     origin: getAllowedOrigins(),
     credentials: true,
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Authorization", "Content-Type"],
   },
 })
 @UseGuards(WsJwtGuard)
@@ -85,7 +85,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * Join appointment chat room
    */
-  @SubscribeMessage('joinAppointment')
+  @SubscribeMessage("joinAppointment")
   async handleJoinAppointment(
     @MessageBody() appointmentId: string,
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -93,11 +93,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       // Verify user is participant
       await this.chatService.verifyParticipant(appointmentId, client.user.id);
-      
+
       // Join room
       client.join(appointmentId);
       console.log(`User ${client.user.id} joined appointment ${appointmentId}`);
-      
+
       return { success: true, appointmentId };
     } catch (error) {
       return { success: false, error: error.message };
@@ -107,7 +107,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * Leave appointment chat room
    */
-  @SubscribeMessage('leaveAppointment')
+  @SubscribeMessage("leaveAppointment")
   async handleLeaveAppointment(
     @MessageBody() appointmentId: string,
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -121,7 +121,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Send message in real-time.
    * Requires email verification (anti-abuso de cuentas recién creadas).
    */
-  @SubscribeMessage('message')
+  @SubscribeMessage("message")
   @UseGuards(WsEmailVerifiedGuard)
   async handleMessage(
     @MessageBody() data: { appointmentId: string; content: string },
@@ -129,8 +129,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       // Verify participant
-      await this.chatService.verifyParticipant(data.appointmentId, client.user.id);
-      
+      await this.chatService.verifyParticipant(
+        data.appointmentId,
+        client.user.id,
+      );
+
       // Save message to database
       const message = await this.chatService.sendMessage(
         data.appointmentId,
@@ -139,7 +142,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
 
       // Broadcast to room (including sender)
-      this.server.to(data.appointmentId).emit('message', message);
+      this.server.to(data.appointmentId).emit("message", message);
 
       return { success: true, message };
     } catch (error) {
@@ -151,7 +154,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Share official price (vets only). Requires email verification para
    * mantener consistencia con el equivalente HTTP.
    */
-  @SubscribeMessage('sharePrice')
+  @SubscribeMessage("sharePrice")
   @UseGuards(WsEmailVerifiedGuard)
   async handleSharePrice(
     @MessageBody()
@@ -167,10 +170,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       // Verify participant and role
-      await this.chatService.verifyParticipant(data.appointmentId, client.user.id);
+      await this.chatService.verifyParticipant(
+        data.appointmentId,
+        client.user.id,
+      );
 
-      if (client.user.role !== 'VET') {
-        throw new Error('Only veterinarians can share prices');
+      if (client.user.role !== "VET") {
+        throw new Error("Only veterinarians can share prices");
       }
 
       // Save price message
@@ -181,7 +187,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
 
       // Broadcast to room
-      this.server.to(data.appointmentId).emit('priceShared', message);
+      this.server.to(data.appointmentId).emit("priceShared", message);
 
       return { success: true, message };
     } catch (error) {
@@ -192,17 +198,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * Typing indicator
    */
-  @SubscribeMessage('typing')
+  @SubscribeMessage("typing")
   async handleTyping(
     @MessageBody() data: { appointmentId: string; isTyping: boolean },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
       // Verify participant
-      await this.chatService.verifyParticipant(data.appointmentId, client.user.id);
+      await this.chatService.verifyParticipant(
+        data.appointmentId,
+        client.user.id,
+      );
 
       // Broadcast to others in room (not sender)
-      client.to(data.appointmentId).emit('typing', {
+      client.to(data.appointmentId).emit("typing", {
         userId: client.user.id,
         isTyping: data.isTyping,
       });

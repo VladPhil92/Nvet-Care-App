@@ -6,8 +6,8 @@ import {
   Length,
   IsNotEmpty,
   Matches,
-} from 'class-validator';
-import { DocumentType } from '@prisma/client';
+} from "class-validator";
+import { DocumentType } from "@prisma/client";
 
 /**
  * DTO para subir un documento de verificación.
@@ -18,7 +18,7 @@ import { DocumentType } from '@prisma/client';
 export class UploadDocumentDto {
   @IsEnum(DocumentType, {
     message:
-      'documentType debe ser COMVEZCOL_CARD, PROFESSIONAL_DEGREE, ID_DOCUMENT o ADDITIONAL',
+      "documentType debe ser COMVEZCOL_CARD, PROFESSIONAL_DEGREE, ID_DOCUMENT o ADDITIONAL",
   })
   documentType: DocumentType;
 
@@ -59,7 +59,7 @@ export class RejectDocumentDto {
   @IsString()
   @IsNotEmpty()
   @Length(10, 500, {
-    message: 'La razón de rechazo debe tener entre 10 y 500 caracteres',
+    message: "La razón de rechazo debe tener entre 10 y 500 caracteres",
   })
   reason: string;
 }
@@ -76,7 +76,7 @@ export class CreateVetProfileDto {
 
   @IsOptional()
   @Matches(/^\d{4,6}-\d{1}$/, {
-    message: 'COMVEZCOL inválido. Formato esperado: XXXXXX-X (ej. 12345-6)',
+    message: "COMVEZCOL inválido. Formato esperado: XXXXXX-X (ej. 12345-6)",
   })
   comvezcolNumber?: string;
 

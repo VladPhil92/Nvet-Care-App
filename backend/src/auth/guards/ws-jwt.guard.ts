@@ -1,8 +1,8 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { WsException } from '@nestjs/websockets';
-import { Socket } from 'socket.io';
-import { PrismaService } from '../../prisma/prisma.service';
+import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { WsException } from "@nestjs/websockets";
+import { Socket } from "socket.io";
+import { PrismaService } from "../../prisma/prisma.service";
 
 export interface AuthenticatedSocket extends Socket {
   user: {
@@ -46,7 +46,7 @@ export class WsJwtGuard implements CanActivate {
 
       const token = client.handshake?.auth?.token;
       if (!token) {
-        throw new WsException('No token provided');
+        throw new WsException("No token provided");
       }
 
       const payload = await this.jwtService.verifyAsync(token, {
@@ -68,10 +68,10 @@ export class WsJwtGuard implements CanActivate {
       });
 
       if (!user) {
-        throw new WsException('User not found');
+        throw new WsException("User not found");
       }
       if (!user.isActive) {
-        throw new WsException('Account deactivated');
+        throw new WsException("Account deactivated");
       }
       // Si la contraseña cambió tras emitir el token, invalidar
       if (
@@ -79,7 +79,7 @@ export class WsJwtGuard implements CanActivate {
         payload.iat &&
         user.passwordChangedAt.getTime() / 1000 > payload.iat
       ) {
-        throw new WsException('Token invalidated by password change');
+        throw new WsException("Token invalidated by password change");
       }
 
       client.user = {
@@ -93,7 +93,7 @@ export class WsJwtGuard implements CanActivate {
       return true;
     } catch (error) {
       if (error instanceof WsException) throw error;
-      throw new WsException('Invalid token');
+      throw new WsException("Invalid token");
     }
   }
 }
@@ -112,12 +112,12 @@ export class WsEmailVerifiedGuard implements CanActivate {
     const client: AuthenticatedSocket = context.switchToWs().getClient();
     const user = client.user;
     if (!user) {
-      throw new WsException('Authentication required');
+      throw new WsException("Authentication required");
     }
-    if (user.role === 'ADMIN') return true;
+    if (user.role === "ADMIN") return true;
     if (user.emailVerified) return true;
     throw new WsException(
-      'Verifica tu correo electrónico para enviar mensajes.',
+      "Verifica tu correo electrónico para enviar mensajes.",
     );
   }
 }

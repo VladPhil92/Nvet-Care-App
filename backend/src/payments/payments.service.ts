@@ -5,16 +5,16 @@ import {
   ForbiddenException,
   ConflictException,
   Logger,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { StorageService } from '../common/storage/storage.service';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { StorageService } from "../common/storage/storage.service";
 import {
   PaymentMethod,
   TransactionStatus,
   AppointmentStatus,
   VetTier,
   Prisma,
-} from '@prisma/client';
+} from "@prisma/client";
 
 // ============================================================
 // TYPES
@@ -39,14 +39,14 @@ import {
   InitiatePsePaymentDto,
   RequestWithdrawalDto,
   TransactionFiltersDto,
-} from './dto/payment.dto';
+} from "./dto/payment.dto";
 
 // ============================================================
 // CONSTANTS
 // ============================================================
 
 const TIER_COMMISSIONS: Record<VetTier, number> = {
-  FREE: 0.10,
+  FREE: 0.1,
   PRO: 0.08,
   ELITE: 0.03,
 };
@@ -67,21 +67,33 @@ const CTG_TO_COP_RATE = 30;
  *  - FAILED desde cualquier estado no-terminal
  */
 const VALID_TRANSITIONS: Record<TransactionStatus, TransactionStatus[]> = {
-  PENDING: [TransactionStatus.VERIFYING, TransactionStatus.CONFIRMED, TransactionStatus.FAILED],
-  VERIFYING: [TransactionStatus.CONFIRMED, TransactionStatus.FAILED, TransactionStatus.DISPUTED],
+  PENDING: [
+    TransactionStatus.VERIFYING,
+    TransactionStatus.CONFIRMED,
+    TransactionStatus.FAILED,
+  ],
+  VERIFYING: [
+    TransactionStatus.CONFIRMED,
+    TransactionStatus.FAILED,
+    TransactionStatus.DISPUTED,
+  ],
   CONFIRMED: [TransactionStatus.LIQUIDATED, TransactionStatus.DISPUTED],
   LIQUIDATED: [TransactionStatus.DISPUTED],
-  DISPUTED: [TransactionStatus.CONFIRMED, TransactionStatus.LIQUIDATED, TransactionStatus.FAILED],
+  DISPUTED: [
+    TransactionStatus.CONFIRMED,
+    TransactionStatus.LIQUIDATED,
+    TransactionStatus.FAILED,
+  ],
   FAILED: [], // terminal
 };
 
 // PSE bank codes (subset; completo en producción)
 const PSE_BANKS: Record<string, string> = {
-  '1007': 'Bancolombia',
-  '1051': 'Davivienda',
-  '1013': 'BBVA',
-  '1006': 'AV Villas',
-  '1023': 'Banco Caja Social',
+  "1007": "Bancolombia",
+  "1051": "Davivienda",
+  "1013": "BBVA",
+  "1006": "AV Villas",
+  "1023": "Banco Caja Social",
 };
 
 // ============================================================
@@ -92,7 +104,10 @@ const PSE_BANKS: Record<string, string> = {
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
   /** Cache de idempotency keys (en producción usar Redis con TTL 24h) */
-  private readonly idempotencyCache = new Map<string, { result: any; ts: number }>();
+  private readonly idempotencyCache = new Map<
+    string,
+    { result: any; ts: number }
+  >();
   private readonly IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
   constructor(
@@ -128,14 +143,17 @@ export class PaymentsService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Cita no encontrada');
+      throw new NotFoundException("Cita no encontrada");
     }
 
     if (appointment.clientId !== userId) {
-      throw new ForbiddenException('Solo el cliente de la cita puede pagarla');
+      throw new ForbiddenException("Solo el cliente de la cita puede pagarla");
     }
 
-    if (appointment.transaction && appointment.transaction.status !== TransactionStatus.FAILED) {
+    if (
+      appointment.transaction &&
+      appointment.transaction.status !== TransactionStatus.FAILED
+    ) {
       throw new ConflictException(
         `Esta cita ya tiene un pago en estado ${appointment.transaction.status}`,
       );
@@ -174,7 +192,7 @@ export class PaymentsService {
         break;
 
       default:
-        throw new BadRequestException('Método de pago no soportado');
+        throw new BadRequestException("Método de pago no soportado");
     }
 
     // 5. Crear transacción (si ya existía con FAILED, actualizarla)
@@ -241,7 +259,7 @@ export class PaymentsService {
     dto: VerifyTransferDto,
   ) {
     if (!file) {
-      throw new BadRequestException('El comprobante es obligatorio');
+      throw new BadRequestException("El comprobante es obligatorio");
     }
 
     const transaction = await this.prisma.transaction.findUnique({
@@ -254,21 +272,29 @@ export class PaymentsService {
     });
 
     if (!transaction) {
-      throw new NotFoundException('Transacción no encontrada');
+      throw new NotFoundException("Transacción no encontrada");
     }
 
     if (transaction.appointment.vet.userId !== userId) {
-      throw new ForbiddenException('Solo el veterinario de la cita puede verificar la transferencia');
+      throw new ForbiddenException(
+        "Solo el veterinario de la cita puede verificar la transferencia",
+      );
     }
 
     if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
-      throw new BadRequestException('Solo aplicable a pagos por transferencia');
+      throw new BadRequestException("Solo aplicable a pagos por transferencia");
     }
 
-    this.validateStateTransition(transaction.status, TransactionStatus.VERIFYING);
+    this.validateStateTransition(
+      transaction.status,
+      TransactionStatus.VERIFYING,
+    );
 
     // Guardar archivo vía StorageService (local o Cloudinary según STORAGE_DRIVER)
-    const uploaded = await this.storage.upload(file, `transfers/${transactionId}`);
+    const uploaded = await this.storage.upload(
+      file,
+      `transfers/${transactionId}`,
+    );
 
     return this.prisma.transaction.update({
       where: { id: transactionId },
@@ -291,8 +317,11 @@ export class PaymentsService {
       include: { appointment: { include: { vet: true } } },
     });
 
-    if (!transaction) throw new NotFoundException('Transacción no encontrada');
-    this.validateStateTransition(transaction.status, TransactionStatus.CONFIRMED);
+    if (!transaction) throw new NotFoundException("Transacción no encontrada");
+    this.validateStateTransition(
+      transaction.status,
+      TransactionStatus.CONFIRMED,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.transaction.update({
@@ -313,16 +342,22 @@ export class PaymentsService {
     });
   }
 
-  async adminRejectTransfer(adminUserId: string, transactionId: string, reason: string) {
+  async adminRejectTransfer(
+    adminUserId: string,
+    transactionId: string,
+    reason: string,
+  ) {
     if (!reason || reason.trim().length < 10) {
-      throw new BadRequestException('La razón de rechazo debe tener al menos 10 caracteres');
+      throw new BadRequestException(
+        "La razón de rechazo debe tener al menos 10 caracteres",
+      );
     }
 
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
     });
 
-    if (!transaction) throw new NotFoundException('Transacción no encontrada');
+    if (!transaction) throw new NotFoundException("Transacción no encontrada");
     this.validateStateTransition(transaction.status, TransactionStatus.FAILED);
 
     return this.prisma.transaction.update({
@@ -343,9 +378,9 @@ export class PaymentsService {
       include: { vetProfile: true },
     });
 
-    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (!user) throw new NotFoundException("Usuario no encontrado");
 
-    if (user.role === 'VET' && user.vetProfile) {
+    if (user.role === "VET" && user.vetProfile) {
       // Calcular saldo del vet basado en transacciones LIQUIDATED
       const liquidated = await this.prisma.transaction.aggregate({
         where: {
@@ -363,8 +398,11 @@ export class PaymentsService {
         _sum: { amountCop: true, commissionAmount: true },
       });
 
-      const earnings = (liquidated._sum.amountCop ?? 0) - (liquidated._sum.commissionAmount ?? 0);
-      const pendingCop = (pending._sum.amountCop ?? 0) - (pending._sum.commissionAmount ?? 0);
+      const earnings =
+        (liquidated._sum.amountCop ?? 0) -
+        (liquidated._sum.commissionAmount ?? 0);
+      const pendingCop =
+        (pending._sum.amountCop ?? 0) - (pending._sum.commissionAmount ?? 0);
 
       return {
         ctgBalance: user.vetProfile.ctgBalance,
@@ -389,14 +427,14 @@ export class PaymentsService {
       include: { vetProfile: true },
     });
 
-    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (!user) throw new NotFoundException("Usuario no encontrado");
 
     const where: Prisma.TransactionWhereInput = {};
 
     // Restricción por rol
-    if (user.role === 'VET' && user.vetProfile) {
+    if (user.role === "VET" && user.vetProfile) {
       where.appointment = { vetId: user.vetProfile.id };
-    } else if (user.role === 'CLIENT') {
+    } else if (user.role === "CLIENT") {
       where.appointment = { clientId: userId };
     }
     // ADMIN ve todas
@@ -417,12 +455,16 @@ export class PaymentsService {
           appointment: {
             include: {
               client: { select: { id: true, firstName: true, lastName: true } },
-              vet: { include: { user: { select: { firstName: true, lastName: true } } } },
+              vet: {
+                include: {
+                  user: { select: { firstName: true, lastName: true } },
+                },
+              },
               pet: { select: { id: true, name: true, species: true } },
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         take: filters.limit ?? 20,
         skip: filters.offset ?? 0,
       }),
@@ -448,16 +490,16 @@ export class PaymentsService {
       },
     });
 
-    if (!transaction) throw new NotFoundException('Transacción no encontrada');
+    if (!transaction) throw new NotFoundException("Transacción no encontrada");
 
     // Ownership: cliente, vet o admin
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const isClient = transaction.appointment.clientId === userId;
     const isVet = transaction.appointment.vet.userId === userId;
-    const isAdmin = user?.role === 'ADMIN';
+    const isAdmin = user?.role === "ADMIN";
 
     if (!isClient && !isVet && !isAdmin) {
-      throw new ForbiddenException('No tienes acceso a esta transacción');
+      throw new ForbiddenException("No tienes acceso a esta transacción");
     }
 
     return transaction;
@@ -539,21 +581,21 @@ export class PaymentsService {
     let newApptStatus: AppointmentStatus | null = null;
 
     switch (upperStatus) {
-      case 'APPROVED':
+      case "APPROVED":
         newTxStatus = TransactionStatus.CONFIRMED;
         newApptStatus = AppointmentStatus.CONFIRMED;
         break;
-      case 'DECLINED':
-      case 'EXPIRED':
-      case 'FAILED':
+      case "DECLINED":
+      case "EXPIRED":
+      case "FAILED":
         newTxStatus = TransactionStatus.FAILED;
         break;
-      case 'PENDING':
+      case "PENDING":
         // El provider enviará otro webhook cuando cambie. Sin acción.
         this.logger.log(
           `PSE webhook PENDING — esperando confirmación del banco: txId=${transactionId}`,
         );
-        this.setIdempotencyResult(idempotencyKey, { status: 'pending_noop' });
+        this.setIdempotencyResult(idempotencyKey, { status: "pending_noop" });
         return;
       default:
         this.logger.warn(
@@ -568,7 +610,9 @@ export class PaymentsService {
         `PSE webhook: transición inválida ${transaction.status} → ${newTxStatus} ` +
           `txId=${transactionId}. Posible replay del webhook.`,
       );
-      this.setIdempotencyResult(idempotencyKey, { alreadyInState: transaction.status });
+      this.setIdempotencyResult(idempotencyKey, {
+        alreadyInState: transaction.status,
+      });
       return;
     }
 
@@ -579,7 +623,9 @@ export class PaymentsService {
         data: {
           status: newTxStatus!,
           externalTransactionId,
-          ...(newTxStatus === TransactionStatus.CONFIRMED && { verifiedAt: new Date() }),
+          ...(newTxStatus === TransactionStatus.CONFIRMED && {
+            verifiedAt: new Date(),
+          }),
         } as any,
       });
 
@@ -592,7 +638,10 @@ export class PaymentsService {
     });
 
     // 7. Marcar como procesado para idempotencia
-    this.setIdempotencyResult(idempotencyKey, { status: newTxStatus, processedAt: new Date() });
+    this.setIdempotencyResult(idempotencyKey, {
+      status: newTxStatus,
+      processedAt: new Date(),
+    });
 
     this.logger.log(
       `PSE webhook procesado: txId=${transactionId} ${transaction.status} → ${newTxStatus} ` +
@@ -613,7 +662,9 @@ export class PaymentsService {
   async initiatePse(userId: string, dto: InitiatePsePaymentDto) {
     const bankName = PSE_BANKS[dto.bank];
     if (!bankName) {
-      throw new BadRequestException(`Código de banco PSE inválido: ${dto.bank}`);
+      throw new BadRequestException(
+        `Código de banco PSE inválido: ${dto.bank}`,
+      );
     }
 
     // Crear transacción PENDING
@@ -665,14 +716,16 @@ export class PaymentsService {
     });
 
     if (!user || !user.vetProfile) {
-      throw new ForbiddenException('Solo veterinarios pueden solicitar retiros');
+      throw new ForbiddenException(
+        "Solo veterinarios pueden solicitar retiros",
+      );
     }
 
     const balance = await this.getBalance(userId);
 
     if (dto.amountCop > balance.copBalance) {
       throw new BadRequestException(
-        `Saldo insuficiente. Disponible: ${balance.copBalance.toLocaleString('es-CO')} COP`,
+        `Saldo insuficiente. Disponible: ${balance.copBalance.toLocaleString("es-CO")} COP`,
       );
     }
 
@@ -680,10 +733,13 @@ export class PaymentsService {
     // Aquí registramos como una pseudo-transacción de retiro
     return {
       success: true,
-      message: 'Solicitud de retiro registrada. Se procesará en 1-2 días hábiles.',
+      message:
+        "Solicitud de retiro registrada. Se procesará en 1-2 días hábiles.",
       requestedAmount: dto.amountCop,
       method: dto.paymentMethod,
-      estimatedArrival: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+      estimatedArrival: new Date(
+        Date.now() + 2 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
     };
   }
 
@@ -691,19 +747,24 @@ export class PaymentsService {
   // EARNINGS SUMMARY (vets)
   // ============================================================
 
-  async getEarningsSummary(userId: string, filters: { startDate?: string; endDate?: string }) {
+  async getEarningsSummary(
+    userId: string,
+    filters: { startDate?: string; endDate?: string },
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { vetProfile: true },
     });
 
     if (!user || !user.vetProfile) {
-      throw new ForbiddenException('Solo veterinarios');
+      throw new ForbiddenException("Solo veterinarios");
     }
 
     const where: Prisma.TransactionWhereInput = {
       appointment: { vetId: user.vetProfile.id },
-      status: { in: [TransactionStatus.CONFIRMED, TransactionStatus.LIQUIDATED] },
+      status: {
+        in: [TransactionStatus.CONFIRMED, TransactionStatus.LIQUIDATED],
+      },
     };
 
     if (filters.startDate || filters.endDate) {
@@ -764,7 +825,10 @@ export class PaymentsService {
   // PRIVATE HELPERS
   // ============================================================
 
-  private validateStateTransition(current: TransactionStatus, next: TransactionStatus) {
+  private validateStateTransition(
+    current: TransactionStatus,
+    next: TransactionStatus,
+  ) {
     if (!VALID_TRANSITIONS[current]?.includes(next)) {
       throw new BadRequestException(
         `Transición de estado inválida: ${current} → ${next}`,

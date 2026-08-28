@@ -8,8 +8,8 @@ import {
   MaxLength,
   Length,
   IsBoolean,
-} from 'class-validator';
-import { UserRole } from '@prisma/client';
+} from "class-validator";
+import { UserRole } from "@prisma/client";
 
 // Only these roles are self-assignable at public registration. ADMIN must
 // never be reachable through this DTO — it's provisioned out-of-band
@@ -34,7 +34,7 @@ const STRONG_PASSWORD_REGEX =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]).{12,128}$/;
 
 const STRONG_PASSWORD_MESSAGE =
-  'La contraseña debe tener mínimo 12 caracteres con al menos una mayúscula, una minúscula, un dígito y un símbolo especial';
+  "La contraseña debe tener mínimo 12 caracteres con al menos una mayúscula, una minúscula, un dígito y un símbolo especial";
 
 const NAME_REGEX = /^[\p{L}\s'-]+$/u;
 const PHONE_REGEX = /^\+?[1-9]\d{7,14}$/;
@@ -44,7 +44,7 @@ const PHONE_REGEX = /^\+?[1-9]\d{7,14}$/;
 // ============================================================
 
 export class RegisterDto {
-  @IsEmail({}, { message: 'Correo electrónico inválido' })
+  @IsEmail({}, { message: "Correo electrónico inválido" })
   @MaxLength(254)
   email: string;
 
@@ -58,7 +58,8 @@ export class RegisterDto {
   @MinLength(2)
   @MaxLength(50)
   @Matches(NAME_REGEX, {
-    message: 'El nombre solo puede contener letras, espacios, guiones y apóstrofes',
+    message:
+      "El nombre solo puede contener letras, espacios, guiones y apóstrofes",
   })
   firstName: string;
 
@@ -66,18 +67,19 @@ export class RegisterDto {
   @MinLength(2)
   @MaxLength(50)
   @Matches(NAME_REGEX, {
-    message: 'El apellido solo puede contener letras, espacios, guiones y apóstrofes',
+    message:
+      "El apellido solo puede contener letras, espacios, guiones y apóstrofes",
   })
   lastName: string;
 
   @IsString()
   @IsOptional()
   @Matches(PHONE_REGEX, {
-    message: 'Teléfono inválido (formato E.164: +57XXXXXXXXXX)',
+    message: "Teléfono inválido (formato E.164: +57XXXXXXXXXX)",
   })
   phone?: string;
 
-  @IsIn(SELF_REGISTERABLE_ROLES, { message: 'Rol inválido' })
+  @IsIn(SELF_REGISTERABLE_ROLES, { message: "Rol inválido" })
   @IsOptional()
   role?: UserRole = UserRole.CLIENT;
 }
@@ -87,12 +89,12 @@ export class RegisterDto {
 // ============================================================
 
 export class LoginDto {
-  @IsEmail({}, { message: 'Correo electrónico inválido' })
+  @IsEmail({}, { message: "Correo electrónico inválido" })
   @MaxLength(254)
   email: string;
 
   @IsString()
-  @MinLength(1, { message: 'Contraseña requerida' })
+  @MinLength(1, { message: "Contraseña requerida" })
   @MaxLength(128)
   password: string;
 
@@ -103,7 +105,9 @@ export class LoginDto {
    */
   @IsString()
   @IsOptional()
-  @Length(6, 8, { message: 'El código del autenticador debe tener entre 6 y 8 dígitos' })
+  @Length(6, 8, {
+    message: "El código del autenticador debe tener entre 6 y 8 dígitos",
+  })
   twoFactorCode?: string;
 
   /**
@@ -126,7 +130,7 @@ export class LoginDto {
 
 export class CtgIdentityExchangeDto {
   @IsString()
-  @MinLength(20, { message: 'Token de sesión CTG One inválido' })
+  @MinLength(20, { message: "Token de sesión CTG One inválido" })
   @MaxLength(4096)
   supabaseAccessToken: string;
 
@@ -137,7 +141,9 @@ export class CtgIdentityExchangeDto {
    */
   @IsString()
   @IsOptional()
-  @Length(6, 8, { message: 'El código del autenticador debe tener entre 6 y 8 dígitos' })
+  @Length(6, 8, {
+    message: "El código del autenticador debe tener entre 6 y 8 dígitos",
+  })
   twoFactorCode?: string;
 }
 
@@ -146,7 +152,7 @@ export class CtgIdentityExchangeDto {
 // ============================================================
 
 export class ForgotPasswordDto {
-  @IsEmail({}, { message: 'Correo electrónico inválido' })
+  @IsEmail({}, { message: "Correo electrónico inválido" })
   @MaxLength(254)
   email: string;
 }
@@ -174,7 +180,7 @@ export class ResetPasswordDto {
 
 export class ChangePasswordDto {
   @IsString()
-  @MinLength(1, { message: 'Contraseña actual requerida' })
+  @MinLength(1, { message: "Contraseña actual requerida" })
   @MaxLength(128)
   currentPassword: string;
 
@@ -197,8 +203,8 @@ export class ChangePasswordDto {
  */
 export class TwoFactorEnableDto {
   @IsString()
-  @Length(6, 8, { message: 'Código TOTP inválido (6-8 dígitos)' })
-  @Matches(/^\d+$/, { message: 'El código solo puede contener dígitos' })
+  @Length(6, 8, { message: "Código TOTP inválido (6-8 dígitos)" })
+  @Matches(/^\d+$/, { message: "El código solo puede contener dígitos" })
   code: string;
 }
 
@@ -212,8 +218,8 @@ export class TwoFactorDisableDto {
   password: string;
 
   @IsString()
-  @Length(6, 8, { message: 'Código TOTP inválido' })
-  @Matches(/^\d+$/, { message: 'El código solo puede contener dígitos' })
+  @Length(6, 8, { message: "Código TOTP inválido" })
+  @Matches(/^\d+$/, { message: "El código solo puede contener dígitos" })
   code: string;
 }
 
@@ -232,7 +238,7 @@ export class TwoFactorRecoveryDto {
   password: string;
 
   @IsString()
-  @Length(10, 12, { message: 'Código de recuperación inválido' })
+  @Length(10, 12, { message: "Código de recuperación inválido" })
   recoveryCode: string;
 }
 

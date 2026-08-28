@@ -6,8 +6,8 @@ import {
   IsOptional,
   Min,
   IsNotEmpty,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+} from "class-validator";
+import { Type } from "class-transformer";
 
 class PriceDataDto {
   @IsString()

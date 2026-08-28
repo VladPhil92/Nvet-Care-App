@@ -2,17 +2,17 @@ import {
   Injectable,
   Logger,
   InternalServerErrorException,
-} from '@nestjs/common';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import * as crypto from 'crypto';
+} from "@nestjs/common";
+import * as fs from "fs/promises";
+import * as path from "path";
+import * as crypto from "crypto";
 
 export interface UploadResult {
   /** URL pública o path relativo para servir el archivo */
   url: string;
   /** Identificador del provider (public_id en Cloudinary, path en local) */
   storageKey: string;
-  driver: 'local' | 'cloudinary';
+  driver: "local" | "cloudinary";
 }
 
 /**
@@ -29,23 +29,22 @@ export interface UploadResult {
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
-  private readonly driver: 'local' | 'cloudinary';
+  private readonly driver: "local" | "cloudinary";
   private readonly uploadDir: string;
   private readonly cloudinaryFolder: string;
 
   constructor() {
-    const configured = (process.env.STORAGE_DRIVER ?? '').toLowerCase();
-    this.driver = configured === 'cloudinary' ? 'cloudinary' : 'local';
+    const configured = (process.env.STORAGE_DRIVER ?? "").toLowerCase();
+    this.driver = configured === "cloudinary" ? "cloudinary" : "local";
 
     this.uploadDir =
-      process.env.UPLOAD_DIR ?? path.join(process.cwd(), 'uploads');
+      process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 
-    this.cloudinaryFolder =
-      process.env.CLOUDINARY_UPLOAD_FOLDER ?? 'nvetcare';
+    this.cloudinaryFolder = process.env.CLOUDINARY_UPLOAD_FOLDER ?? "nvetcare";
 
     this.logger.log(`StorageService initialized: driver=${this.driver}`);
 
-    if (this.driver === 'cloudinary') {
+    if (this.driver === "cloudinary") {
       this.assertCloudinaryEnv();
     }
   }
@@ -63,7 +62,7 @@ export class StorageService {
     folder: string,
     options?: { filename?: string },
   ): Promise<UploadResult> {
-    if (this.driver === 'cloudinary') {
+    if (this.driver === "cloudinary") {
       return this.uploadToCloudinary(file, folder, options);
     }
     return this.uploadToLocal(file, folder, options);
@@ -75,7 +74,7 @@ export class StorageService {
    * En Cloudinary: llama destroy con el public_id.
    */
   async delete(storageKey: string): Promise<void> {
-    if (this.driver === 'cloudinary') {
+    if (this.driver === "cloudinary") {
       await this.deleteFromCloudinary(storageKey);
     } else {
       await this.deleteFromLocal(storageKey);
@@ -93,7 +92,7 @@ export class StorageService {
   ): Promise<UploadResult> {
     const ext = path.extname(file.originalname).toLowerCase();
     const baseName =
-      options?.filename ?? crypto.randomBytes(16).toString('hex');
+      options?.filename ?? crypto.randomBytes(16).toString("hex");
     const fileName = `${baseName}${ext}`;
 
     const dir = path.join(this.uploadDir, folder);
@@ -104,11 +103,11 @@ export class StorageService {
       await fs.writeFile(filePath, file.buffer);
     } catch (err) {
       this.logger.error(`Local upload failed: ${(err as Error).message}`);
-      throw new InternalServerErrorException('No se pudo guardar el archivo');
+      throw new InternalServerErrorException("No se pudo guardar el archivo");
     }
 
     const url = `/uploads/${folder}/${fileName}`;
-    return { url, storageKey: filePath, driver: 'local' };
+    return { url, storageKey: filePath, driver: "local" };
   }
 
   private async deleteFromLocal(storageKey: string): Promise<void> {
@@ -131,10 +130,10 @@ export class StorageService {
     // Lazy-require para no romper si el paquete no está instalado en dev local
     let cloudinary: any;
     try {
-      cloudinary = (await import('cloudinary')).v2;
+      cloudinary = (await import("cloudinary")).v2;
     } catch {
       throw new InternalServerErrorException(
-        'Cloudinary no está instalado. Ejecuta: npm install cloudinary',
+        "Cloudinary no está instalado. Ejecuta: npm install cloudinary",
       );
     }
 
@@ -146,33 +145,35 @@ export class StorageService {
 
     const publicId = options?.filename
       ? `${this.cloudinaryFolder}/${folder}/${options.filename}`
-      : `${this.cloudinaryFolder}/${folder}/${crypto.randomBytes(16).toString('hex')}`;
+      : `${this.cloudinaryFolder}/${folder}/${crypto.randomBytes(16).toString("hex")}`;
 
     // Cloudinary acepta un Buffer si lo envolvemos en un stream o como base64
-    const base64 = file.buffer.toString('base64');
+    const base64 = file.buffer.toString("base64");
     const dataUri = `data:${file.mimetype};base64,${base64}`;
 
     try {
       const result = await cloudinary.uploader.upload(dataUri, {
         public_id: publicId,
-        resource_type: 'auto',
+        resource_type: "auto",
         overwrite: true,
       });
 
       return {
         url: result.secure_url,
         storageKey: result.public_id,
-        driver: 'cloudinary',
+        driver: "cloudinary",
       };
     } catch (err) {
       this.logger.error(`Cloudinary upload failed: ${(err as Error).message}`);
-      throw new InternalServerErrorException('No se pudo subir el archivo a Cloudinary');
+      throw new InternalServerErrorException(
+        "No se pudo subir el archivo a Cloudinary",
+      );
     }
   }
 
   private async deleteFromCloudinary(publicId: string): Promise<void> {
     try {
-      const cloudinary = (await import('cloudinary')).v2;
+      const cloudinary = (await import("cloudinary")).v2;
       cloudinary.config({
         cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
         api_key: process.env.CLOUDINARY_API_KEY,
@@ -180,7 +181,9 @@ export class StorageService {
       });
       await cloudinary.uploader.destroy(publicId);
     } catch (err) {
-      this.logger.warn(`Cloudinary delete failed (non-fatal): ${publicId} — ${(err as Error).message}`);
+      this.logger.warn(
+        `Cloudinary delete failed (non-fatal): ${publicId} — ${(err as Error).message}`,
+      );
     }
   }
 
@@ -190,14 +193,14 @@ export class StorageService {
 
   private assertCloudinaryEnv() {
     const required = [
-      'CLOUDINARY_CLOUD_NAME',
-      'CLOUDINARY_API_KEY',
-      'CLOUDINARY_API_SECRET',
+      "CLOUDINARY_CLOUD_NAME",
+      "CLOUDINARY_API_KEY",
+      "CLOUDINARY_API_SECRET",
     ];
     const missing = required.filter((v) => !process.env[v]);
     if (missing.length) {
       this.logger.error(
-        `STORAGE_DRIVER=cloudinary pero faltan variables: ${missing.join(', ')}`,
+        `STORAGE_DRIVER=cloudinary pero faltan variables: ${missing.join(", ")}`,
       );
     }
   }

@@ -1,112 +1,184 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   FlatList,
+  RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   Card,
-  Button,
-  Badge,
   EmptyState,
+  Skeleton,
   UI_COLORS,
 } from '../../components/ui/primitives'
-import { formatRelativeTime } from '../../utils/format'
+import {
+  useAppointmentsQuery,
+  useTransactionsQuery,
+} from '../../hooks/queries/useMobileQueries'
+import { formatRelativeTime, formatCOP } from '../../utils/format'
 
 interface Props {
   navigation: any
 }
 
-type NotifType = 'APPOINTMENT' | 'PAYMENT' | 'SYSTEM' | 'REVIEW'
-type PermissionStatus = 'granted' | 'denied' | 'undetermined'
+type NotifType = 'APPOINTMENT' | 'PAYMENT' | 'SYSTEM'
 
-interface Notification {
+interface DerivedNotif {
   id: string
   type: NotifType
+  glyph: string
   title: string
   body: string
   timestamp: string
   read: boolean
-  navigateTo?: { screen: string; params?: any }
+  screen?: string
+  screenParams?: Record<string, string>
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: 'n1',
-    type: 'APPOINTMENT',
-    title: 'Tu cita está confirmada',
-    body: 'Dr. María Pérez confirmó tu cita para mañana a las 10:30 AM.',
-    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    read: false,
+const APPT_STATUS_NOTIF: Record<
+  string,
+  { glyph: string; title: string; bodyFn: (pet: string) => string }
+> = {
+  CONFIRMED: {
+    glyph: '✅',
+    title: 'Cita confirmada',
+    bodyFn: (pet) => `La cita para ${pet} ha sido confirmada. Estamos preparando todo.`,
   },
-  {
-    id: 'n2',
-    type: 'PAYMENT',
-    title: 'Pago recibido',
-    body: 'Recibiste un pago de $85.000 COP por consulta veterinaria.',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    read: false,
+  IN_PROGRESS: {
+    glyph: '🐾',
+    title: 'Cita en curso',
+    bodyFn: (pet) => `La visita para ${pet} está en progreso ahora.`,
   },
-  {
-    id: 'n3',
-    type: 'REVIEW',
-    title: 'Nueva reseña',
-    body: 'Laura G. dejó una reseña de 5 estrellas en tu perfil.',
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
+  COMPLETED: {
+    glyph: '🎉',
+    title: 'Cita completada',
+    bodyFn: (pet) => `La consulta de ${pet} ha finalizado. Puedes dejar una reseña.`,
   },
-  {
-    id: 'n4',
-    type: 'SYSTEM',
-    title: 'Bienvenido a Nvet Care',
-    body: 'Completa tu perfil para empezar a recibir citas.',
-    timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
+  CANCELLED: {
+    glyph: '❌',
+    title: 'Cita cancelada',
+    bodyFn: (pet) => `La cita para ${pet} fue cancelada.`,
   },
-]
-
-const TYPE_GLYPHS: Record<NotifType, string> = {
-  APPOINTMENT: '📅',
-  PAYMENT: '💰',
-  SYSTEM: '⚙️',
-  REVIEW: '⭐',
+  PENDING: {
+    glyph: '⏳',
+    title: 'Cita solicitada',
+    bodyFn: (pet) => `Tu solicitud de cita para ${pet} está pendiente de confirmación.`,
+  },
 }
 
-const TYPE_LABELS: Record<NotifType, string> = {
-  APPOINTMENT: 'Cita',
-  PAYMENT: 'Pago',
-  SYSTEM: 'Sistema',
-  REVIEW: 'Reseña',
+const TXN_TYPE_NOTIF: Record<
+  string,
+  { glyph: string; titleFn: (amt: number) => string; body: string }
+> = {
+  PAYMENT: {
+    glyph: '💳',
+    titleFn: (amt) => `Pago de ${formatCOP(amt)}`,
+    body: 'El pago por tu consulta ha sido procesado.',
+  },
+  DEPOSIT: {
+    glyph: '💰',
+    titleFn: (amt) => `Recarga de ${formatCOP(amt)}`,
+    body: 'Tu billetera ha sido recargada exitosamente.',
+  },
+  WITHDRAWAL: {
+    glyph: '🏦',
+    titleFn: (amt) => `Retiro de ${formatCOP(amt)}`,
+    body: 'Tu solicitud de retiro fue enviada.',
+  },
+  COMMISSION: {
+    glyph: '📊',
+    titleFn: (amt) => `Comisión de ${formatCOP(amt)}`,
+    body: 'Se aplicó la comisión de la plataforma a esta transacción.',
+  },
 }
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
 
 export default function NotificationsScreen({ navigation }: Props) {
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS)
-  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('undetermined')
+  const [readIds, setReadIds] = useState<Set<string>>(new Set())
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications],
+  const sevenDaysAgo = useMemo(() => {
+    const d = new Date()
+    d.setTime(d.getTime() - SEVEN_DAYS_MS)
+    return d.toISOString().split('T')[0]
+  }, [])
+
+  const apptQuery = useAppointmentsQuery({ startDate: sevenDaysAgo })
+  const txnQuery = useTransactionsQuery({})
+
+  const isLoading = apptQuery.isLoading || txnQuery.isLoading
+  const isRefreshing = apptQuery.isFetching || txnQuery.isFetching
+
+  const notifications = useMemo<DerivedNotif[]>(() => {
+    const items: DerivedNotif[] = []
+
+    // Derive from appointments (last 7 days)
+    for (const appt of apptQuery.data ?? []) {
+      const tpl = APPT_STATUS_NOTIF[appt.status]
+      if (!tpl) continue
+      const petName = appt.pet?.name ?? 'tu mascota'
+      items.push({
+        id: `appt-${appt.id}-${appt.status}`,
+        type: 'APPOINTMENT',
+        glyph: tpl.glyph,
+        title: tpl.title,
+        body: tpl.bodyFn(petName),
+        timestamp: appt.updatedAt ?? appt.createdAt,
+        read: readIds.has(`appt-${appt.id}-${appt.status}`),
+        screen: 'AppointmentDetail',
+        screenParams: { appointmentId: appt.id },
+      })
+    }
+
+    // Derive from recent transactions (last 20 confirmed/liquidated)
+    const confirmedTxns = (txnQuery.data ?? [])
+      .filter((t) => t.status === 'CONFIRMED' || t.status === 'LIQUIDATED')
+      .slice(0, 20)
+
+    for (const txn of confirmedTxns) {
+      const type = txn.type ?? 'PAYMENT'
+      const tpl = TXN_TYPE_NOTIF[type]
+      if (!tpl) continue
+      items.push({
+        id: `txn-${txn.id}`,
+        type: 'PAYMENT',
+        glyph: tpl.glyph,
+        title: tpl.titleFn(txn.amountCop),
+        body: txn.description ?? tpl.body,
+        timestamp: txn.updatedAt ?? txn.createdAt,
+        read: readIds.has(`txn-${txn.id}`),
+      })
+    }
+
+    // Sort by timestamp descending
+    return items.sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    )
+  }, [apptQuery.data, txnQuery.data, readIds])
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications])
+
+  const handleRefresh = useCallback(() => {
+    apptQuery.refetch()
+    txnQuery.refetch()
+  }, [apptQuery, txnQuery])
+
+  const handlePress = useCallback(
+    (notif: DerivedNotif) => {
+      setReadIds((prev) => new Set([...prev, notif.id]))
+      if (notif.screen) {
+        navigation.navigate(notif.screen, notif.screenParams)
+      }
+    },
+    [navigation],
   )
 
   const handleMarkAllRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-  }, [])
-
-  const handleNotificationPress = useCallback((notif: Notification) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)),
-    )
-    if (notif.navigateTo) {
-      navigation.navigate(notif.navigateTo.screen, notif.navigateTo.params)
-    }
-  }, [navigation])
-
-  const handleRequestPermission = useCallback(() => {
-    setPermissionStatus('granted')
-  }, [])
+    setReadIds(new Set(notifications.map((n) => n.id)))
+  }, [notifications])
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -137,108 +209,81 @@ export default function NotificationsScreen({ navigation }: Props) {
         )}
       </View>
 
-      {permissionStatus === 'undetermined' && (
-        <Card variant="flat" style={styles.permissionCard}>
-          <Text style={styles.permissionTitle}>🔔 Activa las notificaciones</Text>
-          <Text style={styles.permissionText}>
-            Recibe avisos en tiempo real sobre tus citas, pagos y reseñas.
-          </Text>
-          <View style={{ marginTop: 12 }}>
-            <Button
-              label="Permitir notificaciones"
-              onPress={handleRequestPermission}
-              fullWidth
+      {isLoading ? (
+        <View style={styles.skeletonWrap}>
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} width="100%" height={80} borderRadius={12} />
+          ))}
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={UI_COLORS.sage}
             />
-          </View>
-        </Card>
-      )}
-
-      {permissionStatus === 'denied' && (
-        <Card
-          variant="flat"
-          style={StyleSheet.flatten([
-            styles.permissionCard,
-            { borderColor: UI_COLORS.error },
-          ])}
-        >
-          <Text style={styles.permissionTitle}>⚠️ Notificaciones desactivadas</Text>
-          <Text style={styles.permissionText}>
-            Activa las notificaciones desde la configuración del sistema.
-          </Text>
-        </Card>
-      )}
-
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-        renderItem={({ item }) => (
-          <NotificationCard
-            notification={item}
-            onPress={() => handleNotificationPress(item)}
-          />
-        )}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <EmptyState
-              glyph="📭"
-              title="Sin notificaciones"
-              subtitle="Te avisaremos cuando haya algo nuevo."
+          }
+          renderItem={({ item }) => (
+            <NotifCard
+              notif={item}
+              onPress={() => handlePress(item)}
             />
-          </View>
-        }
-      />
+          )}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <EmptyState
+                glyph="📭"
+                title="Sin notificaciones recientes"
+                subtitle="Aparecerán aquí cuando haya actualizaciones de citas o pagos."
+              />
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   )
 }
 
-interface NotificationCardProps {
-  notification: Notification
+interface NotifCardProps {
+  notif: DerivedNotif
   onPress: () => void
 }
 
-function NotificationCard({ notification, onPress }: NotificationCardProps) {
+function NotifCard({ notif, onPress }: NotifCardProps) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.notifCard,
-        !notification.read && styles.notifCardUnread,
+        styles.card,
+        !notif.read && styles.cardUnread,
         pressed && { opacity: 0.85 },
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`${notification.title}. ${notification.body}. ${formatRelativeTime(notification.timestamp)}${
-        !notification.read ? '. Sin leer' : ''
+      accessibilityLabel={`${notif.title}. ${notif.body}. ${formatRelativeTime(notif.timestamp)}${
+        !notif.read ? '. Sin leer' : ''
       }`}
     >
-      <View style={styles.notifGlyph}>
-        <Text style={styles.notifGlyphText}>{TYPE_GLYPHS[notification.type]}</Text>
-        {!notification.read && <View style={styles.unreadDot} />}
+      <View style={styles.glyphWrap}>
+        <Text style={styles.glyph}>{notif.glyph}</Text>
+        {!notif.read && <View style={styles.unreadDot} />}
       </View>
-
-      <View style={{ flex: 1 }}>
-        <View style={styles.notifTopRow}>
-          <Badge
-            label={TYPE_LABELS[notification.type]}
-            tone={notification.type === 'PAYMENT' ? 'gold' : notification.type === 'APPOINTMENT' ? 'sage' : 'muted'}
-            size="sm"
-            outline
-          />
-          <Text style={styles.notifTime}>
-            {formatRelativeTime(notification.timestamp)}
+      <View style={styles.cardBody}>
+        <View style={styles.cardTop}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {notif.title}
           </Text>
+          <Text style={styles.cardTime}>{formatRelativeTime(notif.timestamp)}</Text>
         </View>
-        <Text
-          style={[styles.notifTitle, !notification.read && styles.notifTitleUnread]}
-          numberOfLines={1}
-        >
-          {notification.title}
-        </Text>
-        <Text style={styles.notifBody} numberOfLines={2}>
-          {notification.body}
+        <Text style={styles.cardText} numberOfLines={2}>
+          {notif.body}
         </Text>
       </View>
+      {notif.screen && <Text style={styles.arrow}>›</Text>}
     </Pressable>
   )
 }
@@ -248,70 +293,55 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: UI_COLORS.card,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: UI_COLORS.border,
-    gap: 8,
-  },
-  back: { fontSize: 28, color: UI_COLORS.sage },
-  title: { fontSize: 17, fontWeight: '700', color: UI_COLORS.text },
-  subtitle: { fontSize: 12, color: UI_COLORS.sage, marginTop: 2, fontWeight: '600' },
-  markAllText: { fontSize: 13, color: UI_COLORS.sage, fontWeight: '600' },
-  permissionCard: {
-    margin: 16,
-    marginBottom: 0,
-    borderColor: UI_COLORS.gold,
-  },
-  permissionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: UI_COLORS.text,
-    marginBottom: 4,
-  },
-  permissionText: { fontSize: 13, color: UI_COLORS.muted, lineHeight: 18 },
-  listContent: { padding: 16 },
-  emptyBox: { paddingTop: 60 },
-  notifCard: {
-    flexDirection: 'row',
     backgroundColor: UI_COLORS.card,
-    padding: 14,
+  },
+  back: { fontSize: 32, lineHeight: 32, color: UI_COLORS.text },
+  title: { fontSize: 18, fontWeight: '800', color: UI_COLORS.text },
+  subtitle: { fontSize: 12, color: UI_COLORS.muted, marginTop: 1 },
+  markAllText: { fontSize: 13, color: UI_COLORS.sage, fontWeight: '600' },
+  skeletonWrap: { padding: 16, gap: 10 },
+  listContent: { padding: 16, paddingBottom: 40 },
+  emptyBox: { marginTop: 60 },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: UI_COLORS.card,
     borderRadius: 12,
+    padding: 14,
     borderWidth: 1,
     borderColor: UI_COLORS.border,
-    gap: 12,
   },
-  notifCardUnread: {
+  cardUnread: {
     borderColor: UI_COLORS.sage,
-    backgroundColor: '#5B75530a',
+    backgroundColor: '#F5FBF7',
   },
-  notifGlyph: { position: 'relative' },
-  notifGlyphText: { fontSize: 26 },
+  glyphWrap: { position: 'relative' },
+  glyph: { fontSize: 24 },
   unreadDot: {
     position: 'absolute',
     top: -2,
     right: -4,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: UI_COLORS.sage,
-    borderWidth: 2,
-    borderColor: UI_COLORS.card,
   },
-  notifTopRow: {
+  cardBody: { flex: 1 },
+  cardTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    gap: 8,
+    marginBottom: 3,
   },
-  notifTime: { fontSize: 11, color: UI_COLORS.muted },
-  notifTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: UI_COLORS.text,
-    marginBottom: 2,
-  },
-  notifTitleUnread: { fontWeight: '800' },
-  notifBody: { fontSize: 13, color: UI_COLORS.muted, lineHeight: 18 },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: UI_COLORS.text, flex: 1 },
+  cardTime: { fontSize: 11, color: UI_COLORS.muted, flexShrink: 0 },
+  cardText: { fontSize: 13, color: UI_COLORS.muted, lineHeight: 18 },
+  arrow: { fontSize: 22, color: UI_COLORS.muted, alignSelf: 'center' },
 })

@@ -3,9 +3,9 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreatePetDto, UpdatePetDto } from './dto/pet.dto';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { CreatePetDto, UpdatePetDto } from "./dto/pet.dto";
 
 /**
  * PetsService — CRUD de mascotas del sistema Nvet Care.
@@ -33,7 +33,7 @@ export class PetsService {
           select: { appointments: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -52,13 +52,13 @@ export class PetsService {
             date: true,
             serviceType: true,
           },
-          orderBy: { date: 'desc' },
+          orderBy: { date: "desc" },
           take: 5,
         },
       },
     });
 
-    if (!pet) throw new NotFoundException('Mascota no encontrada');
+    if (!pet) throw new NotFoundException("Mascota no encontrada");
 
     // El dueño siempre puede ver su mascota
     if (pet.ownerId === requesterId) return pet;
@@ -72,7 +72,7 @@ export class PetsService {
     });
 
     if (!hasActiveAppointment) {
-      throw new ForbiddenException('No tienes acceso a esta mascota');
+      throw new ForbiddenException("No tienes acceso a esta mascota");
     }
 
     return pet;
@@ -86,7 +86,7 @@ export class PetsService {
     // Validar que la fecha de nacimiento no sea futura
     if (dto.birthDate && new Date(dto.birthDate) > new Date()) {
       throw new BadRequestException(
-        'La fecha de nacimiento no puede ser futura',
+        "La fecha de nacimiento no puede ser futura",
       );
     }
 
@@ -110,15 +110,15 @@ export class PetsService {
   async updatePet(ownerId: string, petId: string, dto: UpdatePetDto) {
     const pet = await this.prisma.pet.findUnique({ where: { id: petId } });
 
-    if (!pet) throw new NotFoundException('Mascota no encontrada');
+    if (!pet) throw new NotFoundException("Mascota no encontrada");
     if (pet.ownerId !== ownerId) {
-      throw new ForbiddenException('Solo el dueño puede editar su mascota');
+      throw new ForbiddenException("Solo el dueño puede editar su mascota");
     }
 
     // Validar fecha de nacimiento si se actualiza
     if (dto.birthDate && new Date(dto.birthDate) > new Date()) {
       throw new BadRequestException(
-        'La fecha de nacimiento no puede ser futura',
+        "La fecha de nacimiento no puede ser futura",
       );
     }
 
@@ -146,15 +146,15 @@ export class PetsService {
       where: { id: petId },
       include: {
         appointments: {
-          where: { status: { in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] } },
+          where: { status: { in: ["PENDING", "CONFIRMED", "IN_PROGRESS"] } },
           select: { id: true },
         },
       },
     });
 
-    if (!pet) throw new NotFoundException('Mascota no encontrada');
+    if (!pet) throw new NotFoundException("Mascota no encontrada");
     if (pet.ownerId !== ownerId) {
-      throw new ForbiddenException('Solo el dueño puede eliminar su mascota');
+      throw new ForbiddenException("Solo el dueño puede eliminar su mascota");
     }
 
     // No permitir eliminar si tiene citas activas (evita dejar citas huérfanas)

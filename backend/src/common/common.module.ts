@@ -1,18 +1,13 @@
-import {
-  Module,
-  MiddlewareConsumer,
-  NestModule,
-  Global,
-} from '@nestjs/common'
-import { APP_FILTER, APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core'
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
-import { LoggerModule } from 'nestjs-pino'
+import { Module, MiddlewareConsumer, NestModule, Global } from "@nestjs/common";
+import { APP_FILTER, APP_INTERCEPTOR, APP_GUARD } from "@nestjs/core";
+import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
+import { LoggerModule } from "nestjs-pino";
 
-import { AllExceptionsFilter } from './filters/all-exceptions.filter'
-import { LoggingInterceptor } from './interceptors/logging.interceptor'
-import { RequestIdMiddleware } from './middlewares/request-id.middleware'
-import { pinoConfig } from './logger/pino.config'
-import { throttlerConfig } from './throttler/throttler.config'
+import { AllExceptionsFilter } from "./filters/all-exceptions.filter";
+import { LoggingInterceptor } from "./interceptors/logging.interceptor";
+import { RequestIdMiddleware } from "./middlewares/request-id.middleware";
+import { pinoConfig } from "./logger/pino.config";
+import { throttlerConfig } from "./throttler/throttler.config";
 
 /**
  * CommonModule — concentra cross-cutting concerns:
@@ -48,6 +43,6 @@ import { throttlerConfig } from './throttler/throttler.config'
 })
 export class CommonModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestIdMiddleware).forRoutes('*')
+    consumer.apply(RequestIdMiddleware).forRoutes("*");
   }
 }

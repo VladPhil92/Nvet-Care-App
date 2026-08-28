@@ -92,6 +92,7 @@ export interface Translations {
       changePassword: string
       twoFactor: string
       privacy: string
+      activeSessions: string
       help: string
       terms: string
       about: string

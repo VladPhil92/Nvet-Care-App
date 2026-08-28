@@ -84,6 +84,7 @@ const esCO: Translations = {
       changePassword: 'Cambiar contraseña',
       twoFactor: 'Autenticación de dos factores',
       privacy: 'Privacidad',
+      activeSessions: 'Sesiones activas',
       help: 'Ayuda y soporte',
       terms: 'Términos y condiciones',
       about: 'Acerca de Nvet Care',

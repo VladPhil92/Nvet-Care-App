@@ -251,6 +251,19 @@ export function useMyPricesQuery(options?: { enabled?: boolean }) {
   })
 }
 
+export function useScheduleExceptionsQuery(
+  startDate: string,
+  endDate: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ['vets', 'me', 'schedule', 'exceptions', startDate, endDate],
+    queryFn: () => vetService.getMyScheduleExceptions(startDate, endDate),
+    staleTime: STALE_TIMES.MEDIUM,
+    enabled: (options?.enabled ?? true) && !!startDate && !!endDate,
+  })
+}
+
 // ============================================================
 // REVIEWS
 // ============================================================

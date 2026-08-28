@@ -3,16 +3,16 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
 import {
   Prisma,
   VetTier,
   VerificationStatus,
   AppointmentStatus,
-} from '@prisma/client';
-import { SearchVetsDto } from './dto/search-vets.dto';
-import { UpdateVetProfileDto } from './dto/update-vet-profile.dto';
+} from "@prisma/client";
+import { SearchVetsDto } from "./dto/search-vets.dto";
+import { UpdateVetProfileDto } from "./dto/update-vet-profile.dto";
 
 // ============================================
 // CONSTANTS
@@ -65,7 +65,7 @@ export class VetsService {
       search,
       limit = 20,
       offset = 0,
-      sortBy = 'relevance',
+      sortBy = "relevance",
     } = filters;
 
     // Build base where clause
@@ -93,18 +93,18 @@ export class VetsService {
     }
 
     if (city) {
-      where.city = { equals: city, mode: 'insensitive' };
+      where.city = { equals: city, mode: "insensitive" };
     }
 
     // Text search on name/bio
     if (search) {
       where.OR = [
-        { bio: { contains: search, mode: 'insensitive' } },
+        { bio: { contains: search, mode: "insensitive" } },
         {
           user: {
             OR: [
-              { firstName: { contains: search, mode: 'insensitive' } },
-              { lastName: { contains: search, mode: 'insensitive' } },
+              { firstName: { contains: search, mode: "insensitive" } },
+              { lastName: { contains: search, mode: "insensitive" } },
             ],
           },
         },
@@ -114,7 +114,7 @@ export class VetsService {
     // Fetch candidates (oversample for scoring)
     const fetchLimit = Math.min(limit * 3, MAX_SEARCH_RESULTS);
 
-    let vets = await this.prisma.vetProfile.findMany({
+    const vets = await this.prisma.vetProfile.findMany({
       where,
       take: fetchLimit,
       skip: offset,
@@ -131,7 +131,7 @@ export class VetsService {
         prices: {
           where: { isActive: true },
           take: 3,
-          orderBy: { priceCop: 'asc' },
+          orderBy: { priceCop: "asc" },
         },
         _count: {
           select: {
@@ -236,11 +236,11 @@ export class VetsService {
         },
         prices: {
           where: { isActive: true },
-          orderBy: { priceCop: 'asc' },
+          orderBy: { priceCop: "asc" },
         },
         schedules: {
           where: { isActive: true },
-          orderBy: { dayOfWeek: 'asc' },
+          orderBy: { dayOfWeek: "asc" },
         },
         reviews: {
           include: {
@@ -252,7 +252,7 @@ export class VetsService {
               },
             },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           take: 10,
         },
         _count: {
@@ -267,14 +267,17 @@ export class VetsService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Veterinarian not found');
+      throw new NotFoundException("Veterinarian not found");
     }
 
     // Hide unverified vets from public
-    if (!vet.isVerified || vet.verificationStatus !== VerificationStatus.APPROVED) {
+    if (
+      !vet.isVerified ||
+      vet.verificationStatus !== VerificationStatus.APPROVED
+    ) {
       // Allow the vet to see their own profile
       if (!requesterUserId || vet.userId !== requesterUserId) {
-        throw new NotFoundException('Veterinarian not found');
+        throw new NotFoundException("Veterinarian not found");
       }
     }
 
@@ -306,13 +309,13 @@ export class VetsService {
         prices: true,
         schedules: true,
         verificationDocuments: {
-          orderBy: { uploadedAt: 'desc' },
+          orderBy: { uploadedAt: "desc" },
         },
       },
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     return vet;
@@ -343,7 +346,7 @@ export class VetsService {
     });
 
     if (existing) {
-      throw new BadRequestException('Vet profile already exists');
+      throw new BadRequestException("Vet profile already exists");
     }
 
     // Check license uniqueness
@@ -352,7 +355,7 @@ export class VetsService {
     });
 
     if (licenseExists) {
-      throw new BadRequestException('License number already registered');
+      throw new BadRequestException("License number already registered");
     }
 
     const vetProfile = await this.prisma.vetProfile.create({
@@ -387,7 +390,7 @@ export class VetsService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     return this.prisma.vetProfile.update({
@@ -425,11 +428,11 @@ export class VetsService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     if (!vet.isVerified) {
-      throw new ForbiddenException('Only verified vets can set availability');
+      throw new ForbiddenException("Only verified vets can set availability");
     }
 
     return this.prisma.vetProfile.update({
@@ -437,6 +440,81 @@ export class VetsService {
       data: {
         isAvailableNow: !vet.isAvailableNow,
       },
+    });
+  }
+
+  // ============================================
+  // SCHEDULE EXCEPTIONS
+  // ============================================
+
+  async getScheduleExceptions(
+    userId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException("Vet profile not found");
+
+    return this.prisma.scheduleException.findMany({
+      where: {
+        vetProfileId: vet.id,
+        date: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      orderBy: { date: "asc" },
+    });
+  }
+
+  async upsertScheduleException(
+    userId: string,
+    dateStr: string,
+    data: {
+      isAvailable?: boolean;
+      reason?: string;
+      startTime?: string;
+      endTime?: string;
+    },
+  ) {
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException("Vet profile not found");
+
+    const date = new Date(dateStr);
+
+    return this.prisma.scheduleException.upsert({
+      where: { vetProfileId_date: { vetProfileId: vet.id, date } },
+      create: {
+        vetProfileId: vet.id,
+        date,
+        isAvailable: data.isAvailable ?? false,
+        reason: data.reason,
+        startTime: data.startTime,
+        endTime: data.endTime,
+      },
+      update: {
+        isAvailable: data.isAvailable ?? false,
+        reason: data.reason,
+        startTime: data.startTime,
+        endTime: data.endTime,
+      },
+    });
+  }
+
+  async deleteScheduleException(userId: string, dateStr: string) {
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException("Vet profile not found");
+
+    const date = new Date(dateStr);
+
+    const exception = await this.prisma.scheduleException.findUnique({
+      where: { vetProfileId_date: { vetProfileId: vet.id, date } },
+    });
+
+    if (!exception) throw new NotFoundException("Schedule exception not found");
+
+    await this.prisma.scheduleException.delete({
+      where: { vetProfileId_date: { vetProfileId: vet.id, date } },
     });
   }
 
@@ -456,7 +534,7 @@ export class VetsService {
     });
 
     if (!vet) {
-      throw new NotFoundException('Vet profile not found');
+      throw new NotFoundException("Vet profile not found");
     }
 
     const dateFilter: any = {};
@@ -492,9 +570,9 @@ export class VetsService {
         totalCtg += apt.transaction.amountCtg;
       }
 
-      if (apt.transaction.status === 'CONFIRMED') {
+      if (apt.transaction.status === "CONFIRMED") {
         pendingBalance += apt.amount - apt.transaction.commissionAmount;
-      } else if (apt.transaction.status === 'LIQUIDATED') {
+      } else if (apt.transaction.status === "LIQUIDATED") {
         availableBalance += apt.amount - apt.transaction.commissionAmount;
       }
     }
@@ -567,7 +645,7 @@ export class VetsService {
         where: {
           vetProfileId_date: {
             vetProfileId: vet.id,
-            date: new Date(date.toISOString().split('T')[0]),
+            date: new Date(date.toISOString().split("T")[0]),
           },
         },
       });
@@ -594,8 +672,10 @@ export class VetsService {
       const appointmentCount = await this.prisma.appointment.count({
         where: {
           vetId: vet.id,
-          date: new Date(date.toISOString().split('T')[0]),
-          status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
+          date: new Date(date.toISOString().split("T")[0]),
+          status: {
+            in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING],
+          },
         },
       });
 
@@ -619,36 +699,36 @@ export class VetsService {
    */
   private applySorting(vets: any[], sortBy: string) {
     switch (sortBy) {
-      case 'rating':
+      case "rating":
         return vets.sort((a, b) => (b.rating || 0) - (a.rating || 0));
 
-      case 'distance':
+      case "distance":
         return vets.sort((a, b) => {
           if (a.distance === null) return 1;
           if (b.distance === null) return -1;
           return a.distance - b.distance;
         });
 
-      case 'price_asc':
+      case "price_asc":
         return vets.sort((a, b) => {
           const aPrice = a.prices?.[0]?.priceCop || Infinity;
           const bPrice = b.prices?.[0]?.priceCop || Infinity;
           return aPrice - bPrice;
         });
 
-      case 'price_desc':
+      case "price_desc":
         return vets.sort((a, b) => {
           const aPrice = a.prices?.[0]?.priceCop || 0;
           const bPrice = b.prices?.[0]?.priceCop || 0;
           return bPrice - aPrice;
         });
 
-      case 'experience':
+      case "experience":
         return vets.sort(
           (a, b) => (b.yearsExperience || 0) - (a.yearsExperience || 0),
         );
 
-      case 'relevance':
+      case "relevance":
       default:
         return vets.sort((a, b) => b.compositeScore - a.compositeScore);
     }
@@ -659,13 +739,13 @@ export class VetsService {
    */
   private getDayOfWeek(date: Date): any {
     const days = [
-      'SUNDAY',
-      'MONDAY',
-      'TUESDAY',
-      'WEDNESDAY',
-      'THURSDAY',
-      'FRIDAY',
-      'SATURDAY',
+      "SUNDAY",
+      "MONDAY",
+      "TUESDAY",
+      "WEDNESDAY",
+      "THURSDAY",
+      "FRIDAY",
+      "SATURDAY",
     ];
     return days[date.getDay()];
   }
@@ -678,8 +758,8 @@ export class VetsService {
     endTime: string,
     slotDuration: number,
   ): number {
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
+    const [startH, startM] = startTime.split(":").map(Number);
+    const [endH, endM] = endTime.split(":").map(Number);
 
     const startMinutes = startH * 60 + startM;
     const endMinutes = endH * 60 + endM;
@@ -712,7 +792,7 @@ export class VetsService {
     for (const apt of appointments) {
       const monthKey = `${apt.date.getFullYear()}-${String(
         apt.date.getMonth() + 1,
-      ).padStart(2, '0')}`;
+      ).padStart(2, "0")}`;
 
       if (!byMonth[monthKey]) {
         byMonth[monthKey] = { count: 0, earnings: 0, commissions: 0 };
@@ -738,7 +818,7 @@ export class VetsService {
    * Remove internal scoring fields from response
    */
   private stripInternalFields = (vet: any) => {
-    const { compositeScore, _count, ...publicVet } = vet;
+    const { compositeScore: _compositeScore, _count, ...publicVet } = vet;
     return publicVet;
   };
 }

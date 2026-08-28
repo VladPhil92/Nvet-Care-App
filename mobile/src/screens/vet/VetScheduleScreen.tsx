@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react'
+import React, { useMemo, useState, useCallback, useEffect } from 'react'
 import {
   View,
   Text,
@@ -18,7 +18,11 @@ import {
 import WeekScheduleEditor, {
   ScheduleSlot,
 } from '../../components/schedule/WeekScheduleEditor'
-import { useAppointmentsQuery } from '../../hooks/queries/useMobileQueries'
+import { useAppointmentsQuery, useScheduleExceptionsQuery } from '../../hooks/queries/useMobileQueries'
+import {
+  useUpsertScheduleExceptionMutation,
+  useDeleteScheduleExceptionMutation,
+} from '../../hooks/queries/useMobileMutations'
 import { pluralize } from '../../utils/format'
 
 /**
@@ -70,8 +74,11 @@ function formatWeekLabel(start: Date): string {
 export default function VetScheduleScreen({ navigation }: Props) {
   const [weekOffset, setWeekOffset] = useState(0)
 
-  // Bloqueos locales: Map<"YYYY-MM-DD|HH:mm", true>
-  const [blockedSlots, setBlockedSlots] = useState<Set<string>>(new Set())
+  // Bloqueos locales (UI): Map<"YYYY-MM-DD", true> synced to/from backend
+  const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set())
+
+  const upsertException = useUpsertScheduleExceptionMutation()
+  const deleteException = useDeleteScheduleExceptionMutation()
 
   // Calcular el lunes de la semana actual + offset
   const monday = useMemo(() => {
@@ -94,6 +101,22 @@ export default function VetScheduleScreen({ navigation }: Props) {
   })
   const appointments = apptsQuery.data ?? []
 
+  // Query de excepciones del servidor (bloqueos persistidos)
+  const exceptionsQuery = useScheduleExceptionsQuery(weekStart, weekEnd)
+
+  // Sincronizar excepciones del servidor a estado local al cargar la semana
+  useEffect(() => {
+    if (!exceptionsQuery.data) return
+    const blocked = new Set<string>()
+    for (const ex of exceptionsQuery.data) {
+      if (!ex.isAvailable) {
+        // Normalize ISO date to YYYY-MM-DD
+        blocked.add(ex.date.slice(0, 10))
+      }
+    }
+    setBlockedDates(blocked)
+  }, [exceptionsQuery.data])
+
   // Convertir citas + bloqueos a ScheduleSlots
   const slots: ScheduleSlot[] = useMemo(() => {
     const slotList: ScheduleSlot[] = []
@@ -111,14 +134,16 @@ export default function VetScheduleScreen({ navigation }: Props) {
       })
     }
 
-    // Slots bloqueados manualmente
-    for (const key of blockedSlots) {
-      const [date, time] = key.split('|')
-      slotList.push({ date, time, blocked: true })
+    // Bloqueados: marcar todos los slots de los días bloqueados
+    const TIMES = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00']
+    for (const date of blockedDates) {
+      for (const time of TIMES) {
+        slotList.push({ date, time, blocked: true })
+      }
     }
 
     return slotList
-  }, [appointments, blockedSlots])
+  }, [appointments, blockedDates])
 
   // Summary
   const summary = useMemo(() => {
@@ -132,9 +157,9 @@ export default function VetScheduleScreen({ navigation }: Props) {
     return {
       count: inRange.length,
       revenue: totalRevenue,
-      blocked: blockedSlots.size,
+      blocked: blockedDates.size,
     }
-  }, [appointments, blockedSlots])
+  }, [appointments, blockedDates])
 
   const handleSlotPress = useCallback(
     (slot: ScheduleSlot) => {
@@ -147,33 +172,56 @@ export default function VetScheduleScreen({ navigation }: Props) {
   )
 
   const handleToggleAvailability = useCallback(
-    (date: string, time: string, currentlyBlocked: boolean) => {
-      const key = `${date}|${time}`
-      const newAction = currentlyBlocked ? 'liberar' : 'bloquear'
+    (date: string, _time: string, _currentlyBlocked: boolean) => {
+      const isDateBlocked = blockedDates.has(date)
+      const action = isDateBlocked ? 'liberar' : 'bloquear'
       Alert.alert(
-        currentlyBlocked ? 'Liberar horario' : 'Bloquear horario',
-        `¿${newAction} el ${date} a las ${time}? Los clientes ${
-          currentlyBlocked
-            ? 'podrán reservar nuevamente'
-            : 'no podrán reservar este horario'
+        isDateBlocked ? 'Liberar día completo' : 'Bloquear día completo',
+        `¿Quieres ${action} el día ${date}? Los clientes ${
+          isDateBlocked
+            ? 'podrán reservar citas ese día nuevamente'
+            : 'no podrán reservar citas ese día'
         }.`,
         [
           { text: 'Cancelar', style: 'cancel' },
           {
             text: 'Confirmar',
             onPress: () => {
-              setBlockedSlots((prev) => {
-                const next = new Set(prev)
-                if (currentlyBlocked) next.delete(key)
-                else next.add(key)
-                return next
-              })
+              if (isDateBlocked) {
+                // Optimistic update
+                setBlockedDates((prev) => {
+                  const next = new Set(prev)
+                  next.delete(date)
+                  return next
+                })
+                deleteException.mutate(date, {
+                  onError: () => {
+                    // Rollback
+                    setBlockedDates((prev) => new Set([...prev, date]))
+                    Alert.alert('Error', 'No se pudo liberar el horario. Intenta de nuevo.')
+                  },
+                })
+              } else {
+                // Optimistic update
+                setBlockedDates((prev) => new Set([...prev, date]))
+                upsertException.mutate({ dateStr: date, data: { isAvailable: false } }, {
+                  onError: () => {
+                    // Rollback
+                    setBlockedDates((prev) => {
+                      const next = new Set(prev)
+                      next.delete(date)
+                      return next
+                    })
+                    Alert.alert('Error', 'No se pudo bloquear el horario. Intenta de nuevo.')
+                  },
+                })
+              }
             },
           },
         ],
       )
     },
-    [],
+    [blockedDates, upsertException, deleteException],
   )
 
   return (

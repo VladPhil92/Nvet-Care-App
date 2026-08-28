@@ -210,6 +210,38 @@ class VetService {
     const response = await apiClient.get('/vets/me/verification')
     return response.data
   }
+
+  async getMyScheduleExceptions(startDate: string, endDate: string): Promise<ScheduleException[]> {
+    const response = await apiClient.get<ScheduleException[]>('/vets/me/schedule/exceptions', {
+      params: { startDate, endDate },
+    })
+    return response.data
+  }
+
+  async upsertScheduleException(
+    dateStr: string,
+    data: { isAvailable?: boolean; reason?: string },
+  ): Promise<ScheduleException> {
+    const response = await apiClient.put<ScheduleException>(
+      `/vets/me/schedule/exceptions/${dateStr}`,
+      data,
+    )
+    return response.data
+  }
+
+  async deleteScheduleException(dateStr: string): Promise<void> {
+    await apiClient.delete(`/vets/me/schedule/exceptions/${dateStr}`)
+  }
+}
+
+export interface ScheduleException {
+  id: string
+  date: string
+  isAvailable: boolean
+  reason?: string
+  startTime?: string
+  endTime?: string
+  createdAt: string
 }
 
 export const vetService = new VetService()

@@ -7,8 +7,8 @@ import {
   Max,
   MaxLength,
   MinLength,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+} from "class-validator";
+import { Type } from "class-transformer";
 
 export class CreateReviewDto {
   @IsUUID()
@@ -19,8 +19,8 @@ export class CreateReviewDto {
    * Validado aquí y en DB (no existen ratings fuera de rango).
    */
   @IsInt()
-  @Min(1, { message: 'El rating mínimo es 1 estrella' })
-  @Max(5, { message: 'El rating máximo es 5 estrellas' })
+  @Min(1, { message: "El rating mínimo es 1 estrella" })
+  @Max(5, { message: "El rating máximo es 5 estrellas" })
   @Type(() => Number)
   rating: number;
 
@@ -30,8 +30,10 @@ export class CreateReviewDto {
    */
   @IsString()
   @IsOptional()
-  @MinLength(10, { message: 'El comentario debe tener al menos 10 caracteres' })
-  @MaxLength(1000, { message: 'El comentario no puede superar los 1000 caracteres' })
+  @MinLength(10, { message: "El comentario debe tener al menos 10 caracteres" })
+  @MaxLength(1000, {
+    message: "El comentario no puede superar los 1000 caracteres",
+  })
   comment?: string;
 }
 

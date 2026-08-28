@@ -8,14 +8,14 @@ import {
   IsNumber,
   Min,
   Max,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+} from "class-validator";
+import { Type } from "class-transformer";
 import {
   AppointmentStatus,
   PaymentMethod,
   TransactionStatus,
   VetTier,
-} from '@prisma/client';
+} from "@prisma/client";
 
 // ============================================================
 // METRICS FILTERS
@@ -75,7 +75,7 @@ export class AdminTransactionFiltersDto {
 // DISPUTE RESOLUTION
 // ============================================================
 
-export type DisputeResolution = 'CONFIRM' | 'REFUND' | 'CANCEL';
+export type DisputeResolution = "CONFIRM" | "REFUND" | "CANCEL";
 
 export class ResolveDisputeDto {
   @IsString()
@@ -106,7 +106,7 @@ export class UpdateVetTierDto {
 // EXPORTS
 // ============================================================
 
-export type ExportFormat = 'CSV' | 'XLSX';
+export type ExportFormat = "CSV" | "XLSX";
 
 export class ExportFiltersDto {
   @IsString()

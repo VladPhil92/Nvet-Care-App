@@ -6,21 +6,21 @@ import {
   Patch,
   Request,
   UseGuards,
-} from '@nestjs/common';
-import { UserRole } from '@prisma/client';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { UpdateLiveLocationDto } from './dto/update-live-location.dto';
-import { LiveLocationService } from './live-location.service';
+} from "@nestjs/common";
+import { UserRole } from "@prisma/client";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
+import { UpdateLiveLocationDto } from "./dto/update-live-location.dto";
+import { LiveLocationService } from "./live-location.service";
 
-@Controller('appointments')
+@Controller("appointments")
 @UseGuards(JwtAuthGuard)
 export class LiveLocationController {
   constructor(private readonly liveLocationService: LiveLocationService) {}
 
-  @Get(':id/live-location')
-  async getLiveLocation(@Param('id') id: string, @Request() req) {
+  @Get(":id/live-location")
+  async getLiveLocation(@Param("id") id: string, @Request() req) {
     return this.liveLocationService.getLiveLocation(
       id,
       req.user.id,
@@ -28,11 +28,11 @@ export class LiveLocationController {
     );
   }
 
-  @Patch(':id/live-location')
+  @Patch(":id/live-location")
   @UseGuards(RolesGuard)
   @Roles(UserRole.VET)
   async updateLiveLocation(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Request() req,
     @Body() dto: UpdateLiveLocationDto,
   ) {

@@ -1,13 +1,13 @@
-import { Module, BadRequestException } from '@nestjs/common';
-import { MulterModule } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
+import { Module, BadRequestException } from "@nestjs/common";
+import { MulterModule } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 
-import { PaymentsController } from './payments.controller';
-import { PaymentsService } from './payments.service';
-import { PseWebhookController } from './pse-webhook.controller';
-import { PseWebhookGuard } from './guards/pse-webhook.guard';
-import { PseSettlementService } from './pse-settlement.service';
-import { AuthModule } from '../auth/auth.module';
+import { PaymentsController } from "./payments.controller";
+import { PaymentsService } from "./payments.service";
+import { PseWebhookController } from "./pse-webhook.controller";
+import { PseWebhookGuard } from "./guards/pse-webhook.guard";
+import { PseSettlementService } from "./pse-settlement.service";
+import { AuthModule } from "../auth/auth.module";
 
 @Module({
   imports: [
@@ -20,10 +20,10 @@ import { AuthModule } from '../auth/auth.module';
       },
       fileFilter: (_req, file, cb) => {
         const allowed = [
-          'image/jpeg',
-          'image/jpg',
-          'image/png',
-          'application/pdf',
+          "image/jpeg",
+          "image/jpg",
+          "image/png",
+          "application/pdf",
         ];
         if (allowed.includes(file.mimetype)) {
           cb(null, true);

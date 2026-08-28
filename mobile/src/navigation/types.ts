@@ -93,6 +93,7 @@ export type SharedStackParamList = {
   PriceManagement: undefined
   RequestWithdrawal: undefined
   TransferVerification: { transactionId: string }
+  ChangePassword: undefined
 }
 
 // ============================================================

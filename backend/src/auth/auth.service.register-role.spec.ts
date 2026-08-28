@@ -32,7 +32,7 @@ describe('AuthService.register (role escalation guard)', () => {
     };
 
     passwordService = {
-      validateStrength: jest.fn().mockReturnValue({ isValid: true, reasons: [] }),
+      validateStrength: jest.fn().mockReturnValue({ valid: true, issues: [] }),
       hash: jest.fn().mockResolvedValue('hashed-password'),
     };
 

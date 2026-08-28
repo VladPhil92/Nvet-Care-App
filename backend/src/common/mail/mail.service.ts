@@ -1,9 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from "@nestjs/common";
 import {
   passwordResetTemplate,
   emailVerificationTemplate,
   vetApprovalTemplate,
-} from './mail.templates';
+} from "./mail.templates";
 
 /**
  * MailService — capa de envío de email production-grade con driver pluggable.
@@ -59,35 +59,36 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   // driverName y driver NO son readonly porque pueden cambiar en el constructor
   // si SENDGRID_API_KEY falta y caemos a console.
-  private driverName: 'console' | 'sendgrid' | 'ses' | 'smtp';
+  private driverName: "console" | "sendgrid" | "ses" | "smtp";
   private driver: DriverFn;
   private readonly fromAddress: string;
   private readonly fromName: string;
 
   constructor() {
-    const configured = (process.env.MAIL_DRIVER ?? '').trim().toLowerCase();
-    const valid = ['console', 'sendgrid', 'ses', 'smtp'];
-    this.driverName =
-      (valid.includes(configured) ? configured : 'console') as typeof this.driverName;
+    const configured = (process.env.MAIL_DRIVER ?? "").trim().toLowerCase();
+    const valid = ["console", "sendgrid", "ses", "smtp"];
+    this.driverName = (
+      valid.includes(configured) ? configured : "console"
+    ) as typeof this.driverName;
 
-    this.fromAddress = process.env.MAIL_FROM ?? 'no-reply@nvetcare.co';
-    this.fromName = process.env.MAIL_FROM_NAME ?? 'Nvet Care';
+    this.fromAddress = process.env.MAIL_FROM ?? "no-reply@nvetcare.co";
+    this.fromName = process.env.MAIL_FROM_NAME ?? "Nvet Care";
 
     switch (this.driverName) {
-      case 'sendgrid':
+      case "sendgrid":
         this.driver = this.sendViaSendGrid.bind(this);
         if (!process.env.SENDGRID_API_KEY) {
           this.logger.error(
-            'MAIL_DRIVER=sendgrid pero SENDGRID_API_KEY no está configurado. Cayendo a console.',
+            "MAIL_DRIVER=sendgrid pero SENDGRID_API_KEY no está configurado. Cayendo a console.",
           );
-          this.driverName = 'console';
+          this.driverName = "console";
           this.driver = this.sendViaConsole.bind(this);
         }
         break;
-      case 'ses':
+      case "ses":
         this.driver = this.sendViaSes.bind(this);
         break;
-      case 'smtp':
+      case "smtp":
         this.driver = this.sendViaSmtp.bind(this);
         break;
       default:
@@ -115,7 +116,7 @@ export class MailService {
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
-      category: 'password_reset',
+      category: "password_reset",
     });
   }
 
@@ -131,7 +132,7 @@ export class MailService {
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
-      category: 'email_verification',
+      category: "email_verification",
     });
   }
 
@@ -146,7 +147,7 @@ export class MailService {
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
-      category: 'vet_verification_approved',
+      category: "vet_verification_approved",
     });
   }
 
@@ -165,7 +166,7 @@ export class MailService {
     try {
       return await this.driver(params, this.fromAddress, this.fromName);
     } catch (e) {
-      const msg = (e as Error).message ?? 'unknown error';
+      const msg = (e as Error).message ?? "unknown error";
       this.logger.error(
         `MailService.send falló (driver=${this.driverName}, to=${params.to}): ${msg}`,
       );
@@ -188,14 +189,14 @@ export class MailService {
     _fromName: string,
   ): Promise<SendResult> {
     this.logger.log(
-      `[MAIL:console] to=${params.to} subject="${params.subject}" category=${params.category ?? '-'}`,
+      `[MAIL:console] to=${params.to} subject="${params.subject}" category=${params.category ?? "-"}`,
     );
     // Imprimimos el text plano (no el HTML) para mantener logs legibles
     this.logger.debug(`[MAIL:console] body:\n${params.text}`);
     return {
       ok: true,
       providerMessageId: `console-${Date.now()}`,
-      driver: 'console',
+      driver: "console",
     };
   }
 
@@ -214,8 +215,8 @@ export class MailService {
       from: { email: from, name: fromName },
       subject: params.subject,
       content: [
-        { type: 'text/plain', value: params.text },
-        { type: 'text/html', value: params.html },
+        { type: "text/plain", value: params.text },
+        { type: "text/html", value: params.html },
       ],
       categories: params.category ? [params.category] : undefined,
       // SendGrid mejora deliverability con tracking_settings; los desactivamos
@@ -227,22 +228,22 @@ export class MailService {
       },
     };
 
-    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
-      method: 'POST',
+    const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
     });
 
     if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
+      const errBody = await res.text().catch(() => "");
       throw new Error(`SendGrid ${res.status}: ${errBody.slice(0, 500)}`);
     }
     // SendGrid retorna 202 sin body; el message-id viene en headers
-    const messageId = res.headers.get('x-message-id') ?? undefined;
-    return { ok: true, providerMessageId: messageId, driver: 'sendgrid' };
+    const messageId = res.headers.get("x-message-id") ?? undefined;
+    return { ok: true, providerMessageId: messageId, driver: "sendgrid" };
   }
 
   /**
@@ -268,12 +269,12 @@ export class MailService {
     _fromName: string,
   ): Promise<SendResult> {
     this.logger.warn(
-      'MAIL_DRIVER=ses pero el driver es stub. Instala @aws-sdk/client-ses y reemplaza sendViaSes().',
+      "MAIL_DRIVER=ses pero el driver es stub. Instala @aws-sdk/client-ses y reemplaza sendViaSes().",
     );
     return {
       ok: false,
-      error: 'SES driver no implementado (stub)',
-      driver: 'ses',
+      error: "SES driver no implementado (stub)",
+      driver: "ses",
     };
   }
 
@@ -289,12 +290,12 @@ export class MailService {
     _fromName: string,
   ): Promise<SendResult> {
     this.logger.warn(
-      'MAIL_DRIVER=smtp pero el driver es stub. Instala nodemailer y reemplaza sendViaSmtp().',
+      "MAIL_DRIVER=smtp pero el driver es stub. Instala nodemailer y reemplaza sendViaSmtp().",
     );
     return {
       ok: false,
-      error: 'SMTP driver no implementado (stub)',
-      driver: 'smtp',
+      error: "SMTP driver no implementado (stub)",
+      driver: "smtp",
     };
   }
 }

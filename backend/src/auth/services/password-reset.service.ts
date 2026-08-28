@@ -3,13 +3,13 @@ import {
   BadRequestException,
   UnauthorizedException,
   Logger,
-} from '@nestjs/common';
-import * as crypto from 'crypto';
-import { AuditAction, AuditSeverity } from '@prisma/client';
-import { PrismaService } from '../../prisma/prisma.service';
-import { AuditService } from '../../common/audit/audit.service';
-import { MailService } from '../../common/mail/mail.service';
-import { PasswordService } from './password.service';
+} from "@nestjs/common";
+import * as crypto from "crypto";
+import { AuditAction, AuditSeverity } from "@prisma/client";
+import { PrismaService } from "../../prisma/prisma.service";
+import { AuditService } from "../../common/audit/audit.service";
+import { MailService } from "../../common/mail/mail.service";
+import { PasswordService } from "./password.service";
 
 /**
  * PasswordResetService — flujo de recuperación de contraseña vía email.
@@ -41,7 +41,10 @@ export class PasswordResetService {
    * Inicia el flujo: genera un token, lo persiste hasheado, dispara el email.
    * SIEMPRE retorna el mismo mensaje (no revela si el email existe).
    */
-  async requestReset(email: string, ipAddress?: string): Promise<{ message: string }> {
+  async requestReset(
+    email: string,
+    ipAddress?: string,
+  ): Promise<{ message: string }> {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -50,7 +53,7 @@ export class PasswordResetService {
 
     // Mensaje genérico anti enumeration
     const genericMessage =
-      'Si el email existe en nuestro sistema, recibirás instrucciones de recuperación en los próximos minutos.';
+      "Si el email existe en nuestro sistema, recibirás instrucciones de recuperación en los próximos minutos.";
 
     if (!user || !user.isActive) {
       // Log para auditoría sin revelar al cliente
@@ -63,7 +66,7 @@ export class PasswordResetService {
     }
 
     // Generar token: 32 bytes random hex (64 chars) + userId
-    const rawToken = crypto.randomBytes(this.TOKEN_BYTES).toString('hex');
+    const rawToken = crypto.randomBytes(this.TOKEN_BYTES).toString("hex");
     const tokenHash = this.hashToken(rawToken);
     const expiresAt = new Date(Date.now() + this.TOKEN_TTL_MINUTES * 60 * 1000);
 
@@ -77,15 +80,19 @@ export class PasswordResetService {
 
     // Token público enviado al usuario: <userId>.<rawToken>
     const publicToken = `${user.id}.${rawToken}`;
-    await this.sendResetEmail(user.email, user.firstName ?? 'usuario', publicToken);
+    await this.sendResetEmail(
+      user.email,
+      user.firstName ?? "usuario",
+      publicToken,
+    );
 
     await this.auditService.log({
       actor: { id: user.id, ip: ipAddress },
       action: AuditAction.PASSWORD_RESET_REQUESTED,
       severity: AuditSeverity.WARN,
-      targetType: 'User',
+      targetType: "User",
       targetId: user.id,
-      reason: 'reset_link_dispatched',
+      reason: "reset_link_dispatched",
     });
 
     return { message: genericMessage };
@@ -96,9 +103,9 @@ export class PasswordResetService {
    * Tras éxito: limpia el token, invalida sesiones, desbloquea cuenta.
    */
   async resetPassword(publicToken: string, newPassword: string): Promise<void> {
-    const parts = publicToken.split('.');
+    const parts = publicToken.split(".");
     if (parts.length !== 2) {
-      throw new BadRequestException('Token de recuperación inválido');
+      throw new BadRequestException("Token de recuperación inválido");
     }
     const [userId, rawToken] = parts;
     const tokenHash = this.hashToken(rawToken);
@@ -113,7 +120,7 @@ export class PasswordResetService {
       },
     });
     if (!user || !user.passwordResetTokenHash || !user.passwordResetExpiresAt) {
-      throw new UnauthorizedException('Token inválido o expirado');
+      throw new UnauthorizedException("Token inválido o expirado");
     }
 
     // Comparación timing-safe del hash
@@ -122,17 +129,19 @@ export class PasswordResetService {
     const tokenMatches = a.length === b.length && crypto.timingSafeEqual(a, b);
 
     if (!tokenMatches) {
-      throw new UnauthorizedException('Token inválido o expirado');
+      throw new UnauthorizedException("Token inválido o expirado");
     }
     if (user.passwordResetExpiresAt.getTime() < Date.now()) {
-      throw new UnauthorizedException('El token ha expirado. Solicita uno nuevo.');
+      throw new UnauthorizedException(
+        "El token ha expirado. Solicita uno nuevo.",
+      );
     }
 
     // Validar fortaleza adicional (anti-common-passwords + diversidad)
     const strengthCheck = this.passwordService.validateStrength(newPassword);
     if (!strengthCheck.valid) {
       throw new BadRequestException(
-        `Contraseña débil: ${strengthCheck.issues.join(', ')}`,
+        `Contraseña débil: ${strengthCheck.issues.join(", ")}`,
       );
     }
 
@@ -140,10 +149,13 @@ export class PasswordResetService {
     // provisionada vía CTG One y nunca tuvo password (user.passwordHash
     // null), passwordService.verify degrada a isValid: false — no hay nada
     // que comparar, así que se permite establecer la primera contraseña.
-    const sameAsCurrent = await this.passwordService.verify(newPassword, user.passwordHash);
+    const sameAsCurrent = await this.passwordService.verify(
+      newPassword,
+      user.passwordHash,
+    );
     if (sameAsCurrent.valid) {
       throw new BadRequestException(
-        'La nueva contraseña no puede ser igual a la anterior',
+        "La nueva contraseña no puede ser igual a la anterior",
       );
     }
 
@@ -164,7 +176,7 @@ export class PasswordResetService {
       }),
       this.prisma.userSession.updateMany({
         where: { userId, revokedAt: null },
-        data: { revokedAt: new Date(), revokedReason: 'password_reset' },
+        data: { revokedAt: new Date(), revokedReason: "password_reset" },
       }),
     ]);
 
@@ -172,9 +184,9 @@ export class PasswordResetService {
       actor: { id: userId },
       action: AuditAction.PASSWORD_RESET_COMPLETED,
       severity: AuditSeverity.CRITICAL,
-      targetType: 'User',
+      targetType: "User",
       targetId: userId,
-      reason: 'password_reset_completed',
+      reason: "password_reset_completed",
     });
 
     this.logger.log(`password-reset completado para userId=${userId}`);
@@ -185,13 +197,15 @@ export class PasswordResetService {
   // ============================================================
 
   private hashToken(rawToken: string): string {
-    return crypto.createHash('sha256').update(rawToken).digest('hex');
+    return crypto.createHash("sha256").update(rawToken).digest("hex");
   }
 
   private async constantTimeDelay(): Promise<void> {
     // Espera ~250ms para que el endpoint tarde lo mismo independientemente
     // de si el email existe o no (mitiga user-enumeration por timing).
-    await new Promise((resolve) => setTimeout(resolve, 200 + Math.random() * 100));
+    await new Promise((resolve) =>
+      setTimeout(resolve, 200 + Math.random() * 100),
+    );
   }
 
   /**
@@ -211,7 +225,7 @@ export class PasswordResetService {
     firstName: string,
     publicToken: string,
   ): Promise<void> {
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://app.nvetcare.co';
+    const frontendUrl = process.env.FRONTEND_URL ?? "https://app.nvetcare.co";
     const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(publicToken)}`;
 
     const result = await this.mailService.sendPasswordReset({
@@ -228,7 +242,7 @@ export class PasswordResetService {
     } else {
       this.logger.log(
         `Password reset email enviado (driver=${result.driver}, providerId=${
-          result.providerMessageId ?? '-'
+          result.providerMessageId ?? "-"
         }, to=${email})`,
       );
     }

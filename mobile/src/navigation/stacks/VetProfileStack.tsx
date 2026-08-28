@@ -11,6 +11,7 @@ import EditProfileScreen from '../../screens/shared/EditProfileScreen'
 import PriceManagementScreen from '../../screens/vet/PriceManagementScreen'
 import RequestWithdrawalScreen from '../../screens/vet/RequestWithdrawalScreen'
 import TwoFactorEnrollmentScreen from '../../screens/auth/TwoFactorEnrollmentScreen'
+import ChangePasswordScreen from '../../screens/auth/ChangePasswordScreen'
 import ActiveSessionsScreen from '../../screens/shared/ActiveSessionsScreen'
 import MyPetsScreen from '../../screens/shared/MyPetsScreen'
 
@@ -50,6 +51,7 @@ export default function VetProfileStack() {
         name="TwoFactorEnrollment"
         component={TwoFactorEnrollmentScreen}
       />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <Stack.Screen name="ActiveSessions" component={ActiveSessionsScreen} />
       <Stack.Screen name="MyPets" component={MyPetsScreen} />
     </Stack.Navigator>

@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common'
-import { PrismaService } from '../../prisma/prisma.service'
-import { AuditAction, AuditSeverity, Prisma } from '@prisma/client'
+import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../../prisma/prisma.service";
+import { AuditAction, AuditSeverity, Prisma } from "@prisma/client";
 
 /**
  * AuditService — registro append-only de acciones críticas.
@@ -19,27 +19,27 @@ import { AuditAction, AuditSeverity, Prisma } from '@prisma/client'
  */
 
 interface ActorContext {
-  id?: string
-  role?: string
-  ip?: string
-  userAgent?: string
+  id?: string;
+  role?: string;
+  ip?: string;
+  userAgent?: string;
 }
 
 interface AuditEntry {
-  actor?: ActorContext
-  action: AuditAction
-  severity?: AuditSeverity
-  targetType?: string
-  targetId?: string
-  beforeData?: unknown
-  afterData?: unknown
-  reason?: string
-  metadata?: Record<string, unknown>
+  actor?: ActorContext;
+  action: AuditAction;
+  severity?: AuditSeverity;
+  targetType?: string;
+  targetId?: string;
+  beforeData?: unknown;
+  afterData?: unknown;
+  reason?: string;
+  metadata?: Record<string, unknown>;
 }
 
 @Injectable()
 export class AuditService {
-  private readonly logger = new Logger(AuditService.name)
+  private readonly logger = new Logger(AuditService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -64,12 +64,12 @@ export class AuditService {
           reason: this.truncate(entry.reason, 1000),
           metadata: this.sanitizeJson(entry.metadata),
         },
-      })
+      });
     } catch (e) {
       // Log local pero no rethrow: la operación principal no debe fallar
       this.logger.warn(
         `Audit log insert failed for action=${entry.action}: ${(e as Error).message}`,
-      )
+      );
     }
   }
 
@@ -90,53 +90,59 @@ export class AuditService {
       severity: AuditSeverity.INFO,
       targetType: target.type,
       targetId: target.id,
-      beforeData: this.diffOnlyChanged(before, after, 'before'),
-      afterData: this.diffOnlyChanged(before, after, 'after'),
+      beforeData: this.diffOnlyChanged(before, after, "before"),
+      afterData: this.diffOnlyChanged(before, after, "after"),
       reason,
-    })
+    });
   }
 
   /**
    * Búsqueda paginada del audit log (admin only).
    */
   async query(filters: {
-    actorId?: string
-    action?: AuditAction
-    severity?: AuditSeverity
-    targetType?: string
-    targetId?: string
-    startDate?: Date
-    endDate?: Date
-    limit?: number
-    offset?: number
+    actorId?: string;
+    action?: AuditAction;
+    severity?: AuditSeverity;
+    targetType?: string;
+    targetId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
   }) {
-    const where: Prisma.AuditLogWhereInput = {}
-    if (filters.actorId) where.actorId = filters.actorId
-    if (filters.action) where.action = filters.action
-    if (filters.severity) where.severity = filters.severity
-    if (filters.targetType) where.targetType = filters.targetType
-    if (filters.targetId) where.targetId = filters.targetId
+    const where: Prisma.AuditLogWhereInput = {};
+    if (filters.actorId) where.actorId = filters.actorId;
+    if (filters.action) where.action = filters.action;
+    if (filters.severity) where.severity = filters.severity;
+    if (filters.targetType) where.targetType = filters.targetType;
+    if (filters.targetId) where.targetId = filters.targetId;
 
     if (filters.startDate || filters.endDate) {
-      where.createdAt = {}
-      if (filters.startDate) where.createdAt.gte = filters.startDate
-      if (filters.endDate) where.createdAt.lte = filters.endDate
+      where.createdAt = {};
+      if (filters.startDate) where.createdAt.gte = filters.startDate;
+      if (filters.endDate) where.createdAt.lte = filters.endDate;
     }
 
-    const limit = Math.min(filters.limit ?? 50, 200)
-    const offset = filters.offset ?? 0
+    const limit = Math.min(filters.limit ?? 50, 200);
+    const offset = filters.offset ?? 0;
 
     const [results, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where,
         take: limit,
         skip: offset,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.auditLog.count({ where }),
-    ])
+    ]);
 
-    return { results, total, limit, offset, hasMore: offset + results.length < total }
+    return {
+      results,
+      total,
+      limit,
+      offset,
+      hasMore: offset + results.length < total,
+    };
   }
 
   // ----------------------------------------------------------
@@ -148,53 +154,53 @@ export class AuditService {
    * y trunca para evitar valores anómalos.
    */
   private normalizeIp(ip?: string): string | undefined {
-    if (!ip) return undefined
-    const first = ip.split(',')[0].trim()
-    return first.slice(0, 45) // IPv6 max length
+    if (!ip) return undefined;
+    const first = ip.split(",")[0].trim();
+    return first.slice(0, 45); // IPv6 max length
   }
 
   private truncate(str?: string, max = 500): string | undefined {
-    if (!str) return undefined
-    return str.length > max ? str.slice(0, max) + '…' : str
+    if (!str) return undefined;
+    return str.length > max ? str.slice(0, max) + "…" : str;
   }
 
   /**
    * Sanitiza objetos JSON: elimina campos sensibles antes de persistir.
    */
   private sanitizeJson(obj: unknown): Prisma.InputJsonValue | undefined {
-    if (obj === undefined || obj === null) return undefined
+    if (obj === undefined || obj === null) return undefined;
 
     const SENSITIVE_KEYS = new Set([
-      'password',
-      'passwordHash',
-      'refreshToken',
-      'accessToken',
-      'cvv',
-      'creditCard',
-      'ssn',
-    ])
+      "password",
+      "passwordHash",
+      "refreshToken",
+      "accessToken",
+      "cvv",
+      "creditCard",
+      "ssn",
+    ]);
 
-    const seen = new WeakSet()
+    const seen = new WeakSet();
 
     const clean = (v: unknown): unknown => {
-      if (v === null || v === undefined) return v
-      if (typeof v !== 'object') return v
-      if (seen.has(v as object)) return '[Circular]'
-      seen.add(v as object)
+      if (v === null || v === undefined) return v;
+      if (typeof v !== "object") return v;
+      if (seen.has(v as object)) return "[Circular]";
+      seen.add(v as object);
 
-      if (Array.isArray(v)) return v.map(clean)
-      const out: Record<string, unknown> = {}
+      if (Array.isArray(v)) return v.map(clean);
+      const out: Record<string, unknown> = {};
       for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
         if (SENSITIVE_KEYS.has(k)) {
-          out[k] = '[REDACTED]'
+          out[k] = "[REDACTED]";
         } else {
-          out[k] = clean(val)
+          out[k] = clean(val);
         }
       }
-      return out
-    }
+      return out;
+    };
 
-    return clean(obj) as Prisma.InputJsonValue
+    return clean(obj) as Prisma.InputJsonValue;
   }
 
   /**
@@ -204,18 +210,21 @@ export class AuditService {
   private diffOnlyChanged(
     before: Record<string, unknown>,
     after: Record<string, unknown>,
-    side: 'before' | 'after',
+    side: "before" | "after",
   ): Record<string, unknown> {
-    const result: Record<string, unknown> = {}
-    const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])
+    const result: Record<string, unknown> = {};
+    const keys = new Set([
+      ...Object.keys(before ?? {}),
+      ...Object.keys(after ?? {}),
+    ]);
     for (const k of keys) {
-      const a = before?.[k]
-      const b = after?.[k]
-      const changed = JSON.stringify(a) !== JSON.stringify(b)
+      const a = before?.[k];
+      const b = after?.[k];
+      const changed = JSON.stringify(a) !== JSON.stringify(b);
       if (changed) {
-        result[k] = side === 'before' ? a : b
+        result[k] = side === "before" ? a : b;
       }
     }
-    return result
+    return result;
   }
 }

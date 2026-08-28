@@ -83,6 +83,7 @@ const enUS: Translations = {
       changePassword: 'Change password',
       twoFactor: 'Two-factor authentication',
       privacy: 'Privacy',
+      activeSessions: 'Active sessions',
       help: 'Help & support',
       terms: 'Terms & conditions',
       about: 'About Nvet Care',
