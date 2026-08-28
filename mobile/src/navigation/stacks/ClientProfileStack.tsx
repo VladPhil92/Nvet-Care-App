@@ -9,6 +9,7 @@ import UploadVerificationDocsScreen from '../../screens/shared/UploadVerificatio
 import TopUpWalletScreen from '../../screens/shared/TopUpWalletScreen'
 import EditProfileScreen from '../../screens/shared/EditProfileScreen'
 import TwoFactorEnrollmentScreen from '../../screens/auth/TwoFactorEnrollmentScreen'
+import ChangePasswordScreen from '../../screens/auth/ChangePasswordScreen'
 import ActiveSessionsScreen from '../../screens/shared/ActiveSessionsScreen'
 import MyPetsScreen from '../../screens/shared/MyPetsScreen'
 
@@ -45,6 +46,7 @@ export default function ClientProfileStack() {
         name="TwoFactorEnrollment"
         component={TwoFactorEnrollmentScreen}
       />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <Stack.Screen name="ActiveSessions" component={ActiveSessionsScreen} />
       <Stack.Screen name="MyPets" component={MyPetsScreen} />
     </Stack.Navigator>

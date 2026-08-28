@@ -223,9 +223,21 @@ export default function ProfileScreen({ navigation }: Props) {
         {/* Seguridad */}
         <Section title={t('profile.sections.security').toUpperCase()}>
           <Card>
-            <MenuRow glyph="🔒" label={t('profile.menu.changePassword')} />
-            <MenuRow glyph="🔐" label={t('profile.menu.twoFactor')} />
-            <MenuRow glyph="🛡️" label={t('profile.menu.privacy')} />
+            <MenuRow
+              glyph="🔒"
+              label={t('profile.menu.changePassword')}
+              onPress={() => navigation.navigate('ChangePassword')}
+            />
+            <MenuRow
+              glyph="🔐"
+              label={t('profile.menu.twoFactor')}
+              onPress={() => navigation.navigate('TwoFactorEnrollment')}
+            />
+            <MenuRow
+              glyph="👁️"
+              label={t('profile.menu.activeSessions')}
+              onPress={() => navigation.navigate('ActiveSessions')}
+            />
           </Card>
         </Section>
 

@@ -7,6 +7,7 @@ import LoginScreen from '../screens/auth/LoginScreen'
 import RegisterScreen from '../screens/auth/RegisterScreen'
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen'
 import TwoFactorVerifyScreen from '../screens/auth/TwoFactorVerifyScreen'
+import TwoFactorRecoveryScreen from '../screens/auth/TwoFactorRecoveryScreen'
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen'
 
 const Stack = createNativeStackNavigator<AuthStackParamList>()
@@ -46,6 +47,11 @@ export default function AuthNavigator() {
       <Stack.Screen
         name="TwoFactorVerify"
         component={TwoFactorVerifyScreen}
+        options={{ gestureEnabled: false }}
+      />
+      <Stack.Screen
+        name="TwoFactorRecovery"
+        component={TwoFactorRecoveryScreen}
         options={{ gestureEnabled: false }}
       />
       {/*
