@@ -105,10 +105,10 @@ describe('AuthService.refreshToken (reuse detection)', () => {
       },
     };
     prisma.userSession.findUnique.mockResolvedValue(session);
-    // refreshToken() firma primero el refresh token y luego el access token.
+    // refreshToken() firma primero el access token y luego el refresh token.
     jwtService.signAsync
-      .mockResolvedValueOnce('new.refresh.jwt')
-      .mockResolvedValueOnce('new.access.jwt');
+      .mockResolvedValueOnce('new.access.jwt')
+      .mockResolvedValueOnce('new.refresh.jwt');
 
     const result = await service.refreshToken(incomingToken, {
       ipAddress: '1.1.1.1',
@@ -146,8 +146,8 @@ describe('AuthService.refreshToken (reuse detection)', () => {
     };
     prisma.userSession.findUnique.mockResolvedValue(session);
     jwtService.signAsync
-      .mockResolvedValueOnce('new.refresh')
-      .mockResolvedValueOnce('new.access');
+      .mockResolvedValueOnce('new.access')
+      .mockResolvedValueOnce('new.refresh');
 
     await service.refreshToken(incomingToken);
 

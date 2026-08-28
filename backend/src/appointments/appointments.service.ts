@@ -291,54 +291,26 @@ export class AppointmentsService {
       { status: "PENDING", timestamp: appointment.createdAt.toISOString() },
     ];
 
-    const apt = appointment as any;
-    if (apt.confirmedAt)
-      statusHistory.push({
-        status: "CONFIRMED",
-        timestamp: apt.confirmedAt.toISOString(),
-      });
-    if (apt.inProgressAt)
-      statusHistory.push({
-        status: "IN_PROGRESS",
-        timestamp: apt.inProgressAt.toISOString(),
-      });
-    if (apt.completedAt)
-      statusHistory.push({
-        status: "COMPLETED",
-        timestamp: apt.completedAt.toISOString(),
-      });
     if (appointment.confirmedAt) {
       statusHistory.push({
-        status: 'CONFIRMED',
+        status: "CONFIRMED",
         timestamp: appointment.confirmedAt.toISOString(),
       });
     }
     if (appointment.inProgressAt) {
       statusHistory.push({
-        status: 'IN_PROGRESS',
+        status: "IN_PROGRESS",
         timestamp: appointment.inProgressAt.toISOString(),
       });
     }
     if (appointment.completedAt) {
       statusHistory.push({
-        status: 'COMPLETED',
+        status: "COMPLETED",
         timestamp: appointment.completedAt.toISOString(),
       });
     }
 
     const vetLocation =
-      apt.vetLatitude != null && apt.vetLongitude != null
-        ? {
-            latitude: apt.vetLatitude,
-            longitude: apt.vetLongitude,
-            updatedAt: apt.vetLocationAt,
-          }
-        : null;
-
-    // ETA: use stored value if available, otherwise estimate from appointment time
-    let estimatedArrival: string | null =
-      apt.etaMinutes != null
-        ? new Date(Date.now() + apt.etaMinutes * 60 * 1000).toISOString()
       appointment.vetLatitude != null && appointment.vetLongitude != null
         ? {
             latitude: appointment.vetLatitude,
@@ -359,7 +331,6 @@ export class AppointmentsService {
       appointment.status === AppointmentStatus.CONFIRMED
     ) {
       const [hours, minutes] = appointment.time.split(":").map(Number);
-      const [hours, minutes] = appointment.time.split(':').map(Number);
       const scheduled = new Date(appointment.date);
       scheduled.setHours(hours, minutes, 0, 0);
       if (scheduled > new Date()) {
@@ -372,11 +343,8 @@ export class AppointmentsService {
       currentStatus: appointment.status,
       vetLocation,
       estimatedArrival,
-      etaMinutes: apt.etaMinutes ?? null,
-      scheduledAt: apt.scheduledAt ?? appointment.date,
-      lastStatusChangeAt: apt.lastStatusChangeAt ?? appointment.updatedAt,
       etaMinutes: appointment.etaMinutes ?? null,
-      scheduledAt: appointment.scheduledAt ?? appointment.date,
+      scheduledAt: (appointment as any).scheduledAt ?? appointment.date,
       lastStatusChangeAt:
         appointment.lastStatusChangeAt ?? appointment.updatedAt,
       statusHistory,
@@ -402,7 +370,6 @@ export class AppointmentsService {
     if (appointment.status !== AppointmentStatus.IN_PROGRESS) {
       throw new BadRequestException(
         "Location updates only allowed for in-progress appointments",
-        'Location updates only allowed for in-progress appointments',
       );
     }
 
@@ -442,19 +409,6 @@ export class AppointmentsService {
     if (next === AppointmentStatus.IN_PROGRESS)
       timestampField.inProgressAt = now;
     if (next === AppointmentStatus.COMPLETED) timestampField.completedAt = now;
-    this.validateStatusTransition(
-      appointment.status,
-      status as AppointmentStatus,
-    );
-    if (next === AppointmentStatus.CONFIRMED) {
-      timestampField.confirmedAt = now;
-    }
-    if (next === AppointmentStatus.IN_PROGRESS) {
-      timestampField.inProgressAt = now;
-    }
-    if (next === AppointmentStatus.COMPLETED) {
-      timestampField.completedAt = now;
-    }
 
     return this.prisma.appointment.update({
       where: { id },

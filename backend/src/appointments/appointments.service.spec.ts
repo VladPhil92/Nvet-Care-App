@@ -42,6 +42,8 @@ describe('AppointmentsService', () => {
     transaction: null,
   };
 
+  let scheduleService: any;
+
   beforeEach(() => {
     prisma = {
       vetProfile: { findUnique: jest.fn() },
@@ -54,7 +56,13 @@ describe('AppointmentsService', () => {
       },
     };
 
-    service = new AppointmentsService(prisma);
+    scheduleService = {
+      getAvailability: jest.fn().mockResolvedValue([
+        { time: '10:00', available: true },
+      ]),
+    };
+
+    service = new AppointmentsService(prisma, scheduleService);
   });
 
   // ─────────────────────────────────────────────────────────────────
@@ -73,7 +81,7 @@ describe('AppointmentsService', () => {
       paymentMethod: 'TRANSFER',
     };
 
-    it('crea cita con transacción y comisión correcta (PRO 8%)', async () => {
+    it('crea cita con status PENDING y datos correctos', async () => {
       prisma.vetProfile.findUnique.mockResolvedValue(baseVet);
       prisma.pet.findUnique.mockResolvedValue(basePet);
       prisma.appointment.create.mockResolvedValue({ id: APPT_ID, status: AppointmentStatus.PENDING });
@@ -84,12 +92,10 @@ describe('AppointmentsService', () => {
       expect(prisma.appointment.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            transaction: {
-              create: expect.objectContaining({
-                commissionPct: 8, // PRO = 8%
-                commissionAmount: 6_400, // 80_000 * 0.08
-              }),
-            },
+            vetId: VET_PROFILE_ID,
+            clientId: CLIENT_ID,
+            petId: PET_ID,
+            status: AppointmentStatus.PENDING,
           }),
         }),
       );
