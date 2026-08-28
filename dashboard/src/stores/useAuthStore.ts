@@ -75,7 +75,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         isLoading: false,
         error: null,
       })
-    } catch (error: any) {
+    } catch (_error: any) {
       set({ isLoading: false })
       // Limpiar estado local incluso si la llamada API falla
       set({

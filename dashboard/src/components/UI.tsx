@@ -194,6 +194,7 @@ export const Hr = ({ my = 20 }: HrProps) => (
 )
 
 // Input Styles
+// eslint-disable-next-line react-refresh/only-export-components
 export const inputStyle: CSSProperties = {
   width: '100%',
   padding: '10px 14px',
@@ -207,6 +208,7 @@ export const inputStyle: CSSProperties = {
 }
 
 // Card Style
+// eslint-disable-next-line react-refresh/only-export-components
 export const cardStyle: CSSProperties = {
   background: T.surface,
   borderRadius: 12,
