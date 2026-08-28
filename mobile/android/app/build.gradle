@@ -1,3 +1,6 @@
+// Monorepo: react-native is hoisted to root node_modules, tell Reanimated where to find it
+project.ext.REACT_NATIVE_NODE_MODULES_DIR = file("../../../node_modules").absolutePath
+
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
