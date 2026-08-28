@@ -1,7 +1,6 @@
 package com.nvetcare;
 
 import com.wix.detox.Detox;
-import com.wix.detox.config.DetoxConfig;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -20,10 +19,6 @@ public class DetoxTest {
 
     @Test
     public void runDetoxTests() {
-        DetoxConfig detoxConfig = new DetoxConfig();
-        detoxConfig.idlePolicyConfig.masterTimeoutSec = 90;
-        detoxConfig.idlePolicyConfig.idleResourceTimeoutSec = 60;
-        detoxConfig.rnContextLoadTimeoutSec = (BuildConfig.DEBUG ? 180 : 60);
-        Detox.runTests(mActivityRule, detoxConfig);
+        Detox.runTests(mActivityRule);
     }
 }
