@@ -1,4 +1,5 @@
 module.exports = {
+  root: true,
   parser: '@typescript-eslint/parser',
   parserOptions: {
     project: 'tsconfig.json',
@@ -7,6 +8,7 @@ module.exports = {
     sourceType: 'module',
   },
   plugins: ['@typescript-eslint/eslint-plugin'],
+  plugins: ['@typescript-eslint'],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
@@ -34,6 +36,17 @@ module.exports = {
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-require-imports': 'off',
     '@typescript-eslint/no-non-null-assertion': 'off',
+  ignorePatterns: ['dist/', 'coverage/', 'node_modules/', '.eslintrc.js'],
+  rules: {
+    '@typescript-eslint/no-explicit-any': 'off',
+    '@typescript-eslint/no-non-null-assertion': 'off',
+    '@typescript-eslint/no-unused-vars': [
+      'warn',
+      { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+    ],
+    '@typescript-eslint/explicit-function-return-type': 'off',
+    '@typescript-eslint/explicit-module-boundary-types': 'off',
+    '@typescript-eslint/no-require-imports': 'off',
     'no-useless-catch': 'warn',
     'prefer-const': 'warn',
   },
