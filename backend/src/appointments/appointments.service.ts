@@ -287,28 +287,49 @@ export class AppointmentsService {
   async getAppointmentTracking(id: string) {
     const appointment = await this.getAppointmentById(id);
 
-    // Build status history from stored timestamps
     const statusHistory: { status: string; timestamp: string }[] = [
       { status: 'PENDING', timestamp: appointment.createdAt.toISOString() },
     ];
 
-    const apt = appointment as any;
-    if (apt.confirmedAt) statusHistory.push({ status: 'CONFIRMED', timestamp: apt.confirmedAt.toISOString() });
-    if (apt.inProgressAt) statusHistory.push({ status: 'IN_PROGRESS', timestamp: apt.inProgressAt.toISOString() });
-    if (apt.completedAt) statusHistory.push({ status: 'COMPLETED', timestamp: apt.completedAt.toISOString() });
+    if (appointment.confirmedAt) {
+      statusHistory.push({
+        status: 'CONFIRMED',
+        timestamp: appointment.confirmedAt.toISOString(),
+      });
+    }
+    if (appointment.inProgressAt) {
+      statusHistory.push({
+        status: 'IN_PROGRESS',
+        timestamp: appointment.inProgressAt.toISOString(),
+      });
+    }
+    if (appointment.completedAt) {
+      statusHistory.push({
+        status: 'COMPLETED',
+        timestamp: appointment.completedAt.toISOString(),
+      });
+    }
 
-    // GPS location
     const vetLocation =
-      apt.vetLatitude != null && apt.vetLongitude != null
-        ? { latitude: apt.vetLatitude, longitude: apt.vetLongitude, updatedAt: apt.vetLocationAt }
+      appointment.vetLatitude != null && appointment.vetLongitude != null
+        ? {
+            latitude: appointment.vetLatitude,
+            longitude: appointment.vetLongitude,
+            updatedAt: appointment.vetLocationAt,
+          }
         : null;
 
-    // ETA: use stored value if available, otherwise estimate from appointment time
-    let estimatedArrival: string | null = apt.etaMinutes != null
-      ? new Date(Date.now() + apt.etaMinutes * 60 * 1000).toISOString()
-      : null;
+    let estimatedArrival: string | null =
+      appointment.etaMinutes != null
+        ? new Date(
+            Date.now() + appointment.etaMinutes * 60 * 1000,
+          ).toISOString()
+        : null;
 
-    if (!estimatedArrival && appointment.status === AppointmentStatus.CONFIRMED) {
+    if (
+      !estimatedArrival &&
+      appointment.status === AppointmentStatus.CONFIRMED
+    ) {
       const [hours, minutes] = appointment.time.split(':').map(Number);
       const scheduled = new Date(appointment.date);
       scheduled.setHours(hours, minutes, 0, 0);
@@ -322,24 +343,10 @@ export class AppointmentsService {
       currentStatus: appointment.status,
       vetLocation,
       estimatedArrival,
-      etaMinutes: apt.etaMinutes ?? null,
-      scheduledAt: apt.scheduledAt ?? appointment.date,
-      lastStatusChangeAt: apt.lastStatusChangeAt ?? appointment.updatedAt,
-  async getAppointmentTracking(id: string) {
-    const appointment = await this.getAppointmentById(id);
-
-    const statusHistory = [
-      {
-        status: 'PENDING',
-        timestamp: appointment.createdAt.toISOString(),
-      },
-    ];
-
-    return {
-      appointmentId: id,
-      currentStatus: appointment.status,
-      vetLocation: null,
-      estimatedArrival: null,
+      etaMinutes: appointment.etaMinutes ?? null,
+      scheduledAt: appointment.scheduledAt ?? appointment.date,
+      lastStatusChangeAt:
+        appointment.lastStatusChangeAt ?? appointment.updatedAt,
       statusHistory,
     };
   }
@@ -361,7 +368,9 @@ export class AppointmentsService {
     }
 
     if (appointment.status !== AppointmentStatus.IN_PROGRESS) {
-      throw new BadRequestException('Location updates only allowed for in-progress appointments');
+      throw new BadRequestException(
+        'Location updates only allowed for in-progress appointments',
+      );
     }
 
     return this.prisma.appointment.update({
@@ -372,7 +381,13 @@ export class AppointmentsService {
         vetLocationAt: new Date(),
         ...(etaMinutes != null && { etaMinutes }),
       },
-      select: { id: true, vetLatitude: true, vetLongitude: true, vetLocationAt: true, etaMinutes: true },
+      select: {
+        id: true,
+        vetLatitude: true,
+        vetLongitude: true,
+        vetLocationAt: true,
+        etaMinutes: true,
+      },
     });
   }
 
@@ -383,21 +398,22 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(id);
     const next = status as AppointmentStatus;
 
-    // Validate state transition
     this.validateStatusTransition(appointment.status, next);
 
     const now = new Date();
-    const timestampField: Partial<Record<string, Date>> = {
+    const timestampField: Prisma.AppointmentUpdateInput = {
       lastStatusChangeAt: now,
     };
 
-    if (next === AppointmentStatus.CONFIRMED) timestampField.confirmedAt = now;
-    if (next === AppointmentStatus.IN_PROGRESS) timestampField.inProgressAt = now;
-    if (next === AppointmentStatus.COMPLETED) timestampField.completedAt = now;
-    this.validateStatusTransition(
-      appointment.status,
-      status as AppointmentStatus,
-    );
+    if (next === AppointmentStatus.CONFIRMED) {
+      timestampField.confirmedAt = now;
+    }
+    if (next === AppointmentStatus.IN_PROGRESS) {
+      timestampField.inProgressAt = now;
+    }
+    if (next === AppointmentStatus.COMPLETED) {
+      timestampField.completedAt = now;
+    }
 
     return this.prisma.appointment.update({
       where: { id },
