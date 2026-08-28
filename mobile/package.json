@@ -74,6 +74,9 @@
       "/node_modules/",
       "/e2e/"
     ],
+    "moduleNameMapper": {
+      "^msw/node$": "<rootDir>/../node_modules/msw/lib/node/index.js"
+    },
     "transformIgnorePatterns": [
       "node_modules/(?!(react-native|@react-native|@react-navigation|msw)/)"
     ]
