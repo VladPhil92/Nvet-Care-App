@@ -133,16 +133,6 @@ enum AuditSeverity {
 // ============================================
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  role         UserRole @default(CLIENT)
-  firstName    String?  @map("first_name")
-  lastName     String?  @map("last_name")
-  phone        String?
-  avatar       String?
-
-  ctgBalance Float @default(0) @map("ctg_balance")
   id            String    @id @default(uuid())
   email         String    @unique
   // Nullable: a CTG One-provisioned account (see docs/identity/ADR-001 in
@@ -159,6 +149,7 @@ model User {
   lastName      String?   @map("last_name")
   phone         String?
   avatar        String?
+  ctgBalance    Float     @default(0) @map("ctg_balance")
 
   // ============================================
   // SECURITY: email verification
@@ -659,7 +650,7 @@ model IdempotencyKey {
 
   // Endpoint que se está protegiendo
   endpoint String
-  // User que envió la request (para auditoría)
+  // User que envía la request (para auditoría)
   userId   String? @map("user_id")
 
   // Hash del request body (para detectar collision con misma key + body distinto)
