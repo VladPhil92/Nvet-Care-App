@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto';
 
 const port = Number(process.env.PORT || 3000);
 const apiBase = `http://127.0.0.1:${port}/api`;
-const startupTimeoutMs = Number(process.env.NVET_RUNTIME_SMOKE_TIMEOUT_MS || 90_000);
+const startupTimeoutMs = Number(
+  process.env.NVET_RUNTIME_SMOKE_TIMEOUT_MS || 90_000,
+);
 
 const child = spawn(process.execPath, ['canonical-runtime/backend/dist/main.js'], {
   stdio: 'inherit',
@@ -76,45 +78,57 @@ async function verifyLoginPath() {
     .replace(/[^a-zA-Z0-9]/g, '')
     .slice(0, 24);
 
-  const response = await fetchWithTimeout(`${apiBase}/auth/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Request-Id': `railway-smoke-${deploymentSuffix}`,
+  const response = await fetchWithTimeout(
+    `${apiBase}/auth/login`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-Id': `railway-smoke-${deploymentSuffix}`,
+      },
+      body: JSON.stringify({
+        email: `nvet-runtime-smoke-${deploymentSuffix}@example.com`,
+        password: 'NvetSmoke-NotARealPassword-2026!',
+        deviceLabel: 'Railway runtime smoke gate',
+      }),
     },
-    body: JSON.stringify({
-      email: `nvet-runtime-smoke-${deploymentSuffix}@example.com`,
-      password: 'NvetSmoke-NotARealPassword-2026!',
-      deviceLabel: 'Railway runtime smoke gate',
-    }),
-  }, 10_000);
+    10_000,
+  );
 
   const body = await response.text();
 
   if (response.status >= 500) {
-    throw new Error(`Login smoke returned HTTP ${response.status}: ${body.slice(0, 500)}`);
-  }
-
-  if (/PrismaError|PrismaClient|database error/i.test(body)) {
-    throw new Error(`Login smoke exposed a database/Prisma error: ${body.slice(0, 500)}`);
-  }
-
-  if (![400, 401, 403, 429].includes(response.status)) {
     throw new Error(
-      `Unexpected login smoke status ${response.status}; expected a normal auth 4xx response`,
+      `Login smoke returned HTTP ${response.status}: ${body.slice(0, 500)}`,
     );
   }
 
-  console.log(`✅ Railway auth smoke passed (${response.status}, no Prisma/5xx)`);
+  if (/PrismaError|PrismaClient|database error/i.test(body)) {
+    throw new Error(
+      `Login smoke exposed a database/Prisma error: ${body.slice(0, 500)}`,
+    );
+  }
+
+  // The synthetic email is unique and intentionally absent. AuthService first
+  // performs prisma.user.findUnique(), writes LOGIN_FAILED to the audit store,
+  // then throws UnauthorizedException("Credenciales inválidas"). Therefore an
+  // exact 401 proves the production users query + audit path completed normally.
+  if (response.status !== 401) {
+    throw new Error(
+      `Unexpected login smoke status ${response.status}; expected exact HTTP 401 for a nonexistent account. Body: ${body.slice(0, 500)}`,
+    );
+  }
+
+  console.log('✅ Railway auth smoke passed (401, no Prisma/5xx)');
 }
 
 function stopChild() {
-  if (!child.killed && child.exitCode === null) {
-    child.kill('SIGTERM');
-    setTimeout(() => {
-      if (!child.killed && child.exitCode === null) child.kill('SIGKILL');
-    }, 5_000).unref();
-  }
+  if (child.exitCode !== null) return;
+
+  child.kill('SIGTERM');
+  setTimeout(() => {
+    if (child.exitCode === null) child.kill('SIGKILL');
+  }, 5_000).unref();
 }
 
 for (const signal of ['SIGTERM', 'SIGINT']) {
