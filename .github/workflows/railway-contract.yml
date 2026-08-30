@@ -5,7 +5,6 @@ on:
     branches: ['**']
     paths:
       - 'backend/**'
-      - 'nvet-backend/**'
       - 'Dockerfile.railway'
       - 'railway.json'
       - 'package.json'
@@ -16,7 +15,6 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
-      - 'nvet-backend/**'
       - 'Dockerfile.railway'
       - 'railway.json'
       - 'package.json'
@@ -26,7 +24,7 @@ on:
 
 jobs:
   contract:
-    name: Railway deployment contract
+    name: Railway canonical deployment contract
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -37,7 +35,7 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: Validate workspace and active Railway mode
+      - name: Validate canonical Railway contract
         run: |
           node --check backend/scripts/production-predeploy.mjs
           node --check backend/scripts/railway-runtime-smoke.mjs
@@ -46,6 +44,7 @@ jobs:
           const root = require('./package.json');
           const backend = require('./backend/package.json');
           const railway = require('./railway.json');
+          const dockerfile = fs.readFileSync('Dockerfile.railway', 'utf8');
           const prismaSchema = fs.readFileSync('backend/prisma/schema.prisma', 'utf8');
           const liveLocationSql = fs.readFileSync('backend/prisma/migrations/manual/live_location_v1.sql', 'utf8');
 
@@ -61,6 +60,24 @@ jobs:
           if (railway.build?.builder !== 'DOCKERFILE') {
             throw new Error('Railway must use the Dockerfile builder');
           }
+          if (railway.build?.dockerfilePath !== '/Dockerfile.railway') {
+            throw new Error('Railway must deploy the canonical root Dockerfile.railway');
+          }
+          if (railway.deploy?.startCommand !== 'node backend/scripts/railway-runtime-smoke.mjs') {
+            throw new Error('Railway must start through the canonical runtime smoke gate');
+          }
+          if (!railway.deploy?.preDeployCommand?.includes('npm run deploy:preflight --workspace backend')) {
+            throw new Error('Railway must run the backend fail-closed predeploy');
+          }
+          if (railway.deploy?.healthcheckPath !== '/api/health/ready') {
+            throw new Error('Railway readiness healthcheck contract drifted');
+          }
+
+          // npm workspaces may place runtime packages in both trees. Keep the
+          // canonical image explicit so hoisted packages can resolve Nest peers.
+          if (!/^ENV NODE_PATH=\/app\/backend\/node_modules:\/app\/node_modules$/m.test(dockerfile)) {
+            throw new Error('Dockerfile.railway must expose both npm workspace module trees');
+          }
 
           // Prisma String @default(uuid()) maps to PostgreSQL TEXT unless @db.Uuid
           // is explicitly declared. Keep the manual live-location FK aligned.
@@ -74,52 +91,23 @@ jobs:
             throw new Error('UUID appointment_id would be incompatible with appointments.id TEXT');
           }
 
-          const dockerfile = railway.build?.dockerfilePath;
-          if (dockerfile === '/nvet-backend/Dockerfile') {
-            if (railway.deploy?.startCommand !== 'node runtime-smoke.mjs') {
-              throw new Error('Bridge mode must start runtime-smoke.mjs');
-            }
-            if (!railway.deploy?.preDeployCommand?.includes('npm run deploy:preflight')) {
-              throw new Error('Bridge mode must run fail-closed predeploy');
-            }
-            console.log('Railway active mode: verified compatibility bridge');
-          } else if (dockerfile === '/Dockerfile.railway') {
-            if (railway.deploy?.startCommand !== 'node backend/scripts/railway-runtime-smoke.mjs') {
-              throw new Error('Canonical mode must start backend runtime smoke gate');
-            }
-            if (!railway.deploy?.preDeployCommand?.includes('npm run deploy:preflight --workspace backend')) {
-              throw new Error('Canonical mode must reconcile backend workspace');
-            }
-            console.log('Railway active mode: canonical backend image');
-          } else {
-            throw new Error(`Unsupported Railway dockerfilePath: ${dockerfile}`);
+          if (!fs.existsSync('Dockerfile.railway')) {
+            throw new Error('Canonical Dockerfile.railway is required');
+          }
+          if (fs.existsSync('nvet-backend')) {
+            throw new Error('Legacy nvet-backend bridge must not be reintroduced');
           }
 
-          for (const p of [
-            'Dockerfile.railway',
-            'nvet-backend/Dockerfile',
-            'nvet-backend/bridge.mjs',
-            'nvet-backend/runtime-smoke.mjs',
-          ]) {
-            if (!fs.existsSync(p)) throw new Error(`Required transition artifact missing: ${p}`);
-          }
+          console.log('Railway active mode: canonical backend only');
           NODE
 
-      - name: Build canonical candidate from repository root
+      - name: Build canonical Railway image from repository root
         run: docker build --file Dockerfile.railway --tag nvet-railway-canonical:ci .
 
-      - name: Verify canonical candidate contract
+      - name: Verify canonical image runtime contract
         run: |
           docker inspect nvet-railway-canonical:ci --format '{{json .Config.Cmd}}' | grep -q 'railway-runtime-smoke.mjs'
           docker run --rm --entrypoint node nvet-railway-canonical:ci \
+            -e "for (const m of ['@nestjs/common','@nestjs/core','@nestjs/platform-express','@prisma/client','nestjs-pino','pino-http','pino','redis','reflect-metadata','rxjs','socket.io']) { require(m); }"
+          docker run --rm --entrypoint node nvet-railway-canonical:ci \
             -e "const fs=require('fs'); for (const p of ['/app/backend/dist/main.js','/app/backend/scripts/production-predeploy.mjs','/app/backend/scripts/railway-runtime-smoke.mjs']) if(!fs.existsSync(p)) process.exit(1);"
-
-      - name: Build active rollback bridge from repository root
-        env:
-          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          docker build \
-            --file nvet-backend/Dockerfile \
-            --build-arg RAILWAY_GIT_COMMIT_SHA="$SOURCE_SHA" \
-            --tag nvet-railway-bridge:ci \
-            .
