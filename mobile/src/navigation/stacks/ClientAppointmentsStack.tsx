@@ -5,6 +5,8 @@ import type { ClientAppointmentsStackParamList } from '../types'
 import MyAppointmentsScreen from '../../screens/client/MyAppointmentsScreen'
 import AppointmentDetailScreen from '../../screens/client/AppointmentDetailScreen'
 import AppointmentTrackingScreen from '../../screens/client/AppointmentTrackingScreen'
+import HelpCenterScreen from '../../screens/client/HelpCenterScreen'
+import EmergencyScreen from '../../screens/client/EmergencyScreen'
 import ChatScreen from '../../screens/shared/ChatScreen'
 
 const Stack = createNativeStackNavigator<ClientAppointmentsStackParamList>()
@@ -33,6 +35,16 @@ export default function ClientAppointmentsStack() {
           />
         )}
       </Stack.Screen>
+      <Stack.Screen
+        name="Help"
+        component={HelpCenterScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="Emergency"
+        component={EmergencyScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
       <Stack.Screen
         name="ChatScreen"
         component={ChatScreen}
