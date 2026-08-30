@@ -159,17 +159,19 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
     return haversineKm(clientLocation, vetLocation)
   }, [clientLocation, vetLocation])
 
+  const vet = live?.vet ?? appt?.vet
+  const vetPhone = (live?.vet?.phone ?? appt?.vet?.phone)?.trim() || undefined
+
   const handleChat = useCallback(() => {
     navigation.navigate('ChatModal', { appointmentId: id })
   }, [navigation, id])
 
   const handleCall = useCallback(() => {
-    const phone = appt?.vet?.phone
-    if (!phone) {
+    if (!vetPhone) {
       Alert.alert('Sin teléfono', 'El veterinario no tiene número registrado.')
       return
     }
-    const url = `tel:${phone.replace(/\s+/g, '')}`
+    const url = `tel:${vetPhone.replace(/\s+/g, '')}`
     Linking.canOpenURL(url).then((supported) => {
       if (supported) {
         Linking.openURL(url)
@@ -177,7 +179,7 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
         Alert.alert('No disponible', 'Tu dispositivo no puede realizar llamadas.')
       }
     })
-  }, [appt])
+  }, [vetPhone])
 
   const handleHelp = useCallback(() => {
     navigation.navigate('Help')
@@ -193,7 +195,6 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
     )
   }
 
-  const vet = live?.vet ?? appt?.vet
   const trackingMessage = !live?.trackingActive
     ? 'El tracking se activa cuando la cita está confirmada.'
     : !vetLocation
@@ -256,10 +257,11 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
               </Pressable>
               <Pressable
                 onPress={handleCall}
-                disabled={!live?.vet?.phone}
+                disabled={!vetPhone}
                 style={styles.iconButton}
                 accessibilityRole="button"
                 accessibilityLabel="Llamar al veterinario"
+                accessibilityState={{ disabled: !vetPhone }}
               >
                 <Icon name="phone" size={20} color={Colors.sage} />
               </Pressable>
