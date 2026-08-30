@@ -59,12 +59,22 @@ describe('Flow: Vet recibe y procesa una cita', () => {
     // 6. Completar exige diagnóstico y tratamiento
     await element(by.text('Completar cita')).tap()
     await waitForElement(by.text('Notas clínicas'), 5_000)
-    await element(by.text('Ej: Dermatitis alérgica estacional')).replaceText(
-      'Chequeo E2E sin hallazgos de alarma',
-    )
-    await element(
-      by.text('Ej: Antihistamínico oral 5mg/kg por 7 días'),
-    ).replaceText('Seguimiento general y control en 7 días')
+
+    // React Native Android expone TextInput como android.widget.EditText. Los
+    // placeholders no son un selector Detox estable en esa plataforma, así que
+    // usamos el orden determinista del modal. iOS conserva el matcher de texto
+    // hasta que exista el proyecto nativo y podamos instrumentarlo por a11y.
+    const diagnosisInput =
+      device.getPlatform() === 'android'
+        ? element(by.type('android.widget.EditText')).atIndex(0)
+        : element(by.text('Ej: Dermatitis alérgica estacional'))
+    const treatmentInput =
+      device.getPlatform() === 'android'
+        ? element(by.type('android.widget.EditText')).atIndex(1)
+        : element(by.text('Ej: Antihistamínico oral 5mg/kg por 7 días'))
+
+    await diagnosisInput.replaceText('Chequeo E2E sin hallazgos de alarma')
+    await treatmentInput.replaceText('Seguimiento general y control en 7 días')
     await element(by.text('Guardar y completar cita')).tap()
 
     await waitFor(element(by.label('Completada')))
