@@ -1,19 +1,15 @@
 import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
+import type { VetDashboardStackParamList } from '../types'
 import VetDashboardScreen from '../../screens/vet/VetDashboardScreen'
 import VetAppointmentDetailScreen from '../../screens/vet/VetAppointmentDetailScreen'
-
-type VetDashboardStackParamList = {
-  DashboardMain: undefined
-  VetAppointmentDetail: { appointmentId: string }
-}
 
 const Stack = createNativeStackNavigator<VetDashboardStackParamList>()
 
 /**
- * El dashboard ya navega a `VetAppointmentDetail`; este stack hace explícito
- * ese contrato en vez de intentar resolver la pantalla desde el bottom tab.
+ * El dashboard navega a `VetAppointmentDetail`; el navigator usa el mismo
+ * contrato compartido que el resto de la capa de navegación para evitar drift.
  */
 export default function VetDashboardStack() {
   return (
