@@ -2,21 +2,21 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "/nvet-backend/Dockerfile",
+    "dockerfilePath": "/Dockerfile.railway",
     "buildCommand": null,
     "watchPatterns": [
       "/backend/**",
-      "/nvet-backend/**",
       "/package.json",
       "/package-lock.json",
+      "/Dockerfile.railway",
       "/railway.json"
     ]
   },
   "deploy": {
     "preDeployCommand": [
-      "npm run deploy:preflight"
+      "npm run deploy:preflight --workspace backend"
     ],
-    "startCommand": "node runtime-smoke.mjs",
+    "startCommand": "node backend/scripts/railway-runtime-smoke.mjs",
     "healthcheckPath": "/api/health/ready",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
