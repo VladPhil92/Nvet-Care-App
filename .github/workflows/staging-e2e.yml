@@ -1,0 +1,117 @@
+# Manual maintenance gate for the isolated Android E2E staging environment.
+#
+# This workflow never provisions or mutates production. It requires a dedicated
+# GitHub `staging` environment whose STAGING_DATABASE_URL points to the same
+# isolated PostgreSQL instance used by E2E_API_URL.
+name: Staging E2E Seed & Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type seed-staging to apply schema + reset dedicated E2E fixtures'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-e2e-maintenance
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  seed-and-preflight:
+    name: Seed and verify isolated staging
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      E2E_API_URL: ${{ secrets.E2E_API_URL }}
+      E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
+      E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
+      E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
+      E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
+      GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+      NVET_ALLOW_E2E_SEED: 'true'
+      NVET_SEED_TARGET: 'staging'
+
+    steps:
+      - name: Require explicit staging confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "seed-staging" ]; then
+            echo '::error::Confirmation refused. Type seed-staging exactly.'
+            exit 1
+          fi
+
+      - name: Validate isolated staging configuration
+        run: |
+          missing=""
+          [ -z "$DATABASE_URL" ] && missing="$missing STAGING_DATABASE_URL"
+          [ -z "$E2E_API_URL" ] && missing="$missing E2E_API_URL"
+          [ -z "$E2E_CLIENT_EMAIL" ] && missing="$missing E2E_CLIENT_EMAIL"
+          [ -z "$E2E_CLIENT_PASSWORD" ] && missing="$missing E2E_CLIENT_PASSWORD"
+          [ -z "$E2E_VET_EMAIL" ] && missing="$missing E2E_VET_EMAIL"
+          [ -z "$E2E_VET_PASSWORD" ] && missing="$missing E2E_VET_PASSWORD"
+          [ -z "$GOOGLE_MAPS_ANDROID_API_KEY" ] && missing="$missing GOOGLE_MAPS_ANDROID_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing staging configuration:$missing"
+            exit 1
+          fi
+
+          if ! printf '%s' "$DATABASE_URL" | grep -Eq '^postgres(ql)?://'; then
+            echo '::error::STAGING_DATABASE_URL must be a PostgreSQL URL.'
+            exit 1
+          fi
+
+          if printf '%s' "$DATABASE_URL" | grep -Eqi '@(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|/)'; then
+            echo '::error::STAGING_DATABASE_URL must target an isolated remote database.'
+            exit 1
+          fi
+
+          if ! printf '%s' "$E2E_API_URL" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
+            echo '::error::E2E_API_URL must be an absolute HTTPS URL ending in /api.'
+            exit 1
+          fi
+
+          if [ "$(printf '%s' "$E2E_CLIENT_EMAIL" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$E2E_VET_EMAIL" | tr '[:upper:]' '[:lower:]')" ]; then
+            echo '::error::Client and vet E2E identities must be different.'
+            exit 1
+          fi
+
+          echo 'Staging configuration shape accepted. Infrastructure isolation remains an operator responsibility.'
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install canonical workspace dependencies
+        run: npm ci --include=dev --legacy-peer-deps
+
+      - name: Apply backend schema contract to staging
+        run: npm run deploy:preflight --workspace backend
+
+      - name: Reset deterministic E2E fixtures in staging
+        run: npm run seed:e2e --workspace backend
+
+      - name: Verify staging readiness, identities and emergency discovery
+        run: node mobile/e2e/preflight.mjs
+
+      - name: Staging gate summary
+        run: |
+          echo '✅ Staging schema contract applied.'
+          echo '✅ Dedicated E2E fixtures seeded.'
+          echo '✅ /api/health/ready passed.'
+          echo '✅ Client and vet authentication passed.'
+          echo '✅ Emergencias + Disponible ahora fixture search passed.'
+          echo 'Next gate: Mobile E2E → platform=android.'
