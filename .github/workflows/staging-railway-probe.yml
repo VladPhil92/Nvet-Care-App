@@ -1,0 +1,59 @@
+name: Staging Railway Credential Probe
+
+on:
+  push:
+    branches:
+      - ops/staging-railway-probe-20260830
+    paths:
+      - '.github/workflows/staging-railway-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe Railway account read-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+    steps:
+      - name: Verify credential presence
+        run: |
+          set -euo pipefail
+          if [ -z "$RAILWAY_API_TOKEN" ]; then
+            echo '::error::RAILWAY_API_TOKEN is not configured as a repository secret.'
+            exit 78
+          fi
+          echo 'RAILWAY_API_TOKEN is configured.'
+
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli
+
+      - name: Authenticate read-only probe
+        run: |
+          set -euo pipefail
+          railway whoami
+
+      - name: List accessible Railway projects
+        run: |
+          set -euo pipefail
+          railway project list --json > /tmp/railway-projects.json
+          jq -r '.[] | "PROJECT name=\(.name) id=\(.id)"' /tmp/railway-projects.json
+          count="$(jq 'length' /tmp/railway-projects.json)"
+          echo "Accessible project count: $count"
+          if [ "$count" -eq 0 ]; then
+            echo '::error::The token authenticates but exposes no Railway projects.'
+            exit 1
+          fi
+
+      - name: Publish probe summary
+        run: |
+          {
+            echo '## Railway read-only probe'
+            echo ''
+            echo '- Credential: present and authenticated.'
+            echo '- No Railway project, environment, service, variable, deployment, or database was changed.'
+            echo '- Accessible projects:'
+            jq -r '.[] | "  - `\(.name)` — `\(.id)`"' /tmp/railway-projects.json
+          } >> "$GITHUB_STEP_SUMMARY"
