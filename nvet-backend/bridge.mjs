@@ -1,6 +1,6 @@
 import { access, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createRequire } from 'node:module';
+import { delimiter } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import * as tar from 'tar';
 
@@ -9,6 +9,13 @@ const canonicalRoot = path.join(compatRoot, 'canonical-runtime');
 const backendDir = path.join(canonicalRoot, 'backend');
 const backendPackage = path.join(backendDir, 'package.json');
 const builtMain = path.join(backendDir, 'dist', 'main.js');
+const runtimeNodePath = [
+  path.join(backendDir, 'node_modules'),
+  path.join(canonicalRoot, 'node_modules'),
+  process.env.NODE_PATH,
+]
+  .filter(Boolean)
+  .join(delimiter);
 
 function requireCommitSha() {
   const sha = process.env.RAILWAY_GIT_COMMIT_SHA;
@@ -24,7 +31,7 @@ function run(command, args, cwd, extraEnv = {}) {
   const result = spawnSync(command, args, {
     cwd,
     stdio: 'inherit',
-    env: { ...process.env, ...extraEnv },
+    env: { ...process.env, NODE_PATH: runtimeNodePath, ...extraEnv },
     shell: false,
   });
 
@@ -77,8 +84,8 @@ async function downloadCanonicalSource() {
 }
 
 function verifyRuntimeModules() {
-  const backendRequire = createRequire(backendPackage);
   const modules = [
+    '@nestjs/common',
     '@nestjs/core',
     '@nestjs/platform-express',
     '@prisma/client',
@@ -86,20 +93,23 @@ function verifyRuntimeModules() {
     'pino-http',
     'pino',
     'redis',
+    'reflect-metadata',
+    'rxjs',
     'socket.io',
   ];
 
-  for (const moduleName of modules) {
-    try {
-      const resolved = backendRequire.resolve(moduleName);
-      backendRequire(moduleName);
-      console.log(`✅ Runtime module ${moduleName} -> ${resolved}`);
-    } catch (error) {
-      console.error(`❌ Runtime module ${moduleName} no es resoluble/cargable desde backend.`);
-      console.error(error);
-      process.exit(1);
+  const verification = `
+    for (const m of ${JSON.stringify(modules)}) {
+      const r = require.resolve(m);
+      require(m);
+      console.log('runtime-ok', m, r);
     }
-  }
+  `;
+
+  // Use a fresh Node process: NODE_PATH is read when Node initializes its
+  // global module search paths. This reproduces the exact production runtime
+  // instead of mutating module internals in the bridge process.
+  run(process.execPath, ['-e', verification], backendDir);
 }
 
 async function prepare() {
@@ -108,10 +118,9 @@ async function prepare() {
   }
 
   // Install exactly the backend workspace from the canonical root lockfile.
-  // Installing all workspaces can produce a different hoisting layout and can
-  // separate a hoisted runtime package (for example nestjs-pino) from a module
-  // it loads at runtime. This mirrors Dockerfile.railway and keeps the backend
-  // dependency graph deterministic.
+  // npm may legitimately split direct dependencies between backend/node_modules
+  // and root node_modules when legacy peer resolution is needed. NODE_PATH above
+  // makes both locations explicit to every production Node process.
   run(
     'npm',
     [
@@ -146,8 +155,6 @@ async function build() {
     process.exit(1);
   }
 
-  // Re-run after build so the exact runtime artifact is never published with a
-  // dependency tree that Node cannot load.
   verifyRuntimeModules();
 
   console.log('✅ Bridge build: backend canónico compilado y dependencias runtime verificadas.');
@@ -170,7 +177,7 @@ async function start() {
   const child = spawn(process.execPath, ['dist/main.js'], {
     cwd: backendDir,
     stdio: 'inherit',
-    env: process.env,
+    env: { ...process.env, NODE_PATH: runtimeNodePath },
   });
 
   for (const signal of ['SIGTERM', 'SIGINT']) {
