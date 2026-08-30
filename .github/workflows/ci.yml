@@ -47,6 +47,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://stub:stub@localhost:5432/stub?schema=public
 
+      - name: Validate E2E seed contract
+        working-directory: backend
+        run: npm run seed:e2e:check
+        env:
+          DATABASE_URL: postgresql://stub:stub@localhost:5432/stub?schema=public
+
       - name: Typecheck
         working-directory: backend
         run: npx tsc --noEmit
