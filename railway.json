@@ -1,0 +1,25 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "/nvet-backend/Dockerfile",
+    "buildCommand": null,
+    "watchPatterns": [
+      "/backend/**",
+      "/nvet-backend/**",
+      "/package.json",
+      "/package-lock.json",
+      "/railway.json"
+    ]
+  },
+  "deploy": {
+    "preDeployCommand": [
+      "npm run deploy:preflight"
+    ],
+    "startCommand": "node canonical-runtime/backend/dist/main.js",
+    "healthcheckPath": "/api/health/ready",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
+  }
+}
