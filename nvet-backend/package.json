@@ -1,0 +1,10 @@
+{
+  "name": "nvet-backend-railway-compat",
+  "version": "0.0.0-p0-bridge",
+  "private": true,
+  "description": "Temporary Railway compatibility bridge. Canonical backend source remains ../backend in the repository.",
+  "scripts": {
+    "start": "npm run start:prod",
+    "start:prod": "cd /src/backend && npm run deploy:preflight && node dist/main"
+  }
+}
