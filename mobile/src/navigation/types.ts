@@ -68,7 +68,6 @@ export type VetDashboardStackParamList = {
 export type VetScheduleStackParamList = {
   ScheduleMain: undefined
   VetAppointmentDetail: { appointmentId: string }
-  PatientHistory: { petId: string }
 }
 
 export type VetEarningsStackParamList = {
