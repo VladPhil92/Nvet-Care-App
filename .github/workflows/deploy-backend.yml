@@ -45,8 +45,8 @@ jobs:
           if (!Array.isArray(root.workspaces) || !root.workspaces.includes('backend')) {
             throw new Error('backend must remain an npm workspace from repository root');
           }
-          if (backend.scripts?.['railway:start'] !== 'node scripts/railway-runtime-smoke.mjs') {
-            throw new Error('backend railway:start contract drifted');
+          if (backend.scripts?.['railway:start'] !== 'npm run deploy:preflight && node scripts/railway-runtime-smoke.mjs') {
+            throw new Error('backend railway:start must run safe schema preflight before runtime smoke');
           }
           if (backend.scripts?.['deploy:preflight'] !== 'node scripts/production-predeploy.mjs') {
             throw new Error('backend deploy:preflight contract drifted');
