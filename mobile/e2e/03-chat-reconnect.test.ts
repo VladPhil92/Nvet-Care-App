@@ -45,7 +45,7 @@ describe('Flow: Chat WebSocket connectivity', () => {
         .withTimeout(20_000)
       await dexpect(element(by.label('Reconectando'))).toBeVisible()
 
-      await device.clearURLBlacklist()
+      await device.setURLBlacklist([])
       await waitFor(element(by.label('En vivo')))
         .toBeVisible()
         .withTimeout(60_000)
