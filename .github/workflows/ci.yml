@@ -101,6 +101,10 @@ jobs:
         working-directory: mobile
         run: npm run typecheck
 
+      - name: Typecheck Detox E2E contract
+        working-directory: mobile
+        run: npx tsc --noEmit -p e2e/tsconfig.json
+
       - name: Lint
         working-directory: mobile
         run: npm run lint
