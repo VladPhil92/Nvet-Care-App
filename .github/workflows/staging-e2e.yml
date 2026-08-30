@@ -68,13 +68,18 @@ jobs:
             exit 1
           fi
 
-          if printf '%s' "$DATABASE_URL" | grep -Eqi '@(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|/)'; then
+          if printf '%s' "$DATABASE_URL" | grep -Eqi '^postgres(ql)?://([^/@]+(:[^/@]*)?@)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|/)'; then
             echo '::error::STAGING_DATABASE_URL must target an isolated remote database.'
             exit 1
           fi
 
           if ! printf '%s' "$E2E_API_URL" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
             echo '::error::E2E_API_URL must be an absolute HTTPS URL ending in /api.'
+            exit 1
+          fi
+
+          if printf '%s' "$E2E_API_URL" | grep -Eqi '^https://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|/)'; then
+            echo '::error::E2E_API_URL must target a remote staging backend.'
             exit 1
           fi
 
