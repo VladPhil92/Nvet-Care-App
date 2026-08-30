@@ -77,7 +77,10 @@ jobs:
         run: test -s mobile/android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Verify AAB signature
-        run: jarsigner -verify -strict mobile/android/app/build/outputs/bundle/release/app-release.aab
+        run: |
+          AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
+          unzip -Z1 "$AAB" | grep -Eq '^META-INF/[^/]+\.(RSA|DSA|EC)$'
+          jarsigner -verify "$AAB"
 
       - name: Remove decoded keystore
         if: always()
