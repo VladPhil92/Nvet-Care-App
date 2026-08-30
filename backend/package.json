@@ -11,6 +11,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "deploy:preflight": "node scripts/production-predeploy.mjs",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "lint:ci": "eslint \"{src,apps,libs,test}/**/*.ts\" --max-warnings 0",
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
