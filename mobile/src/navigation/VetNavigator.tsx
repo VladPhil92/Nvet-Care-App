@@ -6,7 +6,7 @@ import type { VetTabParamList } from './types'
 import TabBarIcon from '../components/navigation/TabBarIcon'
 import { Colors } from '../theme/colors'
 
-import VetDashboardScreen from '../screens/vet/VetDashboardScreen'
+import VetDashboardStack from './stacks/VetDashboardStack'
 import VetScheduleStack from './stacks/VetScheduleStack'
 import VetEarningsStack from './stacks/VetEarningsStack'
 import VetProfileStack from './stacks/VetProfileStack'
@@ -53,7 +53,7 @@ export default function VetNavigator() {
     >
       <Tab.Screen
         name="VetDashboard"
-        component={VetDashboardScreen}
+        component={VetDashboardStack}
         options={{
           tabBarLabel: 'Panel',
           tabBarAccessibilityLabel: 'Panel veterinario',
