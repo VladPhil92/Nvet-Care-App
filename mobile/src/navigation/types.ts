@@ -62,8 +62,7 @@ export type VetTabParamList = {
 
 export type VetDashboardStackParamList = {
   DashboardMain: undefined
-  AppointmentDetail: { appointmentId: string }
-  AddClinicalNotes: { appointmentId: string }
+  VetAppointmentDetail: { appointmentId: string }
 }
 
 export type VetScheduleStackParamList = {
