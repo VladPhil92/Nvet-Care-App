@@ -37,12 +37,21 @@ const assertOk = async (label, response) => {
   }
 }
 
+const readJson = async (label, response) => {
+  await assertOk(label, response)
+  try {
+    return await response.json()
+  } catch {
+    throw new Error(`${label} returned a non-JSON response`)
+  }
+}
+
 const readiness = await fetchWithTimeout(`${apiUrl}/health/ready`, {
   headers: { accept: 'application/json' },
 })
 await assertOk('Backend readiness', readiness)
 
-const login = async (role, email, password) => {
+const login = async (label, expectedRole, email, password) => {
   const response = await fetchWithTimeout(`${apiUrl}/auth/login`, {
     method: 'POST',
     headers: {
@@ -53,14 +62,72 @@ const login = async (role, email, password) => {
     body: JSON.stringify({ email, password }),
   })
 
-  await assertOk(`${role} fixture login`, response)
+  const payload = await readJson(`${label} fixture login`, response)
+
+  if (!payload?.accessToken || typeof payload.accessToken !== 'string') {
+    throw new Error(`${label} fixture login did not return an access token`)
+  }
+
+  if (payload?.user?.role !== expectedRole) {
+    throw new Error(
+      `${label} fixture login returned role ${payload?.user?.role ?? 'missing'}; expected ${expectedRole}`,
+    )
+  }
+
+  return payload
 }
 
 await login(
   'Client',
+  'CLIENT',
   process.env.E2E_CLIENT_EMAIL,
   process.env.E2E_CLIENT_PASSWORD,
 )
-await login('Vet', process.env.E2E_VET_EMAIL, process.env.E2E_VET_PASSWORD)
+await login(
+  'Vet',
+  'VET',
+  process.env.E2E_VET_EMAIL,
+  process.env.E2E_VET_PASSWORD,
+)
 
-console.log('E2E staging preflight passed: readiness + client/vet authentication.')
+const emergencySearchUrl = new URL(`${apiUrl}/vets`)
+emergencySearchUrl.searchParams.set('specialty', 'Emergencias')
+emergencySearchUrl.searchParams.set('availableNow', 'true')
+emergencySearchUrl.searchParams.set('limit', '20')
+
+const emergencySearch = await fetchWithTimeout(emergencySearchUrl, {
+  headers: {
+    accept: 'application/json',
+    'user-agent': 'nvet-e2e-preflight/1.0',
+  },
+})
+const searchPayload = await readJson('Emergency vet fixture search', emergencySearch)
+
+if (!Array.isArray(searchPayload?.results)) {
+  throw new Error('Emergency vet fixture search did not return a results array')
+}
+
+const emergencyFixture = searchPayload.results.find(
+  (vet) => vet?.licenseNumber === 'NVET-E2E-0001',
+)
+
+if (!emergencyFixture) {
+  throw new Error(
+    'Emergency vet fixture search did not return NVET-E2E-0001. Re-run the staging E2E seed before Detox.',
+  )
+}
+
+if (emergencyFixture.isAvailableNow !== true) {
+  throw new Error('Emergency vet fixture is not marked available now')
+}
+
+if (
+  !Array.isArray(emergencyFixture.specialties) ||
+  !emergencyFixture.specialties.includes('Emergencias')
+) {
+  throw new Error('Emergency vet fixture is missing the Emergencias specialty')
+}
+
+console.log(
+  'E2E staging preflight passed: readiness + client/vet authentication + emergency fixture search.',
+)
