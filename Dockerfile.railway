@@ -27,13 +27,23 @@ RUN npm ci \
   --no-audit \
   --no-fund
 
+# npm workspaces + legacy peer resolution can split runtime packages between
+# /app/backend/node_modules and /app/node_modules. Hoisted packages must be able
+# to resolve peers/direct dependencies from both trees in production.
+ENV NODE_PATH=/app/backend/node_modules:/app/node_modules
+
+# Fail during image build—not after deployment—if the backend runtime graph is
+# incomplete or an npm workspace placement makes a package unloadable.
+RUN cd backend && node -e "for (const m of ['@nestjs/common','@nestjs/core','@nestjs/platform-express','@prisma/client','nestjs-pino','pino-http','pino','redis','reflect-metadata','rxjs','socket.io']) { const r=require.resolve(m); require(m); console.log('runtime-ok',m,r); }"
+
 COPY backend ./backend
 
 # Prisma generate only needs a syntactically valid URL at image-build time;
 # production DATABASE_URL is injected by Railway at predeploy/runtime.
 RUN cd backend \
   && DATABASE_URL='postgresql://stub:stub@localhost:5432/stub?schema=public' npx prisma generate \
-  && npm run build
+  && npm run build \
+  && node -e "for (const m of ['@nestjs/common','@nestjs/core','@nestjs/platform-express','@prisma/client','nestjs-pino','pino-http','pino','redis','reflect-metadata','rxjs','socket.io']) { const r=require.resolve(m); require(m); console.log('runtime-ok-after-build',m,r); }"
 
 ENV NODE_ENV=production
 WORKDIR /app

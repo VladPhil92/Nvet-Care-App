@@ -1,5 +1,6 @@
 import { access, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { delimiter } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import * as tar from 'tar';
 
@@ -8,6 +9,13 @@ const canonicalRoot = path.join(compatRoot, 'canonical-runtime');
 const backendDir = path.join(canonicalRoot, 'backend');
 const backendPackage = path.join(backendDir, 'package.json');
 const builtMain = path.join(backendDir, 'dist', 'main.js');
+const runtimeNodePath = [
+  path.join(backendDir, 'node_modules'),
+  path.join(canonicalRoot, 'node_modules'),
+  process.env.NODE_PATH,
+]
+  .filter(Boolean)
+  .join(delimiter);
 
 function requireCommitSha() {
   const sha = process.env.RAILWAY_GIT_COMMIT_SHA;
@@ -23,7 +31,7 @@ function run(command, args, cwd, extraEnv = {}) {
   const result = spawnSync(command, args, {
     cwd,
     stdio: 'inherit',
-    env: { ...process.env, ...extraEnv },
+    env: { ...process.env, NODE_PATH: runtimeNodePath, ...extraEnv },
     shell: false,
   });
 
@@ -75,15 +83,60 @@ async function downloadCanonicalSource() {
   }
 }
 
+function verifyRuntimeModules() {
+  const modules = [
+    '@nestjs/common',
+    '@nestjs/core',
+    '@nestjs/platform-express',
+    '@prisma/client',
+    'nestjs-pino',
+    'pino-http',
+    'pino',
+    'redis',
+    'reflect-metadata',
+    'rxjs',
+    'socket.io',
+  ];
+
+  const verification = `
+    for (const m of ${JSON.stringify(modules)}) {
+      const r = require.resolve(m);
+      require(m);
+      console.log('runtime-ok', m, r);
+    }
+  `;
+
+  // Use a fresh Node process: NODE_PATH is read when Node initializes its
+  // global module search paths. This reproduces the exact production runtime
+  // instead of mutating module internals in the bridge process.
+  run(process.execPath, ['-e', verification], backendDir);
+}
+
 async function prepare() {
   if (!(await exists(backendPackage))) {
     await downloadCanonicalSource();
   }
 
-  // Install from the canonical monorepo root so package-lock.json and npm
-  // workspaces stay authoritative. Runtime dependencies remain available to
-  // backend/dist through Node's parent-directory module resolution.
-  run('npm', ['ci', '--include=dev', '--legacy-peer-deps', '--no-audit', '--no-fund'], canonicalRoot);
+  // Install exactly the backend workspace from the canonical root lockfile.
+  // npm may legitimately split direct dependencies between backend/node_modules
+  // and root node_modules when legacy peer resolution is needed. NODE_PATH above
+  // makes both locations explicit to every production Node process.
+  run(
+    'npm',
+    [
+      'ci',
+      '--workspace',
+      'backend',
+      '--include-workspace-root',
+      '--include=dev',
+      '--legacy-peer-deps',
+      '--no-audit',
+      '--no-fund',
+    ],
+    canonicalRoot,
+  );
+
+  verifyRuntimeModules();
 
   run(
     'npx',
@@ -102,7 +155,9 @@ async function build() {
     process.exit(1);
   }
 
-  console.log('✅ Bridge build: backend canónico compilado desde el SHA exacto.');
+  verifyRuntimeModules();
+
+  console.log('✅ Bridge build: backend canónico compilado y dependencias runtime verificadas.');
 }
 
 async function preflight() {
@@ -111,6 +166,7 @@ async function preflight() {
     process.exit(1);
   }
 
+  verifyRuntimeModules();
   run('npm', ['run', 'deploy:preflight'], backendDir);
 }
 
@@ -121,7 +177,7 @@ async function start() {
   const child = spawn(process.execPath, ['dist/main.js'], {
     cwd: backendDir,
     stdio: 'inherit',
-    env: process.env,
+    env: { ...process.env, NODE_PATH: runtimeNodePath },
   });
 
   for (const signal of ['SIGTERM', 'SIGINT']) {
