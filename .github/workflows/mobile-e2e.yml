@@ -217,6 +217,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          avd-name: Pixel_6_API_33
           working-directory: mobile
           script: |
             npm start -- --reset-cache > /tmp/nvet-metro.log 2>&1 &
