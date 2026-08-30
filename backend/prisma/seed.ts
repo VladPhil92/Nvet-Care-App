@@ -26,6 +26,8 @@ const DEFAULTS = {
   vetPassword: "TestVet123!",
 };
 
+const E2E_VET_SPECIALTIES = ["Consulta general", "Emergencias"];
+
 function env(name: string, fallback: string): string {
   const value = process.env[name]?.trim();
   return value || fallback;
@@ -149,7 +151,7 @@ async function main(): Promise<void> {
     where: { userId: vetUser.id },
     update: {
       licenseNumber: "NVET-E2E-0001",
-      specialties: ["Consulta general"],
+      specialties: E2E_VET_SPECIALTIES,
       tier: VetTier.ELITE,
       bio: "Fixture veterinario para pruebas E2E de Nvet Care.",
       yearsExperience: 10,
@@ -170,7 +172,7 @@ async function main(): Promise<void> {
     create: {
       userId: vetUser.id,
       licenseNumber: "NVET-E2E-0001",
-      specialties: ["Consulta general"],
+      specialties: E2E_VET_SPECIALTIES,
       tier: VetTier.ELITE,
       bio: "Fixture veterinario para pruebas E2E de Nvet Care.",
       yearsExperience: 10,
