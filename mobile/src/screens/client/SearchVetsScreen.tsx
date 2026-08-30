@@ -11,6 +11,7 @@ import {
   FlatList,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 
 import VetCard, { VetCardData } from '../../components/vet/VetCard'
 import { Skeleton, EmptyState, UI_COLORS } from '../../components/ui/primitives'
@@ -18,6 +19,7 @@ import { useInfiniteVetSearchQuery } from '../../hooks/queries/useMobileQueries'
 import liveLocationService, {
   Coordinates,
 } from '../../services/live-location.service'
+import type { ClientSearchStackParamList } from '../../navigation/types'
 
 const SPECIALTIES = [
   'Medicina general',
@@ -40,19 +42,40 @@ const SORT_OPTIONS: Array<{ value: SortBy; label: string }> = [
   { value: 'experience', label: 'Más experiencia' },
 ]
 
-interface SearchVetsScreenProps {
-  navigation: {
-    navigate: (route: string, params?: any) => void
-  }
-}
+type SearchVetsScreenProps = NativeStackScreenProps<
+  ClientSearchStackParamList,
+  'SearchMain'
+>
 
-export default function SearchVetsScreen({ navigation }: SearchVetsScreenProps) {
+export default function SearchVetsScreen({ navigation, route }: SearchVetsScreenProps) {
   const [searchText, setSearchText] = useState('')
-  const [activeSpecialty, setActiveSpecialty] = useState<string | null>(null)
-  const [availableNow, setAvailableNow] = useState(false)
+  const [activeSpecialty, setActiveSpecialty] = useState<string | null>(
+    route.params?.specialty ?? null,
+  )
+  const [availableNow, setAvailableNow] = useState(
+    route.params?.availableNow ?? false,
+  )
   const [sortBy, setSortBy] = useState<SortBy>('relevance')
   const [deviceLocation, setDeviceLocation] = useState<Coordinates | null>(null)
   const [locationResolved, setLocationResolved] = useState(false)
+
+  useEffect(() => {
+    const presetSpecialty = route.params?.specialty
+    const presetAvailableNow = route.params?.availableNow
+
+    if (presetSpecialty === undefined && presetAvailableNow === undefined) return
+
+    setActiveSpecialty(presetSpecialty ?? null)
+    setAvailableNow(presetAvailableNow ?? false)
+
+    // Consumir el preset una sola vez. De este modo, volver desde el detalle no
+    // reimpone filtros que el usuario haya cambiado manualmente, mientras una
+    // nueva entrada desde Emergencias puede suministrarlos de nuevo.
+    navigation.setParams({
+      specialty: undefined,
+      availableNow: undefined,
+    })
+  }, [navigation, route.params?.specialty, route.params?.availableNow])
 
   useEffect(() => {
     let mounted = true

@@ -21,7 +21,7 @@ export type AuthStackParamList = {
 // ============================================================
 export type ClientTabParamList = {
   ClientHome: undefined
-  ClientSearch: { specialty?: string; city?: string } | undefined
+  ClientSearch: NavigatorScreenParams<ClientSearchStackParamList> | undefined
   ClientAppointments: undefined
   ClientProfile: undefined
 }
@@ -36,7 +36,9 @@ export type ClientHomeStackParamList = {
 }
 
 export type ClientSearchStackParamList = {
-  SearchMain: { specialty?: string; city?: string } | undefined
+  SearchMain:
+    | { specialty?: string; city?: string; availableNow?: boolean }
+    | undefined
   VetDetail: { vetId: string }
   BookAppointment: { vetId: string; serviceType?: string }
 }
