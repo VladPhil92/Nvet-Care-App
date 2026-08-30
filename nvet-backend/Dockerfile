@@ -1,13 +1,11 @@
 # TEMPORARY P0 COMPATIBILITY BRIDGE
 #
-# Railway production historically pointed at /nvet-backend. PR #26 removed
-# that directory when the canonical backend moved to /backend. Some Railway
-# services also retain an explicit builder/build command, so this directory
-# supports BOTH Dockerfile and Nixpacks/Railpack-style execution while still
-# keeping backend/ as the only product source tree.
+# Railway currently builds this Dockerfile with the repository root as the
+# Docker build context. Keep every COPY source explicitly rooted under
+# nvet-backend/ so the bridge works independently of the Dockerfile location.
 #
-# Remove this bridge once Railway source.rootDirectory is permanently changed
-# to /backend and a native deployment from that root is verified SUCCESS.
+# Remove this bridge after the canonical monorepo-root Railway cutover is
+# verified healthy.
 
 FROM node:22-bookworm-slim
 
@@ -21,7 +19,7 @@ RUN test -n "$RAILWAY_GIT_COMMIT_SHA" || (echo "RAILWAY_GIT_COMMIT_SHA is requir
 
 WORKDIR /compat
 
-COPY package.json bridge.mjs runtime-smoke.mjs ./
+COPY nvet-backend/package.json nvet-backend/bridge.mjs nvet-backend/runtime-smoke.mjs ./
 RUN node --check bridge.mjs \
   && node --check runtime-smoke.mjs \
   && npm install --no-audit --no-fund
