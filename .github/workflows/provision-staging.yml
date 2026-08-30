@@ -77,12 +77,26 @@ jobs:
       - name: Install Railway CLI
         run: npm install --global @railway/cli
 
+      - name: Validate Railway account-scoped token
+        run: |
+          set -euo pipefail
+          TOKEN_CHECK="$(curl -sS --request POST \
+            --url https://backboard.railway.com/graphql/v2 \
+            --header "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data '{"query":"query { me { id } }"}')"
+
+          if ! printf '%s' "$TOKEN_CHECK" | jq -e '(.data.me.id? // "") | length > 0' >/dev/null; then
+            echo '::error::RAILWAY_API_TOKEN must be an account-scoped Railway token created with "No workspace". The Railway CLI currently rejects workspace-scoped API tokens for project/link operations.'
+            exit 1
+          fi
+
       - name: Authenticate and bind project
         run: |
           set -euo pipefail
-          # Do not use `railway whoami` here: workspace-scoped API tokens
-          # authenticate as the workspace and cannot resolve personal `me` data.
-          # Linking the known project is the correct non-mutating access check.
+          # Account-scoped RAILWAY_API_TOKEN is required here because the
+          # Railway CLI currently rejects workspace-scoped API tokens for
+          # project list/link operations even when GraphQL accepts them.
           railway link --project "$PROJECT_ID" --environment production --json >/tmp/railway-link-production.json
 
       - name: Refuse to mutate an existing staging environment
