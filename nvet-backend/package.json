@@ -2,9 +2,19 @@
   "name": "nvet-backend-railway-compat",
   "version": "0.0.0-p0-bridge",
   "private": true,
-  "description": "Temporary Railway compatibility bridge. Canonical backend source remains ../backend in the repository.",
+  "description": "Temporary Railway compatibility bridge. Canonical backend source is fetched from the exact deployment SHA.",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "start": "npm run start:prod",
-    "start:prod": "cd /src/backend && npm run deploy:preflight && node dist/main"
+    "prisma:generate": "node bridge.mjs prisma-generate",
+    "build": "node bridge.mjs build",
+    "start": "node bridge.mjs start",
+    "start:prod": "node bridge.mjs start",
+    "deploy:preflight": "node bridge.mjs preflight",
+    "prisma:migrate:prod": "node bridge.mjs preflight"
+  },
+  "dependencies": {
+    "tar": "^7.4.3"
   }
 }
