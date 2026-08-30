@@ -30,6 +30,7 @@ export type ClientHomeStackParamList = {
   HomeMain: undefined
   AppointmentDetail: { appointmentId: string }
   AppointmentTracking: { appointmentId: string }
+  Help: undefined
   Emergency: undefined
   Store: { category?: string } | undefined
 }
@@ -44,6 +45,8 @@ export type ClientAppointmentsStackParamList = {
   AppointmentsList: undefined
   AppointmentDetail: { appointmentId: string }
   AppointmentTracking: { appointmentId: string }
+  Help: undefined
+  Emergency: undefined
   ChatScreen: { appointmentId: string }
 }
 
