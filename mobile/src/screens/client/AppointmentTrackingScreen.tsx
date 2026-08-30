@@ -160,7 +160,7 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
   }, [clientLocation, vetLocation])
 
   const handleChat = useCallback(() => {
-    navigation.navigate('Chat', { appointmentId: id })
+    navigation.navigate('ChatModal', { appointmentId: id })
   }, [navigation, id])
 
   const handleCall = useCallback(() => {
