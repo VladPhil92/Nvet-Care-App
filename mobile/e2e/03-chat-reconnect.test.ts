@@ -22,6 +22,7 @@ describe('Flow: Chat WebSocket connectivity', () => {
   beforeAll(async () => {
     await device.launchApp({
       newInstance: true,
+      delete: true,
       permissions: { notifications: 'YES' },
       languageAndLocale: { language: 'es-CO', locale: 'es-CO' },
     })
