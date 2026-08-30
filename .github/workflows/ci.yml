@@ -207,13 +207,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build exact-SHA compatibility image
+      - name: Build exact-SHA compatibility image with Railway root context
         run: |
           test -n "$SOURCE_SHA"
           docker build \
+            --file nvet-backend/Dockerfile \
             --build-arg RAILWAY_GIT_COMMIT_SHA="$SOURCE_SHA" \
             --tag nvet-railway-compat:ci \
-            nvet-backend
+            .
 
       - name: Verify compatibility start contract
         run: |
