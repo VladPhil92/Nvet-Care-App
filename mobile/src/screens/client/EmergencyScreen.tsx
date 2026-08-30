@@ -1,16 +1,10 @@
 /**
- * EmergencyScreen — "Emergencias 24/7" (mockup oficial).
+ * EmergencyScreen — atención prioritaria sin promesas operativas ficticias.
  *
- * Estructura del mockup:
- *   1. Header con badge rojo "EMERGENCIAS 24/7"
- *   2. Hero rojo: "Atención veterinaria de emergencia" + subtítulo
- *   3. 3 features (Atención inmediata, Veterinarios cerca, Equipos preparados)
- *   4. CTAs: "Solicitar emergencia" (rojo sólido) + "Llamar ahora" (rojo outline)
- *   5. Stats card: "Disponible 24/7" + "Tiempo promedio 20-30 min"
- *   6. "¿Cuándo solicitar emergencia?" — 6 síntomas con iconos circulares rojos suaves
- *   7. Banner alert "Si tu mascota presenta..."
- *   8. "Consejos mientras llega el veterinario" — 5 tips
- *   9. Footer 4 garantías
+ * Esta pantalla orienta al usuario ante signos de alarma y lo dirige a dos
+ * destinos reales del producto: búsqueda de veterinarios y Mis citas. No
+ * expone teléfonos hard-coded, tiempos de respuesta ni canales 24/7 que no
+ * estén respaldados por una integración operativa verificable.
  */
 
 import React, { useCallback } from 'react'
@@ -20,7 +14,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Linking,
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -32,10 +25,9 @@ interface Props {
   navigation: any
 }
 
-// Paleta de emergencia (rojo del mockup)
 const EMERGENCY = {
   red: '#EF4444',
-  redDark: '#DC2626',
+  redDark: '#B91C1C',
   redSoft: '#FEE2E2',
   redSofter: '#FFF5F5',
 } as const
@@ -47,76 +39,63 @@ interface Symptom {
 
 const SYMPTOMS: Symptom[] = [
   { icon: 'heart', label: 'Dificultad para respirar' },
-  { icon: 'lock', label: 'Convulsiones o desmayos' },
-  { icon: 'check', label: 'Hemorragias' },
-  { icon: 'history', label: 'Vómitos o diarrea severa' },
-  { icon: 'shield', label: 'Accidentes o golpes fuertes' },
-  { icon: 'star', label: 'Fiebre alta (>39.5 °C)' },
+  { icon: 'lock', label: 'Convulsiones o pérdida de conciencia' },
+  { icon: 'check', label: 'Hemorragia que no se detiene' },
+  { icon: 'history', label: 'Vómitos o diarrea severa y repetida' },
+  { icon: 'shield', label: 'Accidente, caída o golpe fuerte' },
+  { icon: 'star', label: 'Dolor intenso o deterioro súbito' },
 ]
 
 const TIPS = [
-  'Mantén la calma y habla con voz tranquila.',
-  'No le suministres medicamentos sin indicación.',
-  'Si es posible, toma una foto o video del estado de tu mascota.',
-  'Prepara un espacio cómodo y seguro para la atención.',
-  'Ten a mano la cartilla de vacunación y antecedentes.',
+  'Mantén a tu mascota en un lugar seguro y reduce el movimiento si hubo trauma.',
+  'No suministres medicamentos humanos ni veterinarios sin indicación profesional.',
+  'Si es seguro hacerlo, registra fotos o video de los síntomas para mostrarlos al veterinario.',
+  'Ten disponibles antecedentes, medicamentos actuales y cartilla de vacunación.',
+  'Si el estado empeora rápidamente, busca un servicio veterinario presencial de urgencias cercano.',
 ]
 
-interface FooterGuarantee {
-  icon: IconName
-  title: string
-  body: string
+function currentTabName(navigation: any): string | undefined {
+  const tabs = navigation.getParent?.()
+  const state = tabs?.getState?.()
+  if (!state || typeof state.index !== 'number') return undefined
+  return state.routes?.[state.index]?.name
 }
 
-const FOOTER: FooterGuarantee[] = [
-  {
-    icon: 'verified',
-    title: 'Veterinarios verificados',
-    body: 'Profesionales certificados y evaluados.',
-  },
-  {
-    icon: 'history',
-    title: 'Atención rápida y humana',
-    body: 'Respuesta ágil con trato empático.',
-  },
-  {
-    icon: 'lock',
-    title: 'Información segura',
-    body: 'Tus datos y los de tu mascota están protegidos.',
-  },
-  {
-    icon: 'heart',
-    title: 'Tu mascota, nuestra prioridad',
-    body: 'Amor, cuidado y compromiso siempre.',
-  },
-]
-
 export default function EmergencyScreen({ navigation }: Props) {
-  const handleEmergency = useCallback(() => {
-    Alert.alert(
-      'Solicitar emergencia',
-      '¿Confirmas que necesitas atención veterinaria de emergencia? Te conectaremos con el veterinario más cercano.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sí, solicitar',
-          style: 'destructive',
-          onPress: () =>
-            navigation.navigate('Search', { service: 'EMERGENCY', priority: 'HIGH' }),
-        },
-      ],
-    )
+  const openVetSearch = useCallback(() => {
+    const tabs = navigation.getParent?.()
+    if (!tabs) {
+      Alert.alert(
+        'No se pudo abrir la búsqueda',
+        'Regresa al inicio y abre la sección Servicios para buscar un veterinario disponible.',
+      )
+      return
+    }
+
+    tabs.navigate('ClientSearch', {
+      specialty: 'Emergencias',
+    })
   }, [navigation])
 
-  const handleCall = useCallback(() => {
-    Linking.openURL('tel:+576015551234').catch(() => {
-      Alert.alert('No se pudo iniciar la llamada', 'Marca manualmente: +57 601 555-1234')
-    })
-  }, [])
+  const openAppointments = useCallback(() => {
+    const tabs = navigation.getParent?.()
+    if (currentTabName(navigation) === 'ClientAppointments') {
+      navigation.popToTop()
+      return
+    }
+    if (!tabs) {
+      Alert.alert(
+        'No se pudo abrir Mis citas',
+        'Regresa al inicio y abre la sección Citas para contactar a tu veterinario.',
+      )
+      return
+    }
+
+    tabs.navigate('ClientAppointments')
+  }, [navigation])
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable
           onPress={() => navigation.goBack()}
@@ -127,196 +106,122 @@ export default function EmergencyScreen({ navigation }: Props) {
           <Icon name="arrow-back" size={24} color={Colors.ink} />
         </Pressable>
         <Text style={styles.headerTitle}>Emergencias</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── 1. Eyebrow badge rojo + título ─────────────────── */}
         <View style={styles.eyebrowBadge}>
           <Icon name="emergency" size={14} color={EMERGENCY.redDark} />
-          <Text style={styles.eyebrowText}>EMERGENCIAS 24/7</Text>
+          <Text style={styles.eyebrowText}>ATENCIÓN PRIORITARIA</Text>
         </View>
 
-        <Text style={styles.heroTitle}>
-          Atención veterinaria{'\n'}de emergencia
-        </Text>
+        <Text style={styles.heroTitle}>¿Tu mascota necesita atención urgente?</Text>
         <Text style={styles.heroSubtitle}>
-          Estamos disponibles 24 horas, todos los días del año para cuidar a tu
-          mascota cuando más nos necesita.
+          Revisa los signos de alarma y utiliza los canales disponibles en la app
+          para localizar un veterinario o contactar al profesional de una cita ya
+          creada.
         </Text>
 
-        {/* ── 2. 3 features destacados ────────────────────────── */}
-        <View style={styles.featuresRow}>
-          <FeatureItem
-            icon="history"
-            title="Atención inmediata"
-            body="Respuesta rápida cuando cada minuto cuenta."
-          />
-          <FeatureItem
-            icon="location"
-            title="Veterinarios cerca"
-            body="Te conectamos con el más cercano a tu ubicación."
-          />
-          <FeatureItem
-            icon="services"
-            title="Equipos preparados"
-            body="Contamos con equipos y medicamentos para estabilizar."
-          />
-        </View>
-
-        {/* ── 3. CTAs primarios ─────────────────────────────── */}
-        <View style={styles.ctaRow}>
+        <View style={styles.ctaGroup}>
           <Pressable
-            onPress={handleEmergency}
+            onPress={openVetSearch}
             style={({ pressed }) => [
               styles.ctaPrimary,
-              pressed && { opacity: 0.85 },
+              pressed && styles.pressed,
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Solicitar atención veterinaria de emergencia"
+            accessibilityLabel="Buscar veterinario para una emergencia"
           >
-            <Icon name="emergency" size={20} color="#FFFFFF" />
-            <Text style={styles.ctaPrimaryText}>Solicitar emergencia</Text>
+            <Icon name="location" size={20} color="#FFFFFF" />
+            <View style={styles.ctaCopy}>
+              <Text style={styles.ctaPrimaryTitle}>Buscar veterinario</Text>
+              <Text style={styles.ctaPrimaryBody}>
+                Abre Servicios para consultar profesionales disponibles.
+              </Text>
+            </View>
           </Pressable>
+
           <Pressable
-            onPress={handleCall}
+            onPress={openAppointments}
             style={({ pressed }) => [
               styles.ctaSecondary,
-              pressed && { backgroundColor: EMERGENCY.redSoft },
+              pressed && styles.pressed,
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Llamar ahora a la línea de emergencia"
+            accessibilityLabel="Abrir Mis citas para contactar al veterinario"
           >
-            <Icon name="phone" size={18} color={EMERGENCY.redDark} />
-            <Text style={styles.ctaSecondaryText}>Llamar ahora</Text>
+            <Icon name="history" size={19} color={EMERGENCY.redDark} />
+            <View style={styles.ctaCopy}>
+              <Text style={styles.ctaSecondaryTitle}>Ya tengo una cita</Text>
+              <Text style={styles.ctaSecondaryBody}>
+                Abre Mis citas y usa el chat o la llamada del servicio activo.
+              </Text>
+            </View>
           </Pressable>
         </View>
 
-        <View style={styles.trustRow}>
-          <Icon name="verified" size={14} color={Colors.sage} />
-          <Text style={styles.trustText}>Profesionales verificados</Text>
-          <Text style={styles.trustDivider}>·</Text>
-          <Text style={styles.trustText}>Atención segura y confiable</Text>
+        <View style={styles.notice}>
+          <Icon name="shield" size={18} color={EMERGENCY.redDark} />
+          <Text style={styles.noticeText}>
+            Nvet no muestra una línea telefónica de emergencia hasta disponer de un
+            número operativo verificado. Si existe riesgo vital inmediato y no
+            encuentras disponibilidad en la app, busca una clínica veterinaria de
+            urgencias cercana por un canal externo confiable.
+          </Text>
         </View>
 
-        {/* ── 4. Stats card ────────────────────────────────── */}
-        <View style={styles.statsCard}>
-          <View style={styles.statBox}>
-            <View style={styles.statIconCircle}>
-              <Icon name="emergency" size={18} color={EMERGENCY.redDark} />
-            </View>
-            <Text style={styles.statTitle}>Disponible 24/7</Text>
-            <Text style={styles.statSubtitle}>365 días al año</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <Text style={styles.statTitle}>Tiempo promedio</Text>
-            <Text style={[styles.statBig, { color: EMERGENCY.redDark }]}>
-              20-30 min
-            </Text>
-            <Text style={styles.statFootnote}>*Según tu ubicación</Text>
-          </View>
-        </View>
-
-        {/* ── 5. ¿Cuándo solicitar? ────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>¿Cuándo solicitar una emergencia?</Text>
+          <Text style={styles.sectionTitle}>Signos de alarma</Text>
+          <Text style={styles.sectionSubtitle}>
+            Estos ejemplos justifican una valoración veterinaria prioritaria.
+          </Text>
           <View style={styles.symptomsGrid}>
-            {SYMPTOMS.map((s) => (
-              <View key={s.label} style={styles.symptomItem}>
-                <View style={styles.symptomIconCircle}>
-                  <Icon name={s.icon} size={22} color={EMERGENCY.redDark} />
+            {SYMPTOMS.map((symptom) => (
+              <View key={symptom.label} style={styles.symptomCard}>
+                <View style={styles.symptomIcon}>
+                  <Icon name={symptom.icon} size={20} color={EMERGENCY.redDark} />
                 </View>
-                <Text style={styles.symptomLabel}>{s.label}</Text>
+                <Text style={styles.symptomLabel}>{symptom.label}</Text>
               </View>
             ))}
           </View>
         </View>
 
-        {/* ── 6. Alert banner ──────────────────────────────── */}
-        <View style={styles.alertBanner}>
-          <Icon name="emergency" size={18} color={EMERGENCY.redDark} />
-          <Text style={styles.alertText}>
-            Si tu mascota presenta alguno de estos síntomas, actúa rápido.
-            ¡Estamos para ayudarte!
-          </Text>
-        </View>
-
-        {/* ── 7. Consejos mientras llega ───────────────────── */}
         <View style={styles.section}>
-          <View style={styles.tipsHeader}>
-            <Text style={styles.sectionTitle}>Consejos mientras llega el veterinario</Text>
-            <View style={styles.tipsPaw}>
-              <Icon name="heart" size={14} color={EMERGENCY.redDark} />
-            </View>
-          </View>
+          <Text style={styles.sectionTitle}>Mientras recibes orientación</Text>
           <View style={styles.tipsList}>
-            {TIPS.map((tip, idx) => (
-              <View key={idx} style={styles.tipRow}>
+            {TIPS.map((tip) => (
+              <View key={tip} style={styles.tipRow}>
                 <View style={styles.tipBullet}>
-                  <Icon name="check" size={12} color={EMERGENCY.redDark} />
+                  <Icon name="check" size={11} color={EMERGENCY.redDark} />
                 </View>
                 <Text style={styles.tipText}>{tip}</Text>
               </View>
             ))}
           </View>
-          <Pressable
-            onPress={() => navigation.navigate('Chat', { mode: 'support' })}
-            style={styles.tipsChatLink}
-            accessibilityRole="button"
-            accessibilityLabel="Chatear con soporte"
-          >
-            <Icon name="phone" size={14} color={EMERGENCY.redDark} />
-            <Text style={styles.tipsChatLinkText}>
-              ¿Dudas? Chatea con nosotros en la app
-            </Text>
-          </Pressable>
         </View>
 
-        {/* ── 8. Footer 4 garantías ────────────────────────── */}
-        <View style={styles.footer}>
-          {FOOTER.map((g) => (
-            <View key={g.title} style={styles.footerItem}>
-              <View style={styles.footerIcon}>
-                <Icon name={g.icon} size={18} color={Colors.sage} />
-              </View>
-              <Text style={styles.footerTitle}>{g.title}</Text>
-              <Text style={styles.footerBody}>{g.body}</Text>
-            </View>
-          ))}
+        <View style={styles.trustCard}>
+          <Icon name="verified" size={20} color={Colors.sage} />
+          <View style={styles.trustCopy}>
+            <Text style={styles.trustTitle}>Información responsable</Text>
+            <Text style={styles.trustBody}>
+              Esta pantalla no reemplaza una valoración clínica y evita mostrar
+              contactos, tiempos de llegada o disponibilidad que el sistema no pueda
+              verificar en tiempo real.
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
   )
 }
 
-// ── Sub-componente: feature item ──────────────────────────────
-function FeatureItem({
-  icon,
-  title,
-  body,
-}: {
-  icon: IconName
-  title: string
-  body: string
-}) {
-  return (
-    <View style={styles.featureItem}>
-      <View style={styles.featureIconCircle}>
-        <Icon name={icon} size={20} color={EMERGENCY.redDark} />
-      </View>
-      <Text style={styles.featureTitle}>{title}</Text>
-      <Text style={styles.featureBody}>{body}</Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.canvas },
-
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -324,312 +229,167 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.ink,
-  },
-
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 32,
-    rowGap: 18,
-  },
-
-  // Eyebrow badge
+  headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.ink },
+  headerSpacer: { width: 24 },
+  scrollContent: { padding: 20, paddingBottom: 40, rowGap: 18 },
   eyebrowBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 6,
-    backgroundColor: EMERGENCY.redSoft,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
     alignSelf: 'flex-start',
+    backgroundColor: EMERGENCY.redSoft,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
   },
   eyebrowText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
+    letterSpacing: 0.9,
     color: EMERGENCY.redDark,
-    letterSpacing: 1,
   },
-
   heroTitle: {
-    fontSize: 30,
+    fontSize: 29,
+    lineHeight: 35,
     fontWeight: '800',
     color: Colors.ink,
-    lineHeight: 36,
   },
   heroSubtitle: {
     fontSize: 14,
-    color: Colors.inkSec,
     lineHeight: 20,
-  },
-
-  // Features
-  featuresRow: {
-    flexDirection: 'row',
-    columnGap: 8,
-  },
-  featureItem: {
-    flex: 1,
-    rowGap: 6,
-    paddingVertical: 4,
-  },
-  featureIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: EMERGENCY.redSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featureTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.ink,
-  },
-  featureBody: {
-    fontSize: 11,
     color: Colors.inkSec,
-    lineHeight: 14,
   },
-
-  // CTAs
-  ctaRow: {
-    flexDirection: 'row',
-    columnGap: 10,
-  },
+  ctaGroup: { rowGap: 10 },
   ctaPrimary: {
-    flex: 1.4,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    columnGap: 8,
+    columnGap: 12,
+    borderRadius: 16,
+    padding: 16,
     backgroundColor: EMERGENCY.red,
-    paddingVertical: 14,
-    borderRadius: 100,
-  },
-  ctaPrimaryText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
   },
   ctaSecondary: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    columnGap: 8,
+    columnGap: 12,
+    borderRadius: 16,
+    padding: 16,
     backgroundColor: Colors.surface,
-    paddingVertical: 14,
-    borderRadius: 100,
     borderWidth: 1.5,
-    borderColor: EMERGENCY.red,
+    borderColor: '#FCA5A5',
   },
-  ctaSecondaryText: {
-    color: EMERGENCY.redDark,
-    fontSize: 14,
+  ctaCopy: { flex: 1 },
+  ctaPrimaryTitle: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  ctaPrimaryBody: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 15,
+    color: 'rgba(255,255,255,0.88)',
+  },
+  ctaSecondaryTitle: {
+    fontSize: 15,
     fontWeight: '800',
+    color: EMERGENCY.redDark,
   },
-
-  trustRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 6,
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-  },
-  trustText: {
-    fontSize: 12,
+  ctaSecondaryBody: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 15,
     color: Colors.inkSec,
-    fontWeight: '600',
   },
-  trustDivider: {
-    color: Colors.inkMuted,
-    fontWeight: '700',
-  },
-
-  // Stats card
-  statsCard: {
+  pressed: { opacity: 0.82 },
+  notice: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    columnGap: 10,
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: EMERGENCY.redSofter,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: Colors.inkSec,
+  },
+  section: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.line,
   },
-  statBox: { flex: 1, rowGap: 4 },
-  statIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: EMERGENCY.redSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  statTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.ink,
-  },
-  statSubtitle: {
-    fontSize: 11,
+  sectionTitle: { fontSize: 17, fontWeight: '800', color: Colors.ink },
+  sectionSubtitle: {
+    marginTop: 4,
+    marginBottom: 14,
+    fontSize: 12,
+    lineHeight: 17,
     color: Colors.inkSec,
   },
-  statBig: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  statFootnote: {
-    fontSize: 10,
-    color: EMERGENCY.redDark,
-    fontStyle: 'italic',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: Colors.line,
-    marginHorizontal: 12,
-  },
-
-  // Section general
-  section: { rowGap: 12 },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: Colors.ink,
-  },
-
-  // Symptoms grid
   symptomsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    columnGap: 8,
-    rowGap: 14,
+    gap: 10,
   },
-  symptomItem: {
-    width: '31%',
-    alignItems: 'center',
-    rowGap: 6,
-  },
-  symptomIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  symptomCard: {
+    width: '48%',
+    minHeight: 112,
+    borderRadius: 14,
+    padding: 12,
     backgroundColor: EMERGENCY.redSofter,
+  },
+  symptomIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: EMERGENCY.redSoft,
   },
   symptomLabel: {
-    fontSize: 11,
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
     color: Colors.ink,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 14,
   },
-
-  // Alert banner
-  alertBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    columnGap: 10,
-    backgroundColor: EMERGENCY.redSoft,
-    padding: 14,
-    borderRadius: 12,
-  },
-  alertText: {
-    flex: 1,
-    fontSize: 13,
-    color: EMERGENCY.redDark,
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-
-  // Tips
-  tipsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  tipsPaw: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: EMERGENCY.redSofter,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tipsList: {
-    rowGap: 10,
-    backgroundColor: Colors.surface,
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.line,
-  },
+  tipsList: { marginTop: 14, rowGap: 11 },
   tipRow: {
     flexDirection: 'row',
-    columnGap: 10,
+    alignItems: 'flex-start',
+    columnGap: 9,
   },
   tipBullet: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: EMERGENCY.redSofter,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
+    backgroundColor: EMERGENCY.redSoft,
   },
   tipText: {
     flex: 1,
-    fontSize: 13,
-    color: Colors.ink,
-    lineHeight: 18,
-  },
-  tipsChatLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 6,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  tipsChatLinkText: {
-    fontSize: 13,
-    color: EMERGENCY.redDark,
-    fontWeight: '700',
-  },
-
-  // Footer
-  footer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: 12,
-    rowGap: 12,
-    marginTop: 8,
-  },
-  footerItem: {
-    width: '47%',
-    rowGap: 4,
-  },
-  footerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.greenSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  footerTitle: {
     fontSize: 12,
-    fontWeight: '800',
-    color: Colors.ink,
-  },
-  footerBody: {
-    fontSize: 11,
+    lineHeight: 18,
     color: Colors.inkSec,
-    lineHeight: 14,
+  },
+  trustCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    columnGap: 10,
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: Colors.greenSoft,
+  },
+  trustCopy: { flex: 1 },
+  trustTitle: { fontSize: 13, fontWeight: '800', color: Colors.ink },
+  trustBody: {
+    marginTop: 3,
+    fontSize: 11,
+    lineHeight: 16,
+    color: Colors.inkSec,
   },
 })
