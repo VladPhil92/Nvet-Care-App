@@ -198,10 +198,33 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  railway-legacy-bridge:
+    name: Railway Legacy Root Bridge (Docker)
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build exact-SHA compatibility image
+        run: |
+          test -n "$SOURCE_SHA"
+          docker build \
+            --build-arg RAILWAY_GIT_COMMIT_SHA="$SOURCE_SHA" \
+            --tag nvet-railway-compat:ci \
+            nvet-backend
+
+      - name: Verify compatibility start contract
+        run: |
+          docker inspect nvet-railway-compat:ci --format '{{json .Config.Cmd}}' | grep -q 'start:prod'
+          docker run --rm --entrypoint node nvet-railway-compat:ci \
+            -e "const p=require('/compat/package.json'); if(!p.scripts?.['start:prod']?.includes('deploy:preflight')) process.exit(1);"
+
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [backend, mobile, android-native, dashboard]
+    needs: [backend, mobile, android-native, dashboard, railway-legacy-bridge]
     if: always()
     steps:
       - name: Verify all jobs passed
@@ -220,6 +243,10 @@ jobs:
           fi
           if [[ "${{ needs.dashboard.result }}" != "success" ]]; then
             echo "Dashboard failed: ${{ needs.dashboard.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.railway-legacy-bridge.result }}" != "success" ]]; then
+            echo "Railway legacy bridge failed: ${{ needs.railway-legacy-bridge.result }}"
             exit 1
           fi
           echo "All CI jobs passed."
