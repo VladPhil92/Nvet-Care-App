@@ -17,6 +17,7 @@ describe('Flow: Vet recibe y procesa una cita', () => {
   beforeAll(async () => {
     await device.launchApp({
       newInstance: true,
+      delete: true,
       permissions: { notifications: 'YES', location: 'always' },
       languageAndLocale: { language: 'es-CO', locale: 'es-CO' },
     })
