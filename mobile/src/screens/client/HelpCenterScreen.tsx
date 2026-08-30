@@ -116,10 +116,11 @@ export default function HelpCenterScreen({ navigation }: Props) {
         <View style={styles.emergencyCard}>
           <View style={styles.emergencyCopy}>
             <Text style={styles.emergencyEyebrow}>¿ES UNA URGENCIA MÉDICA?</Text>
-            <Text style={styles.emergencyTitle}>Emergencias veterinarias 24/7</Text>
+            <Text style={styles.emergencyTitle}>Emergencias veterinarias</Text>
             <Text style={styles.emergencyBody}>
               Si tu mascota presenta dificultad para respirar, convulsiones,
-              hemorragia u otro signo grave, utiliza el módulo de emergencias.
+              hemorragia u otro signo grave, abre el módulo de emergencias y
+              consulta las opciones disponibles.
             </Text>
           </View>
           <Pressable
