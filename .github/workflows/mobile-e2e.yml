@@ -1,18 +1,8 @@
 # Detox E2E workflow para mobile.
 #
-# Ejecuta los 3 specs E2E (login-search-book-pay, vet-receives-appointment,
-# chat-reconnect) en un simulador iOS y opcionalmente en un emulador Android.
-#
-# Triggers:
-#   - workflow_dispatch (botón manual en GitHub UI)
-#   - schedule: nightly (08:00 UTC = 03:00 Bogotá), solo si DETOX_NIGHTLY=true
-#   - Comentario "/e2e" en un PR (handled vía workflow_dispatch desde otra acción)
-#
-# Notas:
-#   - macos-latest tiene Xcode + simulators preinstalados
-#   - El job android usa ubuntu con KVM acceleration via reactivecircus/android-emulator-runner
-#   - Los timings son agresivos pero realistas para CI con cache caliente
-#   - Si Detox falla por timeout, los artifacts (.detox-artifacts) se suben para postmortem
+# Android es la plataforma nativa activa. iOS queda disponible manualmente
+# cuando exista el scaffold `mobile/ios`; los nightly no deben simular soporte
+# iOS antes de que esa plataforma esté incorporada al repositorio.
 name: Mobile E2E
 
 on:
@@ -21,11 +11,11 @@ on:
       platform:
         description: 'Plataforma a probar'
         required: true
-        default: 'ios'
+        default: 'android'
         type: choice
         options:
-          - ios
           - android
+          - ios
           - both
       record_videos:
         description: 'Grabar video de cada test'
@@ -33,38 +23,40 @@ on:
         default: false
         type: boolean
   schedule:
-    # Nightly 08:00 UTC = 03:00 Bogotá
+    # Nightly 08:00 UTC = 03:00 Bogotá. Mientras iOS no exista, corre Android.
     - cron: '0 8 * * *'
 
 env:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '22.x'
 
 jobs:
   e2e-ios:
     name: E2E iOS (iPhone 15 simulator)
     if: |
-      github.event_name == 'schedule' ||
-      github.event.inputs.platform == 'ios' ||
-      github.event.inputs.platform == 'both'
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'both')
     runs-on: macos-14
-    defaults:
-      run:
-        working-directory: mobile
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Require committed iOS native project
+        run: |
+          test -d mobile/ios || {
+            echo '::error::mobile/ios todavía no existe. La Fase 2 iOS debe incorporar el proyecto nativo antes de habilitar este E2E.'
+            exit 1
+          }
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
 
-      # No hay package-lock.json comprometido en el repo (ni raíz ni por
-      # paquete), así que `cache: npm` no resuelve ninguna ruta y `npm ci`
-      # no puede correr. Mismo criterio que ya usan ci.yml y deploy-backend.yml.
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install canonical workspace dependencies
+        run: npm ci --include=dev --legacy-peer-deps
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
@@ -73,18 +65,21 @@ jobs:
           key: ${{ runner.os }}-pods-${{ hashFiles('mobile/ios/Podfile.lock') }}
 
       - name: Install pods
-        run: cd ios && pod install --repo-update
+        working-directory: mobile/ios
+        run: pod install --repo-update
 
-      - name: Install detox-cli + applesimutils
+      - name: Install Detox iOS helpers
         run: |
           npm install -g detox-cli
           brew tap wix/brew
           brew install applesimutils
 
       - name: Build app for Detox
+        working-directory: mobile
         run: npm run e2e:build:ios
 
       - name: Run Detox tests
+        working-directory: mobile
         env:
           DETOX_RECORD_VIDEOS: ${{ github.event.inputs.record_videos == 'true' && '1' || '0' }}
           E2E_API_URL: ${{ secrets.E2E_API_URL || 'http://localhost:3000' }}
@@ -105,12 +100,10 @@ jobs:
   e2e-android:
     name: E2E Android (Pixel 6 emulator)
     if: |
+      github.event_name == 'schedule' ||
       github.event.inputs.platform == 'android' ||
       github.event.inputs.platform == 'both'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile
     timeout-minutes: 90
     steps:
       - name: Checkout
@@ -120,12 +113,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
 
-      # No hay package-lock.json comprometido en el repo (ni raíz ni por
-      # paquete), así que `cache: npm` no resuelve ninguna ruta y `npm ci`
-      # no puede correr. Mismo criterio que ya usan ci.yml y deploy-backend.yml.
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install canonical workspace dependencies
+        run: npm ci --include=dev --legacy-peer-deps
 
       - name: Setup Java
         uses: actions/setup-java@v4
