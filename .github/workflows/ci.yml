@@ -152,6 +152,7 @@ jobs:
         working-directory: mobile/android
         env:
           GOOGLE_MAPS_ANDROID_API_KEY: ci-placeholder
+          NVET_API_URL: https://backend-production-a476.up.railway.app/api
         run: ./gradlew assembleDebug assembleAndroidTest bundleRelease -DtestBuildType=debug --no-daemon --stacktrace
 
       - name: Verify Android release bundle

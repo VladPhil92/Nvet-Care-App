@@ -70,6 +70,10 @@ jobs:
             echo "::error::Falta configuración E2E:$missing"
             exit 1
           fi
+          if ! printf '%s' "${{ secrets.E2E_API_URL }}" | grep -Eq '^https://[^[:space:]]+$'; then
+            echo "::error::E2E_API_URL debe ser un endpoint HTTPS absoluto"
+            exit 1
+          fi
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
@@ -87,20 +91,35 @@ jobs:
           brew tap wix/brew
           brew install applesimutils
 
-      - name: Build app for Detox
-        working-directory: mobile
-        run: npm run e2e:build:ios
-
-      - name: Run Detox tests
+      - name: Build and run Detox
         working-directory: mobile
         env:
           DETOX_RECORD_VIDEOS: ${{ github.event.inputs.record_videos == 'true' && '1' || '0' }}
+          NVET_API_URL: ${{ secrets.E2E_API_URL }}
           E2E_API_URL: ${{ secrets.E2E_API_URL }}
           E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
           E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
           E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
           E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
-        run: npm run e2e:test:ios -- --headless --record-logs all
+        run: |
+          npm start -- --reset-cache > /tmp/nvet-metro.log 2>&1 &
+          METRO_PID=$!
+          trap 'kill "$METRO_PID" 2>/dev/null || true' EXIT
+          ready=0
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8081/status 2>/dev/null | grep -q 'packager-status:running'; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/nvet-metro.log
+            echo '::error::Metro no quedó disponible en el puerto 8081'
+            exit 1
+          fi
+          npm run e2e:build:ios
+          npm run e2e:test:ios -- --headless --record-logs all
 
       - name: Upload Detox artifacts on failure
         if: failure()
@@ -144,6 +163,10 @@ jobs:
             echo "::error::Falta configuración E2E:$missing"
             exit 1
           fi
+          if ! printf '%s' "${{ secrets.E2E_API_URL }}" | grep -Eq '^https://[^[:space:]]+$'; then
+            echo "::error::E2E_API_URL debe ser un endpoint HTTPS absoluto"
+            exit 1
+          fi
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -170,6 +193,7 @@ jobs:
       - name: Run E2E with emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
+          NVET_API_URL: ${{ secrets.E2E_API_URL }}
           E2E_API_URL: ${{ secrets.E2E_API_URL }}
           E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
           E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
@@ -183,6 +207,22 @@ jobs:
           profile: pixel_6
           working-directory: mobile
           script: |
+            npm start -- --reset-cache > /tmp/nvet-metro.log 2>&1 &
+            METRO_PID=$!
+            trap 'kill "$METRO_PID" 2>/dev/null || true' EXIT
+            ready=0
+            for _ in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:8081/status 2>/dev/null | grep -q 'packager-status:running'; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              cat /tmp/nvet-metro.log
+              echo '::error::Metro no quedó disponible en el puerto 8081'
+              exit 1
+            fi
             npm run e2e:build:android
             npm run e2e:test:android -- --headless --record-logs all
 

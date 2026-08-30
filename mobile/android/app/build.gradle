@@ -22,9 +22,25 @@ def releaseKeyPassword = System.getenv("NVET_ANDROID_KEY_PASSWORD")
 def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 
 def mapsApiKey = System.getenv("GOOGLE_MAPS_ANDROID_API_KEY") ?: ""
+def nvetApiUrl = System.getenv("NVET_API_URL") ?: ""
 def androidVersionCodeRaw = System.getenv("NVET_ANDROID_VERSION_CODE") ?: "1"
 def androidVersionName = System.getenv("NVET_ANDROID_VERSION_NAME") ?: "1.0.0"
 def androidVersionCode
+
+def releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains("release")
+}
+
+if (releaseTaskRequested) {
+    try {
+        def apiUri = new java.net.URI(nvetApiUrl)
+        if (apiUri.scheme != "https" || !apiUri.host || apiUri.host in ["localhost", "127.0.0.1", "0.0.0.0"]) {
+            throw new IllegalArgumentException("invalid production API URL")
+        }
+    } catch (Exception ignored) {
+        throw new GradleException("NVET_API_URL must be an absolute HTTPS non-local URL for Android release builds")
+    }
+}
 
 try {
     androidVersionCode = Integer.parseInt(androidVersionCodeRaw)
