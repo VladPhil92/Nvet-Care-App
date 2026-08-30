@@ -1,0 +1,61 @@
+name: Railway Contract
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'backend/**'
+      - 'nvet-backend/**'
+      - 'railway.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/railway-contract.yml'
+      - '.github/workflows/deploy-backend.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'nvet-backend/**'
+      - 'railway.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/railway-contract.yml'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  contract:
+    name: Canonical Railway runtime contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Validate canonical workspace and runtime gates
+        run: |
+          node --check backend/scripts/production-predeploy.mjs
+          node --check backend/scripts/railway-runtime-smoke.mjs
+          node - <<'NODE'
+          const root = require('./package.json');
+          const backend = require('./backend/package.json');
+
+          if (!Array.isArray(root.workspaces) || !root.workspaces.includes('backend')) {
+            throw new Error('backend must remain part of the root npm workspace');
+          }
+          if (backend.scripts?.['railway:start'] !== 'node scripts/railway-runtime-smoke.mjs') {
+            throw new Error('railway:start must execute the canonical runtime smoke gate');
+          }
+          if (backend.scripts?.['deploy:preflight'] !== 'node scripts/production-predeploy.mjs') {
+            throw new Error('deploy:preflight must remain fail-closed');
+          }
+          NODE
+
+      - name: Confirm temporary bridge remains isolated
+        run: |
+          test -f nvet-backend/bridge.mjs
+          test -f nvet-backend/runtime-smoke.mjs
+          echo 'Temporary bridge still present; remove only after canonical Railway cutover is verified.'
