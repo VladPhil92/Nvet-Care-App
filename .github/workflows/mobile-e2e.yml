@@ -1,18 +1,8 @@
 # Detox E2E workflow para mobile.
 #
-# Ejecuta los 3 specs E2E (login-search-book-pay, vet-receives-appointment,
-# chat-reconnect) en un simulador iOS y opcionalmente en un emulador Android.
-#
-# Triggers:
-#   - workflow_dispatch (botón manual en GitHub UI)
-#   - schedule: nightly (08:00 UTC = 03:00 Bogotá), solo si DETOX_NIGHTLY=true
-#   - Comentario "/e2e" en un PR (handled vía workflow_dispatch desde otra acción)
-#
-# Notas:
-#   - macos-latest tiene Xcode + simulators preinstalados
-#   - El job android usa ubuntu con KVM acceleration via reactivecircus/android-emulator-runner
-#   - Los timings son agresivos pero realistas para CI con cache caliente
-#   - Si Detox falla por timeout, los artifacts (.detox-artifacts) se suben para postmortem
+# Android es la plataforma nativa activa. iOS solo se habilita manualmente
+# cuando exista el proyecto `mobile/ios`. Los nightly quedan gateados por la
+# variable de repositorio DETOX_NIGHTLY=true y requieren un backend E2E real.
 name: Mobile E2E
 
 on:
@@ -21,11 +11,11 @@ on:
       platform:
         description: 'Plataforma a probar'
         required: true
-        default: 'ios'
+        default: 'android'
         type: choice
         options:
-          - ios
           - android
+          - ios
           - both
       record_videos:
         description: 'Grabar video de cada test'
@@ -33,38 +23,57 @@ on:
         default: false
         type: boolean
   schedule:
-    # Nightly 08:00 UTC = 03:00 Bogotá
+    # 08:00 UTC = 03:00 Bogotá. Solo Android y solo si DETOX_NIGHTLY=true.
     - cron: '0 8 * * *'
 
 env:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '22.x'
 
 jobs:
   e2e-ios:
     name: E2E iOS (iPhone 15 simulator)
     if: |
-      github.event_name == 'schedule' ||
-      github.event.inputs.platform == 'ios' ||
-      github.event.inputs.platform == 'both'
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'both')
     runs-on: macos-14
-    defaults:
-      run:
-        working-directory: mobile
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Require committed iOS native project
+        run: |
+          test -d mobile/ios || {
+            echo '::error::mobile/ios todavía no existe. No se puede certificar iOS antes de incorporar el proyecto nativo.'
+            exit 1
+          }
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
 
-      # No hay package-lock.json comprometido en el repo (ni raíz ni por
-      # paquete), así que `cache: npm` no resuelve ninguna ruta y `npm ci`
-      # no puede correr. Mismo criterio que ya usan ci.yml y deploy-backend.yml.
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install canonical workspace dependencies
+        run: npm ci --include=dev --legacy-peer-deps
+
+      - name: Validate E2E configuration
+        run: |
+          missing=""
+          [ -z "${{ secrets.E2E_API_URL }}" ] && missing="$missing E2E_API_URL"
+          [ -z "${{ secrets.E2E_CLIENT_EMAIL }}" ] && missing="$missing E2E_CLIENT_EMAIL"
+          [ -z "${{ secrets.E2E_CLIENT_PASSWORD }}" ] && missing="$missing E2E_CLIENT_PASSWORD"
+          [ -z "${{ secrets.E2E_VET_EMAIL }}" ] && missing="$missing E2E_VET_EMAIL"
+          [ -z "${{ secrets.E2E_VET_PASSWORD }}" ] && missing="$missing E2E_VET_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Falta configuración E2E:$missing"
+            exit 1
+          fi
+          if ! printf '%s' "${{ secrets.E2E_API_URL }}" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
+            echo "::error::E2E_API_URL debe ser un endpoint HTTPS absoluto que termine en /api"
+            exit 1
+          fi
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
@@ -73,26 +82,44 @@ jobs:
           key: ${{ runner.os }}-pods-${{ hashFiles('mobile/ios/Podfile.lock') }}
 
       - name: Install pods
-        run: cd ios && pod install --repo-update
+        working-directory: mobile/ios
+        run: pod install --repo-update
 
-      - name: Install detox-cli + applesimutils
+      - name: Install Detox iOS helpers
         run: |
           npm install -g detox-cli
           brew tap wix/brew
           brew install applesimutils
 
-      - name: Build app for Detox
-        run: npm run e2e:build:ios
-
-      - name: Run Detox tests
+      - name: Build and run Detox
+        working-directory: mobile
         env:
           DETOX_RECORD_VIDEOS: ${{ github.event.inputs.record_videos == 'true' && '1' || '0' }}
-          E2E_API_URL: ${{ secrets.E2E_API_URL || 'http://localhost:3000' }}
+          NVET_API_URL: ${{ secrets.E2E_API_URL }}
+          E2E_API_URL: ${{ secrets.E2E_API_URL }}
           E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
           E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
           E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
           E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
-        run: npm run e2e:test:ios -- --headless --record-logs all
+        run: |
+          npm start -- --reset-cache > /tmp/nvet-metro.log 2>&1 &
+          METRO_PID=$!
+          trap 'kill "$METRO_PID" 2>/dev/null || true' EXIT
+          ready=0
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8081/status 2>/dev/null | grep -q 'packager-status:running'; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/nvet-metro.log
+            echo '::error::Metro no quedó disponible en el puerto 8081'
+            exit 1
+          fi
+          npm run e2e:build:ios
+          npm run e2e:test:ios -- --headless --record-logs all
 
       - name: Upload Detox artifacts on failure
         if: failure()
@@ -105,12 +132,10 @@ jobs:
   e2e-android:
     name: E2E Android (Pixel 6 emulator)
     if: |
-      github.event.inputs.platform == 'android' ||
-      github.event.inputs.platform == 'both'
+      (github.event_name == 'schedule' && vars.DETOX_NIGHTLY == 'true') ||
+      (github.event_name == 'workflow_dispatch' &&
+        (github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both'))
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile
     timeout-minutes: 90
     steps:
       - name: Checkout
@@ -120,17 +145,34 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
 
-      # No hay package-lock.json comprometido en el repo (ni raíz ni por
-      # paquete), así que `cache: npm` no resuelve ninguna ruta y `npm ci`
-      # no puede correr. Mismo criterio que ya usan ci.yml y deploy-backend.yml.
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install canonical workspace dependencies
+        run: npm ci --include=dev --legacy-peer-deps
 
-      - name: Setup Java
+      - name: Validate E2E configuration
+        run: |
+          missing=""
+          [ -z "${{ secrets.E2E_API_URL }}" ] && missing="$missing E2E_API_URL"
+          [ -z "${{ secrets.E2E_CLIENT_EMAIL }}" ] && missing="$missing E2E_CLIENT_EMAIL"
+          [ -z "${{ secrets.E2E_CLIENT_PASSWORD }}" ] && missing="$missing E2E_CLIENT_PASSWORD"
+          [ -z "${{ secrets.E2E_VET_EMAIL }}" ] && missing="$missing E2E_VET_EMAIL"
+          [ -z "${{ secrets.E2E_VET_PASSWORD }}" ] && missing="$missing E2E_VET_PASSWORD"
+          [ -z "${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}" ] && missing="$missing GOOGLE_MAPS_ANDROID_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Falta configuración E2E:$missing"
+            exit 1
+          fi
+          if ! printf '%s' "${{ secrets.E2E_API_URL }}" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
+            echo "::error::E2E_API_URL debe ser un endpoint HTTPS absoluto que termine en /api"
+            exit 1
+          fi
+
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Cache Gradle
@@ -152,11 +194,14 @@ jobs:
       - name: Run E2E with emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
-          E2E_API_URL: ${{ secrets.E2E_API_URL || 'http://localhost:3000' }}
+          DETOX_RECORD_VIDEOS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.record_videos == 'true' && '1' || '0' }}
+          NVET_API_URL: ${{ secrets.E2E_API_URL }}
+          E2E_API_URL: ${{ secrets.E2E_API_URL }}
           E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
           E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
           E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
           E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
+          GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
         with:
           api-level: 33
           target: google_apis
@@ -164,6 +209,22 @@ jobs:
           profile: pixel_6
           working-directory: mobile
           script: |
+            npm start -- --reset-cache > /tmp/nvet-metro.log 2>&1 &
+            METRO_PID=$!
+            trap 'kill "$METRO_PID" 2>/dev/null || true' EXIT
+            ready=0
+            for _ in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:8081/status 2>/dev/null | grep -q 'packager-status:running'; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              cat /tmp/nvet-metro.log
+              echo '::error::Metro no quedó disponible en el puerto 8081'
+              exit 1
+            fi
             npm run e2e:build:android
             npm run e2e:test:android -- --headless --record-logs all
 

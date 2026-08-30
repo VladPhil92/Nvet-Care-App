@@ -6,14 +6,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 // ============================================================
 
 /**
- * URL base de la API. Exportada para uso en sockets y otros consumidores
- * (p. ej., useChatStore necesita derivar la URL del WebSocket).
+ * URL base de la API, inyectada durante el bundle por Babel.
  *
- * En producción, reemplazar por una variable de entorno via react-native-config.
+ * - Desarrollo/test sin NVET_API_URL: localhost.
+ * - Android release: Gradle exige NVET_API_URL HTTPS antes de generar el AAB.
+ * - Staging/E2E: el workflow inyecta la URL del entorno correspondiente.
+ *
+ * No contiene secretos: es únicamente el endpoint público del backend.
  */
-export const API_URL =
-  (typeof process !== 'undefined' && process.env?.API_URL) ||
-  'http://localhost:3000/api'
+export const API_URL = '__NVET_API_URL__'
 
 const DEFAULT_TIMEOUT_MS = 15000
 const UPLOAD_TIMEOUT_MS = 60000

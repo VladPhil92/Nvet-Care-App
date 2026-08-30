@@ -1,29 +1,8 @@
 # Release Android → AAB firmado
 #
-# Construye un Android App Bundle (.aab) de producción, firmado con el
-# keystore real, y lo publica como artifact del run. No sube nada a
-# Google Play — ese es un paso deliberadamente separado (requiere
-# credenciales de Play Console API, fuera del alcance de este workflow).
-#
-# Solo manual (workflow_dispatch) — un release no se dispara por accidente
-# en cada push.
-#
-# Secrets requeridos en el repo (Settings → Secrets and variables →
-# Actions → Repository secrets):
-#   ANDROID_KEYSTORE_BASE64   → keystore .jks/.keystore codificado en base64
-#                                (`base64 -i release.keystore | pbcopy` o
-#                                equivalente)
-#   ANDROID_KEYSTORE_PASSWORD → contraseña del keystore
-#   ANDROID_KEY_ALIAS         → alias de la clave dentro del keystore
-#   ANDROID_KEY_PASSWORD      → contraseña de la clave (puede ser igual a
-#                                la del keystore, según cómo se generó)
-#   GOOGLE_MAPS_ANDROID_API_KEY → clave de Maps productiva (ya usada en
-#                                otros workflows de este repo)
-#
-# El keystore de producción NO se genera aquí. Generarlo (y decidir su
-# custodia -- idealmente vía Google Play App Signing, que permite
-# reemplazar la upload key si se pierde) es una decisión deliberada del
-# equipo, no de este workflow.
+# Construye un Android App Bundle (.aab) de producción, lo firma con la
+# upload key administrada por el equipo y verifica criptográficamente la
+# firma antes de publicar el artifact. No publica en Google Play.
 name: Release Android
 
 on:
@@ -33,18 +12,25 @@ on:
         description: 'Escribe "release" para confirmar que este build es intencional'
         required: true
         type: string
+      version_name:
+        description: 'Versión pública Android, por ejemplo 1.0.0'
+        required: true
+        default: '1.0.0'
+        type: string
+      api_url:
+        description: 'Endpoint público HTTPS del backend, incluyendo /api'
+        required: true
+        type: string
 
 env:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '22.x'
+  NVET_API_URL: ${{ github.event.inputs.api_url }}
 
 jobs:
   build-signed-aab:
     name: Build signed AAB
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.confirm == 'release' }}
-    defaults:
-      run:
-        working-directory: mobile
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +39,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -60,29 +48,45 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install canonical workspace dependencies
+        run: npm ci --include=dev --legacy-peer-deps
 
       - name: Verify Gradle wrapper integrity
+        working-directory: mobile
         run: |
           test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
           ./android/gradlew --version
 
-      - name: Validate signing secrets are all present
+      - name: Validate release inputs and secrets
         run: |
           missing=""
           [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] && missing="$missing ANDROID_KEYSTORE_BASE64"
           [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] && missing="$missing ANDROID_KEYSTORE_PASSWORD"
           [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] && missing="$missing ANDROID_KEY_ALIAS"
           [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ] && missing="$missing ANDROID_KEY_PASSWORD"
+          [ -z "${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}" ] && missing="$missing GOOGLE_MAPS_ANDROID_API_KEY"
           if [ -n "$missing" ]; then
-            echo "::error::Faltan secrets de firma:$missing — ver los comentarios de este workflow. Sin los 4, Gradle construiría un bundle SIN FIRMAR y este workflow lo subiría igual bajo un nombre que implica que sí está firmado."
+            echo "::error::Faltan secrets de release:$missing"
             exit 1
           fi
+          VERSION_NAME="${{ github.event.inputs.version_name }}"
+          if ! printf '%s' "$VERSION_NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "::error::version_name debe seguir un formato SemVer como 1.0.0 o 1.0.0-rc.1"
+            exit 1
+          fi
+          if ! printf '%s' "$NVET_API_URL" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
+            echo "::error::api_url debe ser un endpoint HTTPS absoluto que termine en /api"
+            exit 1
+          fi
+          case "$NVET_API_URL" in
+            *localhost*|*127.0.0.1*|*0.0.0.0*|*.invalid/*)
+              echo "::error::api_url no puede apuntar a una interfaz local ni a un dominio .invalid"
+              exit 1
+              ;;
+          esac
 
       - name: Decode release keystore
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > mobile/android/app/release.keystore
 
       - name: Build signed AAB
         working-directory: mobile/android
@@ -92,7 +96,18 @@ jobs:
           NVET_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           NVET_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+          NVET_ANDROID_VERSION_CODE: ${{ github.run_number }}
+          NVET_ANDROID_VERSION_NAME: ${{ github.event.inputs.version_name }}
         run: ./gradlew bundleRelease --no-daemon --stacktrace
+
+      - name: Verify signed bundle exists
+        run: test -s mobile/android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Verify AAB signature
+        run: |
+          AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
+          unzip -Z1 "$AAB" | grep -Eq '^META-INF/[^/]+\.(RSA|DSA|EC)$'
+          jarsigner -verify "$AAB"
 
       - name: Remove decoded keystore
         if: always()
@@ -101,6 +116,7 @@ jobs:
       - name: Upload signed AAB
         uses: actions/upload-artifact@v4
         with:
-          name: nvetcare-release-${{ github.run_number }}
+          name: nvetcare-${{ github.event.inputs.version_name }}-${{ github.run_number }}
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
           retention-days: 30
