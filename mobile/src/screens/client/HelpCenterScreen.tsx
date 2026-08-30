@@ -39,9 +39,20 @@ interface Props {
   navigation: any
 }
 
+function currentTabName(navigation: any): string | undefined {
+  const tabs = navigation.getParent?.()
+  const state = tabs?.getState?.()
+  if (!state || typeof state.index !== 'number') return undefined
+  return state.routes?.[state.index]?.name
+}
+
 export default function HelpCenterScreen({ navigation }: Props) {
   const openAppointments = useCallback(() => {
     const tabs = navigation.getParent?.()
+    if (currentTabName(navigation) === 'ClientAppointments') {
+      navigation.popToTop()
+      return
+    }
     if (tabs) {
       tabs.navigate('ClientAppointments')
       return
