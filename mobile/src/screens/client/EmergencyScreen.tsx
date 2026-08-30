@@ -73,7 +73,11 @@ export default function EmergencyScreen({ navigation }: Props) {
     }
 
     tabs.navigate('ClientSearch', {
-      specialty: 'Emergencias',
+      screen: 'SearchMain',
+      params: {
+        specialty: 'Emergencias',
+        availableNow: true,
+      },
     })
   }, [navigation])
 
