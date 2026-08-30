@@ -22,6 +22,7 @@ jobs:
       - name: Dispatch Provision Isolated Staging on main
         run: |
           set -euo pipefail
+          # Re-dispatch after workspace-token authentication fix merged to main.
           gh workflow run provision-staging.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
