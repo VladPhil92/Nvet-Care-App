@@ -53,23 +53,37 @@ export type ClientAppointmentsStackParamList = {
 // ============================================================
 // VET TAB
 // ============================================================
+export type VetProfileStackParamList = {
+  ProfileMain: undefined
+  Wallet: undefined
+  Notifications: undefined
+  VetVerification: undefined
+  UploadVerificationDocs: undefined
+  TopUpWallet: undefined
+  EditProfile: undefined
+  PriceManagement: undefined
+  RequestWithdrawal: undefined
+  TwoFactorEnrollment: undefined
+  ChangePassword: undefined
+  ActiveSessions: undefined
+  MyPets: undefined
+}
+
 export type VetTabParamList = {
   VetDashboard: undefined
   VetSchedule: undefined
   VetEarnings: undefined
-  VetProfile: undefined
+  VetProfile: NavigatorScreenParams<VetProfileStackParamList> | undefined
 }
 
 export type VetDashboardStackParamList = {
   DashboardMain: undefined
-  AppointmentDetail: { appointmentId: string }
-  AddClinicalNotes: { appointmentId: string }
+  VetAppointmentDetail: { appointmentId: string }
 }
 
 export type VetScheduleStackParamList = {
   ScheduleMain: undefined
   VetAppointmentDetail: { appointmentId: string }
-  PatientHistory: { petId: string }
 }
 
 export type VetEarningsStackParamList = {
