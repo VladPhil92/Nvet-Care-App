@@ -46,6 +46,8 @@ jobs:
           const root = require('./package.json');
           const backend = require('./backend/package.json');
           const railway = require('./railway.json');
+          const prismaSchema = fs.readFileSync('backend/prisma/schema.prisma', 'utf8');
+          const liveLocationSql = fs.readFileSync('backend/prisma/migrations/manual/live_location_v1.sql', 'utf8');
 
           if (!Array.isArray(root.workspaces) || !root.workspaces.includes('backend')) {
             throw new Error('backend must remain part of the root npm workspace');
@@ -58,6 +60,18 @@ jobs:
           }
           if (railway.build?.builder !== 'DOCKERFILE') {
             throw new Error('Railway must use the Dockerfile builder');
+          }
+
+          // Prisma String @default(uuid()) maps to PostgreSQL TEXT unless @db.Uuid
+          // is explicitly declared. Keep the manual live-location FK aligned.
+          if (!/model\s+Appointment\s*\{[\s\S]*?\bid\s+String\s+@id\s+@default\(uuid\(\)\)/m.test(prismaSchema)) {
+            throw new Error('Appointment.id contract changed; review live_location_v1.sql FK type');
+          }
+          if (!/appointment_id\s+TEXT\s+PRIMARY\s+KEY/i.test(liveLocationSql)) {
+            throw new Error('appointment_live_locations.appointment_id must remain TEXT');
+          }
+          if (/appointment_id\s+UUID\s+PRIMARY\s+KEY/i.test(liveLocationSql)) {
+            throw new Error('UUID appointment_id would be incompatible with appointments.id TEXT');
           }
 
           const dockerfile = railway.build?.dockerfilePath;
