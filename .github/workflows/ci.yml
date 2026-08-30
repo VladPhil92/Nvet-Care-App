@@ -148,11 +148,11 @@ jobs:
           test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
           ./android/gradlew --version
 
-      - name: Build app and Detox instrumentation APKs
+      - name: Build debug, Detox and unsigned release bundle
         working-directory: mobile/android
         env:
           GOOGLE_MAPS_ANDROID_API_KEY: ci-placeholder
-        run: ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug assembleAndroidTest bundleRelease -DtestBuildType=debug --no-daemon --stacktrace
 
       - name: Upload Android debug artifacts
         if: success()
@@ -162,6 +162,15 @@ jobs:
           path: |
             mobile/android/app/build/outputs/apk/debug/app-debug.apk
             mobile/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload unsigned release bundle
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-unsigned-aab
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 7
 
