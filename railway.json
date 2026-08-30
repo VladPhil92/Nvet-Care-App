@@ -16,7 +16,7 @@
     "preDeployCommand": [
       "npm run deploy:preflight"
     ],
-    "startCommand": "node canonical-runtime/backend/dist/main.js",
+    "startCommand": "node runtime-smoke.mjs",
     "healthcheckPath": "/api/health/ready",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",

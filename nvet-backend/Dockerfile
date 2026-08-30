@@ -21,8 +21,10 @@ RUN test -n "$RAILWAY_GIT_COMMIT_SHA" || (echo "RAILWAY_GIT_COMMIT_SHA is requir
 
 WORKDIR /compat
 
-COPY package.json bridge.mjs ./
-RUN npm install --no-audit --no-fund
+COPY package.json bridge.mjs runtime-smoke.mjs ./
+RUN node --check bridge.mjs \
+  && node --check runtime-smoke.mjs \
+  && npm install --no-audit --no-fund
 
 # Build the canonical backend from the exact immutable Git SHA associated
 # with this Railway deployment. bridge.mjs uses the repository lockfile and
@@ -31,6 +33,7 @@ RUN RAILWAY_GIT_COMMIT_SHA="$RAILWAY_GIT_COMMIT_SHA" npm run build
 
 ENV NODE_ENV=production
 
-# Runtime deploy:preflight receives Railway's real DATABASE_URL. It reconciles
-# Prisma without --accept-data-loss and applies only idempotent SQL guards.
+# Runtime deploy:preflight receives Railway's real DATABASE_URL. After NestJS
+# starts, runtime-smoke.mjs verifies readiness and a synthetic /auth/login call.
+# Any 5xx/Prisma failure terminates the process so Railway rejects the release.
 CMD ["npm", "run", "start:prod"]
