@@ -26,7 +26,9 @@
     "prisma:migrate:prod": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "prisma:reset": "prisma migrate reset",
-    "seed": "ts-node prisma/seed.ts",
+    "seed": "npm run seed:e2e",
+    "seed:e2e": "ts-node prisma/seed.ts",
+    "seed:e2e:check": "ts-node prisma/seed.ts --check",
     "secrets:generate": "node scripts/generate-secrets.mjs"
   },
   "dependencies": {

@@ -1,17 +1,16 @@
 /**
  * Helpers de autenticación para flujos E2E.
  *
- * Centralizan los pasos de login para que cada spec sea declarativo:
- *
- *   import { loginAsClient, loginAsVet } from './helpers/auth'
- *   await loginAsClient()
+ * Los flujos usan el contrato de accesibilidad real de la app en lugar de
+ * testIDs que no existen en las pantallas productivas. Esto mantiene Detox
+ * alineado con la misma superficie que usan lectores de pantalla.
  *
  * Las credenciales se leen de env vars o de defaults para entorno staging.
  * NO uses estos helpers en producción — los emails/passwords son fixtures
  * que solo existen en el seed del entorno de test.
  */
 
-import { fillInput, waitForElement } from '../setup'
+import { waitForElement } from '../setup'
 
 const FIXTURES = {
   client: {
@@ -27,15 +26,17 @@ const FIXTURES = {
 export async function loginAs(role: 'client' | 'vet') {
   const creds = FIXTURES[role]
 
-  await waitForElement(by.id('login-email'), 30_000)
-  await fillInput('login-email', creds.email)
-  await fillInput('login-password', creds.password)
-  await element(by.id('login-submit')).tap()
+  const emailInput = element(by.label('Correo electrónico'))
+  const passwordInput = element(by.label('Contraseña'))
 
-  // Tras login exitoso, el RootNavigator detecta auth y monta el stack del role.
-  // Para CLIENT esperamos el bottom tab "home"; para VET el "dashboard".
-  const targetTestId = role === 'client' ? 'tab-home' : 'tab-vet-dashboard'
-  await waitForElement(by.id(targetTestId), 20_000)
+  await waitForElement(by.label('Correo electrónico'), 30_000)
+  await emailInput.replaceText(creds.email)
+  await passwordInput.replaceText(creds.password)
+  await element(by.label('Iniciar sesión')).tap()
+
+  // RootNavigator cambia de stack cuando /auth/me refleja la sesión.
+  const targetLabel = role === 'client' ? 'Pantalla de inicio' : 'Panel veterinario'
+  await waitForElement(by.label(targetLabel), 20_000)
 }
 
 export async function loginAsClient() {
@@ -47,12 +48,10 @@ export async function loginAsVet() {
 }
 
 export async function logout() {
-  await element(by.id('tab-profile')).tap()
-  await waitForElement(by.id('profile-logout'))
-  await element(by.id('profile-logout')).tap()
-  // Confirmación destructive
+  await element(by.label('Mi perfil')).tap()
+  await waitForElement(by.label('Cerrar sesión'))
+  await element(by.label('Cerrar sesión')).tap()
   await waitForElement(by.text('Cerrar sesión'))
   await element(by.text('Cerrar sesión').and(by.type('_UIAlertControllerActionView'))).tap()
-  // Tras logout, vuelve a Login
-  await waitForElement(by.id('login-email'), 15_000)
+  await waitForElement(by.label('Correo electrónico'), 15_000)
 }
