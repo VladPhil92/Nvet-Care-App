@@ -80,7 +80,9 @@ jobs:
       - name: Authenticate and bind project
         run: |
           set -euo pipefail
-          railway whoami
+          # Do not use `railway whoami` here: workspace-scoped API tokens
+          # authenticate as the workspace and cannot resolve personal `me` data.
+          # Linking the known project is the correct non-mutating access check.
           railway link --project "$PROJECT_ID" --environment production --json >/tmp/railway-link-production.json
 
       - name: Refuse to mutate an existing staging environment
