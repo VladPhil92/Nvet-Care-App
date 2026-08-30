@@ -1,5 +1,6 @@
 import { access, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { spawn, spawnSync } from 'node:child_process';
 import * as tar from 'tar';
 
@@ -75,15 +76,58 @@ async function downloadCanonicalSource() {
   }
 }
 
+function verifyRuntimeModules() {
+  const backendRequire = createRequire(backendPackage);
+  const modules = [
+    '@nestjs/core',
+    '@nestjs/platform-express',
+    '@prisma/client',
+    'nestjs-pino',
+    'pino-http',
+    'pino',
+    'redis',
+    'socket.io',
+  ];
+
+  for (const moduleName of modules) {
+    try {
+      const resolved = backendRequire.resolve(moduleName);
+      backendRequire(moduleName);
+      console.log(`✅ Runtime module ${moduleName} -> ${resolved}`);
+    } catch (error) {
+      console.error(`❌ Runtime module ${moduleName} no es resoluble/cargable desde backend.`);
+      console.error(error);
+      process.exit(1);
+    }
+  }
+}
+
 async function prepare() {
   if (!(await exists(backendPackage))) {
     await downloadCanonicalSource();
   }
 
-  // Install from the canonical monorepo root so package-lock.json and npm
-  // workspaces stay authoritative. Runtime dependencies remain available to
-  // backend/dist through Node's parent-directory module resolution.
-  run('npm', ['ci', '--include=dev', '--legacy-peer-deps', '--no-audit', '--no-fund'], canonicalRoot);
+  // Install exactly the backend workspace from the canonical root lockfile.
+  // Installing all workspaces can produce a different hoisting layout and can
+  // separate a hoisted runtime package (for example nestjs-pino) from a module
+  // it loads at runtime. This mirrors Dockerfile.railway and keeps the backend
+  // dependency graph deterministic.
+  run(
+    'npm',
+    [
+      'ci',
+      '--workspace',
+      'backend',
+      '--include-workspace-root',
+      '--include=dev',
+      '--legacy-peer-deps',
+      '--no-audit',
+      '--no-fund',
+    ],
+    canonicalRoot,
+  );
+
+  verifyRuntimeModules();
 
   run(
     'npx',
@@ -102,7 +146,11 @@ async function build() {
     process.exit(1);
   }
 
-  console.log('✅ Bridge build: backend canónico compilado desde el SHA exacto.');
+  // Re-run after build so the exact runtime artifact is never published with a
+  // dependency tree that Node cannot load.
+  verifyRuntimeModules();
+
+  console.log('✅ Bridge build: backend canónico compilado y dependencias runtime verificadas.');
 }
 
 async function preflight() {
@@ -111,6 +159,7 @@ async function preflight() {
     process.exit(1);
   }
 
+  verifyRuntimeModules();
   run('npm', ['run', 'deploy:preflight'], backendDir);
 }
 
