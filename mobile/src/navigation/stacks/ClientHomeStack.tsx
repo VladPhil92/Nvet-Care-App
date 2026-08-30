@@ -5,6 +5,7 @@ import type { ClientHomeStackParamList } from '../types'
 import HomeScreenV2 from '../../screens/client/HomeScreenV2'
 import AppointmentDetailScreen from '../../screens/client/AppointmentDetailScreen'
 import AppointmentTrackingScreen from '../../screens/client/AppointmentTrackingScreen'
+import HelpCenterScreen from '../../screens/client/HelpCenterScreen'
 import EmergencyScreen from '../../screens/client/EmergencyScreen'
 import StoreScreen from '../../screens/client/StoreScreen'
 
@@ -31,6 +32,11 @@ export default function ClientHomeStack() {
           />
         )}
       </Stack.Screen>
+      <Stack.Screen
+        name="Help"
+        component={HelpCenterScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
       <Stack.Screen
         name="Emergency"
         component={EmergencyScreen}
