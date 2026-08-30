@@ -44,7 +44,6 @@ export default function LoginPage() {
       }}
     >
       <div style={{ width: '100%', maxWidth: 380 }}>
-        {/* Branding */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <div
             style={{
@@ -61,17 +60,15 @@ export default function LoginPage() {
           <div
             style={{
               fontFamily: F.sans,
-              fontSize: 11,
+              fontSize: 13,
               color: T.inkMuted,
-              letterSpacing: '1.5px',
-              textTransform: 'uppercase',
+              lineHeight: 1.5,
             }}
           >
-            Panel de administración
+            Accede a tu cuenta Nvet Care.
           </div>
         </div>
 
-        {/* Card */}
         <div
           style={{
             background: T.surface,
@@ -81,6 +78,18 @@ export default function LoginPage() {
             boxShadow: '0 2px 12px rgba(13,27,42,.06)',
           }}
         >
+          <div
+            style={{
+              fontFamily: F.sans,
+              fontSize: 20,
+              fontWeight: 700,
+              color: T.ink,
+              marginBottom: 22,
+            }}
+          >
+            Iniciar sesión
+          </div>
+
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 16 }}>
               <div
@@ -100,7 +109,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@nvetcare.co"
+                placeholder="tu@correo.com"
                 required
                 autoComplete="email"
                 style={inputStyle}
@@ -134,6 +143,7 @@ export default function LoginPage() {
 
             {error && (
               <div
+                role="alert"
                 style={{
                   marginBottom: 16,
                   padding: '10px 14px',
@@ -150,21 +160,9 @@ export default function LoginPage() {
             )}
 
             <Btn full disabled={isLoading} onClick={() => {}}>
-              {isLoading ? 'Ingresando…' : 'Ingresar al panel'}
+              {isLoading ? 'Ingresando…' : 'Ingresar'}
             </Btn>
           </form>
-        </div>
-
-        <div
-          style={{
-            textAlign: 'center',
-            marginTop: 24,
-            fontFamily: F.sans,
-            fontSize: 12,
-            color: T.inkMuted,
-          }}
-        >
-          Acceso restringido · Solo personal autorizado Nvet
         </div>
       </div>
     </div>

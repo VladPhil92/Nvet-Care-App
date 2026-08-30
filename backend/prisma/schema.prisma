@@ -13,6 +13,7 @@ datasource db {
 // ============================================
 
 enum UserRole {
+  SUPERADMIN
   ADMIN
   VET
   CLIENT

@@ -13,11 +13,27 @@ export class RolesGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    if (!requiredRoles) {
+    if (!requiredRoles?.length) {
       return true;
     }
 
     const { user } = context.switchToHttp().getRequest();
-    return requiredRoles.some((role) => user.role === role);
+    const userRole = user?.role as UserRole | undefined;
+
+    if (!userRole) {
+      return false;
+    }
+
+    // SUPERADMIN enters through the same public authentication flow and only
+    // inherits protected ADMIN capabilities. VET/CLIENT permissions remain
+    // explicitly scoped to those roles.
+    if (userRole === UserRole.SUPERADMIN) {
+      return (
+        requiredRoles.includes(UserRole.SUPERADMIN) ||
+        requiredRoles.includes(UserRole.ADMIN)
+      );
+    }
+
+    return requiredRoles.includes(userRole);
   }
 }
