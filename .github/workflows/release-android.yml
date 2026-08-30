@@ -17,11 +17,14 @@ on:
         required: true
         default: '1.0.0'
         type: string
+      api_url:
+        description: 'Endpoint público HTTPS del backend, incluyendo /api'
+        required: true
+        type: string
 
 env:
   NODE_VERSION: '22.x'
-  # Endpoint público canónico. El AAB firmado nunca debe compilar contra localhost.
-  NVET_API_URL: 'https://backend-production-a476.up.railway.app/api'
+  NVET_API_URL: ${{ github.event.inputs.api_url }}
 
 jobs:
   build-signed-aab:
@@ -71,13 +74,13 @@ jobs:
             echo "::error::version_name debe seguir un formato SemVer como 1.0.0 o 1.0.0-rc.1"
             exit 1
           fi
-          if ! printf '%s' "$NVET_API_URL" | grep -Eq '^https://[^[:space:]]+$'; then
-            echo "::error::NVET_API_URL debe ser un endpoint HTTPS absoluto de producción"
+          if ! printf '%s' "$NVET_API_URL" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
+            echo "::error::api_url debe ser un endpoint HTTPS absoluto que termine en /api"
             exit 1
           fi
           case "$NVET_API_URL" in
-            *localhost*|*127.0.0.1*|*0.0.0.0*)
-              echo "::error::NVET_API_URL no puede apuntar a una interfaz local en un release"
+            *localhost*|*127.0.0.1*|*0.0.0.0*|*.invalid/*)
+              echo "::error::api_url no puede apuntar a una interfaz local ni a un dominio .invalid"
               exit 1
               ;;
           esac

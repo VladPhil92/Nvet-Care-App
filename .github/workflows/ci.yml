@@ -152,7 +152,8 @@ jobs:
         working-directory: mobile/android
         env:
           GOOGLE_MAPS_ANDROID_API_KEY: ci-placeholder
-          NVET_API_URL: https://backend-production-a476.up.railway.app/api
+          # CI compila un AAB técnico no firmado/no distribuible. El release real exige URL explícita.
+          NVET_API_URL: https://ci.invalid/api
         run: ./gradlew assembleDebug assembleAndroidTest bundleRelease -DtestBuildType=debug --no-daemon --stacktrace
 
       - name: Verify Android release bundle
