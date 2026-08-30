@@ -5,7 +5,7 @@
  *   1. Header   → Logo + bell con dot naranja
  *   2. Greeting → "Hola, {nombre}" en verde + heading grande "¿Cómo podemos ayudarte hoy?"
  *   3. Search   → barra blanca redondeada con icono lupa
- *   4. Quick actions → 4 cards (Vet a domicilio, Telemedicina, Emergencias 24/7, Tienda)
+ *   4. Quick actions → 4 cards (Vet a domicilio, Telemedicina, Emergencias, Tienda)
  *      con iconos line+nodes oficiales y dot naranja
  *   5. Hero card → verde claro con título, subtítulo, CTA verde y espacio para imagen mascota
  *   6. Próximas citas → header + "Ver todas" + card con vet info, hora, dirección
@@ -67,6 +67,20 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
   const firstName = userQ.data?.firstName ?? ''
   const nextAppointment = todayApptQ.data?.[0]
 
+  const getTabs = useCallback(() => navigation.getParent?.(), [navigation])
+
+  const openSearch = useCallback(() => {
+    getTabs()?.navigate('ClientSearch')
+  }, [getTabs])
+
+  const openAppointments = useCallback(() => {
+    getTabs()?.navigate('ClientAppointments')
+  }, [getTabs])
+
+  const openNotifications = useCallback(() => {
+    getTabs()?.navigate('ClientProfile', { screen: 'Notifications' })
+  }, [getTabs])
+
   const quickActions: QuickAction[] = useMemo(
     () => [
       {
@@ -75,7 +89,7 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
         label: 'Veterinarios\na domicilio',
         bgColor: Colors.greenSoft,
         iconColor: Colors.sage,
-        onPress: () => navigation.navigate('Search'),
+        onPress: openSearch,
       },
       {
         id: 'telemedicine',
@@ -83,12 +97,12 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
         label: 'Telemedicina',
         bgColor: Colors.greenSoft,
         iconColor: Colors.sage,
-        onPress: () => navigation.navigate('Search', { service: 'TELEMEDICINE' }),
+        onPress: openSearch,
       },
       {
         id: 'emergency',
         icon: 'emergency',
-        label: 'Emergencias\n24/7',
+        label: 'Emergencias',
         bgColor: '#FFE4D2',
         iconColor: Colors.gold,
         onPress: () => navigation.navigate('Emergency'),
@@ -102,7 +116,7 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
         onPress: () => navigation.navigate('Store'),
       },
     ],
-    [navigation],
+    [navigation, openSearch],
   )
 
   return (
@@ -119,7 +133,7 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
         <View style={styles.header}>
           <Logo size={28} showWordmark />
           <Pressable
-            onPress={() => navigation.navigate('Notifications')}
+            onPress={openNotifications}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Notificaciones"
@@ -139,7 +153,7 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
 
         {/* ── 3. Search bar ────────────────────────────────────── */}
         <Pressable
-          onPress={() => navigation.navigate('Search')}
+          onPress={openSearch}
           style={styles.searchBar}
           accessibilityRole="search"
           accessibilityLabel="Buscar servicios, veterinarios o productos"
@@ -183,7 +197,7 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
               lo necesiten.
             </Text>
             <Pressable
-              onPress={() => navigation.navigate('Search')}
+              onPress={openSearch}
               style={({ pressed }) => [
                 styles.heroCta,
                 pressed && { opacity: 0.85 },
@@ -208,7 +222,7 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Citas próximas</Text>
             <Pressable
-              onPress={() => navigation.navigate('Appointments')}
+              onPress={openAppointments}
               hitSlop={8}
               accessibilityRole="link"
             >
@@ -220,7 +234,9 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
             <Pressable
               style={styles.appointmentCard}
               onPress={() =>
-                navigation.navigate('AppointmentDetail', { id: nextAppointment.id })
+                navigation.navigate('AppointmentDetail', {
+                  appointmentId: nextAppointment.id,
+                })
               }
               accessibilityRole="button"
               accessibilityLabel={`Cita ${formatAppointmentDate(
@@ -261,7 +277,7 @@ export default function HomeScreenV2({ navigation }: HomeScreenProps) {
                 No tienes citas programadas
               </Text>
               <Pressable
-                onPress={() => navigation.navigate('Search')}
+                onPress={openSearch}
                 style={styles.appointmentEmptyCta}
               >
                 <Text style={styles.appointmentEmptyCtaText}>Buscar veterinario</Text>
