@@ -1,39 +1,31 @@
-# Deploy Backend → Railway
+# Manual Railway recovery / diagnostics workflow.
 #
-# Canonical production path after the monorepo consolidation is /backend.
-# The former /nvet-backend directory was removed in PR #26; every deploy
-# must actively keep Railway pointed at /backend so configuration drift
-# cannot take production down again.
-name: Deploy Backend
+# Production deploys are owned by Railway's native GitHub autodeploy.
+# This workflow MUST NOT create a second deploy on every push to main.
+# It exists only for an operator-initiated recovery or inspection when a
+# RAILWAY_TOKEN and RAILWAY_SERVICE_ID have been configured in GitHub.
+name: Railway Recovery (Manual)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
     inputs:
-      skip_tests:
-        description: 'Saltar tests (solo para hotfixes urgentes)'
-        required: false
-        default: false
-        type: boolean
-
-concurrency:
-  group: deploy-backend-${{ github.ref }}
-  cancel-in-progress: false
+      operation:
+        description: 'Railway operation'
+        required: true
+        default: 'inspect'
+        type: choice
+        options:
+          - inspect
+          - canonicalize-root
+          - redeploy
 
 env:
   NODE_VERSION: '22.x'
 
 jobs:
-  validate:
-    name: Validate before deploy
+  repository-contract:
+    name: Verify canonical backend contract
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,181 +35,67 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Verify Railway runtime scripts
+        run: |
+          node --check backend/scripts/production-predeploy.mjs
+          node --check backend/scripts/railway-runtime-smoke.mjs
+          node - <<'NODE'
+          const root = require('./package.json');
+          const backend = require('./backend/package.json');
+          if (!Array.isArray(root.workspaces) || !root.workspaces.includes('backend')) {
+            throw new Error('backend must remain an npm workspace from repository root');
+          }
+          if (backend.scripts?.['railway:start'] !== 'node scripts/railway-runtime-smoke.mjs') {
+            throw new Error('backend railway:start contract drifted');
+          }
+          if (backend.scripts?.['deploy:preflight'] !== 'node scripts/production-predeploy.mjs') {
+            throw new Error('backend deploy:preflight contract drifted');
+          }
+          NODE
 
-      - name: Generate Prisma client
-        run: npm run prisma:generate
-        env:
-          DATABASE_URL: postgresql://stub:stub@localhost:5432/stub?schema=public
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Build
-        run: npm run build
-
-      - name: Test
-        if: ${{ github.event.inputs.skip_tests != 'true' }}
-        run: npm test -- --ci --maxWorkers=2
-
-  migrate:
-    name: Reconcile production schema safely
+  railway:
+    name: Railway operator action
     runs-on: ubuntu-latest
-    needs: validate
+    needs: repository-contract
     environment: production
-    defaults:
-      run:
-        working-directory: backend
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Require Railway operator credentials
+        run: |
+          test -n "$RAILWAY_TOKEN" || {
+            echo '❌ GitHub secret RAILWAY_TOKEN is not configured.'
+            echo 'This workflow is intentionally manual; native Railway GitHub autodeploy remains production source of truth.'
+            exit 1
+          }
+          test -n "$RAILWAY_SERVICE_ID" || {
+            echo '❌ GitHub secret RAILWAY_SERVICE_ID is not configured.'
+            exit 1
+          }
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Pull production variables and run fail-closed predeploy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+      - name: Inspect current Railway environment
+        if: ${{ inputs.operation == 'inspect' }}
         run: |
-          test -n "$RAILWAY_TOKEN" || { echo '❌ RAILWAY_TOKEN no configurado'; exit 1; }
-          test -n "$RAILWAY_SERVICE_ID" || { echo '❌ RAILWAY_SERVICE_ID no configurado'; exit 1; }
-          railway run \
-            --service "$RAILWAY_SERVICE_ID" \
-            --no-local \
-            npm run deploy:preflight
+          railway environment config --json || true
+          railway deployment list --service "$RAILWAY_SERVICE_ID" --limit 5
 
-  deploy:
-    name: Deploy to Railway
-    runs-on: ubuntu-latest
-    needs: [validate, migrate]
-    environment: production
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Repair canonical Railway source root
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+      - name: Set canonical monorepo root
+        if: ${{ inputs.operation == 'canonicalize-root' }}
         run: |
-          test -n "$RAILWAY_TOKEN" || { echo '❌ RAILWAY_TOKEN no configurado'; exit 1; }
-          test -n "$RAILWAY_SERVICE_ID" || { echo '❌ RAILWAY_SERVICE_ID no configurado'; exit 1; }
           railway environment edit \
             --yes \
-            --message "P0 recovery: canonical Nvet backend root is /backend" \
-            --service-config "$RAILWAY_SERVICE_ID" source.rootDirectory /backend
+            --message "Nvet canonical shared-workspace root is repository /" \
+            --service-config "$RAILWAY_SERVICE_ID" source.rootDirectory /
+          echo '✅ Railway source.rootDirectory staged/applied as /'
 
-      - name: Deploy canonical backend
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-        run: |
-          railway up \
-            --service "$RAILWAY_SERVICE_ID" \
-            --detach
+      - name: Redeploy current source
+        if: ${{ inputs.operation == 'redeploy' }}
+        run: railway redeploy --service "$RAILWAY_SERVICE_ID" --yes
 
-      - name: Wait for Railway deployment terminal state
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
-        run: |
-          MAX_ATTEMPTS=30
-          ATTEMPT=0
-          while true; do
-            ATTEMPT=$((ATTEMPT+1))
-            DEPLOYMENTS="$(railway deployment list --service "$RAILWAY_SERVICE_ID" --limit 1 --json)"
-            STATUS="$(printf '%s' "$DEPLOYMENTS" | jq -r '.[0].status // empty')"
-            DEPLOYMENT_ID="$(printf '%s' "$DEPLOYMENTS" | jq -r '.[0].id // empty')"
-
-            echo "Deployment ${DEPLOYMENT_ID:-unknown}: ${STATUS:-unknown} ($ATTEMPT/$MAX_ATTEMPTS)"
-
-            case "$STATUS" in
-              SUCCESS)
-                echo '✅ Railway reporta deployment SUCCESS'
-                break
-                ;;
-              FAILED|CRASHED|REMOVED)
-                echo "❌ Railway terminó en estado $STATUS"
-                railway logs --service "$RAILWAY_SERVICE_ID" --latest --deployment --lines 200 || true
-                exit 1
-                ;;
-            esac
-
-            if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
-              echo '❌ Timeout esperando estado terminal de Railway'
-              railway logs --service "$RAILWAY_SERVICE_ID" --latest --deployment --lines 200 || true
-              exit 1
-            fi
-
-            sleep 10
-          done
-
-      - name: Health check post-deploy
-        env:
-          BACKEND_URL: ${{ secrets.BACKEND_PROD_URL }}
-        run: |
-          BACKEND_URL="${BACKEND_URL:-https://backend-production-a476.up.railway.app}"
-          MAX_ATTEMPTS=12
-          ATTEMPT=0
-          until curl --fail --silent --show-error "$BACKEND_URL/api/health/ready" > /tmp/nvet-health.json; do
-            ATTEMPT=$((ATTEMPT+1))
-            if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
-              echo "❌ Health check falló después de $MAX_ATTEMPTS intentos"
-              echo "URL: $BACKEND_URL/api/health/ready"
-              exit 1
-            fi
-            echo "Intento $ATTEMPT/$MAX_ATTEMPTS - esperando readiness..."
-            sleep 10
-          done
-          cat /tmp/nvet-health.json
-          jq -e '.status == "ok" or .status == "degraded"' /tmp/nvet-health.json > /dev/null
-          echo "✅ Backend saludable: $BACKEND_URL/api/health/ready"
-
-      - name: Auth endpoint smoke test
-        env:
-          BACKEND_URL: ${{ secrets.BACKEND_PROD_URL }}
-        run: |
-          BACKEND_URL="${BACKEND_URL:-https://backend-production-a476.up.railway.app}"
-          HTTP_CODE="$(curl --silent --output /tmp/nvet-login.json --write-out '%{http_code}' \
-            -X POST "$BACKEND_URL/api/auth/login" \
-            -H 'Content-Type: application/json' \
-            --data '{"email":"nvet-deploy-smoke@example.invalid","password":"not-a-real-password"}')"
-          cat /tmp/nvet-login.json
-
-          if [ "$HTTP_CODE" -ge 500 ]; then
-            echo "❌ /api/auth/login devolvió $HTTP_CODE; producción no está recuperada"
-            exit 1
-          fi
-
-          if grep -q 'PrismaError' /tmp/nvet-login.json; then
-            echo '❌ /api/auth/login sigue exponiendo PrismaError'
-            exit 1
-          fi
-
-          echo "✅ Login smoke test respondió $HTTP_CODE sin error 5xx/Prisma"
-
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `🚨 Deploy backend FALLÓ - ${new Date().toISOString()}`,
-              body: `El deploy del backend a Railway falló.\n\n**Commit**: ${context.sha}\n**Branch**: ${context.ref}\n**Actor**: ${context.actor}\n\n[Ver log del workflow](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
-              labels: ['bug', 'deploy-failure']
-            })
+      - name: Show latest deployment
+        if: ${{ inputs.operation != 'inspect' }}
+        run: railway deployment list --service "$RAILWAY_SERVICE_ID" --limit 3
