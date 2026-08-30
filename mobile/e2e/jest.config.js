@@ -1,6 +1,7 @@
 /**
  * Jest config para Detox E2E.
  * - Runs solo archivos *.test.ts dentro de e2e/
+ * - Ejecuta los flujos numerados en orden lexical (01 -> 02 -> 03)
  * - Setup global de Detox lifecycle en setup.ts
  * - Reporter detox/runners/jest/reporter para output legible
  * - Verbose para CI (cada step visible)
@@ -12,6 +13,7 @@ module.exports = {
   testMatch: ['<rootDir>/e2e/**/*.test.ts'],
   testTimeout: 120_000,
   maxWorkers: 1,
+  testSequencer: '<rootDir>/e2e/sequencer.js',
   globalSetup: 'detox/runners/jest/globalSetup',
   globalTeardown: 'detox/runners/jest/globalTeardown',
   reporters: ['detox/runners/jest/reporter'],
