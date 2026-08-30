@@ -12,6 +12,11 @@ on:
         description: 'Escribe "release" para confirmar que este build es intencional'
         required: true
         type: string
+      version_name:
+        description: 'Versión pública Android, por ejemplo 1.0.0'
+        required: true
+        default: '1.0.0'
+        type: string
 
 env:
   NODE_VERSION: '22.x'
@@ -47,7 +52,7 @@ jobs:
           test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
           ./android/gradlew --version
 
-      - name: Validate release secrets are all present
+      - name: Validate release inputs and secrets
         run: |
           missing=""
           [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] && missing="$missing ANDROID_KEYSTORE_BASE64"
@@ -57,6 +62,11 @@ jobs:
           [ -z "${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}" ] && missing="$missing GOOGLE_MAPS_ANDROID_API_KEY"
           if [ -n "$missing" ]; then
             echo "::error::Faltan secrets de release:$missing"
+            exit 1
+          fi
+          VERSION_NAME="${{ github.event.inputs.version_name }}"
+          if ! printf '%s' "$VERSION_NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "::error::version_name debe seguir un formato SemVer como 1.0.0 o 1.0.0-rc.1"
             exit 1
           fi
 
@@ -71,6 +81,8 @@ jobs:
           NVET_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           NVET_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+          NVET_ANDROID_VERSION_CODE: ${{ github.run_number }}
+          NVET_ANDROID_VERSION_NAME: ${{ github.event.inputs.version_name }}
         run: ./gradlew bundleRelease --no-daemon --stacktrace
 
       - name: Verify signed bundle exists
@@ -89,7 +101,7 @@ jobs:
       - name: Upload signed AAB
         uses: actions/upload-artifact@v4
         with:
-          name: nvetcare-release-${{ github.run_number }}
+          name: nvetcare-${{ github.event.inputs.version_name }}-${{ github.run_number }}
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
