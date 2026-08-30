@@ -9,8 +9,8 @@
   "scripts": {
     "prisma:generate": "node bridge.mjs prisma-generate",
     "build": "node bridge.mjs build",
-    "start": "node bridge.mjs start",
-    "start:prod": "node bridge.mjs start",
+    "start": "npm run start:prod",
+    "start:prod": "npm run deploy:preflight && node canonical-runtime/backend/dist/main.js",
     "deploy:preflight": "node bridge.mjs preflight",
     "prisma:migrate:prod": "node bridge.mjs preflight"
   },
