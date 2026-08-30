@@ -8,6 +8,8 @@ import {
   Pressable,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import {
   Card,
   Badge,
@@ -16,6 +18,10 @@ import {
   SectionHeader,
   UI_COLORS,
 } from '../../components/ui/primitives'
+import type {
+  VetDashboardStackParamList,
+  VetTabParamList,
+} from '../../navigation/types'
 import {
   useCurrentUserQuery,
   useTodayAppointmentsQuery,
@@ -42,7 +48,10 @@ import {
  */
 
 interface Props {
-  navigation: any
+  navigation: NativeStackNavigationProp<
+    VetDashboardStackParamList,
+    'DashboardMain'
+  >
 }
 
 const STATUS_TONES: Record<
@@ -112,6 +121,27 @@ export default function VetDashboardScreen({ navigation }: Props) {
     },
     [navigation],
   )
+
+  const getTabs = useCallback(
+    () => navigation.getParent<BottomTabNavigationProp<VetTabParamList>>(),
+    [navigation],
+  )
+
+  const openSchedule = useCallback(() => {
+    getTabs()?.navigate('VetSchedule')
+  }, [getTabs])
+
+  const openEarnings = useCallback(() => {
+    getTabs()?.navigate('VetEarnings')
+  }, [getTabs])
+
+  const openPriceManagement = useCallback(() => {
+    getTabs()?.navigate('VetProfile', { screen: 'PriceManagement' })
+  }, [getTabs])
+
+  const openProfile = useCallback(() => {
+    getTabs()?.navigate('VetProfile', { screen: 'ProfileMain' })
+  }, [getTabs])
 
   const tier = user?.vetProfile?.tier ?? 'FREE'
   const tierTone: 'sage' | 'gold' | 'muted' =
@@ -211,7 +241,7 @@ export default function VetDashboardScreen({ navigation }: Props) {
               : `${todayKpis.count} citas programadas`
           }
           actionLabel="Ver agenda completa"
-          onActionPress={() => navigation.navigate('VetSchedule')}
+          onActionPress={openSchedule}
         />
 
         {todayQuery.isLoading ? (
@@ -276,22 +306,18 @@ export default function VetDashboardScreen({ navigation }: Props) {
           <ActionTile
             glyph="📋"
             label="Mis servicios"
-            onPress={() => navigation.navigate('PriceManagement')}
+            onPress={openPriceManagement}
           />
           <ActionTile
             glyph="💰"
             label="Ingresos"
-            onPress={() => navigation.navigate('VetEarnings')}
+            onPress={openEarnings}
           />
+          <ActionTile glyph="📅" label="Agenda" onPress={openSchedule} />
           <ActionTile
-            glyph="📅"
-            label="Agenda"
-            onPress={() => navigation.navigate('VetSchedule')}
-          />
-          <ActionTile
-            glyph="💬"
-            label="Chats activos"
-            onPress={() => navigation.navigate('Chats')}
+            glyph="👤"
+            label="Perfil profesional"
+            onPress={openProfile}
           />
         </View>
       </ScrollView>
