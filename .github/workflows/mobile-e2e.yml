@@ -70,8 +70,8 @@ jobs:
             echo "::error::Falta configuración E2E:$missing"
             exit 1
           fi
-          if ! printf '%s' "${{ secrets.E2E_API_URL }}" | grep -Eq '^https://[^[:space:]]+$'; then
-            echo "::error::E2E_API_URL debe ser un endpoint HTTPS absoluto"
+          if ! printf '%s' "${{ secrets.E2E_API_URL }}" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
+            echo "::error::E2E_API_URL debe ser un endpoint HTTPS absoluto que termine en /api"
             exit 1
           fi
 
@@ -159,12 +159,13 @@ jobs:
           [ -z "${{ secrets.E2E_CLIENT_PASSWORD }}" ] && missing="$missing E2E_CLIENT_PASSWORD"
           [ -z "${{ secrets.E2E_VET_EMAIL }}" ] && missing="$missing E2E_VET_EMAIL"
           [ -z "${{ secrets.E2E_VET_PASSWORD }}" ] && missing="$missing E2E_VET_PASSWORD"
+          [ -z "${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}" ] && missing="$missing GOOGLE_MAPS_ANDROID_API_KEY"
           if [ -n "$missing" ]; then
             echo "::error::Falta configuración E2E:$missing"
             exit 1
           fi
-          if ! printf '%s' "${{ secrets.E2E_API_URL }}" | grep -Eq '^https://[^[:space:]]+$'; then
-            echo "::error::E2E_API_URL debe ser un endpoint HTTPS absoluto"
+          if ! printf '%s' "${{ secrets.E2E_API_URL }}" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
+            echo "::error::E2E_API_URL debe ser un endpoint HTTPS absoluto que termine en /api"
             exit 1
           fi
 
@@ -193,6 +194,7 @@ jobs:
       - name: Run E2E with emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
+          DETOX_RECORD_VIDEOS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.record_videos == 'true' && '1' || '0' }}
           NVET_API_URL: ${{ secrets.E2E_API_URL }}
           E2E_API_URL: ${{ secrets.E2E_API_URL }}
           E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
