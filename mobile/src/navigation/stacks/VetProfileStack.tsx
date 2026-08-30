@@ -1,6 +1,7 @@
 import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
+import type { VetProfileStackParamList } from '../types'
 import ProfileScreen from '../../screens/shared/ProfileScreen'
 import WalletScreen from '../../screens/shared/WalletScreen'
 import NotificationsScreen from '../../screens/shared/NotificationsScreen'
@@ -15,7 +16,7 @@ import ChangePasswordScreen from '../../screens/auth/ChangePasswordScreen'
 import ActiveSessionsScreen from '../../screens/shared/ActiveSessionsScreen'
 import MyPetsScreen from '../../screens/shared/MyPetsScreen'
 
-const Stack = createNativeStackNavigator()
+const Stack = createNativeStackNavigator<VetProfileStackParamList>()
 
 /**
  * Stack del tab Perfil para usuarios VET.
