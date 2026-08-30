@@ -1,0 +1,33 @@
+name: Dispatch Staging Bootstrap Once
+
+on:
+  push:
+    branches:
+      - ops/staging-railway-probe-20260830
+    paths:
+      - '.github/workflows/staging-bootstrap-dispatch-once.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch canonical staging bootstrap
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Dispatch Provision Isolated Staging on main
+        run: |
+          set -euo pipefail
+          gh workflow run provision-staging.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f project_id=61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd \
+            -f frontend_url=https://ctgone.com \
+            -f confirm=provision-staging
+
+          echo 'Canonical Provision Isolated Staging workflow dispatched.'
+          echo 'Railway mutations remain guarded by RAILWAY_API_TOKEN inside the target workflow.'
