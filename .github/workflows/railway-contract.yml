@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'nvet-backend/**'
+      - 'Dockerfile.railway'
       - 'railway.json'
       - 'package.json'
       - 'package-lock.json'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'backend/**'
       - 'nvet-backend/**'
+      - 'Dockerfile.railway'
       - 'railway.json'
       - 'package.json'
       - 'package-lock.json'
@@ -35,13 +37,15 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: Validate canonical workspace and runtime gates
+      - name: Validate canonical workspace and Railway config
         run: |
           node --check backend/scripts/production-predeploy.mjs
           node --check backend/scripts/railway-runtime-smoke.mjs
           node - <<'NODE'
+          const fs = require('fs');
           const root = require('./package.json');
           const backend = require('./backend/package.json');
+          const railway = require('./railway.json');
 
           if (!Array.isArray(root.workspaces) || !root.workspaces.includes('backend')) {
             throw new Error('backend must remain part of the root npm workspace');
@@ -52,10 +56,35 @@ jobs:
           if (backend.scripts?.['deploy:preflight'] !== 'node scripts/production-predeploy.mjs') {
             throw new Error('deploy:preflight must remain fail-closed');
           }
+          if (railway.build?.builder !== 'DOCKERFILE') {
+            throw new Error('Railway must use the canonical Dockerfile builder');
+          }
+          if (railway.build?.dockerfilePath !== '/Dockerfile.railway') {
+            throw new Error('Railway must build Dockerfile.railway from repository root');
+          }
+          if (railway.deploy?.startCommand !== 'node backend/scripts/railway-runtime-smoke.mjs') {
+            throw new Error('Railway startCommand must execute the canonical runtime gate');
+          }
+          if (!railway.deploy?.preDeployCommand?.includes('npm run deploy:preflight --workspace backend')) {
+            throw new Error('Railway preDeployCommand must reconcile the backend workspace');
+          }
+          if (!fs.existsSync('Dockerfile.railway')) {
+            throw new Error('Dockerfile.railway is required');
+          }
           NODE
 
-      - name: Confirm temporary bridge remains isolated
+      - name: Build canonical Railway image from repository root
+        run: docker build --file Dockerfile.railway --tag nvet-railway-canonical:ci .
+
+      - name: Verify canonical image start contract
         run: |
+          docker inspect nvet-railway-canonical:ci --format '{{json .Config.Cmd}}' | grep -q 'railway-runtime-smoke.mjs'
+          docker run --rm --entrypoint node nvet-railway-canonical:ci \
+            -e "const fs=require('fs'); for (const p of ['/app/backend/dist/main.js','/app/backend/scripts/production-predeploy.mjs','/app/backend/scripts/railway-runtime-smoke.mjs']) if(!fs.existsSync(p)) process.exit(1);"
+
+      - name: Keep compatibility bridge available for one-release rollback
+        run: |
+          test -f nvet-backend/Dockerfile
           test -f nvet-backend/bridge.mjs
           test -f nvet-backend/runtime-smoke.mjs
-          echo 'Temporary bridge still present; remove only after canonical Railway cutover is verified.'
+          echo 'Legacy bridge retained only as immediate rollback until canonical deployment is verified in Railway.'

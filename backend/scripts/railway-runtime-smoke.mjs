@@ -1,5 +1,11 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const backendDir = path.resolve(scriptDir, '..');
+const mainPath = path.join(backendDir, 'dist', 'main.js');
 
 const port = Number(process.env.PORT || 3000);
 const apiBase = `http://127.0.0.1:${port}/api`;
@@ -7,7 +13,8 @@ const startupTimeoutMs = Number(
   process.env.NVET_RUNTIME_SMOKE_TIMEOUT_MS || 90_000,
 );
 
-const child = spawn(process.execPath, ['dist/main.js'], {
+const child = spawn(process.execPath, [mainPath], {
+  cwd: backendDir,
   stdio: 'inherit',
   env: process.env,
 });
