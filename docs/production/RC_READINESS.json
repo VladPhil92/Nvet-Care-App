@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "phase": 11,
+  "candidate": "1.0.0-rc.1",
+  "policy": {
+    "productionCanaryMaxAgeHours": 6,
+    "stagingE2eMaxAgeHours": 72,
+    "ctgOneAccessCanaryMaxAgeHours": 6
+  },
+  "requiredExternalEvidence": {
+    "productionBackupConfigured": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Verify provider-level automatic production backups."
+    },
+    "restoreDrillVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Run and date a non-destructive restore drill before RC promotion."
+    },
+    "productionAlertingVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Verify an alert path for sustained readiness degradation/down."
+    },
+    "paymentRailVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Verify at least one intended MVP payment rail end-to-end before commercial RC promotion."
+    }
+  },
+  "postRcTracks": {
+    "iosProduction": "phase-14",
+    "publicStoreRelease": "phase-13/14"
+  }
+}
