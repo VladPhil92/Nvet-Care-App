@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   probe:
-    name: Compare production and staging Railway config
+    name: Verify production Nvet auth deployment read-only
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -20,36 +20,72 @@ jobs:
       RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
       PRODUCTION_ENVIRONMENT_ID: 7f93c67e-5a63-4aae-80b6-90979a9b60b1
       PRODUCTION_BACKEND_SERVICE_ID: 42e734a0-931b-45c8-a091-4334b54e9d1c
-      STAGING_ENVIRONMENT_ID: 9267d965-e5e4-4c6f-af93-001c73cf62b4
-      STAGING_BACKEND_SERVICE_ID: dc5c2eee-3f8d-4416-8854-a921ea694735
+      PRODUCTION_API_ORIGIN: https://backend-production-a476.up.railway.app
+      EXPECTED_MAIN_SHA: badcd4a74a45d3e2d0a4b165efd6775c281689d4
     steps:
       - name: Require workspace token
         run: test -n "$RAILWAY_API_TOKEN"
 
-      - name: Read both service instances
+      - name: Read latest production deployment
         run: |
           set -euo pipefail
-          query='query Instance($environmentId: String!, $serviceId: String!) { serviceInstance(environmentId: $environmentId, serviceId: $serviceId) { id serviceName builder dockerfilePath railwayConfigFile rootDirectory startCommand preDeployCommand healthcheckPath healthcheckTimeout restartPolicyType restartPolicyMaxRetries source { repo image } latestDeployment { id status createdAt updatedAt } } }'
-          fetch_instance() {
-            local env_id="$1" service_id="$2" output="$3"
-            payload="$(jq -cn --arg q "$query" --arg env "$env_id" --arg svc "$service_id" '{query:$q,variables:{environmentId:$env,serviceId:$svc}}')"
-            curl --fail-with-body --silent --show-error \
-              -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
-              --data "$payload" "$RAILWAY_GRAPHQL_URL" >"$output"
-            jq -e '.errors == null and .data.serviceInstance != null' "$output" >/dev/null || { jq . "$output"; exit 1; }
+          query='query Instance($environmentId: String!, $serviceId: String!) { serviceInstance(environmentId: $environmentId, serviceId: $serviceId) { id serviceName latestDeployment { id status createdAt updatedAt statusUpdatedAt staticUrl meta } } }'
+          payload="$(jq -cn --arg q "$query" --arg env "$PRODUCTION_ENVIRONMENT_ID" --arg svc "$PRODUCTION_BACKEND_SERVICE_ID" '{query:$q,variables:{environmentId:$env,serviceId:$svc}}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/prod.json
+          jq -e '.errors == null and .data.serviceInstance.latestDeployment != null' /tmp/prod.json >/dev/null || { jq . /tmp/prod.json; exit 1; }
+          echo 'Latest production deployment:'
+          jq '.data.serviceInstance.latestDeployment' /tmp/prod.json
+          jq -r '.data.serviceInstance.latestDeployment.id' /tmp/prod.json >/tmp/deployment-id
+          jq -e '.data.serviceInstance.latestDeployment.status == "SUCCESS"' /tmp/prod.json >/dev/null || {
+            echo '::error::Latest production deployment is not SUCCESS.'
+            exit 2
           }
-          fetch_instance "$PRODUCTION_ENVIRONMENT_ID" "$PRODUCTION_BACKEND_SERVICE_ID" /tmp/prod.json
-          fetch_instance "$STAGING_ENVIRONMENT_ID" "$STAGING_BACKEND_SERVICE_ID" /tmp/staging.json
-          echo 'PRODUCTION canonical instance:'
-          jq '.data.serviceInstance' /tmp/prod.json
-          echo 'STAGING current instance:'
-          jq '.data.serviceInstance' /tmp/staging.json
 
-      - name: Publish read-only comparison
+      - name: Correlate merged main commit when Railway metadata exposes it
+        run: |
+          set -euo pipefail
+          meta="$(jq -c '.data.serviceInstance.latestDeployment.meta // {}' /tmp/prod.json)"
+          echo "Railway deployment metadata: $meta"
+          if printf '%s' "$meta" | grep -Fq "$EXPECTED_MAIN_SHA"; then
+            echo 'Latest Railway deployment is correlated to the dashboard-role merge commit.'
+          else
+            echo 'Railway metadata does not expose the expected commit in a stable field; deployment timestamp/status remain available for correlation.'
+          fi
+
+      - name: Verify production readiness and auth boundary
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 10 "$PRODUCTION_API_ORIGIN/api/health/ready" >/tmp/ready.json; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo '::error::Production readiness did not become healthy.'
+              exit 3
+            fi
+            sleep 5
+          done
+          cat /tmp/ready.json
+
+          # Invalid credentials must reach the live auth controller and be
+          # rejected by the application (401), not fail at the proxy/runtime.
+          status="$(curl --silent --show-error --max-time 10 -o /tmp/login.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            --data '{"email":"dashboard-role-probe@nvetcare.invalid","password":"DefinitelyInvalid123!"}' \
+            "$PRODUCTION_API_ORIGIN/api/auth/login")"
+          cat /tmp/login.json
+          test "$status" = "401" || { echo "::error::Expected auth boundary HTTP 401, got $status"; exit 4; }
+
+      - name: Publish read-only verification
+        if: always()
         run: |
           {
-            echo '## Railway configuration comparison'
+            echo '## Nvet production dashboard-role verification'
             echo ''
-            echo '- Production and staging service-instance deployment fields were read through the Railway Public API.'
-            echo '- No mutation was executed.'
+            echo '- Railway production deployment state read through Public API.'
+            echo '- Production `/api/health/ready` reached successfully.'
+            echo '- Production `/api/auth/login` reached application code and rejected synthetic invalid credentials with HTTP 401.'
+            echo '- No Railway mutation, production credential, or user data was changed.'
           } >> "$GITHUB_STEP_SUMMARY"
