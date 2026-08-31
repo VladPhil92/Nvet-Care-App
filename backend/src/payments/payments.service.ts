@@ -714,11 +714,7 @@ export class PaymentsService {
     transactionId: string,
     actingRole?: UserRole,
   ) {
-    const tx = await this.getTransactionById(
-      userId,
-      transactionId,
-      actingRole,
-    );
+    const tx = await this.getTransactionById(userId, transactionId, actingRole);
     return {
       status: tx.status,
       transaction: tx,
