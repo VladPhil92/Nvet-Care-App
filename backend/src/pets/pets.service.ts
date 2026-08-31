@@ -140,6 +140,13 @@ export class PetsService {
       }
 
       const profile = pet.healthProfile as Record<string, unknown>;
+      if (
+        profile.schemaVersion !== 1 ||
+        profile.source !== "OWNER_REPORTED"
+      ) {
+        continue;
+      }
+
       const vaccinations = Array.isArray(profile.vaccinations)
         ? profile.vaccinations
         : [];
