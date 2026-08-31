@@ -17,8 +17,7 @@ export class AppointmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scheduleService: ScheduleService,
-    private readonly closedBetaAccess: ClosedBetaAccessService =
-      new ClosedBetaAccessService(),
+    private readonly closedBetaAccess: ClosedBetaAccessService = new ClosedBetaAccessService(),
   ) {}
 
   async getAppointments(
