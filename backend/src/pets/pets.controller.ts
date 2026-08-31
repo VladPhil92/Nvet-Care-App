@@ -6,11 +6,14 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  ParseIntPipe,
+  DefaultValuePipe,
 } from "@nestjs/common";
 import { PetsService } from "./pets.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -32,6 +35,15 @@ export class PetsController {
   @Get("me")
   async getMyPets(@Request() req) {
     return this.petsService.getMyPets(req.user.id);
+  }
+
+  @Get("preventive/agenda")
+  async getPreventiveAgenda(
+    @Request() req,
+    @Query("windowDays", new DefaultValuePipe(60), ParseIntPipe)
+    windowDays: number,
+  ) {
+    return this.petsService.getPreventiveAgenda(req.user.id, windowDays);
   }
 
   @Get(":id")
