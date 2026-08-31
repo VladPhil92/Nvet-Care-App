@@ -12,48 +12,50 @@ permissions:
 
 jobs:
   probe:
-    name: Probe Railway account read-only
+    name: Inspect staging deployment diagnostics schema
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
+      STAGING_ENVIRONMENT_ID: 9267d965-e5e4-4c6f-af93-001c73cf62b4
+      STAGING_BACKEND_SERVICE_ID: dc5c2eee-3f8d-4416-8854-a921ea694735
     steps:
-      - name: Verify credential presence
+      - name: Require workspace token
+        run: test -n "$RAILWAY_API_TOKEN"
+
+      - name: Introspect deployment and log query contract
         run: |
           set -euo pipefail
-          if [ -z "$RAILWAY_API_TOKEN" ]; then
-            echo '::error::RAILWAY_API_TOKEN is not configured as a repository secret.'
-            exit 78
-          fi
-          echo 'RAILWAY_API_TOKEN is configured.'
+          query='query Schema { __schema { queryType { fields { name args { name type { kind name ofType { kind name ofType { kind name } } } } type { kind name ofType { kind name ofType { kind name } } } } } types { kind name fields { name type { kind name ofType { kind name ofType { kind name } } } } inputFields { name type { kind name ofType { kind name ofType { kind name } } } } } } }'
+          payload="$(jq -cn --arg q "$query" '{query:$q}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/schema.json
+          jq -e '.errors == null' /tmp/schema.json >/dev/null || { jq '.errors' /tmp/schema.json; exit 1; }
 
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli
+          echo 'Deployment/log query signatures:'
+          jq -r '
+            .data.__schema.queryType.fields[]
+            | select(.name | test("deployment|log|serviceInstance"; "i"))
+            | [.name, (.args | map(.name + ":" + ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")) | join(",")), ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")]
+            | @tsv
+          ' /tmp/schema.json | sort
 
-      - name: Authenticate read-only probe
-        run: |
-          set -euo pipefail
-          railway whoami
+          echo 'Relevant input/object types:'
+          jq -r '
+            .data.__schema.types[]
+            | select(.name | test("Deployment|Log|ServiceInstance"; "i"))
+            | "TYPE \(.kind) \(.name)",
+              (.inputFields[]? | "  IN \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"),
+              (.fields[]? | "  OUT \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)")
+          ' /tmp/schema.json
 
-      - name: List accessible Railway projects
-        run: |
-          set -euo pipefail
-          railway project list --json > /tmp/railway-projects.json
-          jq -r '.[] | "PROJECT name=\(.name) id=\(.id)"' /tmp/railway-projects.json
-          count="$(jq 'length' /tmp/railway-projects.json)"
-          echo "Accessible project count: $count"
-          if [ "$count" -eq 0 ]; then
-            echo '::error::The token authenticates but exposes no Railway projects.'
-            exit 1
-          fi
-
-      - name: Publish probe summary
+      - name: Publish diagnostics summary
         run: |
           {
-            echo '## Railway read-only probe'
+            echo '## Live staging diagnostics schema'
             echo ''
-            echo '- Credential: present and authenticated.'
-            echo '- No Railway project, environment, service, variable, deployment, or database was changed.'
-            echo '- Accessible projects:'
-            jq -r '.[] | "  - `\(.name)` — `\(.id)`"' /tmp/railway-projects.json
+            echo '- Read-only Railway Public API introspection completed.'
+            echo '- No environment, service, deployment, variable, domain, volume, or production resource was mutated.'
           } >> "$GITHUB_STEP_SUMMARY"

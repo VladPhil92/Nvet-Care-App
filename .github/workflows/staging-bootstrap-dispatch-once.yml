@@ -22,6 +22,7 @@ jobs:
       - name: Dispatch Provision Isolated Staging on main
         run: |
           set -euo pipefail
+          # Re-run Phase 3 after removing the redundant ServiceInstanceUpdate mutation.
           gh workflow run provision-staging.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
