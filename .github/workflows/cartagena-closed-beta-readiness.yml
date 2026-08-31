@@ -1,0 +1,65 @@
+name: Cartagena Closed Beta Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/beta/**'
+      - 'backend/src/appointments/appointments.service.ts'
+      - 'backend/src/appointments/appointments.module.ts'
+      - 'backend/.env.example'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/PHASE_12_CARTAGENA_CLOSED_BETA.md'
+      - 'scripts/verify-cartagena-beta-readiness.mjs'
+      - '.github/workflows/cartagena-closed-beta-readiness.yml'
+  schedule:
+    - cron: '29 12 * * *'
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: 'Fail if any Cartagena closed-beta activation gate is blocked'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cartagena-closed-beta-readiness-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Validate Cartagena beta contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+      - name: Validate Phase 12 contract
+        run: node scripts/verify-cartagena-beta-readiness.mjs --contract-only
+
+  audit:
+    name: Audit live Cartagena beta evidence
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      BETA_ENFORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.enforce && 'true' || 'false' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+      - name: Audit current main beta evidence
+        run: node scripts/verify-cartagena-beta-readiness.mjs --runtime

@@ -8,6 +8,7 @@ import {
 import { AppointmentStatus, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { ScheduleService } from "../vets/schedule.service";
+import { ClosedBetaAccessService } from "../beta/closed-beta-access.service";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { UpdateAppointmentDto } from "./dto/update-appointment.dto";
 
@@ -16,6 +17,7 @@ export class AppointmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scheduleService: ScheduleService,
+    private readonly closedBetaAccess: ClosedBetaAccessService = new ClosedBetaAccessService(),
   ) {}
 
   async getAppointments(
@@ -156,6 +158,11 @@ export class AppointmentsService {
     if (!vet.isVerified) {
       throw new BadRequestException("Veterinarian is not verified");
     }
+
+    // Phase 12 closed-beta boundary. Disabled by default; when operations
+    // enables it, booking becomes invite-only and restricted to Cartagena.
+    // Existing accounts can still authenticate and manage their data.
+    this.closedBetaAccess.assertBookingAllowed(clientId, vet.city);
 
     const pet = await this.prisma.pet.findUnique({
       where: { id: data.petId },

@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "phase": 12,
+  "program": "closed-beta-cartagena",
+  "targetMarket": "Cartagena de Indias",
+  "prerequisiteRcTag": "1.0.0-rc.1",
+  "policy": {
+    "maxInitialClients": 50,
+    "minVerifiedVets": 3,
+    "observationWindowDays": 7,
+    "criticalIncidentTargetMinutes": 30,
+    "bookingKillSwitch": "NVET_BOOKING_ENABLED=false",
+    "cohortGate": "NVET_CLOSED_BETA_ENABLED=true"
+  },
+  "requiredEvidence": {
+    "rcPromoted": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Phase 11 must promote the exact 1.0.0-rc.1 candidate before beta activation."
+    },
+    "productionBackupConfigured": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Provider-level automatic backups must be verified."
+    },
+    "restoreDrillVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "A dated non-destructive restore drill is required."
+    },
+    "productionAlertingVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Sustained readiness degradation/down must reach an operator."
+    },
+    "paymentRailVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "At least one intended beta payment rail must be verified end-to-end."
+    },
+    "cartagenaVetCoverageVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "At least three verified and active veterinarians must have Cartagena as their service city."
+    },
+    "clientCohortConfigured": {
+      "status": "pending",
+      "evidence": null,
+      "note": "The initial invited client cohort must be loaded as SHA-256 Nvet user-id hashes in provider configuration."
+    },
+    "supportOwnerConfirmed": {
+      "status": "pending",
+      "evidence": null,
+      "note": "A named operational owner and escalation route must be confirmed before activation."
+    },
+    "privacyAndTermsReviewed": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Beta-facing privacy/terms language and consent path must be reviewed."
+    },
+    "rollbackDrillVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Operations must verify that new bookings can be stopped without disabling authentication or history access."
+    }
+  }
+}

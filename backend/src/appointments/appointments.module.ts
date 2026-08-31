@@ -5,11 +5,16 @@ import { AppointmentsService } from "./appointments.service";
 import { LiveLocationService } from "./live-location.service";
 import { AuthModule } from "../auth/auth.module";
 import { VetsModule } from "../vets/vets.module";
+import { ClosedBetaAccessService } from "../beta/closed-beta-access.service";
 
 @Module({
   imports: [AuthModule, VetsModule],
   controllers: [AppointmentsController, LiveLocationController],
-  providers: [AppointmentsService, LiveLocationService],
+  providers: [
+    AppointmentsService,
+    LiveLocationService,
+    ClosedBetaAccessService,
+  ],
   exports: [AppointmentsService, LiveLocationService],
 })
 export class AppointmentsModule {}
