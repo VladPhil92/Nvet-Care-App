@@ -155,7 +155,7 @@ export class AuthController {
 
   /**
    * Completa el flujo: usuario llega del email con `token` + nueva password.
-   * Rate limit medio: 5 intentos por 15min para tolerar tokens copiados mal.
+   * Rate limit medio: 5 intentos por 15min para tolerar copy-paste erróneo.
    */
   @Post("reset-password")
   @Throttle({ default: { limit: 5, ttl: seconds(900) } })
@@ -253,7 +253,7 @@ export class AuthController {
   /**
    * Activa la cuenta consumiendo el token recibido por email.
    * Endpoint público (cualquiera con el link puede activar la cuenta).
-   * Rate limit medio: 5 intentos por 15 min para tolerar copy-paste erróneo.
+   * Rate limit medio: 5 intentos por 15min para tolerar copy-paste erróneo.
    */
   @Post("verify-email")
   @Throttle({ default: { limit: 5, ttl: seconds(900) } })
@@ -273,7 +273,14 @@ export class AuthController {
   @Get("me")
   @UseGuards(JwtAuthGuard)
   async getCurrentUser(@Req() req: any) {
-    return this.authService.getUserById(req.user.id);
+    const user = await this.authService.getUserById(req.user.id);
+
+    // JwtStrategy is the authorization boundary that derives the effective
+    // role (including canonical SUPERADMIN promotion and fail-closed downgrade
+    // of any non-canonical SUPERADMIN row). `/auth/me` must report that same
+    // effective role so every dashboard renders the authority the backend is
+    // actually enforcing, rather than a stale database label.
+    return { ...user, role: req.user.role };
   }
 
   @Get("sessions")
