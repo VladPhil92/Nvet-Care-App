@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "phase": 13,
+  "program": "android-production",
+  "applicationId": "com.nvetcare",
+  "requiredTargetApi": 36,
+  "prerequisiteRcTag": "1.0.0-rc.1",
+  "policy": {
+    "minInternalTrackObservationHours": 24,
+    "minPhysicalDevices": 2,
+    "requiredAndroidMajor": 16,
+    "releaseWorkflow": "release-android.yml"
+  },
+  "requiredEvidence": {
+    "rcPromoted": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Phase 11 must promote the approved release candidate before a production Android tag is created."
+    },
+    "playConsoleAppCreated": {
+      "status": "pending",
+      "evidence": null,
+      "note": "The com.nvetcare application must exist in the intended Google Play Console account."
+    },
+    "playAppSigningEnabled": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Google Play App Signing must be enabled and the ownership/custody model documented."
+    },
+    "uploadCertificatePinned": {
+      "status": "pending",
+      "evidence": null,
+      "note": "ANDROID_UPLOAD_CERT_SHA256 must be provisioned from the approved upload certificate and verified by the release workflow."
+    },
+    "privacyPolicyPublished": {
+      "status": "pending",
+      "evidence": null,
+      "note": "A public production privacy-policy URL suitable for the Play listing must be verified."
+    },
+    "dataSafetyReviewed": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Google Play Data safety declarations must be reviewed against actual app permissions and data flows."
+    },
+    "signedAabVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "A successful Release Android run must produce a signed AAB, SHA-256 checksum and release metadata from an immutable tag."
+    },
+    "internalTrackUploaded": {
+      "status": "pending",
+      "evidence": null,
+      "note": "The signed candidate must be uploaded to a non-production Play track before production rollout."
+    },
+    "physicalDeviceSmokeVerified": {
+      "status": "pending",
+      "evidence": null,
+      "note": "At least two physical Android devices must complete login, pet, booking, appointment and recovery smoke tests."
+    },
+    "android16BehaviorReviewCompleted": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Android 16/API 36 behavior and permission changes relevant to Nvet Care must be reviewed before production rollout."
+    }
+  }
+}
