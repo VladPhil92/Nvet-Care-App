@@ -1,4 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
+import { VerificationStatus } from "@prisma/client";
 import { GovernanceService } from "./governance.service";
 
 function createService(prismaOverrides: Record<string, unknown> = {}) {
@@ -8,10 +9,18 @@ function createService(prismaOverrides: Record<string, unknown> = {}) {
       count: jest.fn(),
       findUnique: jest.fn(),
     },
+    vetProfile: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
     ...prismaOverrides,
   } as any;
   const auditService = { log: jest.fn() } as any;
-  return { service: new GovernanceService(prisma, auditService), prisma, auditService };
+  return {
+    service: new GovernanceService(prisma, auditService),
+    prisma,
+    auditService,
+  };
 }
 
 describe("GovernanceService", () => {
@@ -51,5 +60,66 @@ describe("GovernanceService", () => {
 
     expect(page.results[0]).toMatchObject({ id: "user-1", ctgLinked: true });
     expect(page.results[0]).not.toHaveProperty("ctgUserId");
+  });
+
+  it("activates a veterinarian when SUPERADMIN approves verification", async () => {
+    const { service, prisma } = createService();
+    prisma.vetProfile.findUnique.mockResolvedValue({
+      id: "vet-1",
+      verificationStatus: VerificationStatus.IN_REVIEW,
+      isVerified: false,
+      isActive: false,
+    });
+    prisma.vetProfile.update.mockImplementation(({ data }) =>
+      Promise.resolve({ id: "vet-1", ...data }),
+    );
+
+    const updated = await service.reviewVetVerification(
+      "root-user",
+      "vet-1",
+      { decision: "APPROVE", reason: "Documentación profesional validada" },
+    );
+
+    expect(prisma.vetProfile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          verificationStatus: VerificationStatus.APPROVED,
+          isVerified: true,
+          isActive: true,
+        }),
+      }),
+    );
+    expect(updated.isActive).toBe(true);
+  });
+
+  it("deactivates a veterinarian while verification is rejected", async () => {
+    const { service, prisma } = createService();
+    prisma.vetProfile.findUnique.mockResolvedValue({
+      id: "vet-1",
+      verificationStatus: VerificationStatus.APPROVED,
+      isVerified: true,
+      isActive: true,
+      isAvailableNow: true,
+    });
+    prisma.vetProfile.update.mockImplementation(({ data }) =>
+      Promise.resolve({ id: "vet-1", ...data }),
+    );
+
+    await service.reviewVetVerification(
+      "root-user",
+      "vet-1",
+      { decision: "REJECT", reason: "La documentación requiere corrección" },
+    );
+
+    expect(prisma.vetProfile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          verificationStatus: VerificationStatus.REJECTED,
+          isVerified: false,
+          isActive: false,
+          isAvailableNow: false,
+        }),
+      }),
+    );
   });
 });
