@@ -10,10 +10,7 @@ import { CreatePetDto, UpdatePetDto } from "./dto/pet.dto";
 import { UpdatePetHealthProfileDto } from "./dto/pet-health-profile.dto";
 
 type PreventiveAgendaStatus = "OVERDUE" | "DUE_SOON" | "UPCOMING";
-type PreventiveAgendaSource =
-  | "VACCINATION"
-  | "DEWORMING"
-  | "PREVENTIVE_CARE";
+type PreventiveAgendaSource = "VACCINATION" | "DEWORMING" | "PREVENTIVE_CARE";
 
 type PreventiveAgendaItem = {
   id: string;
@@ -199,14 +196,7 @@ export class PetsService {
           typeof item.type === "string" && item.type.trim()
             ? item.type.trim()
             : "OTHER";
-        addAgendaItem(
-          pet,
-          item,
-          "PREVENTIVE_CARE",
-          kind,
-          title,
-          item.dueAt,
-        );
+        addAgendaItem(pet, item, "PREVENTIVE_CARE", kind, title, item.dueAt);
       }
     }
 
