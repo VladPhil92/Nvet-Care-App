@@ -1,9 +1,9 @@
 import {
-  IsOptional,
   IsString,
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from "class-validator";
 
 const NAME_REGEX = /^[\p{L}\s'-]+$/u;
@@ -16,10 +16,13 @@ const PHONE_OR_EMPTY_REGEX = /^(?:|\+?[1-9]\d{7,14})$/;
  * intentionally absent. The global ValidationPipe forbids non-whitelisted
  * properties, so callers cannot smuggle identity/authorization changes into
  * this endpoint.
+ *
+ * `ValidateIf(... !== undefined)` keeps omitted fields optional while ensuring
+ * explicit null still runs the validators and is rejected before the service.
  */
 export class UpdateClientProfileDto {
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
-  @IsOptional()
   @MinLength(2)
   @MaxLength(50)
   @Matches(NAME_REGEX, {
@@ -28,8 +31,8 @@ export class UpdateClientProfileDto {
   })
   firstName?: string;
 
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
-  @IsOptional()
   @MinLength(2)
   @MaxLength(50)
   @Matches(NAME_REGEX, {
@@ -38,8 +41,8 @@ export class UpdateClientProfileDto {
   })
   lastName?: string;
 
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
-  @IsOptional()
   @MaxLength(16)
   @Matches(PHONE_OR_EMPTY_REGEX, {
     message: "Teléfono inválido (formato E.164: +57XXXXXXXXXX)",
