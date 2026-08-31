@@ -1,0 +1,64 @@
+name: Android Production Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/android/**'
+      - '.github/workflows/release-android.yml'
+      - '.github/workflows/android-production-readiness.yml'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/PHASE_13_ANDROID_PRODUCTION.md'
+      - 'scripts/verify-android-production-readiness.mjs'
+      - '.github/workflows/ci.yml'
+  schedule:
+    - cron: '41 12 * * *'
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: 'Fail if any Android production rollout gate is blocked'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: android-production-readiness-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Validate Android production contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+      - name: Validate Phase 13 contract
+        run: node scripts/verify-android-production-readiness.mjs --contract-only
+
+  audit:
+    name: Audit live Android production evidence
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      ANDROID_ENFORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.enforce && 'true' || 'false' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+      - name: Audit current main Android evidence
+        run: node scripts/verify-android-production-readiness.mjs --runtime
