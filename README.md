@@ -1,12 +1,12 @@
 # Nvet Care Platform
 
-Plataforma de servicios veterinarios domiciliarios con aplicación móvil unificada para clientes y veterinarios y API backend. El dashboard administrativo web vive en `ctgone.com/nvetcareapp` (repo `ctg_one_website`), no en este repositorio — ver nota de arquitectura más abajo.
+Plataforma de servicios veterinarios domiciliarios con aplicación móvil unificada para clientes y veterinarios y API backend. El dashboard/web administrativo vigente vive en `ctgone.com/nvetcareapp` (repo `ctg_one_website`); el paquete `dashboard/` local está deprecado como producto desplegable.
 
 **Estado del producto:** productización / preparación de release  
 **Versión objetivo:** Nvet Care 1.0  
-**Arquitectura oficial:** `mobile` + `backend` (el paquete `dashboard/` de este repo está deprecado — ver [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md) § Plataformas y arquitectura de producto)
+**Arquitectura oficial:** `mobile` + `backend` + superficie web federada en CTG One
 
-> El roadmap histórico de abril de 2026 quedó superado por la evolución del código. El estado vigente y la ruta a producción se mantienen en [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md).
+> El roadmap histórico quedó superado por la evolución del código. El estado vigente y la ruta a producción se mantienen en [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md).
 
 ## Arquitectura
 
@@ -14,19 +14,52 @@ Plataforma de servicios veterinarios domiciliarios con aplicación móvil unific
 Nvet-Care-App/
 ├── mobile/       # React Native + TypeScript
 ├── backend/      # NestJS + Prisma + PostgreSQL
-├── dashboard/    # React + Vite + TypeScript — deprecado, no desplegado (ver docs/RELEASE_ROADMAP.md)
-├── docs/         # Arquitectura y roadmap vigentes
+├── dashboard/    # React + Vite + TypeScript — deprecado, no desplegado
+├── docs/         # Arquitectura, integración y roadmap vigentes
 ├── .github/      # CI/CD
 └── package.json  # npm workspaces
 ```
 
-La definición completa de límites y fuentes de verdad está en [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+Fuentes principales:
+
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — arquitectura y autoridad por capa;
+- [`docs/CTG_ONE_INTEGRATION.md`](./docs/CTG_ONE_INTEGRATION.md) — contrato de federación con CTG One;
+- [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md) — ruta a producción.
+
+## CTG One ecosystem integration
+
+Nvet es un bounded context veterinario autónomo dentro del ecosistema CTG One.
+
+```text
+CTG One / Supabase identity
+        ↓
+ctgone.com server-side BFF
+        ↓
+Nvet /auth/ctg-identity-exchange
+        ↓
+Nvet effective role + domain authorization
+        ↓
+Nvet appointments / pets / services / chat / payments
+```
+
+Reglas de coherencia:
+
+- CTG One es autoridad de la cuenta/sesión del ecosistema;
+- Nvet backend es autoridad de roles y reglas veterinarias;
+- el navegador no debe autoasignarse `SUPERADMIN`, `VET` o `CLIENT`;
+- no existe un login público separado para administración;
+- `ctgone.com/nvetcareapp` es la única superficie web activa de Nvet;
+- Nvet conserva su propia identidad visual; la armonía con CTG One se logra mediante contratos, patrones de seguridad, observabilidad y microbranding de cuenta conectada, no forzando el estilo negro/dorado de Wallet.
+
+Nvet no necesita las mismas versiones de React/Node que CTG Wallet o `ctg_one_website`. La compatibilidad se certifica en los límites de API, identidad, CI y despliegue.
 
 ## Estado actual
 
-El repositorio ya contiene implementación material para:
+El repositorio contiene implementación material para:
 
 - autenticación JWT/refresh, verificación de email, sesiones y 2FA;
+- federación de identidad CTG One para la superficie web;
+- proyección server-side de rol efectivo;
 - perfiles de veterinarios;
 - CRUD de mascotas;
 - citas;
@@ -36,18 +69,17 @@ El repositorio ya contiene implementación material para:
 - administración;
 - health checks;
 - aplicación móvil React Native;
-- dashboard React/Vite;
 - Jest/MSW/Detox;
 - workflows de CI y despliegue.
 
-La existencia de estas capas no implica que producción esté habilitada. La prioridad actual es validar builds reproducibles, CI, staging, integraciones externas y el circuito E2E antes de añadir funcionalidades secundarias.
+La existencia de estas capas no implica que toda capacidad esté habilitada en producción. La prioridad de release es validar builds reproducibles, entornos, integraciones externas y el circuito E2E antes de presentar una función como productiva.
 
 ## Circuito crítico 1.0
 
 ```text
-Registro
+Registro / identidad
   ↓
-Verificación de email
+Verificación
   ↓
 Mascota
   ↓
@@ -66,12 +98,14 @@ Review
 
 ## Requisitos
 
-- Node.js 18+ (CI usa Node 20)
+- Node.js 18+ en el workspace root (CI puede usar una versión más nueva compatible)
 - npm 9+
 - Docker / Docker Compose para desarrollo backend
 - PostgreSQL
 - Android Studio para Android
 - Xcode para iOS
+
+Las versiones exactas de cada paquete viven en sus respectivos `package.json`/lockfiles; no duplicar números de dependencias en documentación como fuente autoritativa.
 
 ## Instalación
 
@@ -85,15 +119,7 @@ El repositorio utiliza npm workspaces para:
 
 - `mobile`
 - `backend`
-- `dashboard`
-
-También existe el helper histórico:
-
-```bash
-npm run install:all
-```
-
-que será revisado durante la Fase 1 de baseline técnico.
+- `dashboard` (legacy/deprecado como producto)
 
 ## Desarrollo
 
@@ -121,73 +147,59 @@ npm install
 npm run start
 ```
 
-Android/iOS dependen de que los proyectos nativos estén presentes y correctamente configurados; su verificación es un bloqueante explícito del roadmap de release.
+Android/iOS dependen de los proyectos nativos, signing y configuración del entorno objetivo.
 
-### Dashboard (deprecado)
+### Dashboard local (deprecado)
 
-`dashboard/` es el "Admin SaaS Dashboard" standalone original de este repo. **Ya no se desarrolla ni se despliega como producto** — el dashboard administrativo web vigente es `ctgone.com/nvetcareapp` (repo `ctg_one_website`). Ver `docs/RELEASE_ROADMAP.md` § Plataformas y arquitectura de producto para el porqué. El código sigue aquí como referencia; los comandos de abajo solo sirven para explorarlo localmente, no para desarrollo activo:
-
-```bash
-cd dashboard
-npm install
-npm run dev
-```
+El dashboard standalone se conserva como referencia histórica; no es una superficie de desarrollo o despliegue activa. La web canónica es `ctgone.com/nvetcareapp`.
 
 ## Calidad
 
-El workflow `.github/workflows/ci.yml` está diseñado para validar:
+El workflow `.github/workflows/ci.yml` valida las capas del monorepo. Los cambios de identidad/federación deben pasar además contratos coherentes con `ctg_one_website`.
 
-### Backend
-
-```text
-npm ci → prisma generate → lint → build → tests
-```
-
-### Mobile
+Baseline esperado:
 
 ```text
-npm ci → lint → typecheck → Jest/MSW
+backend: install → prisma generate → lint/build/tests
+mobile:  install → lint/typecheck/tests
+legacy dashboard: checks de no regresión mientras permanezca en el repo
 ```
-
-### Dashboard
-
-```text
-npm ci → lint → build
-```
-
-El siguiente milestone técnico exige que esos checks pasen de forma verificable en `main`.
 
 ## Producción
 
-El backend incluye [`backend/BOOTSTRAP_PROD.md`](./backend/BOOTSTRAP_PROD.md), que documenta secrets, migraciones, mail transaccional y smoke tests.
+El backend incluye [`backend/BOOTSTRAP_PROD.md`](./backend/BOOTSTRAP_PROD.md) para secrets, migraciones, mail transaccional y smoke tests.
 
-Antes de producción deben existir como mínimo:
+Antes de declarar una release completa deben existir como mínimo:
 
 - CI verde;
-- proyectos nativos móviles compilables;
 - staging separado;
 - PostgreSQL con backups;
 - secrets fuera del repositorio;
 - email transaccional real;
-- CORS de producción;
-- HTTPS;
-- geolocalización real;
+- CORS/HTTPS productivos;
+- geolocalización real donde aplique;
 - pruebas E2E del circuito crítico;
 - observabilidad y smoke tests;
-- signing y distribución de builds.
+- signing/distribución móvil;
+- evidencia de compatibilidad entre el backend Nvet desplegado y la superficie federada de CTG One.
+
+Un merge no equivale por sí solo a un deployment. Producción debe validarse contra el proveedor/runtime correspondiente.
+
+## Seguridad
+
+No versionar credenciales, claves JWT, API keys, secrets de cifrado ni archivos `.env` reales. La configuración productiva debe residir en el secret manager del proveedor.
+
+La elevación de rol se decide en servidor. Las superficies web federadas deben mantener tokens sensibles fuera del browser cuando exista un BFF server-side capaz de realizar el intercambio.
 
 ## Documentación vigente
 
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — arquitectura canónica.
+- [`docs/CTG_ONE_INTEGRATION.md`](./docs/CTG_ONE_INTEGRATION.md) — federación CTG One/Nvet.
 - [`docs/RELEASE_ROADMAP.md`](./docs/RELEASE_ROADMAP.md) — ruta a producción.
 - [`docs/LEGACY.md`](./docs/LEGACY.md) — artefactos históricos y política de limpieza.
 - [`backend/BOOTSTRAP_PROD.md`](./backend/BOOTSTRAP_PROD.md) — bootstrap backend.
 
 Los informes `*_AUDIT.md`, `*_COMPLETE.md` y `MOBILE_*.md` conservados en raíz son snapshots históricos hasta completar su clasificación.
-
-## Seguridad
-
-No se deben versionar credenciales, claves JWT, API keys, secrets de cifrado ni archivos `.env` reales. La configuración productiva debe residir en el secret manager del proveedor de infraestructura.
 
 ## Licencia
 
