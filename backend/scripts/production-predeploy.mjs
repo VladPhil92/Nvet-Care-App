@@ -19,6 +19,19 @@ const steps = [
     ],
   },
   {
+    name: 'Aplicar identidad SUPERADMIN canónica de CTG One',
+    command: 'npx',
+    args: [
+      'prisma',
+      'db',
+      'execute',
+      '--file',
+      'prisma/migrations/manual/ctg_superadmin_identity_v1.sql',
+      '--schema',
+      'prisma/schema.prisma',
+    ],
+  },
+  {
     name: 'Aplicar guard de integridad de reservas',
     command: 'npx',
     args: [
