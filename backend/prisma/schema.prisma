@@ -195,12 +195,13 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  vetProfile   VetProfile?
-  pets         Pet[]
-  appointments Appointment[] @relation("ClientAppointments")
-  messages     Message[]
-  reviews      Review[]
-  sessions     UserSession[]
+  vetProfile    VetProfile?
+  pets          Pet[]
+  appointments  Appointment[] @relation("ClientAppointments")
+  messages      Message[]
+  reviews       Review[]
+  sessions      UserSession[]
+  notifications Notification[]
 
   @@index([emailVerified])
   @@index([lockedUntil])
@@ -592,6 +593,37 @@ model Review {
   @@index([vetId])
   @@index([vetId, rating]) // Performance: mejores ratings de un vet
   @@map("reviews")
+}
+
+// ============================================
+// NOTIFICATIONS: persisted inbox + derived lifecycle/reminder events
+// ============================================
+model Notification {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Stable source identity. Together with userId this makes synchronization
+  // replay-safe and prevents duplicate events on repeated inbox reads.
+  dedupeKey String @map("dedupe_key")
+  type      String
+  category  String
+
+  title   String
+  message String
+
+  actionPath String? @map("action_path")
+  metadata   Json?
+
+  occurredAt DateTime  @map("occurred_at")
+  readAt     DateTime? @map("read_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, occurredAt])
+  @@index([userId, occurredAt])
+  @@map("notifications")
 }
 
 // ============================================
