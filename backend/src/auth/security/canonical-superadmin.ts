@@ -32,7 +32,10 @@ export function isCanonicalNvetSuperadminSubject(
   if (!expected) return false;
 
   const actual = digestSubject(ctgUserId);
-  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+  return (
+    actual.length === expected.length &&
+    crypto.timingSafeEqual(actual, expected)
+  );
 }
 
 /**
