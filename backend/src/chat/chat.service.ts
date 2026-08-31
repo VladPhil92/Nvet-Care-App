@@ -13,6 +13,8 @@ interface PriceData {
   priceCtg?: number;
 }
 
+const ACTIVE_CHAT_STATUSES = new Set(["CONFIRMED", "IN_PROGRESS"]);
+
 @Injectable()
 export class ChatService {
   constructor(private prisma: PrismaService) {}
@@ -63,13 +65,33 @@ export class ChatService {
     });
   }
 
+  private async assertChatWritable(appointmentId: string): Promise<void> {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: { status: true },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException("Appointment not found");
+    }
+
+    if (!ACTIVE_CHAT_STATUSES.has(String(appointment.status))) {
+      throw new BadRequestException(
+        "El chat solo admite nuevos mensajes cuando la cita está confirmada o en curso",
+      );
+    }
+  }
+
   /**
-   * Send a text message
+   * Send a text message. Chat write access follows the appointment lifecycle:
+   * only CONFIRMED and IN_PROGRESS appointments accept new content.
    */
   async sendMessage(appointmentId: string, senderId: string, content: string) {
     if (!content || content.trim().length === 0) {
       throw new BadRequestException("Message content cannot be empty");
     }
+
+    await this.assertChatWritable(appointmentId);
 
     return this.prisma.message.create({
       data: {
@@ -100,7 +122,8 @@ export class ChatService {
     senderId: string,
     priceData: PriceData,
   ) {
-    // Verify sender is vet
+    await this.assertChatWritable(appointmentId);
+
     const vet = await this.prisma.vetProfile.findUnique({
       where: { userId: senderId },
     });
@@ -109,7 +132,6 @@ export class ChatService {
       throw new ForbiddenException("Only veterinarians can share prices");
     }
 
-    // Check if this is an official price from vet's price list
     const officialPrice = await this.prisma.price.findFirst({
       where: {
         vetId: vet.id,
@@ -119,8 +141,6 @@ export class ChatService {
     });
 
     const isVerified = !!officialPrice;
-
-    // Build content string
     const content = `💰 ${priceData.serviceName}: ${priceData.priceCop.toLocaleString("es-CO")} COP${
       priceData.priceCtg ? ` (${priceData.priceCtg} CTG)` : ""
     }${isVerified ? " ✓ Precio oficial" : ""}`;
@@ -157,6 +177,7 @@ export class ChatService {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
       include: {
+        pet: { select: { id: true, name: true } },
         vet: {
           include: {
             user: {
@@ -186,7 +207,6 @@ export class ChatService {
       throw new NotFoundException("Appointment not found");
     }
 
-    // Get last message
     const lastMessage = await this.prisma.message.findFirst({
       where: { appointmentId },
       orderBy: { createdAt: "desc" },
@@ -213,6 +233,14 @@ export class ChatService {
 
     return {
       appointmentId,
+      appointment: {
+        status: appointment.status,
+        serviceType: appointment.serviceType,
+        date: appointment.date,
+        time: appointment.time,
+        pet: appointment.pet,
+        chatWritable: ACTIVE_CHAT_STATUSES.has(String(appointment.status)),
+      },
       participants: [
         {
           ...appointment.vet.user,
@@ -223,18 +251,24 @@ export class ChatService {
           role: "CLIENT",
         },
       ],
-      isMonitored: true, // All chats are monitored for arbitration
+      isMonitored: true,
       lastMessage,
       unreadCount,
     };
   }
 
   /**
-   * Mark messages as read (sets readAt timestamp on unread messages not sent by user)
+   * Mark messages as read, constrained to the chat that was authorized by the
+   * membership guard. Message IDs from another appointment are ignored.
    */
-  async markAsRead(messageIds: string[], userId: string) {
+  async markAsRead(
+    appointmentId: string,
+    messageIds: string[],
+    userId: string,
+  ) {
     const result = await this.prisma.message.updateMany({
       where: {
+        appointmentId,
         id: { in: messageIds },
         senderId: { not: userId },
         readAt: null,
@@ -262,7 +296,6 @@ export class ChatService {
       throw new NotFoundException("Message not found");
     }
 
-    // Map string reason to enum; default to OTHER if unrecognised
     const reasonEnum = Object.values(ReportReason).includes(
       reason as ReportReason,
     )
@@ -285,9 +318,9 @@ export class ChatService {
   }
 
   /**
-   * Get active chats for user. `actingRole` is authoritative for request
-   * scoping so the canonical root in CLIENT mode never falls back to its
-   * persisted administrative/veterinarian role and sees third-party chats.
+   * Get active chats for user. The effective role is authoritative and this
+   * endpoint fails closed outside CLIENT/VET instead of falling through to an
+   * unscoped active-appointment query.
    */
   async getActiveChats(userId: string, actingRole?: UserRole) {
     const user = await this.prisma.user.findUnique({
@@ -300,21 +333,25 @@ export class ChatService {
     }
 
     const effectiveRole = actingRole ?? user.role;
-
-    // Get appointments where user is participant and status is active
     const where: any = {
       status: { in: ["CONFIRMED", "IN_PROGRESS"] },
     };
 
-    if (effectiveRole === UserRole.VET && user.vetProfile) {
+    if (effectiveRole === UserRole.VET) {
+      if (!user.vetProfile) return [];
       where.vetId = user.vetProfile.id;
     } else if (effectiveRole === UserRole.CLIENT) {
       where.clientId = userId;
+    } else {
+      throw new ForbiddenException(
+        "Los chats activos solo están disponibles en modo cliente o veterinario",
+      );
     }
 
     const appointments = await this.prisma.appointment.findMany({
       where,
       include: {
+        pet: { select: { id: true, name: true } },
         vet: {
           include: {
             user: {
@@ -340,9 +377,9 @@ export class ChatService {
           take: 1,
         },
       },
+      orderBy: [{ date: "asc" }, { time: "asc" }],
     });
 
-    // Build chat metadata for each appointment
     return Promise.all(
       appointments.map(async (apt) => {
         const unreadCount = await this.prisma.message.count({
@@ -355,6 +392,14 @@ export class ChatService {
 
         return {
           appointmentId: apt.id,
+          appointment: {
+            status: apt.status,
+            serviceType: apt.serviceType,
+            date: apt.date,
+            time: apt.time,
+            pet: apt.pet,
+            chatWritable: true,
+          },
           participants: [
             { ...apt.vet.user, role: "VET" },
             { ...apt.client, role: "CLIENT" },
@@ -440,7 +485,6 @@ export class ChatService {
     const limit = options.limit || 50;
     const where: any = { appointmentId };
 
-    // Cursor-based pagination
     let cursor: any = undefined;
     if (options.before) {
       cursor = { id: options.before };
@@ -462,7 +506,7 @@ export class ChatService {
         },
       },
       orderBy: { createdAt: "desc" },
-      take: limit + 1, // Fetch one extra to check hasMore
+      take: limit + 1,
       ...(cursor && { cursor, skip: 1 }),
     });
 
