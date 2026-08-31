@@ -88,6 +88,38 @@ describe("PetsService preventive agenda V1", () => {
     petFindMany.mockResolvedValue([
       { id: "pet-1", name: "Milo", species: "CAT", healthProfile: null },
       { id: "pet-2", name: "Nala", species: "DOG", healthProfile: "legacy" },
+      {
+        id: "pet-3",
+        name: "Toby",
+        species: "DOG",
+        healthProfile: {
+          vaccinations: [
+            {
+              id: "99999999-9999-4999-8999-999999999999",
+              vaccine: "Legacy",
+              nextDueAt: "2026-09-01",
+            },
+          ],
+        },
+      },
+      {
+        id: "pet-4",
+        name: "Kira",
+        species: "CAT",
+        healthProfile: {
+          schemaVersion: 1,
+          source: "VET_REPORTED",
+          preventiveCare: [
+            {
+              id: "88888888-8888-4888-8888-888888888888",
+              type: "CHECKUP",
+              title: "Fuente no soportada",
+              dueAt: "2026-09-01",
+              status: "PENDING",
+            },
+          ],
+        },
+      },
     ]);
 
     await expect(service.getPreventiveAgenda("owner-1")).resolves.toEqual(
