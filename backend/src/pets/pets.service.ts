@@ -113,9 +113,7 @@ export class PetsService {
       const parsedDueAt = parseCalendarDate(dueAt);
       if (typeof item.id !== "string" || !parsedDueAt) return;
 
-      const daysUntilDue = Math.round(
-        (parsedDueAt.ms - todayMs) / 86_400_000,
-      );
+      const daysUntilDue = Math.round((parsedDueAt.ms - todayMs) / 86_400_000);
       const status: PreventiveAgendaStatus =
         parsedDueAt.ms < todayMs
           ? "OVERDUE"
@@ -147,10 +145,7 @@ export class PetsService {
       }
 
       const profile = pet.healthProfile as Record<string, unknown>;
-      if (
-        profile.schemaVersion !== 1 ||
-        profile.source !== "OWNER_REPORTED"
-      ) {
+      if (profile.schemaVersion !== 1 || profile.source !== "OWNER_REPORTED") {
         continue;
       }
 
