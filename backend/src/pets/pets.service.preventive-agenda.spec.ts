@@ -36,6 +36,11 @@ describe("PetsService preventive agenda V1", () => {
               vaccine: "Rabia",
               nextDueAt: "2026-08-30",
             },
+            {
+              id: "77777777-7777-4777-8777-777777777777",
+              vaccine: "Fecha imposible",
+              nextDueAt: "2026-02-31",
+            },
           ],
           deworming: [
             {
