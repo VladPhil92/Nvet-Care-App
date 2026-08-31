@@ -7,30 +7,24 @@ import {
   BadRequestException,
   Logger,
 } from "@nestjs/common";
+import { UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 
 /**
- * ChatMembershipGuard — valida que `req.user.id` es el cliente o el vet
- * de la cita asociada al chat (`appointmentId` en el path o body).
+ * ChatMembershipGuard — valida que `req.user.id` participa en la cita bajo
+ * el rol EFECTIVO de la solicitud.
  *
  * Diseño:
  *  - Lee `appointmentId` desde `req.params.appointmentId` por defecto.
  *  - Si la ruta usa `messageId` en lugar de `appointmentId` (ej: report,
  *    delete), el guard hace lookup del mensaje y resuelve el appointmentId.
- *  - ADMIN siempre tiene acceso (auditoría de chats).
+ *  - ADMIN/SUPERADMIN tienen acceso global únicamente cuando ese es el rol
+ *    efectivo de la solicitud.
+ *  - CLIENT solo puede actuar como el cliente de la cita; VET solo como el
+ *    veterinario. Esto evita que una identidad con múltiples relaciones
+ *    recupere autoridad lateral durante un modo request-scoped.
  *  - Cachea el appointment en `req.appointment` para evitar otra query
  *    en el handler.
- *
- * Por qué un guard y no inline:
- *  - Single source of truth: la lógica de membership vive en un sólo lugar.
- *  - Mejor testeabilidad: se puede mockear `PrismaService` sin tocar el controller.
- *  - DI consistente: el guard se inyecta como provider, fácil de extender
- *    (ej: agregar audit en accesos no autorizados).
- *
- * Uso:
- *   @UseGuards(JwtAuthGuard, ChatMembershipGuard)
- *   @Get(':appointmentId/messages')
- *   async getMessages(@Param('appointmentId') id: string) { ... }
  */
 @Injectable()
 export class ChatMembershipGuard implements CanActivate {
@@ -46,8 +40,9 @@ export class ChatMembershipGuard implements CanActivate {
       throw new ForbiddenException("Autenticación requerida");
     }
 
-    // ADMIN siempre puede acceder a cualquier chat (auditoría / arbitraje)
-    if (user.role === "ADMIN") return true;
+    if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN) {
+      return true;
+    }
 
     // Resolver appointmentId desde params (caso normal) o desde messageId
     let appointmentId = req.params?.appointmentId as string | undefined;
@@ -80,8 +75,10 @@ export class ChatMembershipGuard implements CanActivate {
       throw new NotFoundException("Cita no encontrada");
     }
 
-    const isClient = appointment.clientId === user.id;
-    const isVet = appointment.vet.userId === user.id;
+    const isClient =
+      user.role === UserRole.CLIENT && appointment.clientId === user.id;
+    const isVet =
+      user.role === UserRole.VET && appointment.vet.userId === user.id;
 
     if (!isClient && !isVet) {
       this.logger.warn(
