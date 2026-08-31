@@ -12,6 +12,9 @@ const apiBase = `http://127.0.0.1:${port}/api`;
 const startupTimeoutMs = Number(
   process.env.NVET_RUNTIME_SMOKE_TIMEOUT_MS || 90_000,
 );
+const verifyCtgIdentityBridge =
+  process.env.NODE_ENV === 'production' ||
+  process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED !== 'false';
 
 const child = spawn(process.execPath, [mainPath], {
   cwd: backendDir,
@@ -162,7 +165,13 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
 try {
   await waitForReadiness();
   await verifyLoginPath();
-  await verifyCtgIdentityExchangePath();
+  if (verifyCtgIdentityBridge) {
+    await verifyCtgIdentityExchangePath();
+  } else {
+    console.log(
+      '✅ CTG identity exchange smoke intentionally skipped outside production; staging bridge is disabled by contract',
+    );
+  }
   console.log('✅ Nvet Railway runtime smoke gate passed; service remains online');
 } catch (error) {
   console.error('❌ Nvet Railway runtime smoke gate failed:', error);
