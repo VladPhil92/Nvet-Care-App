@@ -1,0 +1,65 @@
+name: Release Candidate Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/PHASE_11_RELEASE_CANDIDATE.md'
+      - 'scripts/verify-release-candidate-readiness.mjs'
+      - '.github/workflows/release-candidate-readiness.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/railway-contract.yml'
+      - '.github/workflows/production-health-canary.yml'
+      - '.github/workflows/staging-e2e.yml'
+  schedule:
+    - cron: '17 12 * * *'
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: 'Fail the workflow when any RC gate is still blocked'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-candidate-readiness-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Validate RC readiness contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+      - name: Validate Phase 11 contract
+        run: node scripts/verify-release-candidate-readiness.mjs --contract-only
+
+  audit:
+    name: Audit live RC evidence
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      RC_ENFORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.enforce && 'true' || 'false' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+      - name: Audit current main release evidence
+        run: node scripts/verify-release-candidate-readiness.mjs --runtime
