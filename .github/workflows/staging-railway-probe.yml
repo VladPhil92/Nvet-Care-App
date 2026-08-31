@@ -82,6 +82,38 @@ jobs:
             exit 3
           }
 
+      - name: Introspect exact provisioning input fields and template queries
+        run: |
+          set -euo pipefail
+          query='query ProvisioningInputs { __schema { queryType { fields { name args { name type { kind name ofType { kind name ofType { kind name } } } } } } types { kind name inputFields { name defaultValue type { kind name ofType { kind name ofType { kind name } } } } } } }'
+          payload="$(jq -cn --arg q "$query" '{query:$q}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            "$RAILWAY_GRAPHQL_URL" > /tmp/railway-input-schema.json
+
+          if jq -e '.errors and (.errors | length > 0)' /tmp/railway-input-schema.json >/dev/null; then
+            jq -r '.errors[] | "::error::Railway GraphQL input introspection: \(.message)"' /tmp/railway-input-schema.json
+            exit 1
+          fi
+
+          echo 'Relevant query signatures:'
+          jq -r '
+            .data.__schema.queryType.fields[]
+            | select(.name | test("template|project|environment|service"; "i"))
+            | [.name, (.args | map(.name + ":" + ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")) | join(","))]
+            | @tsv
+          ' /tmp/railway-input-schema.json | sort
+
+          echo 'Exact provisioning input fields:'
+          jq -r '
+            .data.__schema.types[]
+            | select(.name == "EnvironmentCreateInput" or .name == "ServiceCreateInput" or .name == "ServiceConnectInput" or .name == "VariableCollectionUpsertInput" or .name == "VariableUpsertInput" or .name == "ServiceDomainCreateInput" or .name == "TemplateDeployV2Input" or .name == "VolumeCreateInput" or .name == "ServiceInstanceUpdateInput" or .name == "DeploymentTriggerCreateInput")
+            | "TYPE " + .name,
+              (.inputFields[] | "  " + .name + ":" + ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?") + (if .defaultValue then "=" + .defaultValue else "" end))
+          ' /tmp/railway-input-schema.json
+
       - name: Publish probe summary
         if: always()
         run: |
@@ -94,7 +126,7 @@ jobs:
             if [ -f /tmp/railway-project.json ]; then
               echo "- Canonical project: \`$(jq -r '.data.project.name // "unresolved"' /tmp/railway-project.json)\`."
             fi
-            if [ -f /tmp/railway-relevant-mutations.txt ]; then
-              echo '- Provisioning mutation contract was introspected successfully.'
+            if [ -f /tmp/railway-input-schema.json ]; then
+              echo '- Exact provisioning input schema was introspected successfully.'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
