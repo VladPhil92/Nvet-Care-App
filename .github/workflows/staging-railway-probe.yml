@@ -12,69 +12,50 @@ permissions:
 
 jobs:
   probe:
-    name: Probe Railway workspace Public API read-only
+    name: Inspect staging deployment diagnostics schema
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-      TARGET_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
       RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
+      STAGING_ENVIRONMENT_ID: 9267d965-e5e4-4c6f-af93-001c73cf62b4
+      STAGING_BACKEND_SERVICE_ID: dc5c2eee-3f8d-4416-8854-a921ea694735
     steps:
-      - name: Verify credential and project
+      - name: Require workspace token
+        run: test -n "$RAILWAY_API_TOKEN"
+
+      - name: Introspect deployment and log query contract
         run: |
           set -euo pipefail
-          test -n "$RAILWAY_API_TOKEN" || { echo '::error::Missing RAILWAY_API_TOKEN'; exit 78; }
-          payload="$(jq -cn --arg id "$TARGET_PROJECT_ID" '{query:"query Project($id: String!) { project(id: $id) { id name } }",variables:{id:$id}}')"
+          query='query Schema { __schema { queryType { fields { name args { name type { kind name ofType { kind name ofType { kind name } } } } type { kind name ofType { kind name ofType { kind name } } } } } types { kind name fields { name type { kind name ofType { kind name ofType { kind name } } } } inputFields { name type { kind name ofType { kind name ofType { kind name } } } } } } }'
+          payload="$(jq -cn --arg q "$query" '{query:$q}')"
           curl --fail-with-body --silent --show-error \
             -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
-            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/project.json
-          jq -e --arg id "$TARGET_PROJECT_ID" '.data.project.id == $id' /tmp/project.json >/dev/null || { jq . /tmp/project.json; exit 2; }
-          echo "Canonical project: $(jq -r '.data.project.name' /tmp/project.json)"
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/schema.json
+          jq -e '.errors == null' /tmp/schema.json >/dev/null || { jq '.errors' /tmp/schema.json; exit 1; }
 
-      - name: Resolve verified PostgreSQL template
-        run: |
-          set -euo pipefail
-          query='query Search($q: String!) { templateSearch(query: $q, verified: true, first: 20) { edges { node { id code name description image isVerified deploymentCount healthScore } } } }'
-          for term in PostgreSQL Postgres; do
-            payload="$(jq -cn --arg q "$query" --arg term "$term" '{query:$q,variables:{q:$term}}')"
-            curl --fail-with-body --silent --show-error \
-              -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
-              --data "$payload" "$RAILWAY_GRAPHQL_URL" >"/tmp/template-${term}.json"
-            jq -e '.errors == null' "/tmp/template-${term}.json" >/dev/null || { jq '.errors' "/tmp/template-${term}.json"; exit 1; }
-            echo "Verified templates for $term:"
-            jq -r '.data.templateSearch.edges[].node | [.id,.code,.name,.image,.deploymentCount,.healthScore] | @tsv' "/tmp/template-${term}.json"
-          done
+          echo 'Deployment/log query signatures:'
+          jq -r '
+            .data.__schema.queryType.fields[]
+            | select(.name | test("deployment|log|serviceInstance"; "i"))
+            | [.name, (.args | map(.name + ":" + ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")) | join(",")), ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")]
+            | @tsv
+          ' /tmp/schema.json | sort
 
-      - name: Inspect template deployment config of top PostgreSQL result
-        run: |
-          set -euo pipefail
-          template_id="$(jq -r '.data.templateSearch.edges[].node | select((.name|ascii_downcase|contains("postgres"))) | .id' /tmp/template-PostgreSQL.json | head -n1)"
-          if [ -z "$template_id" ]; then
-            template_id="$(jq -r '.data.templateSearch.edges[].node | select((.name|ascii_downcase|contains("postgres"))) | .id' /tmp/template-Postgres.json | head -n1)"
-          fi
-          test -n "$template_id" || { echo '::error::No verified PostgreSQL template resolved.'; exit 2; }
-          query='query Template($id: String!) { template(id: $id) { id code name isVerified serializedConfig services(first: 20) { edges { node { id config } } } } }'
-          payload="$(jq -cn --arg q "$query" --arg id "$template_id" '{query:$q,variables:{id:$id}}')"
-          curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
-            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/postgres-template.json
-          jq -e '.errors == null and .data.template.isVerified == true' /tmp/postgres-template.json >/dev/null || { jq . /tmp/postgres-template.json; exit 3; }
-          jq -r '.data.template | "Selected template: \(.name) id=\(.id) code=\(.code)"' /tmp/postgres-template.json
-          echo 'Template service IDs:'
-          jq -r '.data.template.services.edges[].node.id' /tmp/postgres-template.json
-          echo 'Serialized config keys:'
-          jq -r '.data.template.serializedConfig | keys[]' /tmp/postgres-template.json || true
+          echo 'Relevant input/object types:'
+          jq -r '
+            .data.__schema.types[]
+            | select(.name | test("Deployment|Log|ServiceInstance"; "i"))
+            | "TYPE \(.kind) \(.name)",
+              (.inputFields[]? | "  IN \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"),
+              (.fields[]? | "  OUT \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)")
+          ' /tmp/schema.json
 
-      - name: Publish probe summary
-        if: always()
+      - name: Publish diagnostics summary
         run: |
           {
-            echo '## Railway verified PostgreSQL template probe'
+            echo '## Live staging diagnostics schema'
             echo ''
-            echo '- Workspace token can read canonical Nvet project and verified templates.'
-            if [ -f /tmp/postgres-template.json ]; then
-              echo "- PostgreSQL template: \`$(jq -r '.data.template.name' /tmp/postgres-template.json)\`."
-              echo "- Template id: \`$(jq -r '.data.template.id' /tmp/postgres-template.json)\`."
-            fi
-            echo '- No Railway mutation was executed.'
+            echo '- Read-only Railway Public API introspection completed.'
+            echo '- No environment, service, deployment, variable, domain, volume, or production resource was mutated.'
           } >> "$GITHUB_STEP_SUMMARY"
