@@ -43,7 +43,13 @@ async function graphql(query, variables = {}) {
   }
 
   if (!response.ok || payload.errors?.length) {
-    const errors = payload.errors?.map((error) => error.message).join('; ') || text.slice(0, 500);
+    const errors =
+      payload.errors
+        ?.map((error) => {
+          const details = error.extensions ? ` ${JSON.stringify(error.extensions)}` : '';
+          return `${error.message}${details}`;
+        })
+        .join('; ') || text.slice(0, 500);
     throw new Error(`Railway GraphQL failed (HTTP ${response.status}): ${errors}`);
   }
   return payload.data;
@@ -216,25 +222,12 @@ try {
   const backendServiceId = backendData.serviceCreate.id;
   console.log(`Created staging backend service: ${backendData.serviceCreate.name}`);
 
-  await graphql(
-    'mutation Configure($environmentId: String!, $serviceId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(environmentId: $environmentId, serviceId: $serviceId, input: $input) }',
-    {
-      environmentId: createdEnvironmentId,
-      serviceId: backendServiceId,
-      input: {
-        builder: 'DOCKERFILE',
-        dockerfilePath: '/Dockerfile.railway',
-        railwayConfigFile: '/railway.json',
-        rootDirectory: '/',
-        preDeployCommand: 'npm run deploy:preflight --workspace backend',
-        startCommand: 'node backend/scripts/railway-runtime-smoke.mjs',
-        healthcheckPath: '/api/health/ready',
-        healthcheckTimeout: 300,
-        restartPolicyType: 'ON_FAILURE',
-        restartPolicyMaxRetries: 5,
-      },
-    },
-  );
+  // The repository root already owns the canonical Railway deployment
+  // contract (`railway.json` + `Dockerfile.railway`). ServiceCreate connects
+  // the exact same repository and branch, so staging inherits that contract.
+  // Avoid a second ServiceInstanceUpdate mutation here: it duplicates the
+  // repository config and Railway rejects some redundant combinations while
+  // the service has no deployment yet.
 
   const domainData = await graphql(
     'mutation Domain($input: ServiceDomainCreateInput!) { serviceDomainCreate(input: $input) { id domain } }',
