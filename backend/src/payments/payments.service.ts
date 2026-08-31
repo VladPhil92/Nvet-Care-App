@@ -14,6 +14,7 @@ import {
   AppointmentStatus,
   VetTier,
   Prisma,
+  UserRole,
 } from "@prisma/client";
 
 // ============================================================
@@ -372,7 +373,7 @@ export class PaymentsService {
   // BALANCE & TRANSACTIONS
   // ============================================================
 
-  async getBalance(userId: string) {
+  async getBalance(userId: string, actingRole?: UserRole) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { vetProfile: true },
@@ -380,7 +381,9 @@ export class PaymentsService {
 
     if (!user) throw new NotFoundException("Usuario no encontrado");
 
-    if (user.role === "VET" && user.vetProfile) {
+    const effectiveRole = actingRole ?? user.role;
+
+    if (effectiveRole === UserRole.VET && user.vetProfile) {
       // Calcular saldo del vet basado en transacciones LIQUIDATED
       const liquidated = await this.prisma.transaction.aggregate({
         where: {
@@ -412,7 +415,8 @@ export class PaymentsService {
       };
     }
 
-    // Cliente: CTG balance desde campo User.ctgBalance
+    // CLIENT mode always uses the client's own balance, even if the database
+    // identity also has administrative/veterinarian authority.
     return {
       ctgBalance: user.ctgBalance,
       copBalance: 0,
@@ -421,7 +425,11 @@ export class PaymentsService {
     };
   }
 
-  async getTransactions(userId: string, filters: TransactionFiltersDto) {
+  async getTransactions(
+    userId: string,
+    filters: TransactionFiltersDto,
+    actingRole?: UserRole,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { vetProfile: true },
@@ -429,15 +437,18 @@ export class PaymentsService {
 
     if (!user) throw new NotFoundException("Usuario no encontrado");
 
+    const effectiveRole = actingRole ?? user.role;
     const where: Prisma.TransactionWhereInput = {};
 
-    // Restricción por rol
-    if (user.role === "VET" && user.vetProfile) {
+    // Restricción por el rol EFECTIVO de la solicitud. El modo CLIENT de la
+    // identidad raíz nunca puede recuperar el rol persistido para ampliar el
+    // alcance a transacciones de terceros.
+    if (effectiveRole === UserRole.VET && user.vetProfile) {
       where.appointment = { vetId: user.vetProfile.id };
-    } else if (user.role === "CLIENT") {
+    } else if (effectiveRole === UserRole.CLIENT) {
       where.appointment = { clientId: userId };
     }
-    // ADMIN ve todas
+    // ADMIN/SUPERADMIN ven todas únicamente cuando ése es el rol efectivo.
 
     if (filters.status) where.status = filters.status;
     if (filters.paymentMethod) where.paymentMethod = filters.paymentMethod;
@@ -480,7 +491,11 @@ export class PaymentsService {
     };
   }
 
-  async getTransactionById(userId: string, transactionId: string) {
+  async getTransactionById(
+    userId: string,
+    transactionId: string,
+    actingRole?: UserRole,
+  ) {
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
       include: {
@@ -492,11 +507,19 @@ export class PaymentsService {
 
     if (!transaction) throw new NotFoundException("Transacción no encontrada");
 
-    // Ownership: cliente, vet o admin
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    const isClient = transaction.appointment.clientId === userId;
-    const isVet = transaction.appointment.vet.userId === userId;
-    const isAdmin = user?.role === "ADMIN";
+    const persistedUser = actingRole
+      ? null
+      : await this.prisma.user.findUnique({ where: { id: userId } });
+    const effectiveRole = actingRole ?? persistedUser?.role;
+
+    const isClient =
+      effectiveRole === UserRole.CLIENT &&
+      transaction.appointment.clientId === userId;
+    const isVet =
+      effectiveRole === UserRole.VET &&
+      transaction.appointment.vet.userId === userId;
+    const isAdmin =
+      effectiveRole === UserRole.ADMIN || effectiveRole === UserRole.SUPERADMIN;
 
     if (!isClient && !isVet && !isAdmin) {
       throw new ForbiddenException("No tienes acceso a esta transacción");
@@ -686,8 +709,12 @@ export class PaymentsService {
     };
   }
 
-  async checkPseStatus(userId: string, transactionId: string) {
-    const tx = await this.getTransactionById(userId, transactionId);
+  async checkPseStatus(
+    userId: string,
+    transactionId: string,
+    actingRole?: UserRole,
+  ) {
+    const tx = await this.getTransactionById(userId, transactionId, actingRole);
     return {
       status: tx.status,
       transaction: tx,
@@ -721,7 +748,7 @@ export class PaymentsService {
       );
     }
 
-    const balance = await this.getBalance(userId);
+    const balance = await this.getBalance(userId, UserRole.VET);
 
     if (dto.amountCop > balance.copBalance) {
       throw new BadRequestException(

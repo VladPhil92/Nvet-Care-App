@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import {
   isCanonicalNvetSuperadminSubject,
   resolveEffectiveNvetRole,
+  resolveNvetRequestRole,
 } from "./canonical-superadmin";
 
 describe("canonical Nvet superadmin authorization", () => {
@@ -41,6 +42,44 @@ describe("canonical Nvet superadmin authorization", () => {
         fixtureDigest,
       ),
     ).toBe(UserRole.ADMIN);
+  });
+
+  it("lets only the canonical root enter request-scoped CLIENT mode", () => {
+    expect(
+      resolveNvetRequestRole(
+        { role: UserRole.CLIENT, ctgUserId: fixtureSubject },
+        UserRole.CLIENT,
+        fixtureDigest,
+      ),
+    ).toBe(UserRole.CLIENT);
+
+    expect(
+      resolveNvetRequestRole(
+        {
+          role: UserRole.ADMIN,
+          ctgUserId: "22222222-2222-4222-8222-222222222222",
+        },
+        UserRole.CLIENT,
+        fixtureDigest,
+      ),
+    ).toBe(UserRole.ADMIN);
+  });
+
+  it("does not let the root switch into VET or any other privileged role", () => {
+    const canonical = { role: UserRole.CLIENT, ctgUserId: fixtureSubject };
+
+    expect(
+      resolveNvetRequestRole(canonical, UserRole.VET, fixtureDigest),
+    ).toBe(UserRole.SUPERADMIN);
+    expect(
+      resolveNvetRequestRole(canonical, UserRole.ADMIN, fixtureDigest),
+    ).toBe(UserRole.SUPERADMIN);
+    expect(
+      resolveNvetRequestRole(canonical, UserRole.SUPERADMIN, fixtureDigest),
+    ).toBe(UserRole.SUPERADMIN);
+    expect(resolveNvetRequestRole(canonical, "CLIENT ", fixtureDigest)).toBe(
+      UserRole.SUPERADMIN,
+    );
   });
 
   it("fails closed for missing or malformed identity digests", () => {

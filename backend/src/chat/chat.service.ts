@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { MessageType, ReportReason } from "@prisma/client";
+import { MessageType, ReportReason, UserRole } from "@prisma/client";
 
 interface PriceData {
   serviceName: string;
@@ -285,10 +285,11 @@ export class ChatService {
   }
 
   /**
-   * Get active chats for user
+   * Get active chats for user. `actingRole` is authoritative for request
+   * scoping so the canonical root in CLIENT mode never falls back to its
+   * persisted administrative/veterinarian role and sees third-party chats.
    */
-  async getActiveChats(userId: string) {
-    // Get user's role
+  async getActiveChats(userId: string, actingRole?: UserRole) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { vetProfile: true },
@@ -298,14 +299,16 @@ export class ChatService {
       throw new NotFoundException("User not found");
     }
 
+    const effectiveRole = actingRole ?? user.role;
+
     // Get appointments where user is participant and status is active
     const where: any = {
       status: { in: ["CONFIRMED", "IN_PROGRESS"] },
     };
 
-    if (user.role === "VET" && user.vetProfile) {
+    if (effectiveRole === UserRole.VET && user.vetProfile) {
       where.vetId = user.vetProfile.id;
-    } else if (user.role === "CLIENT") {
+    } else if (effectiveRole === UserRole.CLIENT) {
       where.clientId = userId;
     }
 

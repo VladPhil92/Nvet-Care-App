@@ -103,7 +103,7 @@ export class PaymentsController {
 
   @Get("me/balance")
   async getMyBalance(@Request() req) {
-    return this.paymentsService.getBalance(req.user.id);
+    return this.paymentsService.getBalance(req.user.id, req.user.role);
   }
 
   @Get("transactions")
@@ -111,7 +111,11 @@ export class PaymentsController {
     @Request() req,
     @Query() filters: TransactionFiltersDto,
   ) {
-    return this.paymentsService.getTransactions(req.user.id, filters);
+    return this.paymentsService.getTransactions(
+      req.user.id,
+      filters,
+      req.user.role,
+    );
   }
 
   @Get("transactions/:id")
@@ -119,7 +123,11 @@ export class PaymentsController {
     @Request() req,
     @Param("id", ParseUUIDPipe) id: string,
   ) {
-    return this.paymentsService.getTransactionById(req.user.id, id);
+    return this.paymentsService.getTransactionById(
+      req.user.id,
+      id,
+      req.user.role,
+    );
   }
 
   /**
@@ -163,7 +171,11 @@ export class PaymentsController {
     @Request() req,
     @Param("transactionId", ParseUUIDPipe) transactionId: string,
   ) {
-    return this.paymentsService.checkPseStatus(req.user.id, transactionId);
+    return this.paymentsService.checkPseStatus(
+      req.user.id,
+      transactionId,
+      req.user.role,
+    );
   }
 
   @Get("ctg/rate")
@@ -184,7 +196,7 @@ export class PaymentsController {
         startDate,
         endDate,
       }),
-      this.paymentsService.getBalance(req.user.id),
+      this.paymentsService.getBalance(req.user.id, req.user.role),
     ]);
 
     return {

@@ -54,3 +54,29 @@ export function resolveEffectiveNvetRole(
 
   return user.role === UserRole.SUPERADMIN ? UserRole.ADMIN : user.role;
 }
+
+/**
+ * Session-scoped role mode for the canonical root.
+ *
+ * The database role is NEVER rewritten when the root chooses "Modo usuario".
+ * Instead, one authenticated request may be evaluated with CLIENT authority
+ * when — and only when — the verified canonical SUPERADMIN explicitly asks
+ * for CLIENT mode. No other target role is accepted, and non-canonical users
+ * cannot use the hint to change their authority.
+ */
+export function resolveNvetRequestRole(
+  user: { role: UserRole; ctgUserId?: string | null },
+  requestedRole: unknown,
+  expectedDigestHex = CANONICAL_SUPERADMIN_SUBJECT_SHA256,
+): UserRole {
+  const authorityRole = resolveEffectiveNvetRole(user, expectedDigestHex);
+
+  if (
+    authorityRole === UserRole.SUPERADMIN &&
+    requestedRole === UserRole.CLIENT
+  ) {
+    return UserRole.CLIENT;
+  }
+
+  return authorityRole;
+}
