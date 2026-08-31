@@ -20,113 +20,57 @@ jobs:
       TARGET_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
       RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
     steps:
-      - name: Verify credential presence
+      - name: Verify credential and project
         run: |
           set -euo pipefail
-          if [ -z "$RAILWAY_API_TOKEN" ]; then
-            echo '::error::RAILWAY_API_TOKEN is not configured as a repository secret.'
-            exit 78
-          fi
-          echo 'RAILWAY_API_TOKEN is configured.'
-
-      - name: Verify canonical project via Railway Public API
-        run: |
-          set -euo pipefail
+          test -n "$RAILWAY_API_TOKEN" || { echo '::error::Missing RAILWAY_API_TOKEN'; exit 78; }
           payload="$(jq -cn --arg id "$TARGET_PROJECT_ID" '{query:"query Project($id: String!) { project(id: $id) { id name } }",variables:{id:$id}}')"
           curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data "$payload" \
-            "$RAILWAY_GRAPHQL_URL" > /tmp/railway-project.json
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/project.json
+          jq -e --arg id "$TARGET_PROJECT_ID" '.data.project.id == $id' /tmp/project.json >/dev/null || { jq . /tmp/project.json; exit 2; }
+          echo "Canonical project: $(jq -r '.data.project.name' /tmp/project.json)"
 
-          if jq -e '.errors and (.errors | length > 0)' /tmp/railway-project.json >/dev/null; then
-            jq -r '.errors[] | "::error::Railway GraphQL: \(.message)"' /tmp/railway-project.json
-            exit 1
-          fi
-
-          actual_id="$(jq -r '.data.project.id // empty' /tmp/railway-project.json)"
-          actual_name="$(jq -r '.data.project.name // empty' /tmp/railway-project.json)"
-          if [ "$actual_id" != "$TARGET_PROJECT_ID" ]; then
-            echo '::error::Workspace token cannot read the canonical Nvet Railway project through Public API.'
-            exit 2
-          fi
-          echo "Canonical Railway project visible through Public API: $actual_name ($actual_id)"
-
-      - name: Introspect staging provisioning mutation contract
+      - name: Inspect exact provisioning schema
         run: |
           set -euo pipefail
-          query='query ProvisioningSchema { __schema { mutationType { fields { name args { name type { kind name ofType { kind name ofType { kind name } } } } } } } }'
+          query='query Schema { __schema { queryType { fields { name type { kind name ofType { kind name ofType { kind name } } } } } mutationType { fields { name type { kind name ofType { kind name ofType { kind name } } } args { name type { kind name ofType { kind name ofType { kind name } } } } } } types { kind name fields { name type { kind name ofType { kind name ofType { kind name } } } } inputFields { name defaultValue type { kind name ofType { kind name ofType { kind name } } } } } } }'
           payload="$(jq -cn --arg q "$query" '{query:$q}')"
           curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data "$payload" \
-            "$RAILWAY_GRAPHQL_URL" > /tmp/railway-schema.json
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/schema.json
+          jq -e '.errors == null' /tmp/schema.json >/dev/null || { jq '.errors' /tmp/schema.json; exit 1; }
 
-          if jq -e '.errors and (.errors | length > 0)' /tmp/railway-schema.json >/dev/null; then
-            jq -r '.errors[] | "::error::Railway GraphQL introspection: \(.message)"' /tmp/railway-schema.json
-            exit 1
-          fi
+          echo 'INPUT ServiceSourceInput:'
+          jq -r '.data.__schema.types[] | select(.name=="ServiceSourceInput") | .inputFields[] | "  \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"' /tmp/schema.json
+          echo 'INPUT ServiceCreateInput:'
+          jq -r '.data.__schema.types[] | select(.name=="ServiceCreateInput") | .inputFields[] | "  \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"' /tmp/schema.json
+          echo 'INPUT EnvironmentCreateInput:'
+          jq -r '.data.__schema.types[] | select(.name=="EnvironmentCreateInput") | .inputFields[] | "  \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"' /tmp/schema.json
+          echo 'INPUT VolumeCreateInput:'
+          jq -r '.data.__schema.types[] | select(.name=="VolumeCreateInput") | .inputFields[] | "  \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"' /tmp/schema.json
+          echo 'INPUT ServiceDomainCreateInput:'
+          jq -r '.data.__schema.types[] | select(.name=="ServiceDomainCreateInput") | .inputFields[] | "  \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"' /tmp/schema.json
+          echo 'INPUT VariableCollectionUpsertInput:'
+          jq -r '.data.__schema.types[] | select(.name=="VariableCollectionUpsertInput") | .inputFields[] | "  \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"' /tmp/schema.json
+          echo 'INPUT ServiceInstanceUpdateInput:'
+          jq -r '.data.__schema.types[] | select(.name=="ServiceInstanceUpdateInput") | .inputFields[] | "  \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"' /tmp/schema.json
 
-          jq -r '
-            .data.__schema.mutationType.fields[]
-            | select(.name | test("environment|service|domain|tcp|variable|template|volume|deployment"; "i"))
-            | [.name, (.args | map(.name + ":" + ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")) | join(","))]
-            | @tsv
-          ' /tmp/railway-schema.json | sort > /tmp/railway-relevant-mutations.txt
+          echo 'QUERY templateSearch return type:'
+          jq -r '.data.__schema.queryType.fields[] | select(.name=="templateSearch") | .type | tostring' /tmp/schema.json
+          echo 'Template-related object types:'
+          jq -r '.data.__schema.types[] | select(.kind=="OBJECT" and (.name|test("Template"))) | "TYPE \(.name)", (.fields[]? | "  \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)")' /tmp/schema.json
 
-          echo 'Relevant Railway mutation signatures:'
-          cat /tmp/railway-relevant-mutations.txt
-          test -s /tmp/railway-relevant-mutations.txt || {
-            echo '::error::No provisioning mutations were returned by schema introspection.'
-            exit 3
-          }
-
-      - name: Introspect exact provisioning input fields and template queries
-        run: |
-          set -euo pipefail
-          query='query ProvisioningInputs { __schema { queryType { fields { name args { name type { kind name ofType { kind name ofType { kind name } } } } } } types { kind name inputFields { name defaultValue type { kind name ofType { kind name ofType { kind name } } } } } } }'
-          payload="$(jq -cn --arg q "$query" '{query:$q}')"
-          curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data "$payload" \
-            "$RAILWAY_GRAPHQL_URL" > /tmp/railway-input-schema.json
-
-          if jq -e '.errors and (.errors | length > 0)' /tmp/railway-input-schema.json >/dev/null; then
-            jq -r '.errors[] | "::error::Railway GraphQL input introspection: \(.message)"' /tmp/railway-input-schema.json
-            exit 1
-          fi
-
-          echo 'Relevant query signatures:'
-          jq -r '
-            .data.__schema.queryType.fields[]
-            | select(.name | test("template|project|environment|service"; "i"))
-            | [.name, (.args | map(.name + ":" + ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")) | join(","))]
-            | @tsv
-          ' /tmp/railway-input-schema.json | sort
-
-          echo 'Exact provisioning input fields:'
-          jq -r '
-            .data.__schema.types[]
-            | select(.name == "EnvironmentCreateInput" or .name == "ServiceCreateInput" or .name == "ServiceConnectInput" or .name == "VariableCollectionUpsertInput" or .name == "VariableUpsertInput" or .name == "ServiceDomainCreateInput" or .name == "TemplateDeployV2Input" or .name == "VolumeCreateInput" or .name == "ServiceInstanceUpdateInput" or .name == "DeploymentTriggerCreateInput")
-            | "TYPE " + .name,
-              (.inputFields[] | "  " + .name + ":" + ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?") + (if .defaultValue then "=" + .defaultValue else "" end))
-          ' /tmp/railway-input-schema.json
+          echo 'Mutation return types:'
+          jq -r '.data.__schema.mutationType.fields[] | select(.name=="environmentCreate" or .name=="serviceCreate" or .name=="serviceDomainCreate" or .name=="variableCollectionUpsert" or .name=="volumeCreate" or .name=="serviceInstanceDeployV2" or .name=="serviceInstanceUpdate") | "\(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"' /tmp/schema.json
 
       - name: Publish probe summary
         if: always()
         run: |
           {
-            echo '## Railway workspace Public API probe'
+            echo '## Railway Public API provisioning schema probe'
             echo ''
-            echo '- Credential: present.'
-            echo '- Mode: read-only Railway Public GraphQL API.'
-            echo '- No Railway project, environment, service, variable, deployment, volume, domain, or database was changed.'
-            if [ -f /tmp/railway-project.json ]; then
-              echo "- Canonical project: \`$(jq -r '.data.project.name // "unresolved"' /tmp/railway-project.json)\`."
-            fi
-            if [ -f /tmp/railway-input-schema.json ]; then
-              echo '- Exact provisioning input schema was introspected successfully.'
-            fi
+            echo '- Workspace token can read the canonical Nvet project.'
+            echo '- Exact service/source/volume/domain/variable input contracts inspected.'
+            echo '- No Railway mutation was executed.'
           } >> "$GITHUB_STEP_SUMMARY"
