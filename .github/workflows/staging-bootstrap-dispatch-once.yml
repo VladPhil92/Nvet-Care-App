@@ -22,7 +22,7 @@ jobs:
       - name: Dispatch Provision Isolated Staging on main
         run: |
           set -euo pipefail
-          # Re-dispatch after account-scoped token preflight and CI deduplication fixes merged to main.
+          # Dispatch the merged Public API bootstrap for Phase 3 isolated staging.
           gh workflow run provision-staging.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
