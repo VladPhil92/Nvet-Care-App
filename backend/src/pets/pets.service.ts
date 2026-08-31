@@ -253,18 +253,18 @@ export class PetsService {
         throw new BadRequestException(`${label} no puede estar en el futuro`);
       }
     };
-    const ordered = (
-      start: string,
-      end: string | undefined,
-      label: string,
-    ) => {
+    const ordered = (start: string, end: string | undefined, label: string) => {
       if (end && new Date(end).getTime() < new Date(start).getTime()) {
-        throw new BadRequestException(`${label} no puede ser anterior al evento`);
+        throw new BadRequestException(
+          `${label} no puede ser anterior al evento`,
+        );
       }
     };
     const unique = (items: { id: string }[], label: string) => {
       if (new Set(items.map((item) => item.id)).size !== items.length) {
-        throw new BadRequestException(`Hay identificadores duplicados en ${label}`);
+        throw new BadRequestException(
+          `Hay identificadores duplicados en ${label}`,
+        );
       }
     };
 
@@ -275,12 +275,19 @@ export class PetsService {
     unique(dto.deworming, "desparasitación");
     unique(dto.preventiveCare, "controles preventivos");
 
-    for (const item of dto.allergies) pastOrPresent(item.notedAt, "La fecha de alergia");
-    for (const item of dto.conditions) pastOrPresent(item.diagnosedAt, "La fecha del antecedente");
+    for (const item of dto.allergies)
+      pastOrPresent(item.notedAt, "La fecha de alergia");
+    for (const item of dto.conditions)
+      pastOrPresent(item.diagnosedAt, "La fecha del antecedente");
     for (const item of dto.medications) {
       pastOrPresent(item.startedAt, "La fecha de inicio del medicamento");
       pastOrPresent(item.endedAt, "La fecha de fin del medicamento");
-      if (item.startedAt) ordered(item.startedAt, item.endedAt, "La fecha de fin del medicamento");
+      if (item.startedAt)
+        ordered(
+          item.startedAt,
+          item.endedAt,
+          "La fecha de fin del medicamento",
+        );
     }
     for (const item of dto.vaccinations) {
       pastOrPresent(item.administeredAt, "La fecha de vacunación");
@@ -288,7 +295,11 @@ export class PetsService {
     }
     for (const item of dto.deworming) {
       pastOrPresent(item.administeredAt, "La fecha de desparasitación");
-      ordered(item.administeredAt, item.nextDueAt, "La próxima desparasitación");
+      ordered(
+        item.administeredAt,
+        item.nextDueAt,
+        "La próxima desparasitación",
+      );
     }
   }
 }
