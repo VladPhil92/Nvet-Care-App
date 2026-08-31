@@ -1,0 +1,153 @@
+name: Repair and Certify Staging Once
+
+on:
+  push:
+    branches:
+      - ops/staging-railway-probe-20260830
+    paths:
+      - '.github/workflows/staging-runtime-repair-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    name: Repair isolated staging predeploy and certify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
+      STAGING_ENVIRONMENT_ID: 9267d965-e5e4-4c6f-af93-001c73cf62b4
+      STAGING_BACKEND_SERVICE_ID: dc5c2eee-3f8d-4416-8854-a921ea694735
+      E2E_API_URL: https://nvet-staging-backend-staging.up.railway.app/api
+      E2E_CLIENT_EMAIL: cliente@nvetcare.test
+      E2E_CLIENT_PASSWORD: TestClient123!
+      E2E_VET_EMAIL: vet@nvetcare.test
+      E2E_VET_PASSWORD: TestVet123!
+    steps:
+      - name: Require workspace token
+        run: test -n "$RAILWAY_API_TOKEN"
+
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Capture canonical main commit
+        run: echo "MAIN_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Apply staging-only predeploy contract
+        run: |
+          set -euo pipefail
+          query='mutation Configure($environmentId: String!, $serviceId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(environmentId: $environmentId, serviceId: $serviceId, input: $input) }'
+          payload="$(jq -cn \
+            --arg q "$query" \
+            --arg env "$STAGING_ENVIRONMENT_ID" \
+            --arg svc "$STAGING_BACKEND_SERVICE_ID" \
+            '{query:$q,variables:{environmentId:$env,serviceId:$svc,input:{rootDirectory:"/",preDeployCommand:"npm run deploy:preflight --workspace backend"}}}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/configure.json
+          if jq -e '.errors and (.errors | length > 0)' /tmp/configure.json >/dev/null; then
+            jq '.errors' /tmp/configure.json
+            exit 1
+          fi
+          echo 'Staging predeploy contract applied.'
+
+      - name: Verify staging instance config
+        run: |
+          set -euo pipefail
+          query='query Instance($environmentId: String!, $serviceId: String!) { serviceInstance(environmentId: $environmentId, serviceId: $serviceId) { serviceName rootDirectory preDeployCommand source { repo } } }'
+          payload="$(jq -cn --arg q "$query" --arg env "$STAGING_ENVIRONMENT_ID" --arg svc "$STAGING_BACKEND_SERVICE_ID" '{query:$q,variables:{environmentId:$env,serviceId:$svc}}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/instance.json
+          jq -e '.data.serviceInstance.rootDirectory == "/" and (.data.serviceInstance.preDeployCommand | tostring | contains("deploy:preflight")) and .data.serviceInstance.source.repo == "VladPhil92/Nvet-Care-App"' /tmp/instance.json >/dev/null || {
+            jq '.data.serviceInstance' /tmp/instance.json
+            echo '::error::Staging instance did not retain the required predeploy contract.'
+            exit 2
+          }
+          jq '.data.serviceInstance' /tmp/instance.json
+
+      - name: Deploy canonical main commit to staging only
+        run: |
+          set -euo pipefail
+          query='mutation Deploy($commitSha: String!, $environmentId: String!, $serviceId: String!) { serviceInstanceDeployV2(commitSha: $commitSha, environmentId: $environmentId, serviceId: $serviceId) }'
+          payload="$(jq -cn --arg q "$query" --arg sha "$MAIN_SHA" --arg env "$STAGING_ENVIRONMENT_ID" --arg svc "$STAGING_BACKEND_SERVICE_ID" '{query:$q,variables:{commitSha:$sha,environmentId:$env,serviceId:$svc}}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/deploy.json
+          if jq -e '.errors and (.errors | length > 0)' /tmp/deploy.json >/dev/null; then
+            jq '.errors' /tmp/deploy.json
+            exit 1
+          fi
+          deployment_id="$(jq -r '.data.serviceInstanceDeployV2 // empty' /tmp/deploy.json)"
+          test -n "$deployment_id" || { jq . /tmp/deploy.json; exit 2; }
+          echo "STAGING_DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
+          echo "Requested staging deployment $deployment_id for $MAIN_SHA"
+
+      - name: Wait for Railway deployment success
+        run: |
+          set -euo pipefail
+          query='query Deployment($id: String!) { deployment(id: $id) { id status diagnosis updatedAt } }'
+          for attempt in $(seq 1 120); do
+            payload="$(jq -cn --arg q "$query" --arg id "$STAGING_DEPLOYMENT_ID" '{query:$q,variables:{id:$id}}')"
+            curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/status.json
+            status="$(jq -r '.data.deployment.status // "UNKNOWN"' /tmp/status.json)"
+            echo "Attempt $attempt: $status"
+            case "$status" in
+              SUCCESS) exit 0 ;;
+              FAILED|CRASHED|REMOVED|SKIPPED)
+                jq '.data.deployment' /tmp/status.json
+                exit 1
+                ;;
+            esac
+            sleep 5
+          done
+          echo '::error::Timed out waiting for staging deployment.'
+          exit 1
+
+      - name: Verify live API readiness
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            code="$(curl -sS -o /tmp/ready.txt -w '%{http_code}' --max-time 10 "$E2E_API_URL/health/ready" || true)"
+            if [ "$code" = "200" ]; then
+              cat /tmp/ready.txt
+              exit 0
+            fi
+            echo "Readiness attempt $attempt: HTTP $code"
+            sleep 5
+          done
+          echo '::error::Staging API did not become ready.'
+          exit 1
+
+      - name: Certify deterministic E2E fixtures
+        run: node mobile/e2e/preflight.mjs
+
+      - name: Publish Phase 3 certification
+        run: |
+          {
+            echo '## Phase 3 — isolated staging certified'
+            echo ''
+            echo "- Commit: \`$MAIN_SHA\`"
+            echo "- Railway deployment: \`$STAGING_DEPLOYMENT_ID\`"
+            echo "- API: \`$E2E_API_URL\`"
+            echo '- Prisma/schema guards: executed through staging predeploy.'
+            echo '- Deterministic CLIENT/VET fixtures: certified.'
+            echo '- Emergency veterinarian discovery fixture: certified.'
+            echo '- Production environment/service IDs were never targeted by this workflow.'
+          } >> "$GITHUB_STEP_SUMMARY"
