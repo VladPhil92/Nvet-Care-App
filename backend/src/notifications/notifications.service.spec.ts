@@ -1,12 +1,12 @@
-import { AppointmentStatus } from "@prisma/client";
 import { NotFoundException } from "@nestjs/common";
+import { AppointmentStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { PetsService } from "../pets/pets.service";
 import { NotificationsService } from "./notifications.service";
 
 describe("NotificationsService", () => {
   const appointmentFindMany = jest.fn();
-  const notificationUpsert = jest.fn();
+  const notificationCreateMany = jest.fn();
   const notificationFindMany = jest.fn();
   const notificationCount = jest.fn();
   const notificationFindFirst = jest.fn();
@@ -15,7 +15,7 @@ describe("NotificationsService", () => {
   const prisma = {
     appointment: { findMany: appointmentFindMany },
     notification: {
-      upsert: notificationUpsert,
+      createMany: notificationCreateMany,
       findMany: notificationFindMany,
       count: notificationCount,
       findFirst: notificationFindFirst,
@@ -38,7 +38,7 @@ describe("NotificationsService", () => {
       summary: { total: 0, overdue: 0, dueSoon: 0, upcoming: 0 },
       items: [],
     });
-    notificationUpsert.mockResolvedValue({});
+    notificationCreateMany.mockResolvedValue({ count: 0 });
   });
 
   afterEach(() => {
@@ -85,20 +85,53 @@ describe("NotificationsService", () => {
     const result = await service.listForUser("owner-1", "50");
 
     expect(appointmentFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { clientId: "owner-1" } }),
+      expect.objectContaining({
+        where: expect.objectContaining({ clientId: "owner-1" }),
+      }),
     );
     expect(getPreventiveAgenda).toHaveBeenCalledWith("owner-1", 60);
-    expect(notificationUpsert).toHaveBeenCalledTimes(3);
-    expect(
-      notificationUpsert.mock.calls.map((call) => call[0].create.type),
-    ).toEqual(
+    expect(notificationCreateMany).toHaveBeenCalledTimes(1);
+    const createMany = notificationCreateMany.mock.calls[0][0];
+    expect(createMany.skipDuplicates).toBe(true);
+    expect(createMany.data.map((item: { type: string }) => item.type)).toEqual(
       expect.arrayContaining([
         "APPOINTMENT_CONFIRMED",
         "APPOINTMENT_REMINDER",
         "PREVENTIVE_OVERDUE",
       ]),
     );
+    const preventive = createMany.data.find(
+      (item: { type: string }) => item.type === "PREVENTIVE_OVERDUE",
+    );
+    expect(preventive.occurredAt).toEqual(
+      new Date("2026-08-31T12:00:00.000Z"),
+    );
     expect(result.summary).toEqual({ total: 3, unread: 3 });
+  });
+
+  it("bounds appointment synchronization to active or recently changed records", async () => {
+    notificationCount.mockResolvedValue(0);
+
+    await service.getUnreadCount("owner-1");
+
+    const query = appointmentFindMany.mock.calls[0][0];
+    expect(query.where.clientId).toBe("owner-1");
+    expect(query.where.OR).toEqual(
+      expect.arrayContaining([
+        {
+          status: {
+            in: expect.arrayContaining([
+              AppointmentStatus.PENDING,
+              AppointmentStatus.CONFIRMED,
+              AppointmentStatus.IN_PROGRESS,
+              AppointmentStatus.DISPUTED,
+            ]),
+          },
+        },
+        { updatedAt: { gte: new Date("2026-06-02T12:00:00.000Z") } },
+      ]),
+    );
+    expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 
   it("never marks a notification owned by another user", async () => {
