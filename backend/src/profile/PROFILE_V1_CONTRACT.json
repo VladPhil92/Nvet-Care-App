@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "surface": "CLIENT_PROFILE_ACCOUNT_CENTER",
+  "authority": {
+    "identitySource": "AUTHENTICATED_JWT_SUBJECT",
+    "effectiveRole": "CLIENT",
+    "readOnlyFields": ["email", "userId", "ctgUserId", "role"],
+    "mutableFields": ["firstName", "lastName", "phone"]
+  },
+  "channels": {
+    "inAppNotifications": "ACTIVE",
+    "emailNotifications": "NOT_DEPLOYED",
+    "pushNotifications": "NOT_DEPLOYED"
+  }
+}

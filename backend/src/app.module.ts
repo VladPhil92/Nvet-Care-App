@@ -15,6 +15,7 @@ import { AdminModule } from "./admin/admin.module";
 import { ReviewsModule } from "./reviews/reviews.module";
 import { PetsModule } from "./pets/pets.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { ProfileModule } from "./profile/profile.module";
 import { WaitlistModule } from "./waitlist/waitlist.module";
 
 /**
@@ -48,6 +49,7 @@ import { WaitlistModule } from "./waitlist/waitlist.module";
     ReviewsModule,
     PetsModule,
     NotificationsModule,
+    ProfileModule,
     WaitlistModule,
   ],
 })
