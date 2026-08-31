@@ -9,6 +9,7 @@ import { PetsService } from "../pets/pets.service";
 
 const DAY_MS = 86_400_000;
 const PREVENTIVE_WINDOW_DAYS = 60;
+const APPOINTMENT_LOOKBACK_DAYS = 90;
 
 type NotificationSeed = {
   dedupeKey: string;
@@ -105,9 +106,26 @@ export class NotificationsService {
   }
 
   private async syncDerivedNotifications(userId: string) {
+    const materializedAt = new Date();
+    const recentCutoff = new Date(
+      materializedAt.getTime() - APPOINTMENT_LOOKBACK_DAYS * DAY_MS,
+    );
+    const activeStatuses: AppointmentStatus[] = [
+      AppointmentStatus.PENDING,
+      AppointmentStatus.CONFIRMED,
+      AppointmentStatus.IN_PROGRESS,
+      AppointmentStatus.DISPUTED,
+    ];
+
     const [appointments, preventiveAgenda] = await Promise.all([
       this.prisma.appointment.findMany({
-        where: { clientId: userId },
+        where: {
+          clientId: userId,
+          OR: [
+            { status: { in: activeStatuses } },
+            { updatedAt: { gte: recentCutoff } },
+          ],
+        },
         select: {
           id: true,
           status: true,
@@ -134,9 +152,6 @@ export class NotificationsService {
       if (Number.isNaN(dueAt.getTime())) continue;
 
       const overdue = item.status === "OVERDUE";
-      const occurredAt = overdue
-        ? dueAt
-        : new Date(dueAt.getTime() - PREVENTIVE_WINDOW_DAYS * DAY_MS);
       const message = overdue
         ? item.daysUntilDue === 0
           ? `${item.petName}: este control preventivo vence hoy.`
@@ -150,7 +165,10 @@ export class NotificationsService {
         title: item.title,
         message,
         actionPath: `/nvetcareapp/dashboard/mascotas/${item.petId}/salud`,
-        occurredAt,
+        // Preventive reminders are events created when the system notices the
+        // threshold. Using the source due date here would bury a newly created
+        // unread alert behind historical inbox entries.
+        occurredAt: materializedAt,
         metadata: {
           source: item.source,
           preventiveItemId: item.id,
@@ -162,36 +180,25 @@ export class NotificationsService {
       });
     }
 
-    await Promise.all(
-      seeds.map((seed) =>
-        this.prisma.notification.upsert({
-          where: {
-            userId_dedupeKey: {
-              userId,
-              dedupeKey: seed.dedupeKey,
-            },
-          },
-          create: {
-            userId,
-            dedupeKey: seed.dedupeKey,
-            type: seed.type,
-            category: seed.category,
-            title: seed.title,
-            message: seed.message,
-            actionPath: seed.actionPath,
-            occurredAt: seed.occurredAt,
-            metadata: seed.metadata,
-          },
-          update: {
-            title: seed.title,
-            message: seed.message,
-            actionPath: seed.actionPath,
-            occurredAt: seed.occurredAt,
-            metadata: seed.metadata,
-          },
-        }),
-      ),
-    );
+    if (seeds.length === 0) return;
+
+    // Do not rewrite existing notifications during badge polling. The unique
+    // userId + dedupeKey contract makes this replay-safe while skipDuplicates
+    // turns repeat synchronization into a no-op at the storage layer.
+    await this.prisma.notification.createMany({
+      data: seeds.map((seed) => ({
+        userId,
+        dedupeKey: seed.dedupeKey,
+        type: seed.type,
+        category: seed.category,
+        title: seed.title,
+        message: seed.message,
+        actionPath: seed.actionPath,
+        occurredAt: seed.occurredAt,
+        metadata: seed.metadata,
+      })),
+      skipDuplicates: true,
+    });
   }
 
   private appointmentSeeds(
