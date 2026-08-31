@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   probe:
-    name: Inspect staging deployment diagnostics schema
+    name: Read live staging backend diagnostics
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -24,38 +24,53 @@ jobs:
       - name: Require workspace token
         run: test -n "$RAILWAY_API_TOKEN"
 
-      - name: Introspect deployment and log query contract
+      - name: Read service instance and recent deployments
         run: |
           set -euo pipefail
-          query='query Schema { __schema { queryType { fields { name args { name type { kind name ofType { kind name ofType { kind name } } } } type { kind name ofType { kind name ofType { kind name } } } } } types { kind name fields { name type { kind name ofType { kind name ofType { kind name } } } } inputFields { name type { kind name ofType { kind name ofType { kind name } } } } } } }'
-          payload="$(jq -cn --arg q "$query" '{query:$q}')"
+          query='query Diagnostics($environmentId: String!, $serviceId: String!, $input: DeploymentListInput!) { serviceInstance(environmentId: $environmentId, serviceId: $serviceId) { id serviceName hasEverDeployed builder dockerfilePath railwayConfigFile rootDirectory startCommand preDeployCommand healthcheckPath healthcheckTimeout restartPolicyType restartPolicyMaxRetries latestDeployment { id status createdAt updatedAt statusUpdatedAt diagnosis staticUrl } } deployments(input: $input, first: 10) { edges { node { id status createdAt updatedAt statusUpdatedAt diagnosis staticUrl } } } }'
+          payload="$(jq -cn --arg q "$query" --arg env "$STAGING_ENVIRONMENT_ID" --arg svc "$STAGING_BACKEND_SERVICE_ID" '{query:$q,variables:{environmentId:$env,serviceId:$svc,input:{environmentId:$env,serviceId:$svc}}}')"
           curl --fail-with-body --silent --show-error \
             -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
-            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/schema.json
-          jq -e '.errors == null' /tmp/schema.json >/dev/null || { jq '.errors' /tmp/schema.json; exit 1; }
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/diag.json
+          jq -e '.errors == null' /tmp/diag.json >/dev/null || { jq '.errors' /tmp/diag.json; exit 1; }
+          echo 'Service instance:'
+          jq '.data.serviceInstance' /tmp/diag.json
+          echo 'Recent deployments:'
+          jq '.data.deployments.edges | map(.node)' /tmp/diag.json
+          jq -r '.data.serviceInstance.latestDeployment.id // empty' /tmp/diag.json >/tmp/deployment-id
+          test -s /tmp/deployment-id || { echo '::error::No latest deployment found.'; exit 2; }
 
-          echo 'Deployment/log query signatures:'
-          jq -r '
-            .data.__schema.queryType.fields[]
-            | select(.name | test("deployment|log|serviceInstance"; "i"))
-            | [.name, (.args | map(.name + ":" + ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")) | join(",")), ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")]
-            | @tsv
-          ' /tmp/schema.json | sort
+      - name: Read latest deployment runtime logs
+        run: |
+          set -euo pipefail
+          deployment_id="$(cat /tmp/deployment-id)"
+          query='query Logs($deploymentId: String!, $limit: Int!) { deploymentLogs(deploymentId: $deploymentId, limit: $limit) { message severity timestamp tags { deploymentId environmentId serviceId } } }'
+          payload="$(jq -cn --arg q "$query" --arg id "$deployment_id" '{query:$q,variables:{deploymentId:$id,limit:250}}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/logs.json
+          jq -e '.errors == null' /tmp/logs.json >/dev/null || { jq '.errors' /tmp/logs.json; exit 1; }
+          echo "Runtime logs for deployment $deployment_id:"
+          jq -r '.data.deploymentLogs[] | "\(.timestamp) [\(.severity // "-")] \(.message)"' /tmp/logs.json | tail -n 250
 
-          echo 'Relevant input/object types:'
-          jq -r '
-            .data.__schema.types[]
-            | select(.name | test("Deployment|Log|ServiceInstance"; "i"))
-            | "TYPE \(.kind) \(.name)",
-              (.inputFields[]? | "  IN \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)"),
-              (.fields[]? | "  OUT \(.name):\(.type.name // .type.ofType.name // .type.ofType.ofType.name)")
-          ' /tmp/schema.json
+      - name: Read recent HTTP proxy failures
+        run: |
+          set -euo pipefail
+          deployment_id="$(cat /tmp/deployment-id)"
+          query='query Http($deploymentId: String!, $limit: Int!) { httpLogs(deploymentId: $deploymentId, limit: $limit) { timestamp method path httpStatus requestId responseDetails upstreamErrors upstreamAddress totalDuration } }'
+          payload="$(jq -cn --arg q "$query" --arg id "$deployment_id" '{query:$q,variables:{deploymentId:$id,limit:100}}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" -H 'Content-Type: application/json' \
+            --data "$payload" "$RAILWAY_GRAPHQL_URL" >/tmp/http.json
+          jq -e '.errors == null' /tmp/http.json >/dev/null || { jq '.errors' /tmp/http.json; exit 1; }
+          jq -r '.data.httpLogs[] | select((.httpStatus // 0) >= 500 or (.upstreamErrors // "") != "") | [.timestamp,.method,.path,(.httpStatus|tostring),(.responseDetails//""),(.upstreamErrors//"")] | @tsv' /tmp/http.json
 
       - name: Publish diagnostics summary
+        if: always()
         run: |
           {
-            echo '## Live staging diagnostics schema'
+            echo '## Live staging backend diagnostics'
             echo ''
-            echo '- Read-only Railway Public API introspection completed.'
-            echo '- No environment, service, deployment, variable, domain, volume, or production resource was mutated.'
+            echo '- Railway deployment state and runtime logs read through Public API.'
+            echo '- No Railway mutation was executed.'
           } >> "$GITHUB_STEP_SUMMARY"
