@@ -1,8 +1,0 @@
-CLIENT Profile & Account Center V1 critical journey
-
-1. Authenticate as effective CLIENT.
-2. GET /api/profile returns only the authenticated profile projection.
-3. PATCH /api/profile changes only name and phone fields owned by this surface.
-4. Requests containing identity or role fields are rejected by the global whitelist contract.
-5. VET, ADMIN and SUPERADMIN effective roles are rejected until the canonical root explicitly enters CLIENT mode.
-6. Session and 2FA controls remain delegated to the existing /api/auth security endpoints.
