@@ -1,15 +1,14 @@
 buildscript {
     ext {
-        // AndroidX Core resolves to 1.16.x in this dependency graph (react-native-gesture-handler
-        // and other transitive deps), which requires compileSdk 35 + AGP 8.6+. Forcing Core back to
-        // an older version to match a lower compileSdk breaks Kotlin binary compatibility elsewhere
-        // (react-native-gesture-handler's compiled classes expect the newer Core APIs) — so the
-        // toolchain is bumped to match what the dependency graph already needs, instead of pinning
-        // Core down.
+        // Phase 13 / Google Play 2026: new apps and updates submitted from
+        // 2026-08-31 must target Android 16 (API 36). AGP 8.10 is the first
+        // stable 8.x line with official API 36 support, while retaining JDK 17
+        // and avoiding the broader React Native/AGP 9 migration in the release
+        // stabilization window.
         buildToolsVersion = "35.0.0"
         minSdkVersion = 23
-        compileSdkVersion = 35
-        targetSdkVersion = 34
+        compileSdkVersion = 36
+        targetSdkVersion = 36
         ndkVersion = "26.1.10909125"
         kotlinVersion = "1.9.24"
     }
@@ -18,7 +17,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:8.6.0")
+        classpath("com.android.tools.build:gradle:8.10.1")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
     }
