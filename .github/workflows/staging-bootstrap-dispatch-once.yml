@@ -22,7 +22,7 @@ jobs:
       - name: Dispatch Provision Isolated Staging on main
         run: |
           set -euo pipefail
-          # Dispatch the merged Public API bootstrap for Phase 3 isolated staging.
+          # Re-run Phase 3 after removing the redundant ServiceInstanceUpdate mutation.
           gh workflow run provision-staging.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
