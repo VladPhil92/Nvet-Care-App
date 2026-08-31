@@ -47,7 +47,7 @@ export class ChatController {
    */
   @Get("active")
   async getActiveChats(@Request() req) {
-    return this.chatService.getActiveChats(req.user.id);
+    return this.chatService.getActiveChats(req.user.id, req.user.role);
   }
 
   /**
