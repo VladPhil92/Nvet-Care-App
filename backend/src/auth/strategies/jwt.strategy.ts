@@ -6,6 +6,7 @@ import {
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { PrismaService } from "../../prisma/prisma.service";
+import { resolveEffectiveNvetRole } from "../security/canonical-superadmin";
 
 interface JwtPayload {
   sub: string; // user id
@@ -55,11 +56,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException("Token invalidated by password change");
     }
 
+    // Root authorization is derived from the verified CTG One identity link,
+    // not from a mutable browser claim and not solely from the database role.
+    // The canonical linked identity is promoted to SUPERADMIN at request time;
+    // any accidentally-labelled SUPERADMIN row for another identity is
+    // downgraded to ADMIN before RolesGuard evaluates permissions.
+    const effectiveRole = resolveEffectiveNvetRole(user);
+
     // Return user object (attached to request.user)
     return {
       id: user.id,
       email: user.email,
-      role: user.role,
+      role: effectiveRole,
       emailVerified: user.emailVerified,
       twoFactorEnabled: user.twoFactorEnabled,
       vetProfileId: user.vetProfile?.id,
