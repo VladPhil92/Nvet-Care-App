@@ -9,6 +9,20 @@ import helmet from "helmet";
 import compression = require("compression");
 import { AppModule } from "./app.module";
 
+// Phase 4 of the CTG One -> Nvet identity bridge is now a launched capability.
+// Keep explicit environment overrides as emergency/operator controls, but do
+// not require provisioning public/non-secret launch constants before users can
+// authenticate. The Supabase project URL is a public issuer identifier; JWT
+// signature, issuer, audience and expiry are still verified by
+// CtgIdentityService against Supabase JWKS.
+const CTG_ONE_PRODUCTION_SUPABASE_URL =
+  "https://mdscwjvlihdiflcvghhk.supabase.co";
+
+function applyIdentityLaunchDefaults(): void {
+  process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED ??= "true";
+  process.env.NVET_CTG_SUPABASE_URL ??= CTG_ONE_PRODUCTION_SUPABASE_URL;
+}
+
 /**
  * Bootstrap del backend Nvet Care.
  *
@@ -23,6 +37,8 @@ import { AppModule } from "./app.module";
  *  8. Graceful shutdown — drena conexiones en SIGTERM/SIGINT
  */
 async function bootstrap() {
+  applyIdentityLaunchDefaults();
+
   const app: INestApplication = await NestFactory.create(AppModule, {
     bufferLogs: true,
     rawBody: true,
