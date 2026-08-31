@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { AppointmentStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { PetsService } from "../pets/pets.service";
@@ -207,7 +211,10 @@ export class NotificationsService {
           dedupeKey: `appointment:${appointment.id}:REMINDER:${appointmentDay.toISOString().slice(0, 10)}`,
           type: "APPOINTMENT_REMINDER",
           category: "APPOINTMENT",
-          title: daysUntil === 0 ? "Cita programada para hoy" : "Cita programada para mañana",
+          title:
+            daysUntil === 0
+              ? "Cita programada para hoy"
+              : "Cita programada para mañana",
           message: `${appointment.pet.name} tiene una atención confirmada a las ${appointment.time}.`,
           actionPath: "/nvetcareapp/dashboard/citas",
           occurredAt: today,
