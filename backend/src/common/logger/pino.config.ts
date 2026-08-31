@@ -59,6 +59,20 @@ const REDACT_PATHS = [
   'res.headers["set-cookie"]',
 ];
 
+const HEALTH_PROBE_PATHS = new Set([
+  "/api/health",
+  "/api/health/live",
+  "/api/health/ready",
+  "/health",
+  "/health/live",
+  "/health/ready",
+]);
+
+function isHealthProbe(req: IncomingMessage): boolean {
+  const path = req.url?.split("?", 1)[0];
+  return path ? HEALTH_PROBE_PATHS.has(path) : false;
+}
+
 export const pinoConfig: Params = {
   pinoHttp: {
     level: logLevel,
@@ -141,10 +155,10 @@ export const pinoConfig: Params = {
       return `${req.method} ${req.url} failed: ${err.message}`;
     },
 
-    // No loguear endpoints de health check (ruido)
+    // Los probers consultan con alta frecuencia; su estado se observa por el
+    // canary dedicado y no debe contaminar el stream operacional de requests.
     autoLogging: {
-      ignore: (req: IncomingMessage) =>
-        req.url === "/api/health" || req.url === "/health",
+      ignore: isHealthProbe,
     },
   },
 };

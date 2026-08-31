@@ -11,6 +11,10 @@ import { PrismaService } from "../prisma/prisma.service";
  *    saca el pod del load balancer pero NO lo reinicia.
  *    Hace ping a DB, cache externa, etc.
  *
+ * El payload público nunca expone mensajes de excepción del proveedor o de
+ * PostgreSQL. La revisión operativa usa logs/Sentry; el probe solo publica
+ * evidencia coarse-grained apta para internet.
+ *
  * Estos contratos respetan SemVer:
  *  - Cambios breaking en el shape de respuesta requieren aviso.
  *  - Status codes: 200 si OK, 503 si DOWN.
@@ -21,6 +25,7 @@ export interface HealthStatus {
   timestamp: string;
   uptimeSeconds: number;
   version: string;
+  revision: string;
   environment: string;
   checks: Record<string, ComponentHealth>;
 }
@@ -28,12 +33,33 @@ export interface HealthStatus {
 interface ComponentHealth {
   status: "up" | "down";
   latencyMs?: number;
-  error?: string;
+  error?: "dependency_unavailable";
   details?: Record<string, unknown>;
 }
 
 const DB_PING_TIMEOUT_MS = 2000;
 const APP_START = Date.now();
+
+/**
+ * Exposes only a validated, shortened git SHA. Provider variables may contain
+ * arbitrary operator input, so untrusted values fail closed to `unknown`
+ * rather than becoming public metadata.
+ */
+function getSafeRevision(): string {
+  const candidate = [
+    process.env.APP_REVISION,
+    process.env.RAILWAY_GIT_COMMIT_SHA,
+    process.env.GITHUB_SHA,
+  ]
+    .find((value) => value?.trim())
+    ?.trim();
+
+  if (!candidate || !/^[0-9a-f]{7,64}$/i.test(candidate)) {
+    return "unknown";
+  }
+
+  return candidate.slice(0, 12).toLowerCase();
+}
 
 @Injectable()
 export class HealthService {
@@ -48,6 +74,7 @@ export class HealthService {
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.floor((Date.now() - APP_START) / 1000),
       version: process.env.APP_VERSION || "1.0.0",
+      revision: getSafeRevision(),
       environment: process.env.NODE_ENV || "development",
       checks: {
         process: { status: "up" },
@@ -73,6 +100,7 @@ export class HealthService {
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.floor((Date.now() - APP_START) / 1000),
       version: process.env.APP_VERSION || "1.0.0",
+      revision: getSafeRevision(),
       environment: process.env.NODE_ENV || "development",
       checks: {
         database: dbCheck,
@@ -88,7 +116,6 @@ export class HealthService {
   private async checkDatabase(): Promise<ComponentHealth> {
     const start = Date.now();
     try {
-      // Race entre ping y timeout
       await Promise.race([
         this.prisma.$queryRaw`SELECT 1`,
         new Promise((_, reject) =>
@@ -102,11 +129,11 @@ export class HealthService {
         status: "up",
         latencyMs: Date.now() - start,
       };
-    } catch (e) {
+    } catch {
       return {
         status: "down",
         latencyMs: Date.now() - start,
-        error: (e as Error).message,
+        error: "dependency_unavailable",
       };
     }
   }

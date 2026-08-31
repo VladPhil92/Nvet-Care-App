@@ -1,0 +1,54 @@
+name: Nvet Production Backend Health Canary
+
+on:
+  schedule:
+    - cron: '8,23,38,53 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-production-backend-health-canary
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    name: Verify canonical Railway backend readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check public readiness contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://backend-production-a476.up.railway.app/api/health/ready'
+
+          for attempt in 1 2 3; do
+            tmp="$(mktemp)"
+            code="$(curl --silent --show-error --location --max-time 12 \
+              --output "$tmp" --write-out '%{http_code}' "$url" || true)"
+
+            echo "Attempt ${attempt}/3 -> HTTP ${code:-000}"
+
+            if [ "$code" = '200' ] && node - "$tmp" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const healthy =
+            body?.status === 'ok' &&
+            body?.checks?.database?.status === 'up' &&
+            typeof body?.revision === 'string';
+          if (!healthy) process.exit(1);
+          NODE
+            then
+              echo '✅ Canonical Nvet backend is ready.'
+              rm -f "$tmp"
+              exit 0
+            fi
+
+            rm -f "$tmp"
+            sleep 10
+          done
+
+          echo '❌ Canonical Nvet backend readiness contract is not healthy.'
+          exit 1
