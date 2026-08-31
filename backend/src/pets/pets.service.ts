@@ -9,6 +9,25 @@ import { PrismaService } from "../prisma/prisma.service";
 import { CreatePetDto, UpdatePetDto } from "./dto/pet.dto";
 import { UpdatePetHealthProfileDto } from "./dto/pet-health-profile.dto";
 
+type PreventiveAgendaStatus = "OVERDUE" | "DUE_SOON" | "UPCOMING";
+type PreventiveAgendaSource =
+  | "VACCINATION"
+  | "DEWORMING"
+  | "PREVENTIVE_CARE";
+
+type PreventiveAgendaItem = {
+  id: string;
+  petId: string;
+  petName: string;
+  species: string;
+  source: PreventiveAgendaSource;
+  kind: string;
+  title: string;
+  dueAt: string;
+  status: PreventiveAgendaStatus;
+  daysUntilDue: number;
+};
+
 /**
  * PetsService — CRUD de mascotas del sistema Nvet Care.
  *
@@ -17,6 +36,8 @@ import { UpdatePetHealthProfileDto } from "./dto/pet-health-profile.dto";
  *  - Un vet con una cita puede consultar la mascota (GET by ID).
  *  - El perfil preventivo V2 es información reportada por el dueño y se
  *    mantiene separado del diagnóstico/tratamiento firmado por el vet.
+ *  - La agenda preventiva es un read-model derivado de fechas reportadas por
+ *    el dueño; no infiere indicaciones médicas ni sustituye criterio clínico.
  *  - La fecha de nacimiento no puede ser futura.
  */
 @Injectable()
@@ -37,6 +58,174 @@ export class PetsService {
       },
       orderBy: { createdAt: "desc" },
     });
+  }
+
+  // ============================================================
+  // GET — agenda preventiva derivada del expediente del dueño
+  // ============================================================
+
+  async getPreventiveAgenda(ownerId: string, windowDays = 60) {
+    if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 365) {
+      throw new BadRequestException(
+        "windowDays debe ser un entero entre 1 y 365",
+      );
+    }
+
+    const pets = await this.prisma.pet.findMany({
+      where: { ownerId },
+      select: {
+        id: true,
+        name: true,
+        species: true,
+        healthProfile: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const now = new Date();
+    const todayMs = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+    );
+    const dueSoonLimitMs = todayMs + windowDays * 86_400_000;
+    const items: PreventiveAgendaItem[] = [];
+
+    const addAgendaItem = (
+      pet: { id: string; name: string; species: string },
+      item: Record<string, unknown>,
+      source: PreventiveAgendaSource,
+      kind: string,
+      title: string,
+      dueAt: unknown,
+    ) => {
+      if (
+        typeof item.id !== "string" ||
+        typeof dueAt !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}/.test(dueAt)
+      ) {
+        return;
+      }
+
+      const dueDate = dueAt.slice(0, 10);
+      const dueMs = Date.parse(`${dueDate}T00:00:00.000Z`);
+      if (Number.isNaN(dueMs)) return;
+
+      const daysUntilDue = Math.round((dueMs - todayMs) / 86_400_000);
+      const status: PreventiveAgendaStatus =
+        dueMs < todayMs
+          ? "OVERDUE"
+          : dueMs <= dueSoonLimitMs
+            ? "DUE_SOON"
+            : "UPCOMING";
+
+      items.push({
+        id: item.id,
+        petId: pet.id,
+        petName: pet.name,
+        species: pet.species,
+        source,
+        kind,
+        title,
+        dueAt: dueDate,
+        status,
+        daysUntilDue,
+      });
+    };
+
+    for (const pet of pets) {
+      if (
+        !pet.healthProfile ||
+        typeof pet.healthProfile !== "object" ||
+        Array.isArray(pet.healthProfile)
+      ) {
+        continue;
+      }
+
+      const profile = pet.healthProfile as Record<string, unknown>;
+      const vaccinations = Array.isArray(profile.vaccinations)
+        ? profile.vaccinations
+        : [];
+      const deworming = Array.isArray(profile.deworming)
+        ? profile.deworming
+        : [];
+      const preventiveCare = Array.isArray(profile.preventiveCare)
+        ? profile.preventiveCare
+        : [];
+
+      for (const raw of vaccinations) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const item = raw as Record<string, unknown>;
+        const vaccine =
+          typeof item.vaccine === "string" && item.vaccine.trim()
+            ? item.vaccine.trim()
+            : "Vacuna";
+        addAgendaItem(
+          pet,
+          item,
+          "VACCINATION",
+          "VACCINATION",
+          `Próxima vacuna: ${vaccine}`,
+          item.nextDueAt,
+        );
+      }
+
+      for (const raw of deworming) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const item = raw as Record<string, unknown>;
+        const product =
+          typeof item.product === "string" && item.product.trim()
+            ? item.product.trim()
+            : "Desparasitación";
+        addAgendaItem(
+          pet,
+          item,
+          "DEWORMING",
+          "DEWORMING",
+          `Próxima desparasitación: ${product}`,
+          item.nextDueAt,
+        );
+      }
+
+      for (const raw of preventiveCare) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const item = raw as Record<string, unknown>;
+        if (item.status !== "PENDING") continue;
+        const title =
+          typeof item.title === "string" && item.title.trim()
+            ? item.title.trim()
+            : "Control preventivo";
+        const kind =
+          typeof item.type === "string" && item.type.trim()
+            ? item.type.trim()
+            : "OTHER";
+        addAgendaItem(
+          pet,
+          item,
+          "PREVENTIVE_CARE",
+          kind,
+          title,
+          item.dueAt,
+        );
+      }
+    }
+
+    items.sort((a, b) => {
+      const dueOrder = a.dueAt.localeCompare(b.dueAt);
+      return dueOrder || a.petName.localeCompare(b.petName, "es");
+    });
+
+    return {
+      generatedAt: now.toISOString(),
+      windowDays,
+      summary: {
+        total: items.length,
+        overdue: items.filter((item) => item.status === "OVERDUE").length,
+        dueSoon: items.filter((item) => item.status === "DUE_SOON").length,
+        upcoming: items.filter((item) => item.status === "UPCOMING").length,
+      },
+      items,
+    };
   }
 
   // ============================================================
