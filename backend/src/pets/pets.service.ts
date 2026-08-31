@@ -88,6 +88,20 @@ export class PetsService {
     const dueSoonLimitMs = todayMs + windowDays * 86_400_000;
     const items: PreventiveAgendaItem[] = [];
 
+    const parseCalendarDate = (value: unknown) => {
+      if (typeof value !== "string") return null;
+      const date = value.slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+      const parsed = new Date(`${date}T00:00:00.000Z`);
+      if (
+        Number.isNaN(parsed.getTime()) ||
+        parsed.toISOString().slice(0, 10) !== date
+      ) {
+        return null;
+      }
+      return { date, ms: parsed.getTime() };
+    };
+
     const addAgendaItem = (
       pet: { id: string; name: string; species: string },
       item: Record<string, unknown>,
@@ -96,23 +110,16 @@ export class PetsService {
       title: string,
       dueAt: unknown,
     ) => {
-      if (
-        typeof item.id !== "string" ||
-        typeof dueAt !== "string" ||
-        !/^\d{4}-\d{2}-\d{2}/.test(dueAt)
-      ) {
-        return;
-      }
+      const parsedDueAt = parseCalendarDate(dueAt);
+      if (typeof item.id !== "string" || !parsedDueAt) return;
 
-      const dueDate = dueAt.slice(0, 10);
-      const dueMs = Date.parse(`${dueDate}T00:00:00.000Z`);
-      if (Number.isNaN(dueMs)) return;
-
-      const daysUntilDue = Math.round((dueMs - todayMs) / 86_400_000);
+      const daysUntilDue = Math.round(
+        (parsedDueAt.ms - todayMs) / 86_400_000,
+      );
       const status: PreventiveAgendaStatus =
-        dueMs < todayMs
+        parsedDueAt.ms < todayMs
           ? "OVERDUE"
-          : dueMs <= dueSoonLimitMs
+          : parsedDueAt.ms <= dueSoonLimitMs
             ? "DUE_SOON"
             : "UPCOMING";
 
@@ -124,7 +131,7 @@ export class PetsService {
         source,
         kind,
         title,
-        dueAt: dueDate,
+        dueAt: parsedDueAt.date,
         status,
         daysUntilDue,
       });
