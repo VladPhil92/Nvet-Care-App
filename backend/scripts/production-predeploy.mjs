@@ -5,6 +5,11 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
+const isIsolatedE2EStaging =
+  process.env.NODE_ENV === 'staging' &&
+  process.env.NVET_ALLOW_E2E_SEED === 'true' &&
+  process.env.NVET_SEED_TARGET === 'staging';
+
 const steps = [
   {
     name: 'Sincronizar Prisma schema (sin aceptar pérdida de datos)',
@@ -59,6 +64,18 @@ const steps = [
   },
 ];
 
+// Staging is intentionally self-seeding so CI never needs a public database
+// endpoint. The seed itself is fail-closed and independently verifies the two
+// explicit staging flags before touching data. Production never satisfies
+// this three-part predicate, so its predeploy behaviour remains unchanged.
+if (isIsolatedE2EStaging) {
+  steps.push({
+    name: 'Sembrar fixtures E2E deterministas en staging aislado',
+    command: 'npm',
+    args: ['run', 'seed:e2e'],
+  });
+}
+
 for (const step of steps) {
   console.log(`\n▶ ${step.name}`);
   const result = spawnSync(step.command, step.args, {
@@ -81,4 +98,8 @@ for (const step of steps) {
   }
 }
 
-console.log('\n✅ Predeploy de producción completado sin aceptar pérdida de datos.');
+console.log(
+  isIsolatedE2EStaging
+    ? '\n✅ Predeploy de staging completado y fixtures E2E sembrados.'
+    : '\n✅ Predeploy de producción completado sin aceptar pérdida de datos.',
+);
