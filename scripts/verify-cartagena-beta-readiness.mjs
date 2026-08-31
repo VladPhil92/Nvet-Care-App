@@ -2,6 +2,18 @@ import fs from 'node:fs/promises';
 
 const MANIFEST_PATH = new URL('../docs/production/BETA_CARTAGENA_READINESS.json', import.meta.url);
 const allowedEvidenceStates = new Set(['pending', 'verified']);
+const REQUIRED_EVIDENCE_KEYS = [
+  'rcPromoted',
+  'productionBackupConfigured',
+  'restoreDrillVerified',
+  'productionAlertingVerified',
+  'paymentRailVerified',
+  'cartagenaVetCoverageVerified',
+  'clientCohortConfigured',
+  'supportOwnerConfirmed',
+  'privacyAndTermsReviewed',
+  'rollbackDrillVerified',
+];
 const args = new Set(process.argv.slice(2));
 const contractOnly = args.has('--contract-only');
 const runtimeAudit = args.has('--runtime');
@@ -45,8 +57,21 @@ async function readManifest() {
   }
 
   const evidence = manifest.requiredEvidence;
-  if (!evidence || typeof evidence !== 'object') fail('requiredEvidence is required.');
-  for (const [key, entry] of Object.entries(evidence)) {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+    fail('requiredEvidence is required.');
+  }
+
+  const actualEvidenceKeys = Object.keys(evidence).sort();
+  const expectedEvidenceKeys = [...REQUIRED_EVIDENCE_KEYS].sort();
+  if (
+    actualEvidenceKeys.length !== expectedEvidenceKeys.length ||
+    actualEvidenceKeys.some((key, index) => key !== expectedEvidenceKeys[index])
+  ) {
+    fail(`requiredEvidence must contain exactly: ${REQUIRED_EVIDENCE_KEYS.join(', ')}`);
+  }
+
+  for (const key of REQUIRED_EVIDENCE_KEYS) {
+    const entry = evidence[key];
     if (!allowedEvidenceStates.has(entry?.status)) fail(`Invalid evidence status for ${key}.`);
     if (entry.status === 'verified' && (typeof entry.evidence !== 'string' || entry.evidence.trim().length < 3)) {
       fail(`Verified beta evidence ${key} must include a concrete reference.`);
@@ -65,11 +90,19 @@ function githubHeaders() {
   };
 }
 
-async function githubRuns(repo) {
-  const response = await fetch(`https://api.github.com/repos/${repo}/actions/runs?branch=main&per_page=100`, {
-    headers: githubHeaders(),
+async function githubWorkflowRuns(repo, workflow, extraParams = {}) {
+  const params = new URLSearchParams({
+    branch: 'main',
+    per_page: '20',
+    ...extraParams,
   });
-  if (!response.ok) fail(`GitHub Actions API failed for ${repo}: HTTP ${response.status}`);
+  const response = await fetch(
+    `https://api.github.com/repos/${repo}/actions/workflows/${encodeURIComponent(workflow)}/runs?${params}`,
+    { headers: githubHeaders() },
+  );
+  if (!response.ok) {
+    fail(`GitHub Actions API failed for ${repo}/${workflow}: HTTP ${response.status}`);
+  }
   const payload = await response.json();
   return Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
 }
@@ -83,18 +116,15 @@ async function refExists(repo, tag) {
   return true;
 }
 
-function latestRun(runs, name, predicate = () => true) {
-  return runs.find((run) => run?.name === name && predicate(run));
-}
-
 async function auditRuntime(manifest) {
   const repo = process.env.GITHUB_REPOSITORY || 'VladPhil92/Nvet-Care-App';
   const sha = process.env.GITHUB_SHA;
   if (!sha || !/^[0-9a-f]{40}$/i.test(sha)) fail('GITHUB_SHA is required for beta runtime audit.');
 
-  const [nvetRuns, ctgRuns, rcTagExists] = await Promise.all([
-    githubRuns(repo),
-    githubRuns('VladPhil92/ctg_one_website'),
+  const [ciRuns, backendCanaryRuns, ctgCanaryRuns, rcTagExists] = await Promise.all([
+    githubWorkflowRuns(repo, 'ci.yml', { head_sha: sha }),
+    githubWorkflowRuns(repo, 'production-health-canary.yml'),
+    githubWorkflowRuns('VladPhil92/ctg_one_website', 'nvet-production-access-canary.yml'),
     refExists(repo, manifest.prerequisiteRcTag),
   ]);
 
@@ -106,18 +136,14 @@ async function auditRuntime(manifest) {
     detail: rcTagExists ? 'tag exists' : 'tag not present',
   });
 
-  const ci = latestRun(nvetRuns, 'CI', (run) => run.head_sha === sha);
+  const ci = ciRuns.find((run) => run.head_sha === sha);
   checks.push({
     ok: ci?.status === 'completed' && ci?.conclusion === 'success',
     label: 'main CI on current Phase 12 SHA',
     detail: ci ? `${ci.status}/${ci.conclusion ?? 'none'} run=${ci.id}` : 'no CI run for current SHA',
   });
 
-  const backendCanary = latestRun(
-    nvetRuns,
-    'Nvet Production Backend Health Canary',
-    (run) => run.conclusion === 'success',
-  );
+  const backendCanary = backendCanaryRuns.find((run) => run.conclusion === 'success');
   const backendAge = backendCanary
     ? hoursSince(backendCanary.updated_at || backendCanary.created_at)
     : Number.POSITIVE_INFINITY;
@@ -127,11 +153,7 @@ async function auditRuntime(manifest) {
     detail: backendCanary ? `${backendAge.toFixed(1)}h old run=${backendCanary.id}` : 'no successful canary',
   });
 
-  const ctgCanary = latestRun(
-    ctgRuns,
-    'Nvet Production Access Canary',
-    (run) => run.conclusion === 'success',
-  );
+  const ctgCanary = ctgCanaryRuns.find((run) => run.conclusion === 'success');
   const ctgAge = ctgCanary
     ? hoursSince(ctgCanary.updated_at || ctgCanary.created_at)
     : Number.POSITIVE_INFINITY;
@@ -141,7 +163,8 @@ async function auditRuntime(manifest) {
     detail: ctgCanary ? `${ctgAge.toFixed(1)}h old run=${ctgCanary.id}` : 'no successful CTG One access canary',
   });
 
-  for (const [key, entry] of Object.entries(manifest.requiredEvidence)) {
+  for (const key of REQUIRED_EVIDENCE_KEYS) {
+    const entry = manifest.requiredEvidence[key];
     checks.push({
       ok: entry.status === 'verified',
       label: `beta evidence: ${key}`,
