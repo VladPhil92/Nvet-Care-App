@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
+  NotFoundException,
 } from "@nestjs/common";
 import { Observable, map } from "rxjs";
 
@@ -15,7 +16,9 @@ function stripCoordinates<T extends Record<string, any>>(vet: T): T {
 /**
  * Las coordenadas exactas del veterinario se usan internamente para ranking
  * por distancia y tracking autorizado, pero no deben salir por endpoints
- * públicos de descubrimiento/perfil.
+ * públicos de descubrimiento/perfil. Un perfil suspendido tampoco debe poder
+ * recuperarse por ID aunque el visitante conserve un enlace directo; el vet
+ * mantiene acceso a su estado privado mediante `/vets/me`.
  */
 @Injectable()
 export class PublicVetLocationInterceptor implements NestInterceptor {
@@ -44,6 +47,9 @@ export class PublicVetLocationInterceptor implements NestInterceptor {
         }
 
         if (isPublicDetail && body && typeof body === "object") {
+          if (body.isActive === false) {
+            throw new NotFoundException("Veterinarian not found");
+          }
           return stripCoordinates(body);
         }
 

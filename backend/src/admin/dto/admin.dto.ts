@@ -1,19 +1,24 @@
 import {
-  IsEnum,
-  IsString,
-  IsOptional,
+  IsBoolean,
   IsDateString,
-  Length,
+  IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
-  Min,
+  IsOptional,
+  IsString,
+  Length,
   Max,
+  Min,
 } from "class-validator";
 import { Type } from "class-transformer";
 import {
   AppointmentStatus,
+  AuditAction,
+  AuditSeverity,
   PaymentMethod,
   TransactionStatus,
+  UserRole,
   VetTier,
 } from "@prisma/client";
 
@@ -178,6 +183,98 @@ export class AdminAppointmentsFiltersDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  offset?: number;
+}
+
+// ============================================================
+// SUPERADMIN GOVERNANCE
+// ============================================================
+
+export class AdminUsersFiltersDto {
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  @IsOptional()
+  @IsIn(["true", "false"])
+  isActive?: "true" | "false";
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 100)
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  offset?: number;
+}
+
+export class UpdateUserStatusDto {
+  @IsBoolean()
+  isActive: boolean;
+
+  @IsString()
+  @IsNotEmpty()
+  @Length(10, 500)
+  reason: string;
+}
+
+export type VetVerificationDecision = "APPROVE" | "REJECT" | "IN_REVIEW";
+
+export class ReviewVetVerificationDto {
+  @IsIn(["APPROVE", "REJECT", "IN_REVIEW"])
+  decision: VetVerificationDecision;
+
+  @IsString()
+  @IsNotEmpty()
+  @Length(10, 500)
+  reason: string;
+}
+
+export class UpdateVetStatusDto {
+  @IsBoolean()
+  isActive: boolean;
+
+  @IsString()
+  @IsNotEmpty()
+  @Length(10, 500)
+  reason: string;
+}
+
+export class AuditLogFiltersDto {
+  @IsOptional()
+  @IsEnum(AuditSeverity)
+  severity?: AuditSeverity;
+
+  @IsOptional()
+  @IsEnum(AuditAction)
+  action?: AuditAction;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 80)
+  targetType?: string;
 
   @IsOptional()
   @Type(() => Number)
