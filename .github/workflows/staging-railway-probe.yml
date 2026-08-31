@@ -12,11 +12,13 @@ permissions:
 
 jobs:
   probe:
-    name: Probe Railway workspace read-only
+    name: Probe Railway workspace Public API read-only
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      TARGET_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
+      RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
     steps:
       - name: Verify credential presence
         run: |
@@ -27,43 +29,72 @@ jobs:
           fi
           echo 'RAILWAY_API_TOKEN is configured.'
 
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli
-
-      - name: List accessible Railway projects
+      - name: Verify canonical project via Railway Public API
         run: |
           set -euo pipefail
-          railway project list --json > /tmp/railway-projects.json
-          jq -r '.[] | "PROJECT name=\(.name) id=\(.id)"' /tmp/railway-projects.json
-          count="$(jq 'length' /tmp/railway-projects.json)"
-          echo "Accessible project count: $count"
-          if [ "$count" -eq 0 ]; then
-            echo '::error::The workspace token exposes no Railway projects.'
+          payload="$(jq -cn --arg id "$TARGET_PROJECT_ID" '{query:"query Project($id: String!) { project(id: $id) { id name } }",variables:{id:$id}}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            "$RAILWAY_GRAPHQL_URL" > /tmp/railway-project.json
+
+          if jq -e '.errors and (.errors | length > 0)' /tmp/railway-project.json >/dev/null; then
+            jq -r '.errors[] | "::error::Railway GraphQL: \(.message)"' /tmp/railway-project.json
             exit 1
           fi
 
-      - name: Check canonical Nvet project visibility
-        env:
-          TARGET_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
-        run: |
-          set -euo pipefail
-          if jq -e --arg id "$TARGET_PROJECT_ID" '.[] | select(.id == $id)' /tmp/railway-projects.json >/dev/null; then
-            echo 'Canonical Nvet Railway project is visible to this token.'
-          else
-            echo '::error::Canonical Nvet Railway project is NOT visible to this workspace token.'
+          actual_id="$(jq -r '.data.project.id // empty' /tmp/railway-project.json)"
+          actual_name="$(jq -r '.data.project.name // empty' /tmp/railway-project.json)"
+          if [ "$actual_id" != "$TARGET_PROJECT_ID" ]; then
+            echo '::error::Workspace token cannot read the canonical Nvet Railway project through Public API.'
             exit 2
           fi
+          echo "Canonical Railway project visible through Public API: $actual_name ($actual_id)"
+
+      - name: Introspect staging provisioning mutation contract
+        run: |
+          set -euo pipefail
+          query='query ProvisioningSchema { __schema { mutationType { fields { name args { name type { kind name ofType { kind name ofType { kind name } } } } } } } }'
+          payload="$(jq -cn --arg q "$query" '{query:$q}')"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            "$RAILWAY_GRAPHQL_URL" > /tmp/railway-schema.json
+
+          if jq -e '.errors and (.errors | length > 0)' /tmp/railway-schema.json >/dev/null; then
+            jq -r '.errors[] | "::error::Railway GraphQL introspection: \(.message)"' /tmp/railway-schema.json
+            exit 1
+          fi
+
+          jq -r '
+            .data.__schema.mutationType.fields[]
+            | select(.name | test("environment|service|domain|tcp|variable|template|volume|deployment"; "i"))
+            | [.name, (.args | map(.name + ":" + ((.type.name // .type.ofType.name // .type.ofType.ofType.name) // "?")) | join(","))]
+            | @tsv
+          ' /tmp/railway-schema.json | sort > /tmp/railway-relevant-mutations.txt
+
+          echo 'Relevant Railway mutation signatures:'
+          cat /tmp/railway-relevant-mutations.txt
+          test -s /tmp/railway-relevant-mutations.txt || {
+            echo '::error::No provisioning mutations were returned by schema introspection.'
+            exit 3
+          }
 
       - name: Publish probe summary
         if: always()
         run: |
           {
-            echo '## Railway read-only workspace probe'
+            echo '## Railway workspace Public API probe'
             echo ''
             echo '- Credential: present.'
-            echo '- No Railway project, environment, service, variable, deployment, or database was changed.'
-            if [ -f /tmp/railway-projects.json ]; then
-              echo '- Accessible projects:'
-              jq -r '.[] | "  - `\(.name)` — `\(.id)`"' /tmp/railway-projects.json
+            echo '- Mode: read-only Railway Public GraphQL API.'
+            echo '- No Railway project, environment, service, variable, deployment, volume, domain, or database was changed.'
+            if [ -f /tmp/railway-project.json ]; then
+              echo "- Canonical project: \`$(jq -r '.data.project.name // "unresolved"' /tmp/railway-project.json)\`."
+            fi
+            if [ -f /tmp/railway-relevant-mutations.txt ]; then
+              echo '- Provisioning mutation contract was introspected successfully.'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
