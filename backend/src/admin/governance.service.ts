@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import {
   AppointmentStatus,
   AuditAction,
@@ -50,11 +54,17 @@ export class GovernanceService {
       this.prisma.user.count(),
       this.prisma.user.count({ where: { isActive: true } }),
       this.prisma.user.groupBy({ by: ["role"], _count: true }),
-      this.prisma.vetProfile.groupBy({ by: ["verificationStatus"], _count: true }),
+      this.prisma.vetProfile.groupBy({
+        by: ["verificationStatus"],
+        _count: true,
+      }),
       this.prisma.appointment.groupBy({ by: ["status"], _count: true }),
       this.prisma.transaction.groupBy({ by: ["status"], _count: true }),
       this.prisma.auditLog.count({
-        where: { severity: AuditSeverity.CRITICAL, createdAt: { gte: last24h } },
+        where: {
+          severity: AuditSeverity.CRITICAL,
+          createdAt: { gte: last24h },
+        },
       }),
       this.prisma.messageReport.count({ where: { status: ReportStatus.OPEN } }),
       this.prisma.userSession.count({
@@ -120,7 +130,9 @@ export class GovernanceService {
   async getUsers(filters: AdminUsersFiltersDto) {
     const where: Prisma.UserWhereInput = {};
     if (filters.role) where.role = filters.role;
-    if (filters.isActive !== undefined) where.isActive = filters.isActive === "true";
+    if (filters.isActive !== undefined) {
+      where.isActive = filters.isActive === "true";
+    }
     if (filters.search) {
       where.OR = [
         { email: { contains: filters.search, mode: "insensitive" } },
@@ -174,7 +186,9 @@ export class GovernanceService {
     ctx: GovernanceActionContext = {},
   ) {
     if (actorId === userId && !dto.isActive) {
-      throw new BadRequestException("La identidad SUPERADMIN no puede desactivarse a sí misma");
+      throw new BadRequestException(
+        "La identidad SUPERADMIN no puede desactivarse a sí misma",
+      );
     }
 
     const current = await this.prisma.user.findUnique({
@@ -204,7 +218,10 @@ export class GovernanceService {
       if (!dto.isActive) {
         await tx.userSession.updateMany({
           where: { userId, revokedAt: null },
-          data: { revokedAt: now, revokedReason: "superadmin_account_deactivation" },
+          data: {
+            revokedAt: now,
+            revokedReason: "superadmin_account_deactivation",
+          },
         });
       }
 
@@ -225,7 +242,9 @@ export class GovernanceService {
       beforeData: { isActive: current.isActive },
       afterData: { isActive: updated.isActive },
       reason: dto.reason,
-      metadata: { operation: dto.isActive ? "USER_REACTIVATED" : "USER_DEACTIVATED" },
+      metadata: {
+        operation: dto.isActive ? "USER_REACTIVATED" : "USER_DEACTIVATED",
+      },
     });
 
     return updated;
@@ -237,7 +256,9 @@ export class GovernanceService {
     dto: ReviewVetVerificationDto,
     ctx: GovernanceActionContext = {},
   ) {
-    const current = await this.prisma.vetProfile.findUnique({ where: { id: vetId } });
+    const current = await this.prisma.vetProfile.findUnique({
+      where: { id: vetId },
+    });
     if (!current) throw new NotFoundException("Veterinario no encontrado");
 
     const now = new Date();
@@ -307,13 +328,18 @@ export class GovernanceService {
     dto: UpdateVetStatusDto,
     ctx: GovernanceActionContext = {},
   ) {
-    const current = await this.prisma.vetProfile.findUnique({ where: { id: vetId } });
+    const current = await this.prisma.vetProfile.findUnique({
+      where: { id: vetId },
+    });
     if (!current) throw new NotFoundException("Veterinario no encontrado");
     if (current.isActive === dto.isActive) return current;
 
     const updated = await this.prisma.vetProfile.update({
       where: { id: vetId },
-      data: { isActive: dto.isActive, isAvailableNow: dto.isActive ? current.isAvailableNow : false },
+      data: {
+        isActive: dto.isActive,
+        isAvailableNow: dto.isActive ? current.isAvailableNow : false,
+      },
     });
 
     await this.auditService.log({
@@ -323,7 +349,9 @@ export class GovernanceService {
         ip: ctx.ip,
         userAgent: ctx.userAgent,
       },
-      action: dto.isActive ? AuditAction.VET_REACTIVATED : AuditAction.VET_SUSPENDED,
+      action: dto.isActive
+        ? AuditAction.VET_REACTIVATED
+        : AuditAction.VET_SUSPENDED,
       severity: dto.isActive ? AuditSeverity.INFO : AuditSeverity.WARN,
       targetType: "VetProfile",
       targetId: vetId,
