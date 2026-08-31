@@ -10,13 +10,14 @@
 --
 -- Canonical CTG One identity verified in the production Supabase project:
 --   b7c5a0f0-0ff4-4470-9df5-aaa50fbf5405
--- The email below is used only for one-time reconciliation of a pre-existing
--- Nvet row. Ongoing authorization is based solely on the immutable UUID.
+-- A one-way MD5 fingerprint is used only to reconcile a possible pre-existing
+-- Nvet row without publishing the account email in this public repository.
+-- Ongoing authorization is based solely on the immutable UUID.
 
 DO $$
 DECLARE
   canonical_ctg_user_id CONSTANT uuid := 'b7c5a0f0-0ff4-4470-9df5-aaa50fbf5405'::uuid;
-  canonical_email CONSTANT text := 'valderramapino@gmail.com';
+  canonical_email_fingerprint CONSTANT text := 'f28df668c2b5b4e37698ce037ee214ab';
   canonical_link_exists boolean;
 BEGIN
   SELECT EXISTS(
@@ -25,20 +26,20 @@ BEGIN
     WHERE ctg_user_id = canonical_ctg_user_id
   ) INTO canonical_link_exists;
 
-  -- A legacy Nvet account with the canonical email can be linked safely only
-  -- when it is not already bound to a different CTG identity. This makes the
-  -- migration repair the common email-collision case without enabling generic
-  -- email-based account linking.
+  -- A legacy Nvet account matching the canonical email fingerprint can be
+  -- linked safely only when it is not already bound to a different CTG
+  -- identity. This repairs the common email-collision case without enabling
+  -- generic email-based account linking.
   IF NOT canonical_link_exists THEN
     IF EXISTS (
       SELECT 1
       FROM public.users
-      WHERE lower(email) = canonical_email
+      WHERE md5(lower(email)) = canonical_email_fingerprint
         AND ctg_user_id IS NOT NULL
         AND ctg_user_id <> canonical_ctg_user_id
     ) THEN
       RAISE EXCEPTION
-        'Canonical CTG One superadmin email is already linked to another CTG identity';
+        'Canonical CTG One superadmin account is already linked to another CTG identity';
     END IF;
 
     UPDATE public.users
@@ -46,7 +47,7 @@ BEGIN
         role = 'SUPERADMIN'::"UserRole",
         email_verified = true,
         updated_at = now()
-    WHERE lower(email) = canonical_email
+    WHERE md5(lower(email)) = canonical_email_fingerprint
       AND ctg_user_id IS NULL;
   END IF;
 
