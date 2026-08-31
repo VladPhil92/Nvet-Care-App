@@ -1,1 +1,0 @@
-CLIENT Profile & Account Center V1 adds a server-authoritative, JWT-scoped profile surface for effective CLIENT users. It updates only Nvet-local name and phone attributes, preserves CTG One identity authority, and reuses existing session and 2FA controls without simulating email or push notification delivery.
