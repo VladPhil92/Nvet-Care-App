@@ -22,10 +22,6 @@ describe('ChatMembershipGuard', () => {
     jest.spyOn((guard as any).logger, 'warn').mockImplementation(() => {});
   });
 
-  // -----------------------------------------------------------------
-  // Helpers
-  // -----------------------------------------------------------------
-
   function buildContext(req: any): ExecutionContext {
     return {
       switchToHttp: () => ({ getRequest: () => req }),
@@ -38,10 +34,6 @@ describe('ChatMembershipGuard', () => {
     vet: { userId: 'vet-1' },
   };
 
-  // -----------------------------------------------------------------
-  // ADMIN bypass
-  // -----------------------------------------------------------------
-
   it('ADMIN siempre tiene acceso (no consulta DB)', async () => {
     const req = {
       user: { id: 'admin-1', role: 'ADMIN' },
@@ -52,9 +44,15 @@ describe('ChatMembershipGuard', () => {
     expect(prisma.appointment.findUnique).not.toHaveBeenCalled();
   });
 
-  // -----------------------------------------------------------------
-  // Client / Vet membership
-  // -----------------------------------------------------------------
+  it('SUPERADMIN efectivo conserva acceso global (no consulta DB)', async () => {
+    const req = {
+      user: { id: 'root-1', role: 'SUPERADMIN' },
+      params: { appointmentId: 'appt-1' },
+    };
+    const result = await guard.canActivate(buildContext(req));
+    expect(result).toBe(true);
+    expect(prisma.appointment.findUnique).not.toHaveBeenCalled();
+  });
 
   it('permite al cliente dueño de la cita y cachea appointment + chatRole', async () => {
     prisma.appointment.findUnique.mockResolvedValue(APPT);
@@ -68,7 +66,7 @@ describe('ChatMembershipGuard', () => {
     expect(req.chatRole).toBe('CLIENT');
   });
 
-  it('permite al vet de la cita', async () => {
+  it('permite al vet de la cita cuando el rol efectivo es VET', async () => {
     prisma.appointment.findUnique.mockResolvedValue(APPT);
     const req: any = {
       user: { id: 'vet-1', role: 'VET' },
@@ -79,7 +77,39 @@ describe('ChatMembershipGuard', () => {
     expect(req.chatRole).toBe('VET');
   });
 
-  it('rechaza con ForbiddenException si el user no es client ni vet', async () => {
+  it('CLIENT mode no hereda la relación de veterinario de la misma identidad', async () => {
+    prisma.appointment.findUnique.mockResolvedValue({
+      id: 'appt-1',
+      clientId: 'other-client',
+      vet: { userId: 'root-user' },
+    });
+    const req = {
+      user: { id: 'root-user', role: 'CLIENT' },
+      params: { appointmentId: 'appt-1' },
+    };
+
+    await expect(guard.canActivate(buildContext(req))).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('VET mode no hereda la relación de cliente de la misma identidad', async () => {
+    prisma.appointment.findUnique.mockResolvedValue({
+      id: 'appt-1',
+      clientId: 'dual-user',
+      vet: { userId: 'other-vet' },
+    });
+    const req = {
+      user: { id: 'dual-user', role: 'VET' },
+      params: { appointmentId: 'appt-1' },
+    };
+
+    await expect(guard.canActivate(buildContext(req))).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('rechaza con ForbiddenException si el user no es participante bajo su rol efectivo', async () => {
     prisma.appointment.findUnique.mockResolvedValue(APPT);
     const req = {
       user: { id: 'other-user', role: 'CLIENT' },
@@ -89,10 +119,6 @@ describe('ChatMembershipGuard', () => {
       ForbiddenException,
     );
   });
-
-  // -----------------------------------------------------------------
-  // messageId → appointmentId resolution
-  // -----------------------------------------------------------------
 
   it('resuelve appointmentId desde messageId cuando solo hay messageId en params', async () => {
     prisma.message.findUnique.mockResolvedValue({ appointmentId: 'appt-1' });
@@ -119,10 +145,6 @@ describe('ChatMembershipGuard', () => {
       NotFoundException,
     );
   });
-
-  // -----------------------------------------------------------------
-  // Errores
-  // -----------------------------------------------------------------
 
   it('NotFoundException cuando la cita no existe', async () => {
     prisma.appointment.findUnique.mockResolvedValue(null);
