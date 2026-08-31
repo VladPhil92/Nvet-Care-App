@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 
-const ROOT = new URL('../', import.meta.url);
 const MANIFEST_PATH = new URL('../docs/production/ANDROID_PRODUCTION_READINESS.json', import.meta.url);
 const ANDROID_BUILD_PATH = new URL('../mobile/android/build.gradle', import.meta.url);
 const APP_BUILD_PATH = new URL('../mobile/android/app/build.gradle', import.meta.url);
@@ -96,12 +95,14 @@ async function validateRepositoryContract() {
   requireMatch(appBuild, /applicationId\s+["']com\.nvetcare["']/, 'applicationId com.nvetcare');
 
   for (const contract of [
+    ['production environment', /environment:\s*production/],
     ['immutable release_ref input', /release_ref:/],
     ['release tag checkout', /ref:\s*\$\{\{\s*github\.event\.inputs\.release_ref\s*\}\}/],
     ['certificate fingerprint pin', /ANDROID_UPLOAD_CERT_SHA256/],
-    ['strict AAB signature verification', /jarsigner -verify -strict/],
+    ['AAB signature verification', /jarsigner -verify\s+["']?\$AAB/],
     ['AAB SHA-256 evidence', /app-release\.aab\.sha256/],
     ['release metadata evidence', /release-metadata\.json/],
+    ['tagged artifact SHA traceability', /execFileSync\('git', \['rev-parse', 'HEAD'\]/],
     ['Node 24-compatible checkout action', /actions\/checkout@v7/],
     ['Node 24-compatible setup-node action', /actions\/setup-node@v7/],
     ['Node 24-compatible setup-java action', /actions\/setup-java@v5/],
