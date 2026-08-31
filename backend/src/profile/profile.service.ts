@@ -50,7 +50,9 @@ export class ProfileService {
     if (dto.firstName !== undefined) {
       const firstName = dto.firstName.trim();
       if (firstName.length < 2) {
-        throw new BadRequestException("El nombre debe tener mínimo 2 caracteres");
+        throw new BadRequestException(
+          "El nombre debe tener mínimo 2 caracteres",
+        );
       }
       data.firstName = firstName;
       changedFields.push("firstName");
