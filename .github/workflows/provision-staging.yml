@@ -28,6 +28,7 @@ env:
   NODE_VERSION: '22.x'
   STAGING_ENVIRONMENT: staging
   BACKEND_SERVICE: nvet-staging-backend
+  POSTGRES_SERVICE: nvet-staging-postgres
   E2E_CLIENT_EMAIL: cliente@nvetcare.test
   E2E_CLIENT_PASSWORD: TestClient123!
   E2E_VET_EMAIL: vet@nvetcare.test
@@ -64,209 +65,24 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout mainline source
+      - name: Checkout canonical mainline source
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
 
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli
-
-      - name: Validate Railway account-scoped token
+      - name: Validate staging bootstrap contract
         run: |
-          set -euo pipefail
-          TOKEN_CHECK="$(curl -sS --request POST \
-            --url https://backboard.railway.com/graphql/v2 \
-            --header "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            --header 'Content-Type: application/json' \
-            --data '{"query":"query { me { id } }"}')"
+          node --check scripts/railway-staging-bootstrap.mjs
+          node --check backend/scripts/production-predeploy.mjs
+          node --check backend/scripts/railway-runtime-smoke.mjs
 
-          if ! printf '%s' "$TOKEN_CHECK" | jq -e '(.data.me.id? // "") | length > 0' >/dev/null; then
-            echo '::error::RAILWAY_API_TOKEN must be an account-scoped Railway token created with "No workspace". The Railway CLI currently rejects workspace-scoped API tokens for project/link operations.'
-            exit 1
-          fi
+      - name: Provision isolated Railway environment via Public API
+        run: node scripts/railway-staging-bootstrap.mjs
 
-      - name: Authenticate and bind project
-        run: |
-          set -euo pipefail
-          # Account-scoped RAILWAY_API_TOKEN is required here because the
-          # Railway CLI currently rejects workspace-scoped API tokens for
-          # project list/link operations even when GraphQL accepts them.
-          railway link --project "$PROJECT_ID" --environment production --json >/tmp/railway-link-production.json
-
-      - name: Refuse to mutate an existing staging environment
-        run: |
-          set -euo pipefail
-          ENVIRONMENTS="$(railway environment list --json)"
-          if printf '%s' "$ENVIRONMENTS" | jq -e '.. | objects | select(.name? == "staging")' >/dev/null; then
-            echo '::error::A Railway environment named staging already exists. This one-time bootstrap intentionally refuses to reconcile or overwrite it.'
-            echo 'Use Staging E2E Seed & Preflight for an existing environment, or inspect Railway before making changes.'
-            exit 1
-          fi
-
-      - name: Create empty isolated staging environment
-        run: |
-          set -euo pipefail
-          railway environment new "$STAGING_ENVIRONMENT" --json >/tmp/railway-staging-environment.json
-          railway link --project "$PROJECT_ID" --environment "$STAGING_ENVIRONMENT" --json >/tmp/railway-link-staging.json
-
-      - name: Provision isolated PostgreSQL
-        run: |
-          set -euo pipefail
-          railway add --database postgres --json >/tmp/railway-staging-postgres.json
-
-      - name: Create staging backend service
-        run: |
-          set -euo pipefail
-          railway add --service "$BACKEND_SERVICE" --json >/tmp/railway-staging-backend.json
-
-      - name: Configure backend variables without production secrets
-        run: |
-          set -euo pipefail
-
-          JWT_SECRET="$(openssl rand -hex 32)"
-          JWT_REFRESH_SECRET="$(openssl rand -hex 32)"
-          TWO_FACTOR_KEY="$(openssl rand -hex 32)"
-          SESSION_SALT="$(openssl rand -hex 16)"
-
-          # Construct Railway's reference expression at runtime so GitHub does
-          # not interpret it as a GitHub Actions expression.
-          DB_REFERENCE='$'
-          DB_REFERENCE="${DB_REFERENCE}{{Postgres.DATABASE_URL}}"
-
-          railway variable set \
-            "NODE_ENV=staging" \
-            "APP_VERSION=1.0.0-staging" \
-            "PORT=3000" \
-            "FRONTEND_URL=$FRONTEND_URL" \
-            "DATABASE_URL=$DB_REFERENCE" \
-            "JWT_SECRET=$JWT_SECRET" \
-            "JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET" \
-            "JWT_EXPIRES_IN=15m" \
-            "JWT_REFRESH_EXPIRES_IN=7d" \
-            "JWT_REFRESH_EXPIRES_DAYS=7" \
-            "TWO_FACTOR_ENCRYPTION_KEY=$TWO_FACTOR_KEY" \
-            "SESSION_ID_SALT=$SESSION_SALT" \
-            "MAIL_DRIVER=console" \
-            "LOG_LEVEL=info" \
-            "NVET_CTG_IDENTITY_EXCHANGE_ENABLED=false" \
-            --service "$BACKEND_SERVICE" \
-            --environment "$STAGING_ENVIRONMENT" \
-            --skip-deploys \
-            --json >/tmp/railway-staging-vars.json
-
-      - name: Connect staging backend to canonical GitHub source
-        run: |
-          set -euo pipefail
-          railway service source connect \
-            --service "$BACKEND_SERVICE" \
-            --environment "$STAGING_ENVIRONMENT" \
-            --project "$PROJECT_ID" \
-            --repo VladPhil92/Nvet-Care-App \
-            --branch main \
-            --json >/tmp/railway-staging-source.json
-
-      - name: Create staging public API domain
-        run: |
-          set -euo pipefail
-          railway domain \
-            --service "$BACKEND_SERVICE" \
-            --environment "$STAGING_ENVIRONMENT" \
-            --project "$PROJECT_ID" \
-            --json >/tmp/railway-staging-domain.json
-
-      - name: Expose only staging PostgreSQL to CI
-        run: |
-          set -euo pipefail
-          railway tcp-proxy create \
-            --port 5432 \
-            --service Postgres \
-            --environment "$STAGING_ENVIRONMENT" \
-            --project "$PROJECT_ID" \
-            --json >/tmp/railway-staging-postgres-proxy.json
-
-      - name: Deploy canonical backend to staging
-        run: |
-          set -euo pipefail
-          railway up \
-            --project "$PROJECT_ID" \
-            --environment "$STAGING_ENVIRONMENT" \
-            --service "$BACKEND_SERVICE" \
-            --ci
-
-      - name: Resolve staging endpoints without printing database credentials
-        run: |
-          set -euo pipefail
-
-          API_DOMAIN=''
-          DATABASE_PUBLIC_URL=''
-
-          for _ in $(seq 1 30); do
-            BACKEND_VARS="$(railway variable list --service "$BACKEND_SERVICE" --environment "$STAGING_ENVIRONMENT" --kv)"
-            API_DOMAIN="$(printf '%s\n' "$BACKEND_VARS" | sed -n 's/^RAILWAY_PUBLIC_DOMAIN=//p' | head -n1)"
-
-            POSTGRES_VARS="$(railway variable list --service Postgres --environment "$STAGING_ENVIRONMENT" --kv)"
-            DATABASE_PUBLIC_URL="$(printf '%s\n' "$POSTGRES_VARS" | sed -n 's/^DATABASE_PUBLIC_URL=//p' | head -n1)"
-
-            if [ -n "$API_DOMAIN" ] && [ -n "$DATABASE_PUBLIC_URL" ]; then
-              break
-            fi
-            sleep 5
-          done
-
-          if [ -z "$API_DOMAIN" ]; then
-            echo '::error::Railway did not expose RAILWAY_PUBLIC_DOMAIN for the staging backend.'
-            exit 1
-          fi
-          if [ -z "$DATABASE_PUBLIC_URL" ]; then
-            echo '::error::Railway did not expose DATABASE_PUBLIC_URL after creating the staging TCP proxy.'
-            exit 1
-          fi
-
-          API_URL="https://${API_DOMAIN%/}/api"
-          echo "::add-mask::$DATABASE_PUBLIC_URL"
-          echo "DATABASE_URL=$DATABASE_PUBLIC_URL" >> "$GITHUB_ENV"
-          echo "E2E_API_URL=$API_URL" >> "$GITHUB_ENV"
-          echo "STAGING_API_URL=$API_URL" >> "$GITHUB_ENV"
-
-      - name: Wait for staging backend readiness
-        run: |
-          set -euo pipefail
-          ready=0
-          for _ in $(seq 1 60); do
-            if curl -fsS "$E2E_API_URL/health/ready" >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 5
-          done
-          if [ "$ready" -ne 1 ]; then
-            echo '::error::Staging backend never reached /api/health/ready.'
-            railway logs --service "$BACKEND_SERVICE" --environment "$STAGING_ENVIRONMENT" -n 150 || true
-            exit 1
-          fi
-
-      - name: Install canonical workspace dependencies
-        run: npm ci --include=dev --legacy-peer-deps
-
-      - name: Reconcile staging schema from CI
-        env:
-          NVET_ALLOW_E2E_SEED: 'true'
-          NVET_SEED_TARGET: staging
-        run: npm run deploy:preflight --workspace backend
-
-      - name: Seed deterministic staging fixtures
-        env:
-          NVET_ALLOW_E2E_SEED: 'true'
-          NVET_SEED_TARGET: staging
-        run: npm run seed:e2e --workspace backend
-
-      - name: Certify staging preflight
+      - name: Certify staging API fixtures and emergency discovery
         run: node mobile/e2e/preflight.mjs
 
       - name: Publish non-secret staging handoff
@@ -275,12 +91,16 @@ jobs:
             echo '## Nvet Care isolated staging provisioned'
             echo ''
             echo "- Environment: \`$STAGING_ENVIRONMENT\`"
+            echo "- Environment ID: \`$STAGING_ENVIRONMENT_ID\`"
             echo "- Backend service: \`$BACKEND_SERVICE\`"
+            echo "- Backend service ID: \`$STAGING_BACKEND_SERVICE_ID\`"
+            echo "- PostgreSQL service: \`$POSTGRES_SERVICE\`"
             echo "- API: \`$STAGING_API_URL\`"
-            echo '- PostgreSQL: isolated service with TCP proxy enabled for CI; credentials intentionally not printed.'
-            echo '- Schema preflight: passed.'
-            echo '- Deterministic E2E seed: passed.'
+            echo '- PostgreSQL: isolated private-network service with persistent volume; no public database endpoint was created.'
+            echo '- Schema preflight: applied inside Railway predeploy.'
+            echo '- Deterministic E2E seed: applied inside isolated staging predeploy.'
+            echo '- CTG One identity exchange: deliberately disabled in synthetic staging.'
             echo '- API readiness + client/vet auth + emergency search preflight: passed.'
             echo ''
-            echo 'Next gate: configure the GitHub `staging` environment values described in `docs/production/STAGING_PROVISIONING.md`, then run `Mobile E2E` with `platform=android`.'
+            echo 'Next gate: Android Detox against this staging API, then RC1 release-readiness.'
           } >> "$GITHUB_STEP_SUMMARY"

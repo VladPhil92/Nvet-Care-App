@@ -5,22 +5,26 @@ on:
     branches: ['**']
     paths:
       - 'backend/**'
+      - 'scripts/railway-staging-bootstrap.mjs'
       - 'Dockerfile.railway'
       - 'railway.json'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/railway-contract.yml'
       - '.github/workflows/deploy-backend.yml'
+      - '.github/workflows/provision-staging.yml'
   pull_request:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'scripts/railway-staging-bootstrap.mjs'
       - 'Dockerfile.railway'
       - 'railway.json'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/railway-contract.yml'
       - '.github/workflows/deploy-backend.yml'
+      - '.github/workflows/provision-staging.yml'
 
 jobs:
   contract:
@@ -39,12 +43,15 @@ jobs:
         run: |
           node --check backend/scripts/production-predeploy.mjs
           node --check backend/scripts/railway-runtime-smoke.mjs
+          node --check scripts/railway-staging-bootstrap.mjs
           node - <<'NODE'
           const fs = require('fs');
           const root = require('./package.json');
           const backend = require('./backend/package.json');
           const railway = require('./railway.json');
           const dockerfile = fs.readFileSync('Dockerfile.railway', 'utf8');
+          const stagingBootstrap = fs.readFileSync('scripts/railway-staging-bootstrap.mjs', 'utf8');
+          const stagingWorkflow = fs.readFileSync('.github/workflows/provision-staging.yml', 'utf8');
           const prismaSchema = fs.readFileSync('backend/prisma/schema.prisma', 'utf8');
           const liveLocationSql = fs.readFileSync('backend/prisma/migrations/manual/live_location_v1.sql', 'utf8');
 
@@ -73,6 +80,22 @@ jobs:
             throw new Error('Railway readiness healthcheck contract drifted');
           }
 
+          if (!stagingBootstrap.includes('https://backboard.railway.com/graphql/v2')) {
+            throw new Error('Staging bootstrap must use Railway Public API');
+          }
+          if (!stagingBootstrap.includes("source: { image: 'postgres:16-alpine' }")) {
+            throw new Error('Staging PostgreSQL image contract drifted');
+          }
+          if (!stagingBootstrap.includes('.railway.internal:5432')) {
+            throw new Error('Staging database must remain private-network only');
+          }
+          if (!stagingWorkflow.includes('node scripts/railway-staging-bootstrap.mjs')) {
+            throw new Error('Provision workflow must execute the Public API bootstrap');
+          }
+          if (/\brailway\s+(?:link|add|up|variable|domain|tcp-proxy)\b/.test(stagingWorkflow)) {
+            throw new Error('Provision workflow must not regress to CLI project mutations for workspace tokens');
+          }
+
           // npm workspaces may place runtime packages in both trees. Keep the
           // canonical image explicit so hoisted packages can resolve Nest peers.
           if (!/^ENV NODE_PATH=\/app\/backend\/node_modules:\/app\/node_modules$/m.test(dockerfile)) {
@@ -98,7 +121,7 @@ jobs:
             throw new Error('Legacy nvet-backend bridge must not be reintroduced');
           }
 
-          console.log('Railway active mode: canonical backend only');
+          console.log('Railway active mode: canonical production + isolated Public API staging');
           NODE
 
       - name: Build canonical Railway image from repository root
