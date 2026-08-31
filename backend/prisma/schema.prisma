@@ -387,6 +387,14 @@ model Pet {
   photo String?
   notes String?
 
+  // Owner-reported preventive profile. This is intentionally separate from
+  // veterinarian-authored diagnosis/treatment in Appointment so provenance
+  // remains explicit. The JSON document is schema-versioned and validated by
+  // the Pets service before every write.
+  healthProfile          Json?     @map("health_profile")
+  healthProfileVersion   Int       @default(1) @map("health_profile_version")
+  healthProfileUpdatedAt DateTime? @map("health_profile_updated_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
