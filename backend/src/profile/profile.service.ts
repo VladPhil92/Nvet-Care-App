@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { AuditAction, AuditSeverity, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../common/audit/audit.service";
@@ -8,7 +12,6 @@ const CLIENT_PROFILE_SELECT = {
   id: true,
   email: true,
   ctgUserId: true,
-  role: true,
   firstName: true,
   lastName: true,
   phone: true,
@@ -18,6 +21,10 @@ const CLIENT_PROFILE_SELECT = {
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;
+
+type ClientProfileRow = Prisma.UserGetPayload<{
+  select: typeof CLIENT_PROFILE_SELECT;
+}>;
 
 @Injectable()
 export class ProfileService {
@@ -33,7 +40,7 @@ export class ProfileService {
     });
 
     if (!user) throw new UnauthorizedException("Usuario no encontrado");
-    return user;
+    return this.toPublicProfile(user);
   }
 
   async updateClientProfile(userId: string, dto: UpdateClientProfileDto) {
@@ -41,17 +48,31 @@ export class ProfileService {
     const changedFields: string[] = [];
 
     if (dto.firstName !== undefined) {
-      data.firstName = dto.firstName.trim();
+      const firstName = dto.firstName.trim();
+      if (firstName.length < 2) {
+        throw new BadRequestException("El nombre debe tener mínimo 2 caracteres");
+      }
+      data.firstName = firstName;
       changedFields.push("firstName");
     }
     if (dto.lastName !== undefined) {
-      data.lastName = dto.lastName.trim();
+      const lastName = dto.lastName.trim();
+      if (lastName.length < 2) {
+        throw new BadRequestException(
+          "El apellido debe tener mínimo 2 caracteres",
+        );
+      }
+      data.lastName = lastName;
       changedFields.push("lastName");
     }
     if (dto.phone !== undefined) {
       const phone = dto.phone.trim();
       data.phone = phone.length > 0 ? phone : null;
       changedFields.push("phone");
+    }
+
+    if (changedFields.length === 0) {
+      throw new BadRequestException("No hay cambios de perfil para guardar");
     }
 
     const user = await this.prisma.user.update({
@@ -72,6 +93,14 @@ export class ProfileService {
       metadata: { changedFields },
     });
 
-    return user;
+    return this.toPublicProfile(user);
+  }
+
+  private toPublicProfile(user: ClientProfileRow) {
+    const { ctgUserId, ...profile } = user;
+    return {
+      ...profile,
+      identitySource: ctgUserId ? "CTG_ONE" : "NVET_LOCAL",
+    };
   }
 }
