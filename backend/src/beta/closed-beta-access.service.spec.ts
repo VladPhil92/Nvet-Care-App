@@ -14,6 +14,7 @@ describe("ClosedBetaAccessService", () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete process.env.NVET_BOOKING_ENABLED;
     delete process.env.NVET_CLOSED_BETA_ENABLED;
     delete process.env.NVET_CLOSED_BETA_MARKET;
     delete process.env.NVET_CLOSED_BETA_CLIENT_HASHES;
@@ -64,6 +65,14 @@ describe("ClosedBetaAccessService", () => {
     ).toThrow(ServiceUnavailableException);
   });
 
+  it("blocks new bookings when the operations switch is off", () => {
+    process.env.NVET_BOOKING_ENABLED = "false";
+
+    expect(() =>
+      service.assertBookingAllowed("client-1", "Cartagena"),
+    ).toThrow(ServiceUnavailableException);
+  });
+
   it("does not expose the cohort through the public policy", () => {
     process.env.NVET_CLOSED_BETA_ENABLED = "true";
     process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-1");
@@ -72,6 +81,7 @@ describe("ClosedBetaAccessService", () => {
       phase: 12,
       mode: "closed-beta",
       market: "Cartagena de Indias",
+      bookingEnabled: true,
       cohortConfigured: true,
     });
     expect(JSON.stringify(service.getPublicPolicy())).not.toContain(
