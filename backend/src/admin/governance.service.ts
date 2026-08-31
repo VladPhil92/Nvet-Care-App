@@ -267,6 +267,7 @@ export class GovernanceService {
         ? {
             verificationStatus: VerificationStatus.APPROVED,
             isVerified: true,
+            isActive: true,
             verifiedAt: now,
             rejectionReason: null,
           }
@@ -274,12 +275,16 @@ export class GovernanceService {
           ? {
               verificationStatus: VerificationStatus.REJECTED,
               isVerified: false,
+              isActive: false,
+              isAvailableNow: false,
               verifiedAt: null,
               rejectionReason: dto.reason,
             }
           : {
               verificationStatus: VerificationStatus.IN_REVIEW,
               isVerified: false,
+              isActive: false,
+              isAvailableNow: false,
               verifiedAt: null,
               rejectionReason: null,
             };
@@ -310,10 +315,12 @@ export class GovernanceService {
       beforeData: {
         verificationStatus: current.verificationStatus,
         isVerified: current.isVerified,
+        isActive: current.isActive,
       },
       afterData: {
         verificationStatus: updated.verificationStatus,
         isVerified: updated.isVerified,
+        isActive: updated.isActive,
       },
       reason: dto.reason,
       metadata: { decision: dto.decision },
