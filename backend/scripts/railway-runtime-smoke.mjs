@@ -108,6 +108,42 @@ async function verifyLoginPath() {
   console.log('✅ Railway auth smoke passed (401, no Prisma/5xx)');
 }
 
+async function verifyCtgIdentityExchangePath() {
+  const response = await fetchWithTimeout(
+    `${apiBase}/auth/ctg-identity-exchange`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-Id': `railway-ctg-identity-smoke-${randomUUID()}`,
+      },
+      body: JSON.stringify({
+        // Deliberately invalid but DTO-valid. A launched endpoint must reach
+        // cryptographic verification and reject this with 401. A 404 means the
+        // production identity bridge was disabled by configuration drift.
+        supabaseAccessToken: 'not-a-valid-jwt-token-railway-smoke',
+      }),
+    },
+    10_000,
+  );
+
+  const body = await response.text();
+
+  if (response.status !== 401) {
+    throw new Error(
+      `CTG identity smoke returned HTTP ${response.status}; expected 401: ${body.slice(0, 500)}`,
+    );
+  }
+
+  if (/PrismaError|PrismaClient|database error/i.test(body)) {
+    throw new Error(
+      `CTG identity smoke exposed a database/Prisma error: ${body.slice(0, 500)}`,
+    );
+  }
+
+  console.log('✅ Railway CTG identity exchange smoke passed (401, endpoint launched)');
+}
+
 function stopChild() {
   if (!child.killed && child.exitCode === null) {
     child.kill('SIGTERM');
@@ -126,6 +162,7 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
 try {
   await waitForReadiness();
   await verifyLoginPath();
+  await verifyCtgIdentityExchangePath();
   console.log('✅ Nvet Railway runtime smoke gate passed; service remains online');
 } catch (error) {
   console.error('❌ Nvet Railway runtime smoke gate failed:', error);
