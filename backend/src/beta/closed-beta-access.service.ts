@@ -14,6 +14,10 @@ export class ClosedBetaAccessService {
     return process.env.NVET_CLOSED_BETA_ENABLED === "true";
   }
 
+  isBookingEnabled(): boolean {
+    return process.env.NVET_BOOKING_ENABLED !== "false";
+  }
+
   getMarket(): string {
     const configured = process.env.NVET_CLOSED_BETA_MARKET?.trim();
     return configured || DEFAULT_MARKET;
@@ -29,6 +33,14 @@ export class ClosedBetaAccessService {
    * fails closed so a configuration mistake cannot silently open production.
    */
   assertBookingAllowed(clientId: string, vetCity?: string | null): void {
+    if (!this.isBookingEnabled()) {
+      throw new ServiceUnavailableException({
+        error: "BOOKING_TEMPORARILY_DISABLED",
+        message:
+          "Las nuevas reservas están temporalmente deshabilitadas por operación.",
+      });
+    }
+
     if (!this.isEnabled()) return;
 
     const cohort = this.getClientHashes();
@@ -63,6 +75,7 @@ export class ClosedBetaAccessService {
       phase: 12,
       mode: this.isEnabled() ? "closed-beta" : "standard",
       market: this.getMarket(),
+      bookingEnabled: this.isBookingEnabled(),
       cohortConfigured: this.getClientHashes().size > 0,
     } as const;
   }
