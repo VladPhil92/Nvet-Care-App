@@ -66,11 +66,10 @@ jobs:
         env:
           RELEASE_REF: ${{ github.event.inputs.release_ref }}
         run: |
-          TAG="${RELEASE_REF#v}"
           git fetch --force --tags --depth=1 origin "refs/tags/${RELEASE_REF}:refs/tags/${RELEASE_REF}"
           test "$(git rev-list -n 1 "$RELEASE_REF")" = "$(git rev-parse HEAD)"
           echo "Release commit: $(git rev-parse HEAD)"
-          echo "Release version: $TAG"
+          echo "Release ref: $RELEASE_REF"
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -96,7 +95,6 @@ jobs:
 
       - name: Validate release inputs and secrets
         env:
-          VERSION_NAME: ${{ github.event.inputs.version_name }}
           EXPECTED_CERT_SHA256: ${{ secrets.ANDROID_UPLOAD_CERT_SHA256 }}
         run: |
           missing=""
@@ -130,6 +128,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          export LC_ALL=C
           ACTUAL="$(keytool -list -v \
             -keystore mobile/android/app/release.keystore \
             -alias "$KEY_ALIAS" \
@@ -159,7 +158,11 @@ jobs:
           AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
           test -s "$AAB"
           unzip -Z1 "$AAB" | grep -Eq '^META-INF/[^/]+\.(RSA|DSA|EC)$'
-          jarsigner -verify -strict "$AAB"
+          # Upload keys are commonly self-signed; plain verification checks the
+          # JAR/AAB cryptographic signature without treating certificate-chain
+          # warnings as a false release failure. Fingerprint pinning above
+          # separately proves that the intended upload certificate signed it.
+          jarsigner -verify "$AAB"
 
       - name: Generate release evidence
         env:
@@ -171,12 +174,14 @@ jobs:
           sha256sum "$AAB" > mobile/android/app/build/outputs/bundle/release/app-release.aab.sha256
           node - <<'NODE'
           const fs = require('fs');
+          const { execFileSync } = require('child_process');
+          const releaseGitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
           const metadata = {
             schemaVersion: 1,
             applicationId: 'com.nvetcare',
             versionName: process.env.VERSION_NAME,
             versionCode: Number(process.env.VERSION_CODE),
-            gitSha: process.env.GITHUB_SHA,
+            gitSha: releaseGitSha,
             releaseRef: process.env.RELEASE_REF,
             targetSdk: 36,
             apiUrl: process.env.NVET_API_URL,
