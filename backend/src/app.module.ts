@@ -14,6 +14,7 @@ import { PaymentsModule } from "./payments/payments.module";
 import { AdminModule } from "./admin/admin.module";
 import { ReviewsModule } from "./reviews/reviews.module";
 import { PetsModule } from "./pets/pets.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { WaitlistModule } from "./waitlist/waitlist.module";
 
 /**
@@ -46,6 +47,7 @@ import { WaitlistModule } from "./waitlist/waitlist.module";
     AdminModule,
     ReviewsModule,
     PetsModule,
+    NotificationsModule,
     WaitlistModule,
   ],
 })
