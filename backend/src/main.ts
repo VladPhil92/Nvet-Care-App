@@ -9,17 +9,32 @@ import helmet from "helmet";
 import compression = require("compression");
 import { AppModule } from "./app.module";
 
-// Phase 4 of the CTG One -> Nvet identity bridge is now a launched capability.
-// Keep explicit environment overrides as emergency/operator controls, but do
-// not require provisioning public/non-secret launch constants before users can
-// authenticate. The Supabase project URL is a public issuer identifier; JWT
-// signature, issuer, audience and expiry are still verified by
-// CtgIdentityService against Supabase JWKS.
+// Phase 4 of the CTG One -> Nvet identity bridge is a launched production
+// capability. A legacy Railway variable may still contain
+// NVET_CTG_IDENTITY_EXCHANGE_ENABLED=false from the pre-launch rollout. Do not
+// let that stale value silently disable production SSO. Operators retain an
+// explicit emergency kill switch through NVET_CTG_IDENTITY_EXCHANGE_DISABLED.
+//
+// The Supabase project URL is a public issuer identifier; JWT signature,
+// issuer, audience and expiry remain verified by CtgIdentityService against
+// Supabase JWKS.
 const CTG_ONE_PRODUCTION_SUPABASE_URL =
   "https://mdscwjvlihdiflcvghhk.supabase.co";
 
 function applyIdentityLaunchDefaults(): void {
-  process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED ??= "true";
+  const emergencyDisabled =
+    process.env.NVET_CTG_IDENTITY_EXCHANGE_DISABLED === "true";
+
+  if (process.env.NODE_ENV === "production") {
+    process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED = emergencyDisabled
+      ? "false"
+      : "true";
+  } else {
+    process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED ??= emergencyDisabled
+      ? "false"
+      : "true";
+  }
+
   process.env.NVET_CTG_SUPABASE_URL ??= CTG_ONE_PRODUCTION_SUPABASE_URL;
 }
 
