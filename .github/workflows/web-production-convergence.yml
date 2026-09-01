@@ -50,7 +50,44 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Verify production backend readiness now
+        id: production
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://backend-production-a476.up.railway.app/api/health/ready'
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          code="$(curl --silent --show-error --location --max-time 15 --output "$tmp" --write-out '%{http_code}' "$url")"
+          test "$code" = '200'
+          node - "$tmp" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (body?.status !== 'ok' || body?.checks?.database?.status !== 'up' || typeof body?.revision !== 'string') {
+            process.exit(1);
+          }
+          console.log(`Production backend ready at revision ${body.revision}`);
+          NODE
+
+      - name: Verify ctgone.com federated Nvet connectivity now
+        id: ctg
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://ctgone.com/api/nvetcareapp/health'
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          code="$(curl --silent --show-error --location --max-time 15 --output "$tmp" --write-out '%{http_code}' "$url")"
+          test "$code" = '200'
+          node - "$tmp" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (body?.status !== 'ok' || body?.dependency !== 'nvet-backend') process.exit(1);
+          console.log('ctgone.com -> Nvet backend connectivity is healthy.');
+          NODE
+
       - name: Validate staging evidence inputs
+        id: staging_inputs
         shell: bash
         run: |
           set -euo pipefail
@@ -71,67 +108,50 @@ jobs:
           fi
 
       - name: Verify isolated staging identity and discovery
+        id: staging
         shell: bash
         run: |
           set -euo pipefail
           node mobile/e2e/preflight.mjs
           echo 'RC_STAGING_PREFLIGHT_CURRENT=true' >> "$GITHUB_ENV"
 
-      - name: Verify production backend readiness now
-        shell: bash
-        run: |
-          set -euo pipefail
-          url='https://backend-production-a476.up.railway.app/api/health/ready'
-          tmp="$(mktemp)"
-          trap 'rm -f "$tmp"' EXIT
-          code="$(curl --silent --show-error --location --max-time 15 --output "$tmp" --write-out '%{http_code}' "$url")"
-          test "$code" = '200'
-          node - "$tmp" <<'NODE'
-          const fs = require('fs');
-          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          if (body?.status !== 'ok' || body?.checks?.database?.status !== 'up' || typeof body?.revision !== 'string') {
-            process.exit(1);
-          }
-          console.log(`Production backend ready at revision ${body.revision}`);
-          NODE
-
-      - name: Verify ctgone.com federated Nvet connectivity now
-        shell: bash
-        run: |
-          set -euo pipefail
-          url='https://ctgone.com/api/nvetcareapp/health'
-          tmp="$(mktemp)"
-          trap 'rm -f "$tmp"' EXIT
-          code="$(curl --silent --show-error --location --max-time 15 --output "$tmp" --write-out '%{http_code}' "$url")"
-          test "$code" = '200'
-          node - "$tmp" <<'NODE'
-          const fs = require('fs');
-          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          if (body?.status !== 'ok' || body?.dependency !== 'nvet-backend') process.exit(1);
-          console.log('ctgone.com -> Nvet backend connectivity is healthy.');
-          NODE
-
       - name: Enforce machine-verifiable RC gates
+        id: machine
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RC_ENFORCE: 'true'
         run: node scripts/verify-release-candidate-readiness.mjs --runtime --machine-only
 
       - name: Publish full RC report without masking operator blockers
+        id: report
+        if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RC_ENFORCE: 'false'
         run: node scripts/verify-release-candidate-readiness.mjs --runtime
 
       - name: Convergence summary
+        if: always()
         shell: bash
         run: |
+          outcome_label() {
+            case "$1" in
+              success) printf 'PASS' ;;
+              failure) printf 'BLOCKED' ;;
+              skipped) printf 'SKIPPED' ;;
+              *) printf '%s' "$1" ;;
+            esac
+          }
+
           {
             echo '## Web Production Convergence'
             echo "- Candidate: $RC_CANDIDATE_SHA"
-            echo '- Isolated staging readiness + CLIENT/VET authentication: passed.'
-            echo '- Production backend readiness: passed.'
-            echo '- ctgone.com → Nvet backend connectivity: passed.'
-            echo '- Machine-verifiable RC gates: passed.'
-            echo '- External backup/restore/alerting/payment evidence remains independently required for RC promotion.'
+            echo "- Production backend readiness: $(outcome_label '${{ steps.production.outcome }}')"
+            echo "- ctgone.com → Nvet backend connectivity: $(outcome_label '${{ steps.ctg.outcome }}')"
+            echo "- Staging evidence inputs: $(outcome_label '${{ steps.staging_inputs.outcome }}')"
+            echo "- Isolated staging identity/discovery: $(outcome_label '${{ steps.staging.outcome }}')"
+            echo "- Machine-verifiable RC gates: $(outcome_label '${{ steps.machine.outcome }}')"
+            echo "- Full RC evidence report: $(outcome_label '${{ steps.report.outcome }}')"
+            echo ''
+            echo '> Staging remains fail-closed. A staging configuration failure must not hide independent production or CTG One health evidence.'
           } >> "$GITHUB_STEP_SUMMARY"
