@@ -43,6 +43,12 @@ export const qk = {
     ctgRate: () => [...qk.payments.all, 'ctg-rate'] as const,
   },
 
+  notifications: {
+    all: ['notifications'] as const,
+    inbox: (limit = 50) => [...qk.notifications.all, 'inbox', limit] as const,
+    unread: () => [...qk.notifications.all, 'unread'] as const,
+  },
+
   chat: {
     all: ['chat'] as const,
     active: () => [...qk.chat.all, 'active'] as const,
@@ -87,6 +93,7 @@ export async function invalidateAfterBooking(
   await Promise.all([
     qc.invalidateQueries({ queryKey: qk.appointments.all }),
     qc.invalidateQueries({ queryKey: qk.payments.balance() }),
+    qc.invalidateQueries({ queryKey: qk.notifications.all }),
     appointmentId
       ? qc.invalidateQueries({ queryKey: qk.appointments.detail(appointmentId) })
       : Promise.resolve(),
