@@ -7,7 +7,8 @@
     "stagingE2eMaxAgeHours": 72,
     "ctgOneAccessCanaryMaxAgeHours": 6,
     "recoveryDrillMaxAgeHours": 168,
-    "alertDrillMaxAgeHours": 720
+    "alertDrillMaxAgeHours": 720,
+    "paymentRailApplicationMaxAgeHours": 72
   },
   "requiredExternalEvidence": {
     "productionBackupConfigured": {
@@ -28,7 +29,7 @@
     "paymentRailVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Verify at least one intended MVP payment rail end-to-end. TRANSFER is the current candidate rail; CTG remains disabled and PSE fails closed in production while its adapter is still sandbox/mock."
+      "note": "Nvet Transfer Payment Rail Certification must first prove the TRANSFER application lifecycle in isolated staging (CLIENT → VET → ADMIN, PENDING → VERIFYING → CONFIRMED). Keep this external evidence pending until a controlled real bank transfer is executed and retained as operator evidence showing actual funds movement. CTG remains disabled and PSE remains fail-closed in production while its adapter is sandbox/mock."
     }
   },
   "postRcTracks": {
