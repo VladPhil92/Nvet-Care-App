@@ -1,148 +1,76 @@
-# Manual maintenance gate for the isolated Android E2E staging environment.
+# Autonomous certification gate for the isolated Nvet staging environment.
 #
-# This workflow never provisions or mutates production. It requires a dedicated
-# GitHub `staging` environment whose STAGING_DATABASE_URL points to the same
-# isolated PostgreSQL instance used by E2E_API_URL.
+# The workflow never mutates production and does not retain E2E passwords in
+# GitHub. It rotates synthetic credentials in Railway staging, deploys the exact
+# candidate SHA, lets the staging predeploy seed those identities, then verifies
+# readiness/auth/discovery through the public staging API.
 name: Staging E2E Seed & Preflight
 
 on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
   workflow_dispatch:
-    inputs:
-      confirm:
-        description: 'Type seed-staging to apply schema + reset dedicated E2E fixtures'
-        required: true
-        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: staging-e2e-maintenance
-  cancel-in-progress: false
+  group: nvet-staging-e2e-certification
+  cancel-in-progress: true
 
 env:
   NODE_VERSION: '22.x'
+  RAILWAY_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
+  RAILWAY_STAGING_ENVIRONMENT_ID: 9267d965-e5e4-4c6f-af93-001c73cf62b4
+  RAILWAY_STAGING_SERVICE_ID: dc5c2eee-3f8d-4416-8854-a921ea694735
+  RAILWAY_PRODUCTION_SERVICE_ID: 42e734a0-931b-45c8-a091-4334b54e9d1c
 
 jobs:
   seed-and-preflight:
-    name: Seed and verify isolated staging
+    name: Deploy, rotate fixtures and verify isolated staging
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: staging
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
-      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
-      E2E_API_URL: ${{ secrets.E2E_API_URL }}
-      E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
-      E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
-      E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
-      E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
-      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-      GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
-      NVET_ALLOW_E2E_SEED: 'true'
-      NVET_SEED_TARGET: 'staging'
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RC_CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
     steps:
-      - name: Require explicit staging confirmation
-        run: |
-          if [ "${{ inputs.confirm }}" != "seed-staging" ]; then
-            echo '::error::Confirmation refused. Type seed-staging exactly.'
-            exit 1
-          fi
-
-      - name: Validate isolated staging configuration
-        run: |
-          missing=""
-          [ -z "$DATABASE_URL" ] && missing="$missing STAGING_DATABASE_URL"
-          [ -z "$E2E_API_URL" ] && missing="$missing E2E_API_URL"
-          [ -z "$E2E_CLIENT_EMAIL" ] && missing="$missing E2E_CLIENT_EMAIL"
-          [ -z "$E2E_CLIENT_PASSWORD" ] && missing="$missing E2E_CLIENT_PASSWORD"
-          [ -z "$E2E_VET_EMAIL" ] && missing="$missing E2E_VET_EMAIL"
-          [ -z "$E2E_VET_PASSWORD" ] && missing="$missing E2E_VET_PASSWORD"
-          [ -z "$GOOGLE_MAPS_ANDROID_API_KEY" ] && missing="$missing GOOGLE_MAPS_ANDROID_API_KEY"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing staging configuration:$missing"
-            exit 1
-          fi
-
-          if [ -n "$E2E_ADMIN_EMAIL" ] && [ -z "$E2E_ADMIN_PASSWORD" ]; then
-            echo '::error::E2E_ADMIN_PASSWORD is required when E2E_ADMIN_EMAIL is configured.'
-            exit 1
-          fi
-          if [ -z "$E2E_ADMIN_EMAIL" ] && [ -n "$E2E_ADMIN_PASSWORD" ]; then
-            echo '::error::E2E_ADMIN_EMAIL is required when E2E_ADMIN_PASSWORD is configured.'
-            exit 1
-          fi
-
-          if ! printf '%s' "$DATABASE_URL" | grep -Eq '^postgres(ql)?://'; then
-            echo '::error::STAGING_DATABASE_URL must be a PostgreSQL URL.'
-            exit 1
-          fi
-
-          if printf '%s' "$DATABASE_URL" | grep -Eqi '^postgres(ql)?://([^/@]+(:[^/@]*)?@)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|/)'; then
-            echo '::error::STAGING_DATABASE_URL must target an isolated remote database.'
-            exit 1
-          fi
-
-          if ! printf '%s' "$E2E_API_URL" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
-            echo '::error::E2E_API_URL must be an absolute HTTPS URL ending in /api.'
-            exit 1
-          fi
-
-          if printf '%s' "$E2E_API_URL" | grep -Eqi '^https://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|/)'; then
-            echo '::error::E2E_API_URL must target a remote staging backend.'
-            exit 1
-          fi
-
-          client="$(printf '%s' "$E2E_CLIENT_EMAIL" | tr '[:upper:]' '[:lower:]')"
-          vet="$(printf '%s' "$E2E_VET_EMAIL" | tr '[:upper:]' '[:lower:]')"
-          if [ "$client" = "$vet" ]; then
-            echo '::error::Client and vet E2E identities must be different.'
-            exit 1
-          fi
-
-          if [ -n "$E2E_ADMIN_EMAIL" ]; then
-            admin="$(printf '%s' "$E2E_ADMIN_EMAIL" | tr '[:upper:]' '[:lower:]')"
-            if [ "$admin" = "$client" ] || [ "$admin" = "$vet" ]; then
-              echo '::error::Admin E2E identity must be different from client and vet.'
-              exit 1
-            fi
-          fi
-
-          echo 'Staging configuration shape accepted. Infrastructure isolation remains an operator responsibility.'
-
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout certified candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RC_CANDIDATE_SHA }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
 
-      - name: Install canonical workspace dependencies
-        run: npm ci --include=dev --legacy-peer-deps
-
-      - name: Apply backend schema contract to staging
-        run: npm run deploy:preflight --workspace backend
-
-      - name: Reset deterministic E2E fixtures in staging
-        run: npm run seed:e2e --workspace backend
+      - name: Prepare autonomous staging certification session
+        run: node scripts/railway-staging-session.mjs prepare
 
       - name: Verify staging readiness, identities and emergency discovery
         run: node mobile/e2e/preflight.mjs
 
       - name: Staging gate summary
+        if: always()
+        shell: bash
         run: |
-          echo '✅ Staging schema contract applied.'
-          echo '✅ Dedicated E2E client/vet fixtures seeded.'
-          if [ -n "$E2E_ADMIN_EMAIL" ]; then
-            echo '✅ Dedicated staging ADMIN payment-certification fixture seeded.'
-          else
-            echo 'ℹ️ ADMIN payment-certification fixture not configured yet.'
-          fi
-          echo '✅ /api/health/ready passed.'
-          echo '✅ Client and vet authentication passed.'
-          echo '✅ Emergencias + Disponible ahora fixture search passed.'
-          echo 'Next gate: TRANSFER payment rail certification when ADMIN fixture secrets are configured.'
+          {
+            echo '## Nvet isolated staging certification'
+            echo ''
+            echo "- Candidate: \`${RC_CANDIDATE_SHA}\`"
+            echo '- Target guard: Nvet Care App / staging / nvet-staging-backend.'
+            echo '- Credentials: runtime-generated synthetic CLIENT/VET/ADMIN passwords, stored only as Railway staging variables and masked in Actions.'
+            echo '- Deployment: exact candidate SHA through Railway API.'
+            echo '- Seed: staging predeploy only; production service ID is explicitly refused.'
+            echo '- Checks: /api/health/ready revision + CLIENT/VET authentication + Emergencias/Disponible ahora discovery.'
+            echo ''
+            echo '> A green run is staging application evidence. It is not provider backup evidence and does not prove real funds movement.'
+          } >> "$GITHUB_STEP_SUMMARY"

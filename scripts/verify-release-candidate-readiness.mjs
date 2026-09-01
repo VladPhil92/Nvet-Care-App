@@ -21,15 +21,16 @@ const railwayImpactingPaths = [
 ];
 
 // A TRANSFER certification may only be reused across changes that cannot alter
-// the payment lifecycle. Any backend/dependency/certification-contract change
-// invalidates the previous run and requires the staging flow to be executed
-// again. This prevents a fresh-but-stale financial proof from surviving a
-// later code change.
+// the payment lifecycle or the staging target/credential contract. Any such
+// change invalidates the previous run and requires the staging flow to execute
+// again. This prevents a fresh-but-stale financial proof from surviving later
+// code or certification-infrastructure changes.
 const paymentRailImpactingPaths = [
   /^backend\//,
   /^package\.json$/,
   /^package-lock\.json$/,
   /^scripts\/certify-transfer-payment-rail\.mjs$/,
+  /^scripts\/railway-staging-session\.mjs$/,
   /^\.github\/workflows\/payment-rail-certification\.yml$/,
   /^\.github\/workflows\/staging-e2e\.yml$/,
 ];
@@ -273,7 +274,7 @@ async function auditRuntime(manifest) {
     ok: currentStagingPreflight || (Boolean(staging) && stagingAge <= manifest.policy.stagingE2eMaxAgeHours),
     label: 'isolated staging E2E freshness',
     detail: currentStagingPreflight
-      ? 'verified in current convergence run: readiness + CLIENT/VET auth + emergency discovery'
+      ? 'verified in current convergence run: candidate revision + CLIENT/VET auth + emergency discovery'
       : staging
         ? `${stagingAge.toFixed(1)}h old run=${staging.id}`
         : 'no successful staging E2E run or current preflight proof',

@@ -247,18 +247,27 @@ try {
   }
   const transactionId = payment.id;
 
+  // The upload filter accepts JPG, PNG or PDF only. Use a tiny synthetic PDF
+  // rather than weakening the backend file contract for certification.
+  const pdfFixture = [
+    '%PDF-1.4',
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+    '2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj',
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]>>endobj',
+    `%% NVET staging transfer certification ${certificateId}`,
+    `%% appointment=${appointmentId}`,
+    `%% transaction=${transactionId}`,
+    '%%EOF',
+    '',
+  ].join('\n');
+
   const form = new FormData();
   form.set('transferCode', `E2E-${certificateId}`.slice(0, 50));
   form.set('transferDate', new Date().toISOString());
   form.set(
     'file',
-    new Blob(
-      [
-        `NVET STAGING TRANSFER CERTIFICATION\nrun=${certificateId}\nappointment=${appointmentId}\ntransaction=${transactionId}\n`,
-      ],
-      { type: 'text/plain' },
-    ),
-    `nvet-transfer-${certificateId}.txt`,
+    new Blob([pdfFixture], { type: 'application/pdf' }),
+    `nvet-transfer-${certificateId}.pdf`,
   );
 
   const verifying = await readJson(

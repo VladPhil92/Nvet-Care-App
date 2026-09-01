@@ -19,6 +19,7 @@ const FIXTURE_IDS = {
   confirmedAppointment: "00000000-0000-4000-8000-000000000202",
 };
 
+const E2E_VET_LICENSE = "NVET-E2E-0001";
 const E2E_VET_SPECIALTIES = ["Consulta general", "Emergencias"];
 
 function requiredEnv(name: string): string {
@@ -206,10 +207,14 @@ async function main(): Promise<void> {
     });
   }
 
+  // The professional fixture is canonical by license, not by user identity.
+  // This makes credential/email rotation safe: an existing staging profile is
+  // re-linked to the current synthetic VET user instead of attempting to create
+  // a duplicate license_number row.
   const vetProfile = await prisma.vetProfile.upsert({
-    where: { userId: vetUser.id },
+    where: { licenseNumber: E2E_VET_LICENSE },
     update: {
-      licenseNumber: "NVET-E2E-0001",
+      userId: vetUser.id,
       specialties: E2E_VET_SPECIALTIES,
       tier: VetTier.ELITE,
       bio: "Fixture veterinario para pruebas E2E de Nvet Care.",
@@ -230,7 +235,7 @@ async function main(): Promise<void> {
     },
     create: {
       userId: vetUser.id,
-      licenseNumber: "NVET-E2E-0001",
+      licenseNumber: E2E_VET_LICENSE,
       specialties: E2E_VET_SPECIALTIES,
       tier: VetTier.ELITE,
       bio: "Fixture veterinario para pruebas E2E de Nvet Care.",
@@ -251,16 +256,24 @@ async function main(): Promise<void> {
     },
   });
 
-  // Reset only records owned by the dedicated E2E fixture client/vet. The
-  // optional ADMIN fixture has no domain data and is never used outside
-  // test/staging, so repeated runs cannot touch unrelated operator accounts.
+  // Reset only the dedicated fixture domain records. Deterministic IDs are
+  // included explicitly so a prior CLIENT email can be rotated without leaving
+  // a pet/appointment behind that would collide on the next seed.
   await prisma.$transaction([
     prisma.appointment.deleteMany({
       where: {
-        OR: [{ clientId: client.id }, { vetId: vetProfile.id }],
+        OR: [
+          { id: { in: [FIXTURE_IDS.pendingAppointment, FIXTURE_IDS.confirmedAppointment] } },
+          { clientId: client.id },
+          { vetId: vetProfile.id },
+        ],
       },
     }),
-    prisma.pet.deleteMany({ where: { ownerId: client.id } }),
+    prisma.pet.deleteMany({
+      where: {
+        OR: [{ id: FIXTURE_IDS.pet }, { ownerId: client.id }],
+      },
+    }),
     prisma.price.deleteMany({ where: { vetId: vetProfile.id } }),
     prisma.vetSchedule.deleteMany({ where: { vetProfileId: vetProfile.id } }),
     prisma.scheduleException.deleteMany({

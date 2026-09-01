@@ -29,7 +29,7 @@
     "paymentRailVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Nvet Transfer Payment Rail Certification must first prove the TRANSFER application lifecycle in isolated staging (CLIENT → VET → ADMIN, PENDING → VERIFYING → CONFIRMED). Keep this external evidence pending until a controlled real bank transfer is executed and retained as operator evidence showing actual funds movement. CTG remains disabled and PSE remains fail-closed in production while its adapter is sandbox/mock."
+      "note": "The machine gate now certifies TRANSFER autonomously in isolated Railway staging using runtime-rotated synthetic CLIENT/VET/ADMIN credentials and the exact candidate SHA. That application proof remains separate from this external gate: keep paymentRailVerified pending until a controlled real bank transfer is retained as operator evidence showing actual funds movement. CTG remains disabled and PSE remains fail-closed in production while its adapter is sandbox/mock."
     }
   },
   "postRcTracks": {
