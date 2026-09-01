@@ -45,6 +45,8 @@ jobs:
       E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
       E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
       E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
 
     steps:
       - name: Checkout canonical main
@@ -71,9 +73,28 @@ jobs:
             echo "::error::Missing required staging secrets:$missing"
             exit 1
           fi
-          if [ "$E2E_CLIENT_EMAIL" = "$E2E_VET_EMAIL" ]; then
+
+          if [ -n "$E2E_ADMIN_EMAIL" ] && [ -z "$E2E_ADMIN_PASSWORD" ]; then
+            echo '::error::E2E_ADMIN_PASSWORD is required when E2E_ADMIN_EMAIL is configured.'
+            exit 1
+          fi
+          if [ -z "$E2E_ADMIN_EMAIL" ] && [ -n "$E2E_ADMIN_PASSWORD" ]; then
+            echo '::error::E2E_ADMIN_EMAIL is required when E2E_ADMIN_PASSWORD is configured.'
+            exit 1
+          fi
+
+          client="$(printf '%s' "$E2E_CLIENT_EMAIL" | tr '[:upper:]' '[:lower:]')"
+          vet="$(printf '%s' "$E2E_VET_EMAIL" | tr '[:upper:]' '[:lower:]')"
+          if [ "$client" = "$vet" ]; then
             echo '::error::CLIENT and VET fixture identities must be different.'
             exit 1
+          fi
+          if [ -n "$E2E_ADMIN_EMAIL" ]; then
+            admin="$(printf '%s' "$E2E_ADMIN_EMAIL" | tr '[:upper:]' '[:lower:]')"
+            if [ "$admin" = "$client" ] || [ "$admin" = "$vet" ]; then
+              echo '::error::ADMIN fixture identity must be different from CLIENT and VET.'
+              exit 1
+            fi
           fi
 
       - name: Verify Railway project identity
@@ -121,5 +142,8 @@ jobs:
             echo "- API: $STAGING_API_URL"
             echo '- PostgreSQL remains on Railway private networking.'
             echo '- CLIENT/VET fixture credentials came exclusively from the GitHub staging environment.'
+            if [ -n "$E2E_ADMIN_EMAIL" ]; then
+              echo '- Optional staging-only ADMIN payment-certification identity was also provisioned.'
+            fi
             echo '- Backend readiness, fixture login and discovery preflight passed.'
           } >> "$GITHUB_STEP_SUMMARY"
