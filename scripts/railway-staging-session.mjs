@@ -179,6 +179,35 @@ async function wait(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function printDeploymentDiagnostics(deploymentId) {
+  try {
+    const data = await graphql(
+      `query Diagnose($deploymentId: String!) {
+        buildLogs(deploymentId: $deploymentId, limit: 80) { timestamp message severity }
+        deploymentLogs(deploymentId: $deploymentId, limit: 80) { timestamp message severity }
+      }`,
+      { deploymentId },
+    );
+
+    console.error(`--- Railway staging diagnostics for ${deploymentId} ---`);
+    for (const [label, rows] of [
+      ['build', data.buildLogs || []],
+      ['deploy', data.deploymentLogs || []],
+    ]) {
+      for (const row of rows.slice(-40)) {
+        console.error(
+          `${label} ${row.timestamp ?? ''} [${row.severity ?? 'unknown'}] ${row.message ?? ''}`,
+        );
+      }
+    }
+    console.error('--- end Railway staging diagnostics ---');
+  } catch (error) {
+    console.error(
+      `Unable to fetch Railway diagnostics: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 async function waitForDeployment(deploymentId, timeoutMs = 15 * 60_000) {
   const deadline = Date.now() + timeoutMs;
   let lastStatus = 'UNKNOWN';
@@ -190,10 +219,12 @@ async function waitForDeployment(deploymentId, timeoutMs = 15 * 60_000) {
     lastStatus = data.deployment?.status || 'UNKNOWN';
     if (lastStatus === 'SUCCESS') return;
     if (['FAILED', 'CRASHED', 'REMOVED'].includes(lastStatus)) {
+      await printDeploymentDiagnostics(deploymentId);
       throw new Error(`Railway staging deployment ${deploymentId} ended with ${lastStatus}.`);
     }
     await wait(5_000);
   }
+  await printDeploymentDiagnostics(deploymentId);
   throw new Error(`Railway staging deployment timed out with status ${lastStatus}.`);
 }
 
