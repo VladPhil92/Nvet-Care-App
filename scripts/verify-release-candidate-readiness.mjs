@@ -5,6 +5,7 @@ const allowedEvidenceStates = new Set(['pending', 'verified']);
 const args = new Set(process.argv.slice(2));
 const contractOnly = args.has('--contract-only');
 const runtimeAudit = args.has('--runtime');
+const machineOnly = args.has('--machine-only');
 const enforce = process.env.RC_ENFORCE === 'true';
 
 function fail(message) {
@@ -116,31 +117,36 @@ async function auditRuntime(manifest) {
     detail: ctgCanary ? `${ctgCanaryAge.toFixed(1)}h old run=${ctgCanary.id}` : 'no successful CTG One access canary',
   });
 
-  for (const [key, entry] of Object.entries(manifest.requiredExternalEvidence)) {
-    checks.push({
-      ok: entry.status === 'verified',
-      label: `external evidence: ${key}`,
-      detail: entry.status === 'verified' ? entry.evidence : 'pending provider/operator evidence',
-    });
+  if (!machineOnly) {
+    for (const [key, entry] of Object.entries(manifest.requiredExternalEvidence)) {
+      checks.push({
+        ok: entry.status === 'verified',
+        label: `external evidence: ${key}`,
+        detail: entry.status === 'verified' ? entry.evidence : 'pending provider/operator evidence',
+      });
+    }
   }
 
   const blocked = checks.filter((check) => !check.ok);
+  const scope = machineOnly ? 'machine-gate' : 'full';
   const lines = [
-    `Nvet Care ${manifest.candidate} readiness audit`,
+    `Nvet Care ${manifest.candidate} readiness audit (${scope})`,
     `candidate SHA: ${sha}`,
     '',
     ...checks.map((check) => statusLine(check.ok, check.label, check.detail)),
     '',
     blocked.length === 0
-      ? 'READY: all machine and external RC gates are satisfied.'
-      : `NOT READY: ${blocked.length} gate(s) remain blocked.`,
+      ? machineOnly
+        ? 'READY: all machine RC gates are satisfied; operator/provider evidence remains a separate promotion gate.'
+        : 'READY: all machine and external RC gates are satisfied.'
+      : `NOT READY: ${blocked.length} ${scope} gate(s) remain blocked.`,
   ];
   const report = `${lines.join('\n')}\n`;
   console.log(report);
 
   if (process.env.GITHUB_STEP_SUMMARY) {
     const markdown = [
-      `# Nvet Care ${manifest.candidate} readiness`,
+      `# Nvet Care ${manifest.candidate} readiness (${scope})`,
       '',
       `Candidate SHA: \`${sha}\``,
       '',
@@ -148,7 +154,11 @@ async function auditRuntime(manifest) {
       '|---|---|---|',
       ...checks.map((check) => `| ${check.label} | ${check.ok ? 'PASS' : 'BLOCKED'} | ${String(check.detail).replaceAll('|', '\\|')} |`),
       '',
-      blocked.length === 0 ? '**READY for RC promotion.**' : `**NOT READY:** ${blocked.length} gate(s) remain blocked.`,
+      blocked.length === 0
+        ? machineOnly
+          ? '**Machine gates READY. External provider/operator evidence is still required for RC promotion.**'
+          : '**READY for RC promotion.**'
+        : `**NOT READY:** ${blocked.length} ${scope} gate(s) remain blocked.`,
       '',
     ].join('\n');
     await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, markdown);
@@ -160,8 +170,12 @@ async function auditRuntime(manifest) {
 const manifest = await readManifest();
 console.log(`RC contract valid: ${manifest.candidate}`);
 
+if (machineOnly && !runtimeAudit) {
+  fail('--machine-only requires --runtime.');
+}
+
 if (runtimeAudit) {
   await auditRuntime(manifest);
 } else if (!contractOnly) {
-  console.log('Use --runtime for live evidence audit or --contract-only for schema validation.');
+  console.log('Use --runtime for live evidence audit, --runtime --machine-only for technical gates, or --contract-only for schema validation.');
 }
