@@ -8,6 +8,18 @@ const runtimeAudit = args.has('--runtime');
 const machineOnly = args.has('--machine-only');
 const enforce = process.env.RC_ENFORCE === 'true';
 
+const railwayImpactingPaths = [
+  /^backend\//,
+  /^scripts\/railway-staging-bootstrap\.mjs$/,
+  /^Dockerfile\.railway$/,
+  /^railway\.json$/,
+  /^package\.json$/,
+  /^package-lock\.json$/,
+  /^\.github\/workflows\/railway-contract\.yml$/,
+  /^\.github\/workflows\/deploy-backend\.yml$/,
+  /^\.github\/workflows\/provision-staging\.yml$/,
+];
+
 function fail(message) {
   throw new Error(message);
 }
@@ -19,6 +31,15 @@ function hoursSince(iso) {
 
 function statusLine(ok, label, detail) {
   return `${ok ? 'PASS' : 'BLOCKED'} | ${label} | ${detail}`;
+}
+
+function githubHeaders() {
+  const token = process.env.GITHUB_TOKEN;
+  return {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
 async function readManifest() {
@@ -49,26 +70,86 @@ async function readManifest() {
 }
 
 async function githubRuns(repo) {
-  const token = process.env.GITHUB_TOKEN;
-  const headers = {
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-  const response = await fetch(`https://api.github.com/repos/${repo}/actions/runs?branch=main&per_page=100`, { headers });
+  const response = await fetch(`https://api.github.com/repos/${repo}/actions/runs?branch=main&per_page=100`, {
+    headers: githubHeaders(),
+  });
   if (!response.ok) fail(`GitHub Actions API failed for ${repo}: HTTP ${response.status}`);
   const payload = await response.json();
   return Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
+}
+
+async function githubCompare(repo, base, head) {
+  const response = await fetch(`https://api.github.com/repos/${repo}/compare/${base}...${head}`, {
+    headers: githubHeaders(),
+  });
+  if (!response.ok) fail(`GitHub compare API failed for ${repo}: HTTP ${response.status}`);
+  const payload = await response.json();
+  if (!Array.isArray(payload.files)) fail('GitHub compare response did not contain files.');
+  if (payload.files.length >= 300) {
+    fail('GitHub compare reached the 300-file safety boundary; Railway evidence cannot be reused safely.');
+  }
+  return payload;
 }
 
 function latestRun(runs, name, predicate = () => true) {
   return runs.find((run) => run?.name === name && predicate(run));
 }
 
+function isRailwayImpactingPath(path) {
+  return railwayImpactingPaths.some((pattern) => pattern.test(path));
+}
+
+async function resolveRailwayEvidence(nvetRuns, repo, sha) {
+  const exact = latestRun(
+    nvetRuns,
+    'Railway Contract',
+    (run) => run.head_sha === sha && run.status === 'completed' && run.conclusion === 'success',
+  );
+  if (exact) {
+    return {
+      ok: true,
+      detail: `exact candidate success run=${exact.id}`,
+    };
+  }
+
+  const baseline = latestRun(
+    nvetRuns,
+    'Railway Contract',
+    (run) => run.status === 'completed' && run.conclusion === 'success' && /^[0-9a-f]{40}$/i.test(run.head_sha || ''),
+  );
+  if (!baseline) {
+    return { ok: false, detail: 'no successful Railway Contract baseline on main' };
+  }
+
+  const comparison = await githubCompare(repo, baseline.head_sha, sha);
+  if (!['ahead', 'identical'].includes(comparison.status)) {
+    return {
+      ok: false,
+      detail: `Railway baseline is not a safe ancestor of candidate (compare status=${comparison.status ?? 'unknown'})`,
+    };
+  }
+
+  const changedFiles = comparison.files.map((file) => file?.filename).filter(Boolean);
+  const impacting = changedFiles.filter(isRailwayImpactingPath);
+  if (impacting.length > 0) {
+    return {
+      ok: false,
+      detail: `Railway-impacting changes since run=${baseline.id}: ${impacting.slice(0, 5).join(', ')}`,
+    };
+  }
+
+  return {
+    ok: true,
+    detail: `reused run=${baseline.id} sha=${baseline.head_sha.slice(0, 7)}; ${changedFiles.length} later file change(s), none Railway-impacting`,
+  };
+}
+
 async function auditRuntime(manifest) {
   const repo = process.env.GITHUB_REPOSITORY || 'VladPhil92/Nvet-Care-App';
-  const sha = process.env.GITHUB_SHA;
-  if (!sha || !/^[0-9a-f]{40}$/i.test(sha)) fail('GITHUB_SHA is required for runtime RC audit.');
+  const sha = process.env.RC_CANDIDATE_SHA || process.env.GITHUB_SHA;
+  if (!sha || !/^[0-9a-f]{40}$/i.test(sha)) {
+    fail('RC_CANDIDATE_SHA or GITHUB_SHA is required for runtime RC audit.');
+  }
 
   const [nvetRuns, ctgRuns] = await Promise.all([
     githubRuns(repo),
@@ -81,14 +162,14 @@ async function auditRuntime(manifest) {
   checks.push({
     ok: ci?.status === 'completed' && ci?.conclusion === 'success',
     label: 'main CI on candidate SHA',
-    detail: ci ? `${ci.status}/${ci.conclusion ?? 'none'} run=${ci.id}` : 'no run for current SHA',
+    detail: ci ? `${ci.status}/${ci.conclusion ?? 'none'} run=${ci.id}` : 'no run for candidate SHA',
   });
 
-  const railway = latestRun(nvetRuns, 'Railway Contract', (run) => run.head_sha === sha);
+  const railway = await resolveRailwayEvidence(nvetRuns, repo, sha);
   checks.push({
-    ok: railway?.status === 'completed' && railway?.conclusion === 'success',
-    label: 'Railway contract on candidate SHA',
-    detail: railway ? `${railway.status}/${railway.conclusion ?? 'none'} run=${railway.id}` : 'no run for current SHA',
+    ok: railway.ok,
+    label: 'Railway deployment contract evidence',
+    detail: railway.detail,
   });
 
   const backendCanary = latestRun(nvetRuns, 'Nvet Production Backend Health Canary', (run) => run.conclusion === 'success');
