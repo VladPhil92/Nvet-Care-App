@@ -10,11 +10,15 @@ describe("HealthService", () => {
     service = new HealthService(prisma as any);
     jest
       .spyOn(service as any, "checkMemory")
-      .mockReturnValue({ status: "up" });
+      .mockReturnValue({ status: "up", impact: "advisory" });
 
     delete process.env.APP_REVISION;
     delete process.env.RAILWAY_GIT_COMMIT_SHA;
     delete process.env.GITHUB_SHA;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   afterAll(() => {
@@ -50,6 +54,7 @@ describe("HealthService", () => {
     expect(health.checks.database).toEqual(
       expect.objectContaining({
         status: "down",
+        impact: "blocking",
         error: "dependency_unavailable",
       }),
     );
@@ -57,13 +62,38 @@ describe("HealthService", () => {
     expect(serialized).not.toContain("private-host");
   });
 
-  it("reports ready when database and memory checks are up", async () => {
+  it("reports ready when the blocking database dependency is up", async () => {
     prisma.$queryRaw.mockResolvedValue([{ "?column?": 1 }]);
 
     const health = await service.getReadiness();
 
     expect(health.status).toBe("ok");
+    expect(health.checks.database).toEqual(
+      expect.objectContaining({ status: "up", impact: "blocking" }),
+    );
+    expect(health.checks.memory).toEqual(
+      expect.objectContaining({ status: "up", impact: "advisory" }),
+    );
+  });
+
+  it("does not remove a healthy instance from traffic for advisory V8 heap pressure", async () => {
+    prisma.$queryRaw.mockResolvedValue([{ "?column?": 1 }]);
+    (service as any).checkMemory.mockReturnValue({
+      status: "down",
+      impact: "advisory",
+      details: { utilizationPct: 97 },
+    });
+
+    const health = await service.getReadiness();
+
+    expect(health.status).toBe("ok");
     expect(health.checks.database.status).toBe("up");
-    expect(health.checks.memory.status).toBe("up");
+    expect(health.checks.memory).toEqual(
+      expect.objectContaining({
+        status: "down",
+        impact: "advisory",
+        details: { utilizationPct: 97 },
+      }),
+    );
   });
 });
