@@ -52,6 +52,7 @@ jobs:
       NVET_SEED_TARGET: test
       E2E_CLIENT_EMAIL: recovery-client@nvetcare.invalid
       E2E_VET_EMAIL: recovery-vet@nvetcare.invalid
+      E2E_ADMIN_EMAIL: recovery-admin@nvetcare.invalid
 
     steps:
       - name: Checkout
@@ -79,6 +80,7 @@ jobs:
           set -euo pipefail
           echo "E2E_CLIENT_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
           echo "E2E_VET_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+          echo "E2E_ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
 
       - name: Materialize canonical schema and deterministic fixtures
         shell: bash
@@ -97,10 +99,12 @@ jobs:
           users="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from users')"
           pets="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from pets')"
           appointments="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from appointments')"
+          admins="$(psql "$SOURCE_PG_URL" -Atc "select count(*) from users where email='recovery-admin@nvetcare.invalid' and role='ADMIN'")"
 
-          test "$users" -ge 2
+          test "$users" -ge 3
           test "$pets" -ge 1
           test "$appointments" -ge 2
+          test "$admins" = '1'
 
           echo "users=$users" >> "$GITHUB_OUTPUT"
           echo "pets=$pets" >> "$GITHUB_OUTPUT"
@@ -144,6 +148,7 @@ jobs:
           test "$restored_pets" = '${{ steps.source.outputs.pets }}'
           test "$restored_appointments" = '${{ steps.source.outputs.appointments }}'
 
+          test "$(psql "$RESTORE_PG_URL" -Atc "select count(*) from users where email='recovery-admin@nvetcare.invalid' and role='ADMIN'")" = '1'
           test "$(psql "$RESTORE_PG_URL" -Atc "select count(*) from pets where id='00000000-0000-4000-8000-000000000101'")" = '1'
           test "$(psql "$RESTORE_PG_URL" -Atc "select count(*) from appointments where id in ('00000000-0000-4000-8000-000000000201','00000000-0000-4000-8000-000000000202')")" = '2'
 
@@ -164,7 +169,7 @@ jobs:
             echo '- PostgreSQL source: ephemeral Postgres 16 service.'
             echo '- Backup format: pg_dump custom archive, no owner/ACL coupling.'
             echo '- Restore target: independently created empty database.'
-            echo '- Integrity verification: users, pets, appointments and deterministic fixture IDs.'
+            echo '- Integrity verification: client, vet, staging-only ADMIN fixture, pets, appointments and deterministic fixture IDs.'
             if [ -f /tmp/nvet-recovery.sha256 ]; then
               echo "- Dump checksum: \`$(cut -d' ' -f1 /tmp/nvet-recovery.sha256)\`"
             fi
