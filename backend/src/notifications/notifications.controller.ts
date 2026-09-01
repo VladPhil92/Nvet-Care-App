@@ -18,21 +18,25 @@ export class NotificationsController {
 
   @Get()
   async list(@Request() req, @Query("limit") limit?: string) {
-    return this.notificationsService.listForUser(req.user.id, limit);
+    return this.notificationsService.listForUser(
+      req.user.id,
+      req.user.role,
+      limit,
+    );
   }
 
   @Get("unread-count")
   async unreadCount(@Request() req) {
-    return this.notificationsService.getUnreadCount(req.user.id);
+    return this.notificationsService.getUnreadCount(req.user.id, req.user.role);
   }
 
   @Patch("read-all")
   async markAllRead(@Request() req) {
-    return this.notificationsService.markAllRead(req.user.id);
+    return this.notificationsService.markAllRead(req.user.id, req.user.role);
   }
 
   @Patch(":id/read")
   async markRead(@Request() req, @Param("id", ParseUUIDPipe) id: string) {
-    return this.notificationsService.markRead(req.user.id, id);
+    return this.notificationsService.markRead(req.user.id, req.user.role, id);
   }
 }
