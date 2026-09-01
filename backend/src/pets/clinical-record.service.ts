@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { AppointmentStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 
 type JsonObject = Record<string, unknown>;
@@ -45,7 +44,7 @@ export class ClinicalRecordService {
       where: {
         petId,
         clientId: ownerId,
-        status: AppointmentStatus.COMPLETED,
+        completedAt: { not: null },
       },
       select: {
         id: true,
@@ -135,7 +134,7 @@ export class ClinicalRecordService {
         ownerReported:
           "Datos declarados por el responsable de la mascota; no equivalen a una conclusión clínica veterinaria.",
         vetAuthored:
-          "Diagnósticos y tratamientos persistidos en atenciones COMPLETED por el flujo veterinario de Nvet Care.",
+          "Diagnósticos y tratamientos persistidos en atenciones que alcanzaron estado completado; el expediente conserva esa evidencia aunque la cita entre después en disputa.",
       },
     };
   }
