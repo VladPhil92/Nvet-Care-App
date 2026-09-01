@@ -1,0 +1,122 @@
+name: Nvet Transfer Payment Rail Certification
+
+on:
+  workflow_run:
+    workflows: ['Staging E2E Seed & Preflight']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type CERTIFY_TRANSFER_STAGING to run the staging-only payment lifecycle'
+        required: true
+        default: 'NO'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-transfer-payment-rail-certification
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  certify-transfer:
+    name: Certify CLIENT → VET → ADMIN transfer lifecycle
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+    env:
+      NVET_PAYMENT_CERTIFICATION_TARGET: staging
+      E2E_API_URL: ${{ secrets.E2E_API_URL }}
+      E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
+      E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
+      E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
+      E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+
+    steps:
+      - name: Require explicit manual confirmation
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ inputs.confirmation }}' != 'CERTIFY_TRANSFER_STAGING' ]; then
+            echo '::error::Confirmation refused. Type CERTIFY_TRANSFER_STAGING exactly.'
+            exit 1
+          fi
+
+      - name: Validate staging-only certification inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=''
+          for name in \
+            E2E_API_URL \
+            E2E_CLIENT_EMAIL E2E_CLIENT_PASSWORD \
+            E2E_VET_EMAIL E2E_VET_PASSWORD \
+            E2E_ADMIN_EMAIL E2E_ADMIN_PASSWORD; do
+            [ -z "${!name}" ] && missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing payment certification staging secrets:$missing"
+            exit 1
+          fi
+
+          if ! printf '%s' "$E2E_API_URL" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
+            echo '::error::E2E_API_URL must be an absolute HTTPS URL ending in /api.'
+            exit 1
+          fi
+
+          case "$E2E_API_URL" in
+            *backend-production-a476.up.railway.app*|https://ctgone.com/*|https://www.ctgone.com/*)
+              echo '::error::Payment certification refuses production hosts.'
+              exit 1
+              ;;
+          esac
+
+          client="$(printf '%s' "$E2E_CLIENT_EMAIL" | tr '[:upper:]' '[:lower:]')"
+          vet="$(printf '%s' "$E2E_VET_EMAIL" | tr '[:upper:]' '[:lower:]')"
+          admin="$(printf '%s' "$E2E_ADMIN_EMAIL" | tr '[:upper:]' '[:lower:]')"
+          if [ "$client" = "$vet" ] || [ "$client" = "$admin" ] || [ "$vet" = "$admin" ]; then
+            echo '::error::CLIENT, VET and ADMIN fixture emails must be distinct.'
+            exit 1
+          fi
+
+      - name: Checkout certified candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Certify staging transfer application lifecycle
+        run: node scripts/certify-transfer-payment-rail.mjs
+
+      - name: Publish certification boundary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Nvet TRANSFER Payment Rail Certification'
+            echo ''
+            echo "- Candidate: \`${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}\`"
+            echo '- Target: isolated staging only.'
+            echo '- Required identities: CLIENT → VET → ADMIN.'
+            echo '- Required transaction lifecycle: PENDING → VERIFYING → CONFIRMED.'
+            echo '- Appointment must become CONFIRMED and remain readable by the owning CLIENT.'
+            echo '- The synthetic appointment is cancelled after certification to release availability.'
+            echo ''
+            echo '> A successful run proves the Nvet application rail and authorization/state-machine lifecycle. It does not prove that real funds moved through a bank. Keep `paymentRailVerified` pending until a controlled real transfer is retained as operator evidence.'
+          } >> "$GITHUB_STEP_SUMMARY"

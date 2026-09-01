@@ -20,6 +20,20 @@ const railwayImpactingPaths = [
   /^\.github\/workflows\/provision-staging\.yml$/,
 ];
 
+// A TRANSFER certification may only be reused across changes that cannot alter
+// the payment lifecycle. Any backend/dependency/certification-contract change
+// invalidates the previous run and requires the staging flow to be executed
+// again. This prevents a fresh-but-stale financial proof from surviving a
+// later code change.
+const paymentRailImpactingPaths = [
+  /^backend\//,
+  /^package\.json$/,
+  /^package-lock\.json$/,
+  /^scripts\/certify-transfer-payment-rail\.mjs$/,
+  /^\.github\/workflows\/payment-rail-certification\.yml$/,
+  /^\.github\/workflows\/staging-e2e\.yml$/,
+];
+
 function fail(message) {
   throw new Error(message);
 }
@@ -58,6 +72,7 @@ async function readManifest() {
     'ctgOneAccessCanaryMaxAgeHours',
     'recoveryDrillMaxAgeHours',
     'alertDrillMaxAgeHours',
+    'paymentRailApplicationMaxAgeHours',
   ]) {
     const value = manifest.policy?.[key];
     if (!Number.isFinite(value) || value <= 0) fail(`Invalid RC policy value: ${key}`);
@@ -96,7 +111,7 @@ async function githubCompare(repo, base, head) {
   const payload = await response.json();
   if (!Array.isArray(payload.files)) fail('GitHub compare response did not contain files.');
   if (payload.files.length >= 300) {
-    fail('GitHub compare reached the 300-file safety boundary; Railway evidence cannot be reused safely.');
+    fail('GitHub compare reached the 300-file safety boundary; evidence cannot be reused safely.');
   }
   return payload;
 }
@@ -107,6 +122,10 @@ function latestRun(runs, name, predicate = () => true) {
 
 function isRailwayImpactingPath(path) {
   return railwayImpactingPaths.some((pattern) => pattern.test(path));
+}
+
+function isPaymentRailImpactingPath(path) {
+  return paymentRailImpactingPaths.some((pattern) => pattern.test(path));
 }
 
 async function resolveRailwayEvidence(nvetRuns, repo, sha) {
@@ -151,6 +170,51 @@ async function resolveRailwayEvidence(nvetRuns, repo, sha) {
   return {
     ok: true,
     detail: `reused run=${baseline.id} sha=${baseline.head_sha.slice(0, 7)}; ${changedFiles.length} later file change(s), none Railway-impacting`,
+  };
+}
+
+async function resolvePaymentRailEvidence(nvetRuns, repo, sha, maxAgeHours) {
+  const candidates = nvetRuns.filter(
+    (run) =>
+      run?.name === 'Nvet Transfer Payment Rail Certification' &&
+      run.head_branch === 'main' &&
+      run.status === 'completed' &&
+      run.conclusion === 'success' &&
+      /^[0-9a-f]{40}$/i.test(run.head_sha || ''),
+  );
+
+  for (const run of candidates) {
+    const age = hoursSince(run.updated_at || run.created_at);
+    if (age > maxAgeHours) continue;
+
+    if (run.head_sha === sha) {
+      return {
+        ok: true,
+        detail: `${age.toFixed(1)}h old exact candidate run=${run.id}; CLIENT→VET→ADMIN lifecycle only`,
+      };
+    }
+
+    const comparison = await githubCompare(repo, run.head_sha, sha);
+    if (!['ahead', 'identical'].includes(comparison.status)) continue;
+
+    const changedFiles = comparison.files.map((file) => file?.filename).filter(Boolean);
+    const impacting = changedFiles.filter(isPaymentRailImpactingPath);
+    if (impacting.length > 0) {
+      return {
+        ok: false,
+        detail: `latest fresh run=${run.id} invalidated by payment-impacting changes: ${impacting.slice(0, 5).join(', ')}`,
+      };
+    }
+
+    return {
+      ok: true,
+      detail: `${age.toFixed(1)}h old run=${run.id} safely reused across ${changedFiles.length} non-payment change(s); CLIENT→VET→ADMIN lifecycle only`,
+    };
+  }
+
+  return {
+    ok: false,
+    detail: 'no fresh successful staging TRANSFER application certification',
   };
 }
 
@@ -213,6 +277,18 @@ async function auditRuntime(manifest) {
       : staging
         ? `${stagingAge.toFixed(1)}h old run=${staging.id}`
         : 'no successful staging E2E run or current preflight proof',
+  });
+
+  const transferRail = await resolvePaymentRailEvidence(
+    nvetRuns,
+    repo,
+    sha,
+    manifest.policy.paymentRailApplicationMaxAgeHours,
+  );
+  checks.push({
+    ok: transferRail.ok,
+    label: 'TRANSFER application rail certification freshness',
+    detail: transferRail.detail,
   });
 
   const ctgCanary = latestRun(ctgRuns, 'Nvet Production Access Canary', (run) => run.conclusion === 'success');

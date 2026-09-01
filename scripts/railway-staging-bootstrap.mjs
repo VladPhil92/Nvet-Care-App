@@ -14,6 +14,8 @@ const e2eClientEmail = process.env.E2E_CLIENT_EMAIL?.trim();
 const e2eClientPassword = process.env.E2E_CLIENT_PASSWORD;
 const e2eVetEmail = process.env.E2E_VET_EMAIL?.trim();
 const e2eVetPassword = process.env.E2E_VET_PASSWORD;
+const e2eAdminEmail = process.env.E2E_ADMIN_EMAIL?.trim();
+const e2eAdminPassword = process.env.E2E_ADMIN_PASSWORD;
 
 for (const [name, value] of Object.entries({
   RAILWAY_API_TOKEN: token,
@@ -34,6 +36,19 @@ if (!/^https:\/\/[^\s]+$/.test(frontendUrl)) {
 
 if (e2eClientEmail.toLowerCase() === e2eVetEmail.toLowerCase()) {
   throw new Error('E2E client and vet emails must be different');
+}
+
+if (Boolean(e2eAdminEmail) !== Boolean(e2eAdminPassword)) {
+  throw new Error('E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD must be configured together');
+}
+if (e2eAdminEmail) {
+  const normalizedAdmin = e2eAdminEmail.toLowerCase();
+  if (
+    normalizedAdmin === e2eClientEmail.toLowerCase() ||
+    normalizedAdmin === e2eVetEmail.toLowerCase()
+  ) {
+    throw new Error('E2E admin email must be different from client and vet');
+  }
 }
 
 async function graphql(query, variables = {}) {
@@ -220,6 +235,12 @@ try {
     E2E_CLIENT_PASSWORD: e2eClientPassword,
     E2E_VET_EMAIL: e2eVetEmail,
     E2E_VET_PASSWORD: e2eVetPassword,
+    ...(e2eAdminEmail && e2eAdminPassword
+      ? {
+          E2E_ADMIN_EMAIL: e2eAdminEmail,
+          E2E_ADMIN_PASSWORD: e2eAdminPassword,
+        }
+      : {}),
   };
 
   const backendData = await graphql(
