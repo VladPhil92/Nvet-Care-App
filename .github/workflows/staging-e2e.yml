@@ -36,6 +36,8 @@ jobs:
       E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
       E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
       E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
       GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
       NVET_ALLOW_E2E_SEED: 'true'
       NVET_SEED_TARGET: 'staging'
@@ -63,6 +65,15 @@ jobs:
             exit 1
           fi
 
+          if [ -n "$E2E_ADMIN_EMAIL" ] && [ -z "$E2E_ADMIN_PASSWORD" ]; then
+            echo '::error::E2E_ADMIN_PASSWORD is required when E2E_ADMIN_EMAIL is configured.'
+            exit 1
+          fi
+          if [ -z "$E2E_ADMIN_EMAIL" ] && [ -n "$E2E_ADMIN_PASSWORD" ]; then
+            echo '::error::E2E_ADMIN_EMAIL is required when E2E_ADMIN_PASSWORD is configured.'
+            exit 1
+          fi
+
           if ! printf '%s' "$DATABASE_URL" | grep -Eq '^postgres(ql)?://'; then
             echo '::error::STAGING_DATABASE_URL must be a PostgreSQL URL.'
             exit 1
@@ -83,9 +94,19 @@ jobs:
             exit 1
           fi
 
-          if [ "$(printf '%s' "$E2E_CLIENT_EMAIL" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$E2E_VET_EMAIL" | tr '[:upper:]' '[:lower:]')" ]; then
+          client="$(printf '%s' "$E2E_CLIENT_EMAIL" | tr '[:upper:]' '[:lower:]')"
+          vet="$(printf '%s' "$E2E_VET_EMAIL" | tr '[:upper:]' '[:lower:]')"
+          if [ "$client" = "$vet" ]; then
             echo '::error::Client and vet E2E identities must be different.'
             exit 1
+          fi
+
+          if [ -n "$E2E_ADMIN_EMAIL" ]; then
+            admin="$(printf '%s' "$E2E_ADMIN_EMAIL" | tr '[:upper:]' '[:lower:]')"
+            if [ "$admin" = "$client" ] || [ "$admin" = "$vet" ]; then
+              echo '::error::Admin E2E identity must be different from client and vet.'
+              exit 1
+            fi
           fi
 
           echo 'Staging configuration shape accepted. Infrastructure isolation remains an operator responsibility.'
@@ -115,8 +136,13 @@ jobs:
       - name: Staging gate summary
         run: |
           echo '✅ Staging schema contract applied.'
-          echo '✅ Dedicated E2E fixtures seeded.'
+          echo '✅ Dedicated E2E client/vet fixtures seeded.'
+          if [ -n "$E2E_ADMIN_EMAIL" ]; then
+            echo '✅ Dedicated staging ADMIN payment-certification fixture seeded.'
+          else
+            echo 'ℹ️ ADMIN payment-certification fixture not configured yet.'
+          fi
           echo '✅ /api/health/ready passed.'
           echo '✅ Client and vet authentication passed.'
           echo '✅ Emergencias + Disponible ahora fixture search passed.'
-          echo 'Next gate: Mobile E2E → platform=android.'
+          echo 'Next gate: TRANSFER payment rail certification when ADMIN fixture secrets are configured.'
