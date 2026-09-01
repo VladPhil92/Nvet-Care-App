@@ -19,7 +19,7 @@ This phase does not claim commercial readiness. Provider/operator evidence remai
 
 ## Convergence gate
 
-`.github/workflows/web-production-convergence.yml` is the canonical non-destructive convergence gate. It runs periodically and can be dispatched manually from `main`.
+`.github/workflows/web-production-convergence.yml` is the canonical non-destructive convergence gate. It runs after successful CI on `main`, periodically, and can be dispatched manually from `main`.
 
 The gate verifies:
 
@@ -29,7 +29,7 @@ The gate verifies:
 4. emergency-vet discovery succeeds against the seeded isolated staging fixture;
 5. the production backend readiness contract is healthy now;
 6. `ctgone.com` can reach the Nvet production backend now;
-7. the exact candidate SHA has successful CI and Railway contract evidence;
+7. the exact candidate SHA has successful CI and safe Railway contract evidence;
 8. production/staging/CTG One canary evidence is fresh according to `RC_READINESS.json`.
 
 ## Machine gates vs operator evidence
@@ -67,16 +67,31 @@ The canonical staging gate reads:
 
 from the GitHub `staging` environment.
 
-Temporary one-shot staging workflows used during initial provisioning are retired after this phase. Any credential that has previously appeared in repository history must be rotated before RC promotion, even when it only protected a non-production fixture account.
+The E2E seed has no credential defaults. Runtime seeding refuses to execute unless the four fixture identity secrets are explicitly supplied. `Provision Isolated Staging` also consumes those secrets and propagates them to the isolated Railway backend so predeploy and preflight use the same identities.
+
+Temporary one-shot staging workflows used during initial provisioning are retired after this phase. Any credential that has previously appeared in repository history must be treated as compromised and rotated before RC promotion, even when it only protected a non-production fixture account.
+
+### Existing staging rotation
+
+An already-created Railway staging environment must not reuse historical fixture credentials. Before certifying it again:
+
+1. create new dedicated CLIENT and VET staging identities/passwords in the GitHub `staging` environment;
+2. set the same four `E2E_*` variables on the Railway `nvet-staging-backend` service;
+3. redeploy that staging service so its isolated predeploy re-seeds the fixture users with the rotated password hashes;
+4. set `E2E_API_URL` in the GitHub `staging` environment to the public staging backend URL ending in `/api`;
+5. rerun `Web Production Convergence` and require a green machine gate.
+
+Production does not execute the E2E seed because it does not satisfy the isolated staging seed predicate.
 
 ## Exit criteria
 
 Phase 11A is technically complete when:
 
 1. `Web Production Convergence` succeeds on `main`;
-2. CI and Railway contract are green on the same candidate SHA;
+2. CI and Railway contract are green or safely inherited across a proven non-infrastructure diff;
 3. production backend and CTG One access canaries are fresh;
-4. isolated staging E2E evidence is fresh;
-5. no active workflow contains hard-coded staging credentials.
+4. isolated staging E2E evidence is fresh or proven in the current convergence run;
+5. no active workflow or seed contains hard-coded staging credentials;
+6. historically exposed fixture credentials have been rotated in both GitHub and Railway staging configuration.
 
 This does **not** by itself promote `1.0.0-rc.1`. Promotion remains blocked until the external evidence contract is also verified.
