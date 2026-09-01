@@ -12,14 +12,13 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
 
   const items = [
     { id: 'admin', label: 'Admin', icon: '◈' },
-    { id: 'vet', label: 'Veterinario', icon: '⚕' },
+    { id: 'vet', label: 'Vet Tester', icon: '⚕' },
     { id: 'tiers', label: 'Planes', icon: '◆' },
     { id: 'accounting', label: 'Contabilidad', icon: '₱' },
     { id: 'tracking', label: 'Tracking', icon: '⊙' },
     { id: 'mobile', label: 'Mobile', icon: '📱' },
   ]
 
-  // Mobile: Bottom navigation
   if (isMobile) {
     return (
       <div style={{
@@ -67,7 +66,6 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
     )
   }
 
-  // Tablet/Desktop: Sidebar vertical
   return (
     <div style={{
       width: isTablet ? 80 : 240,
@@ -78,7 +76,6 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
       gap: 8,
       transition: 'width .2s',
     }}>
-      {/* Logo/Brand */}
       <div style={{
         marginBottom: 24,
         paddingLeft: isTablet ? 0 : 12,
@@ -87,17 +84,12 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
         {isTablet ? (
           <Logo size={32} text={false} inverted />
         ) : (
-          <div style={{
-            color: T.gold,
-            fontSize: 20,
-            fontWeight: 600,
-          }}>
+          <div style={{ color: T.gold, fontSize: 20, fontWeight: 600 }}>
             Nvet Care
           </div>
         )}
       </div>
 
-      {/* Navigation items */}
       {items.map(item => {
         const active = activePage === item.id
         return (
