@@ -9,7 +9,7 @@ import { PrismaService } from "../prisma/prisma.service";
  *    Solo hace checks rápidos en memoria (uptime, memory).
  *  - **Readiness**: ¿el servicio puede atender tráfico? Si falla, k8s
  *    saca el pod del load balancer pero NO lo reinicia.
- *    Hace ping a DB, cache externa, etc.
+ *    Hace ping a DB y otras dependencias realmente bloqueantes.
  *
  * El payload público nunca expone mensajes de excepción del proveedor o de
  * PostgreSQL. La revisión operativa usa logs/Sentry; el probe solo publica
@@ -32,6 +32,7 @@ export interface HealthStatus {
 
 interface ComponentHealth {
   status: "up" | "down";
+  impact?: "blocking" | "advisory";
   latencyMs?: number;
   error?: "dependency_unavailable";
   details?: Record<string, unknown>;
@@ -77,14 +78,16 @@ export class HealthService {
       revision: getSafeRevision(),
       environment: process.env.NODE_ENV || "development",
       checks: {
-        process: { status: "up" },
+        process: { status: "up", impact: "blocking" },
       },
     };
   }
 
   /**
-   * Readiness: chequea dependencias externas (DB).
-   * Si alguna falla → status 'down' y HTTP 503.
+   * Readiness: chequea dependencias externas realmente necesarias para servir
+   * tráfico. La memoria V8 se conserva como telemetría advisory: `heapTotal`
+   * es un heap dinámico administrado por V8 y no representa el límite real del
+   * contenedor, por lo que no debe sacar una instancia sana del tráfico.
    */
   async getReadiness(): Promise<HealthStatus> {
     const [dbCheck, memoryCheck] = await Promise.all([
@@ -92,20 +95,22 @@ export class HealthService {
       Promise.resolve(this.checkMemory()),
     ]);
 
-    const allUp = dbCheck.status === "up" && memoryCheck.status === "up";
-    const anyDown = dbCheck.status === "down";
+    const checks: Record<string, ComponentHealth> = {
+      database: dbCheck,
+      memory: memoryCheck,
+    };
+    const blockingDown = Object.values(checks).some(
+      (check) => check.impact === "blocking" && check.status === "down",
+    );
 
     return {
-      status: anyDown ? "down" : allUp ? "ok" : "degraded",
+      status: blockingDown ? "down" : "ok",
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.floor((Date.now() - APP_START) / 1000),
       version: process.env.APP_VERSION || "1.0.0",
       revision: getSafeRevision(),
       environment: process.env.NODE_ENV || "development",
-      checks: {
-        database: dbCheck,
-        memory: memoryCheck,
-      },
+      checks,
     };
   }
 
@@ -127,11 +132,13 @@ export class HealthService {
       ]);
       return {
         status: "up",
+        impact: "blocking",
         latencyMs: Date.now() - start,
       };
     } catch {
       return {
         status: "down",
+        impact: "blocking",
         latencyMs: Date.now() - start,
         error: "dependency_unavailable",
       };
@@ -139,18 +146,22 @@ export class HealthService {
   }
 
   /**
-   * Memory check: alert si heap usado > 90% del límite.
-   * El threshold es indicativo; en producción ajustar según observación real.
+   * Memory telemetry: marca presión relativa del heap de V8 para diagnóstico,
+   * pero es advisory. `heapTotal` crece y decrece dinámicamente y no equivale
+   * al límite RSS/container del proveedor; usarlo como readiness gate genera
+   * falsos negativos aun cuando proceso y base de datos pueden servir tráfico.
    */
   private checkMemory(): ComponentHealth {
     const usage = process.memoryUsage();
     const heapUsedMB = Math.round(usage.heapUsed / 1024 / 1024);
     const heapTotalMB = Math.round(usage.heapTotal / 1024 / 1024);
     const rssMB = Math.round(usage.rss / 1024 / 1024);
-    const utilization = usage.heapUsed / usage.heapTotal;
+    const utilization =
+      usage.heapTotal > 0 ? usage.heapUsed / usage.heapTotal : 0;
 
     return {
       status: utilization > 0.9 ? "down" : "up",
+      impact: "advisory",
       details: {
         heapUsedMB,
         heapTotalMB,
