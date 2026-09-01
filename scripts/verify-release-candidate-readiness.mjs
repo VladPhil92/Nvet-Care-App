@@ -52,7 +52,13 @@ async function readManifest() {
     fail('RC candidate must use the 1.0.0-rc.N format.');
   }
 
-  for (const key of ['productionCanaryMaxAgeHours', 'stagingE2eMaxAgeHours', 'ctgOneAccessCanaryMaxAgeHours']) {
+  for (const key of [
+    'productionCanaryMaxAgeHours',
+    'stagingE2eMaxAgeHours',
+    'ctgOneAccessCanaryMaxAgeHours',
+    'recoveryDrillMaxAgeHours',
+    'alertDrillMaxAgeHours',
+  ]) {
     const value = manifest.policy?.[key];
     if (!Number.isFinite(value) || value <= 0) fail(`Invalid RC policy value: ${key}`);
   }
@@ -176,14 +182,24 @@ async function auditRuntime(manifest) {
     detail: railway.detail,
   });
 
-  const backendCanary = latestRun(nvetRuns, 'Nvet Production Backend Health Canary', (run) => run.conclusion === 'success');
+  const backendCanary = latestRun(nvetRuns, 'Nvet Production Backend Health Canary', (run) => run.conclusion === 'success' && run.event !== 'push');
   const backendCanaryAge = backendCanary ? hoursSince(backendCanary.updated_at || backendCanary.created_at) : Number.POSITIVE_INFINITY;
   checks.push({
     ok: Boolean(backendCanary) && backendCanaryAge <= manifest.policy.productionCanaryMaxAgeHours,
     label: 'production backend canary freshness',
     detail: backendCanary
       ? `${backendCanaryAge.toFixed(1)}h old run=${backendCanary.id}`
-      : 'no successful production backend canary',
+      : 'no successful real production backend canary',
+  });
+
+  const recovery = latestRun(nvetRuns, 'Nvet Recovery Readiness', (run) => run.conclusion === 'success');
+  const recoveryAge = recovery ? hoursSince(recovery.updated_at || recovery.created_at) : Number.POSITIVE_INFINITY;
+  checks.push({
+    ok: Boolean(recovery) && recoveryAge <= manifest.policy.recoveryDrillMaxAgeHours,
+    label: 'application recovery rehearsal freshness',
+    detail: recovery
+      ? `${recoveryAge.toFixed(1)}h old run=${recovery.id}`
+      : 'no successful Nvet Recovery Readiness run',
   });
 
   const currentStagingPreflight = process.env.RC_STAGING_PREFLIGHT_CURRENT === 'true';
@@ -208,6 +224,20 @@ async function auditRuntime(manifest) {
   });
 
   if (!machineOnly) {
+    const alertDrill = latestRun(
+      nvetRuns,
+      'Nvet Production Backend Health Canary',
+      (run) => run.event === 'push' && run.conclusion === 'success',
+    );
+    const alertDrillAge = alertDrill ? hoursSince(alertDrill.updated_at || alertDrill.created_at) : Number.POSITIVE_INFINITY;
+    checks.push({
+      ok: Boolean(alertDrill) && alertDrillAge <= manifest.policy.alertDrillMaxAgeHours,
+      label: 'synthetic production alert drill freshness',
+      detail: alertDrill
+        ? `${alertDrillAge.toFixed(1)}h old run=${alertDrill.id}`
+        : 'no successful isolated synthetic alert drill',
+    });
+
     for (const [key, entry] of Object.entries(manifest.requiredExternalEvidence)) {
       checks.push({
         ok: entry.status === 'verified',

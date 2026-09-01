@@ -5,7 +5,9 @@
   "policy": {
     "productionCanaryMaxAgeHours": 6,
     "stagingE2eMaxAgeHours": 72,
-    "ctgOneAccessCanaryMaxAgeHours": 6
+    "ctgOneAccessCanaryMaxAgeHours": 6,
+    "recoveryDrillMaxAgeHours": 168,
+    "alertDrillMaxAgeHours": 720
   },
   "requiredExternalEvidence": {
     "productionBackupConfigured": {
@@ -16,17 +18,17 @@
     "restoreDrillVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Nvet Recovery Readiness now proves the application-level pg_dump/pg_restore procedure. Run and date a non-destructive provider-level production restore drill before RC promotion."
+      "note": "Nvet Recovery Readiness proves the application-level pg_dump/pg_restore procedure. Run and date a non-destructive provider-level production restore drill before RC promotion."
     },
     "productionAlertingVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "The production readiness canary now opens/updates an incident issue on sustained failure and closes it after recovery. Execute the synthetic failure drill and retain the workflow/issue evidence before marking verified."
+      "note": "The production readiness canary now isolates synthetic drills from real incidents. A successful synthetic push drill must create and close a dedicated [DRILL] issue before this evidence is marked verified."
     },
     "paymentRailVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Verify at least one intended MVP payment rail end-to-end. TRANSFER is the current candidate rail; CTG remains disabled and PSE now fails closed in production while its adapter is still sandbox/mock."
+      "note": "Verify at least one intended MVP payment rail end-to-end. TRANSFER is the current candidate rail; CTG remains disabled and PSE fails closed in production while its adapter is still sandbox/mock."
     }
   },
   "postRcTracks": {
