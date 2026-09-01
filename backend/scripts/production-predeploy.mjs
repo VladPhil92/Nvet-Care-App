@@ -5,10 +5,22 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const isIsolatedE2EStaging =
+const stagingSeedRequested =
   process.env.NODE_ENV === 'staging' &&
   process.env.NVET_ALLOW_E2E_SEED === 'true' &&
   process.env.NVET_SEED_TARGET === 'staging';
+
+const requiredStagingFixtureVars = [
+  'E2E_CLIENT_EMAIL',
+  'E2E_CLIENT_PASSWORD',
+  'E2E_VET_EMAIL',
+  'E2E_VET_PASSWORD',
+];
+const missingStagingFixtureVars = stagingSeedRequested
+  ? requiredStagingFixtureVars.filter((name) => !process.env[name]?.trim())
+  : [];
+const shouldSeedIsolatedStaging =
+  stagingSeedRequested && missingStagingFixtureVars.length === 0;
 
 const steps = [
   {
@@ -64,16 +76,24 @@ const steps = [
   },
 ];
 
-// Staging is intentionally self-seeding so CI never needs a public database
-// endpoint. The seed itself is fail-closed and independently verifies the two
-// explicit staging flags before touching data. Production never satisfies
-// this three-part predicate, so its predeploy behaviour remains unchanged.
-if (isIsolatedE2EStaging) {
+// Deployment readiness and test-fixture readiness are separate contracts.
+// Staging may deploy schema/runtime safely even when its secret-backed E2E
+// identities are not installed yet. In that case the deploy succeeds but the
+// Staging E2E / Web Production Convergence gates remain fail-closed. This avoids
+// turning missing test credentials into an application deployment outage.
+if (shouldSeedIsolatedStaging) {
   steps.push({
     name: 'Sembrar fixtures E2E deterministas en staging aislado',
     command: 'npm',
     args: ['run', 'seed:e2e'],
   });
+} else if (stagingSeedRequested) {
+  console.warn(
+    `⚠️ Staging E2E seed omitido: faltan credenciales secret-backed (${missingStagingFixtureVars.join(', ')}).`,
+  );
+  console.warn(
+    'El deployment continuará; la certificación E2E seguirá bloqueada hasta instalar los secrets y ejecutar su gate dedicado.',
+  );
 }
 
 for (const step of steps) {
@@ -98,8 +118,14 @@ for (const step of steps) {
   }
 }
 
-console.log(
-  isIsolatedE2EStaging
-    ? '\n✅ Predeploy de staging completado y fixtures E2E sembrados.'
-    : '\n✅ Predeploy de producción completado sin aceptar pérdida de datos.',
-);
+if (process.env.NODE_ENV === 'staging') {
+  console.log(
+    shouldSeedIsolatedStaging
+      ? '\n✅ Predeploy de staging completado y fixtures E2E sembrados.'
+      : '\n✅ Predeploy de staging completado sin fixtures; el gate E2E permanece independiente y fail-closed.',
+  );
+} else {
+  console.log(
+    '\n✅ Predeploy de producción completado sin aceptar pérdida de datos.',
+  );
+}
