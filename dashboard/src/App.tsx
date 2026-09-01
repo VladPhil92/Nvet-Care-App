@@ -35,7 +35,7 @@ function AdminApp() {
         }}
       >
         {page === 'admin' && <AdminDashboard />}
-        {page === 'vet' && <VetPanel />}
+        {page === 'vet' && <VetPanel mode="tester" />}
         {page === 'tiers' && <TiersPage />}
         {page === 'accounting' && <AccountingPage />}
         {page === 'tracking' && <TrackingPage />}
@@ -63,7 +63,7 @@ function ProfessionalShell({ children }: { children: ReactNode }) {
         <div>
           <div style={{ fontFamily: F.serif, fontSize: 24, color: T.ink }}>Nvet Care</div>
           <div style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted }}>
-            Panel profesional
+            Panel veterinario
           </div>
         </div>
         <button
@@ -156,7 +156,7 @@ function AppContent() {
     case 'VET':
       return (
         <ProfessionalShell>
-          <VetPanel />
+          <VetPanel mode="live" />
         </ProfessionalShell>
       )
     case 'ADMIN':
