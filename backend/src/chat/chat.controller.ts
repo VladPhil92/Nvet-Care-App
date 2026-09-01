@@ -21,6 +21,7 @@ import { UserRole } from "@prisma/client";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { SharePriceDto } from "./dto/share-price.dto";
 import { ReportMessageDto } from "./dto/report-message.dto";
+import { MarkMessagesReadDto } from "./dto/mark-messages-read.dto";
 import { ChatMembershipGuard } from "./guards/chat-membership.guard";
 
 /**
@@ -41,11 +42,11 @@ export class ChatController {
 
   /**
    * GET /chat/active
-   * Get all active chats for current user. NO requiere membership guard
-   * porque solo lista las propias del usuario autenticado.
-   * Importante: declarar ANTES de :appointmentId para evitar match conflict.
+   * Lists only chats belonging to the effective CLIENT/VET mode.
    */
   @Get("active")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.CLIENT, UserRole.VET)
   async getActiveChats(@Request() req) {
     return this.chatService.getActiveChats(req.user.id, req.user.role);
   }
@@ -102,7 +103,7 @@ export class ChatController {
 
   /**
    * GET /chat/:appointmentId/metadata
-   * Get chat metadata (participants, monitoring status, unread count)
+   * Get chat metadata (participants, appointment lifecycle, unread count)
    */
   @Get(":appointmentId/metadata")
   @UseGuards(ChatMembershipGuard)
@@ -115,13 +116,21 @@ export class ChatController {
 
   /**
    * POST /chat/:appointmentId/mark-read
-   * Mark messages as read
+   * Read acknowledgement is constrained to this authorized appointment.
    */
   @Post(":appointmentId/mark-read")
   @UseGuards(ChatMembershipGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async markAsRead(@Body("messageIds") messageIds: string[], @Request() req) {
-    await this.chatService.markAsRead(messageIds, req.user.id);
+  async markAsRead(
+    @Param("appointmentId") appointmentId: string,
+    @Body() dto: MarkMessagesReadDto,
+    @Request() req,
+  ) {
+    await this.chatService.markAsRead(
+      appointmentId,
+      dto.messageIds,
+      req.user.id,
+    );
     return;
   }
 
@@ -157,12 +166,10 @@ export class ChatController {
   async deleteMessage(@Param("messageId") messageId: string, @Request() req) {
     const message = await this.chatService.getMessageById(messageId);
 
-    // Only sender can delete
     if (message.senderId !== req.user.id) {
       throw new ForbiddenException("You can only delete your own messages");
     }
 
-    // Check 5 minute window
     const now = new Date();
     const createdAt = new Date(message.createdAt);
     const minutesElapsed = (now.getTime() - createdAt.getTime()) / 1000 / 60;
