@@ -65,6 +65,8 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 20_000) => {
   }
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const bodySnippet = async (response) =>
   (await response.text().catch(() => '')).slice(0, 500).replace(/\s+/g, ' ');
 
@@ -77,6 +79,61 @@ const readJson = async (label, response) => {
   } catch {
     throw new Error(`${label} returned non-JSON content`);
   }
+};
+
+const waitForStableReadiness = async ({
+  timeoutMs = 60_000,
+  intervalMs = 2_000,
+  consecutiveRequired = 2,
+} = {}) => {
+  const deadline = Date.now() + timeoutMs;
+  let consecutive = 0;
+  let lastDetail = 'not reached';
+  let lastHealthyPayload = null;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchWithTimeout(
+        `${apiUrl}/health/ready`,
+        { headers: { accept: 'application/json' } },
+        10_000,
+      );
+
+      if (!response.ok) {
+        lastDetail = `HTTP ${response.status}: ${await bodySnippet(response)}`;
+        consecutive = 0;
+      } else {
+        const payload = await response.json();
+        const status = payload?.status ?? 'missing';
+        const databaseStatus = payload?.checks?.database?.status ?? 'missing';
+
+        if (status === 'ok' && databaseStatus === 'up') {
+          consecutive += 1;
+          lastHealthyPayload = payload;
+          console.log(
+            `Stable readiness sample ${consecutive}/${consecutiveRequired}: status=ok database=up revision=${payload?.revision ?? 'missing'}`,
+          );
+          if (consecutive >= consecutiveRequired) return lastHealthyPayload;
+        } else {
+          consecutive = 0;
+          lastHealthyPayload = null;
+          lastDetail = `status=${status} database=${databaseStatus}`;
+          console.warn(`Readiness sample reset: ${lastDetail}`);
+        }
+      }
+    } catch (error) {
+      consecutive = 0;
+      lastHealthyPayload = null;
+      lastDetail = error instanceof Error ? error.message : String(error);
+      console.warn(`Readiness sample failed: ${lastDetail}`);
+    }
+
+    if (Date.now() < deadline) await sleep(intervalMs);
+  }
+
+  throw new Error(
+    `Staging readiness was not stable (${consecutiveRequired} consecutive healthy reads required within ${timeoutMs}ms): ${lastDetail}`,
+  );
 };
 
 const authHeaders = (token, extra = {}) => ({
@@ -108,16 +165,7 @@ const login = async (label, expectedRole, email, password) => {
   return payload.accessToken;
 };
 
-const readiness = await fetchWithTimeout(`${apiUrl}/health/ready`, {
-  headers: { accept: 'application/json' },
-});
-const readinessPayload = await readJson('Staging readiness', readiness);
-if (
-  readinessPayload?.status !== 'ok' ||
-  readinessPayload?.checks?.database?.status !== 'up'
-) {
-  throw new Error('Staging readiness did not report database=up');
-}
+const readinessPayload = await waitForStableReadiness();
 
 const [clientToken, vetToken, adminToken] = await Promise.all([
   login(
@@ -175,9 +223,6 @@ const cancelAppointment = async (reason) => {
 };
 
 try {
-  // Generate a future staging-only slot. Cancelled appointments do not block
-  // availability, while the run/attempt-derived date+time makes reruns very
-  // unlikely to collide with an interrupted historical certification.
   for (let candidate = 0; candidate < 30; candidate += 1) {
     const candidateSeed = runSeed + BigInt(candidate);
     const daysAhead = 14 + Number(candidateSeed % 1200n);
@@ -247,8 +292,6 @@ try {
   }
   const transactionId = payment.id;
 
-  // The upload filter accepts JPG, PNG or PDF only. Use a tiny synthetic PDF
-  // rather than weakening the backend file contract for certification.
   const pdfFixture = [
     '%PDF-1.4',
     '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
