@@ -44,9 +44,10 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      SOURCE_DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_source?schema=public
-      RESTORE_DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_restore?schema=public
+      SOURCE_PG_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_source
+      RESTORE_PG_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_restore
       DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_source?schema=public
+      RESTORE_DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_restore?schema=public
       NVET_ALLOW_E2E_SEED: 'true'
       NVET_SEED_TARGET: test
       E2E_CLIENT_EMAIL: recovery-client@nvetcare.invalid
@@ -93,9 +94,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          users="$(psql "$SOURCE_DATABASE_URL" -Atc 'select count(*) from users')"
-          pets="$(psql "$SOURCE_DATABASE_URL" -Atc 'select count(*) from pets')"
-          appointments="$(psql "$SOURCE_DATABASE_URL" -Atc 'select count(*) from appointments')"
+          users="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from users')"
+          pets="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from pets')"
+          appointments="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from appointments')"
 
           test "$users" -ge 2
           test "$pets" -ge 1
@@ -109,7 +110,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pg_dump "$SOURCE_DATABASE_URL" \
+          pg_dump "$SOURCE_PG_URL" \
             --format=custom \
             --no-owner \
             --no-acl \
@@ -125,7 +126,7 @@ jobs:
           set -euo pipefail
           createdb -h localhost -U nvet_recovery nvet_restore
           pg_restore \
-            --dbname="$RESTORE_DATABASE_URL" \
+            --dbname="$RESTORE_PG_URL" \
             --no-owner \
             --no-acl \
             --exit-on-error \
@@ -135,16 +136,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          restored_users="$(psql "$RESTORE_DATABASE_URL" -Atc 'select count(*) from users')"
-          restored_pets="$(psql "$RESTORE_DATABASE_URL" -Atc 'select count(*) from pets')"
-          restored_appointments="$(psql "$RESTORE_DATABASE_URL" -Atc 'select count(*) from appointments')"
+          restored_users="$(psql "$RESTORE_PG_URL" -Atc 'select count(*) from users')"
+          restored_pets="$(psql "$RESTORE_PG_URL" -Atc 'select count(*) from pets')"
+          restored_appointments="$(psql "$RESTORE_PG_URL" -Atc 'select count(*) from appointments')"
 
           test "$restored_users" = '${{ steps.source.outputs.users }}'
           test "$restored_pets" = '${{ steps.source.outputs.pets }}'
           test "$restored_appointments" = '${{ steps.source.outputs.appointments }}'
 
-          test "$(psql "$RESTORE_DATABASE_URL" -Atc "select count(*) from pets where id='00000000-0000-4000-8000-000000000101'")" = '1'
-          test "$(psql "$RESTORE_DATABASE_URL" -Atc "select count(*) from appointments where id in ('00000000-0000-4000-8000-000000000201','00000000-0000-4000-8000-000000000202')")" = '2'
+          test "$(psql "$RESTORE_PG_URL" -Atc "select count(*) from pets where id='00000000-0000-4000-8000-000000000101'")" = '1'
+          test "$(psql "$RESTORE_PG_URL" -Atc "select count(*) from appointments where id in ('00000000-0000-4000-8000-000000000201','00000000-0000-4000-8000-000000000202')")" = '2'
 
           DATABASE_URL="$RESTORE_DATABASE_URL" npx prisma db execute \
             --schema backend/prisma/schema.prisma \
