@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback } from 'react'
 import {
   View,
   Text,
@@ -8,177 +8,78 @@ import {
   RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Card,
   EmptyState,
   Skeleton,
   UI_COLORS,
 } from '../../components/ui/primitives'
-import {
-  useAppointmentsQuery,
-  useTransactionsQuery,
-} from '../../hooks/queries/useMobileQueries'
-import { formatRelativeTime, formatCOP } from '../../utils/format'
+import { qk } from '../../lib/queryKeys'
+import { STALE_TIMES } from '../../lib/queryClient'
+import notificationService, {
+  NotificationItem,
+} from '../../services/notification.service'
+import { formatRelativeTime } from '../../utils/format'
 
 interface Props {
   navigation: any
 }
 
-type NotifType = 'APPOINTMENT' | 'PAYMENT' | 'SYSTEM'
-
-interface DerivedNotif {
-  id: string
-  type: NotifType
-  glyph: string
-  title: string
-  body: string
-  timestamp: string
-  read: boolean
-  screen?: string
-  screenParams?: Record<string, string>
+const CATEGORY_GLYPHS: Record<string, string> = {
+  APPOINTMENT: '🐾',
+  PAYMENT: '💳',
+  PREVENTIVE: '🩺',
+  SYSTEM: '🔔',
 }
-
-const APPT_STATUS_NOTIF: Record<
-  string,
-  { glyph: string; title: string; bodyFn: (pet: string) => string }
-> = {
-  CONFIRMED: {
-    glyph: '✅',
-    title: 'Cita confirmada',
-    bodyFn: (pet) => `La cita para ${pet} ha sido confirmada. Estamos preparando todo.`,
-  },
-  IN_PROGRESS: {
-    glyph: '🐾',
-    title: 'Cita en curso',
-    bodyFn: (pet) => `La visita para ${pet} está en progreso ahora.`,
-  },
-  COMPLETED: {
-    glyph: '🎉',
-    title: 'Cita completada',
-    bodyFn: (pet) => `La consulta de ${pet} ha finalizado. Puedes dejar una reseña.`,
-  },
-  CANCELLED: {
-    glyph: '❌',
-    title: 'Cita cancelada',
-    bodyFn: (pet) => `La cita para ${pet} fue cancelada.`,
-  },
-  PENDING: {
-    glyph: '⏳',
-    title: 'Cita solicitada',
-    bodyFn: (pet) => `Tu solicitud de cita para ${pet} está pendiente de confirmación.`,
-  },
-}
-
-const TXN_TYPE_NOTIF: Record<
-  string,
-  { glyph: string; titleFn: (amt: number) => string; body: string }
-> = {
-  PAYMENT: {
-    glyph: '💳',
-    titleFn: (amt) => `Pago de ${formatCOP(amt)}`,
-    body: 'El pago por tu consulta ha sido procesado.',
-  },
-  DEPOSIT: {
-    glyph: '💰',
-    titleFn: (amt) => `Recarga de ${formatCOP(amt)}`,
-    body: 'Tu billetera ha sido recargada exitosamente.',
-  },
-  WITHDRAWAL: {
-    glyph: '🏦',
-    titleFn: (amt) => `Retiro de ${formatCOP(amt)}`,
-    body: 'Tu solicitud de retiro fue enviada.',
-  },
-  COMMISSION: {
-    glyph: '📊',
-    titleFn: (amt) => `Comisión de ${formatCOP(amt)}`,
-    body: 'Se aplicó la comisión de la plataforma a esta transacción.',
-  },
-}
-
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
 
 export default function NotificationsScreen({ navigation }: Props) {
-  const [readIds, setReadIds] = useState<Set<string>>(new Set())
+  const queryClient = useQueryClient()
+  const inboxQuery = useQuery({
+    queryKey: qk.notifications.inbox(50),
+    queryFn: () => notificationService.getInbox(50),
+    staleTime: STALE_TIMES.SHORT,
+  })
 
-  const sevenDaysAgo = useMemo(() => {
-    const d = new Date()
-    d.setTime(d.getTime() - SEVEN_DAYS_MS)
-    return d.toISOString().split('T')[0]
-  }, [])
+  const refreshNotificationCache = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: qk.notifications.all })
+  }, [queryClient])
 
-  const apptQuery = useAppointmentsQuery({ startDate: sevenDaysAgo })
-  const txnQuery = useTransactionsQuery({})
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) => notificationService.markRead(id),
+    onSuccess: refreshNotificationCache,
+  })
 
-  const isLoading = apptQuery.isLoading || txnQuery.isLoading
-  const isRefreshing = apptQuery.isFetching || txnQuery.isFetching
-
-  const notifications = useMemo<DerivedNotif[]>(() => {
-    const items: DerivedNotif[] = []
-
-    // Derive from appointments (last 7 days)
-    for (const appt of apptQuery.data ?? []) {
-      const tpl = APPT_STATUS_NOTIF[appt.status]
-      if (!tpl) continue
-      const petName = appt.pet?.name ?? 'tu mascota'
-      items.push({
-        id: `appt-${appt.id}-${appt.status}`,
-        type: 'APPOINTMENT',
-        glyph: tpl.glyph,
-        title: tpl.title,
-        body: tpl.bodyFn(petName),
-        timestamp: appt.updatedAt ?? appt.createdAt,
-        read: readIds.has(`appt-${appt.id}-${appt.status}`),
-        screen: 'AppointmentDetail',
-        screenParams: { appointmentId: appt.id },
-      })
-    }
-
-    // Derive from recent transactions (last 20 confirmed/liquidated)
-    const confirmedTxns = (txnQuery.data ?? [])
-      .filter((t) => t.status === 'CONFIRMED' || t.status === 'LIQUIDATED')
-      .slice(0, 20)
-
-    for (const txn of confirmedTxns) {
-      const type = txn.type ?? 'PAYMENT'
-      const tpl = TXN_TYPE_NOTIF[type]
-      if (!tpl) continue
-      items.push({
-        id: `txn-${txn.id}`,
-        type: 'PAYMENT',
-        glyph: tpl.glyph,
-        title: tpl.titleFn(txn.amountCop),
-        body: txn.description ?? tpl.body,
-        timestamp: txn.updatedAt ?? txn.createdAt,
-        read: readIds.has(`txn-${txn.id}`),
-      })
-    }
-
-    // Sort by timestamp descending
-    return items.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    )
-  }, [apptQuery.data, txnQuery.data, readIds])
-
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications])
+  const markAllReadMutation = useMutation({
+    mutationFn: () => notificationService.markAllRead(),
+    onSuccess: refreshNotificationCache,
+  })
 
   const handleRefresh = useCallback(() => {
-    apptQuery.refetch()
-    txnQuery.refetch()
-  }, [apptQuery, txnQuery])
+    void inboxQuery.refetch()
+  }, [inboxQuery])
 
   const handlePress = useCallback(
-    (notif: DerivedNotif) => {
-      setReadIds((prev) => new Set([...prev, notif.id]))
-      if (notif.screen) {
-        navigation.navigate(notif.screen, notif.screenParams)
+    async (notification: NotificationItem) => {
+      if (!notification.readAt) {
+        try {
+          await markReadMutation.mutateAsync(notification.id)
+        } catch {
+          // Reading state must not block the user from opening the related flow.
+        }
+      }
+
+      const appointmentId = notification.metadata?.appointmentId
+      if (typeof appointmentId === 'string' && appointmentId.length > 0) {
+        navigation.navigate('AppointmentDetail', { appointmentId })
       }
     },
-    [navigation],
+    [markReadMutation, navigation],
   )
 
-  const handleMarkAllRead = useCallback(() => {
-    setReadIds(new Set(notifications.map((n) => n.id)))
-  }, [notifications])
+  const inbox = inboxQuery.data
+  const notifications = inbox?.items ?? []
+  const unreadCount = inbox?.summary.unread ?? 0
+  const isRefreshing = inboxQuery.isFetching && !inboxQuery.isLoading
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -199,21 +100,32 @@ export default function NotificationsScreen({ navigation }: Props) {
         </View>
         {unreadCount > 0 && (
           <Pressable
-            onPress={handleMarkAllRead}
+            onPress={() => markAllReadMutation.mutate()}
+            disabled={markAllReadMutation.isPending}
             hitSlop={6}
-            accessibilityRole="link"
+            accessibilityRole="button"
             accessibilityLabel="Marcar todas como leídas"
           >
-            <Text style={styles.markAllText}>Marcar todas</Text>
+            <Text style={styles.markAllText}>
+              {markAllReadMutation.isPending ? 'Marcando…' : 'Marcar todas'}
+            </Text>
           </Pressable>
         )}
       </View>
 
-      {isLoading ? (
+      {inboxQuery.isLoading ? (
         <View style={styles.skeletonWrap}>
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} width="100%" height={80} borderRadius={12} />
           ))}
+        </View>
+      ) : inboxQuery.isError ? (
+        <View style={styles.emptyBox}>
+          <EmptyState
+            glyph="⚠️"
+            title="No pudimos cargar tus notificaciones"
+            subtitle="Verifica tu conexión y desliza para volver a intentar."
+          />
         </View>
       ) : (
         <FlatList
@@ -230,16 +142,16 @@ export default function NotificationsScreen({ navigation }: Props) {
           }
           renderItem={({ item }) => (
             <NotifCard
-              notif={item}
-              onPress={() => handlePress(item)}
+              notification={item}
+              onPress={() => void handlePress(item)}
             />
           )}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
               <EmptyState
                 glyph="📭"
-                title="Sin notificaciones recientes"
-                subtitle="Aparecerán aquí cuando haya actualizaciones de citas o pagos."
+                title="Sin notificaciones"
+                subtitle="Aparecerán aquí las actualizaciones de citas, pagos y cuidado preventivo."
               />
             </View>
           }
@@ -250,40 +162,47 @@ export default function NotificationsScreen({ navigation }: Props) {
 }
 
 interface NotifCardProps {
-  notif: DerivedNotif
+  notification: NotificationItem
   onPress: () => void
 }
 
-function NotifCard({ notif, onPress }: NotifCardProps) {
+function NotifCard({ notification, onPress }: NotifCardProps) {
+  const unread = !notification.readAt
+  const appointmentId = notification.metadata?.appointmentId
+  const hasAction = typeof appointmentId === 'string' && appointmentId.length > 0
+  const glyph = CATEGORY_GLYPHS[notification.category] ?? CATEGORY_GLYPHS.SYSTEM
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        !notif.read && styles.cardUnread,
+        unread && styles.cardUnread,
         pressed && { opacity: 0.85 },
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`${notif.title}. ${notif.body}. ${formatRelativeTime(notif.timestamp)}${
-        !notif.read ? '. Sin leer' : ''
+      accessibilityLabel={`${notification.title}. ${notification.message}. ${formatRelativeTime(notification.occurredAt)}${
+        unread ? '. Sin leer' : ''
       }`}
     >
       <View style={styles.glyphWrap}>
-        <Text style={styles.glyph}>{notif.glyph}</Text>
-        {!notif.read && <View style={styles.unreadDot} />}
+        <Text style={styles.glyph}>{glyph}</Text>
+        {unread && <View style={styles.unreadDot} />}
       </View>
       <View style={styles.cardBody}>
         <View style={styles.cardTop}>
           <Text style={styles.cardTitle} numberOfLines={1}>
-            {notif.title}
+            {notification.title}
           </Text>
-          <Text style={styles.cardTime}>{formatRelativeTime(notif.timestamp)}</Text>
+          <Text style={styles.cardTime}>
+            {formatRelativeTime(notification.occurredAt)}
+          </Text>
         </View>
         <Text style={styles.cardText} numberOfLines={2}>
-          {notif.body}
+          {notification.message}
         </Text>
       </View>
-      {notif.screen && <Text style={styles.arrow}>›</Text>}
+      {hasAction && <Text style={styles.arrow}>›</Text>}
     </Pressable>
   )
 }
@@ -305,8 +224,8 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 12, color: UI_COLORS.muted, marginTop: 1 },
   markAllText: { fontSize: 13, color: UI_COLORS.sage, fontWeight: '600' },
   skeletonWrap: { padding: 16, gap: 10 },
-  listContent: { padding: 16, paddingBottom: 40 },
-  emptyBox: { marginTop: 60 },
+  listContent: { padding: 16, paddingBottom: 40, flexGrow: 1 },
+  emptyBox: { marginTop: 60, paddingHorizontal: 16 },
   card: {
     flexDirection: 'row',
     alignItems: 'flex-start',
