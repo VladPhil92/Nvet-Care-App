@@ -1,6 +1,10 @@
 name: Nvet Production Backend Health Canary
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-health-canary.yml'
   schedule:
     - cron: '8,23,38,53 * * * *'
   workflow_dispatch:
@@ -20,8 +24,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SIMULATE_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_failure || false }}
+  SIMULATE_FAILURE: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.simulate_failure) || false }}
   INCIDENT_TITLE: '[ALERT] Nvet production backend readiness degraded'
+  DRILL_TITLE: '[DRILL] Nvet production readiness incident path'
 
 jobs:
   canary:
@@ -126,8 +131,8 @@ jobs:
           node <<'NODE'
           const repo = process.env.GITHUB_REPOSITORY;
           const token = process.env.GH_TOKEN;
-          const title = process.env.INCIDENT_TITLE;
           const simulated = process.env.SIMULATE_FAILURE === 'true';
+          const title = simulated ? process.env.DRILL_TITLE : process.env.INCIDENT_TITLE;
           const runUrl = `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
           const headers = {
             Accept: 'application/vnd.github+json',
@@ -165,21 +170,39 @@ jobs:
             '- recent backend logs and Sentry events',
             '- CTG One → Nvet access canary',
             '',
-            'This issue is automatically closed after a later healthy canary run.',
+            simulated
+              ? 'This drill issue is closed automatically after the incident API path is verified.'
+              : 'This issue is automatically closed after a later healthy canary run.',
           ].join('\n');
 
+          let issue;
           if (existing) {
             await request(`/issues/${existing.number}/comments`, {
               method: 'POST',
               body: JSON.stringify({ body }),
             });
+            issue = existing;
             console.log(`Updated existing incident #${existing.number}`);
           } else {
-            const created = await request('/issues', {
+            issue = await request('/issues', {
               method: 'POST',
               body: JSON.stringify({ title, body }),
             });
-            console.log(`Created incident #${created.number}`);
+            console.log(`Created incident #${issue.number}`);
+          }
+
+          if (simulated) {
+            await request(`/issues/${issue.number}/comments`, {
+              method: 'POST',
+              body: JSON.stringify({
+                body: `✅ Synthetic escalation path verified at ${new Date().toISOString()}. Evidence run: ${runUrl}`,
+              }),
+            });
+            await request(`/issues/${issue.number}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ state: 'closed', state_reason: 'completed' }),
+            });
+            console.log(`Closed certified drill issue #${issue.number}`);
           }
           NODE
 
@@ -187,7 +210,7 @@ jobs:
         if: env.SIMULATE_FAILURE == 'true'
         shell: bash
         run: |
-          echo '✅ Synthetic readiness failure was escalated through the production incident path.'
+          echo '✅ Synthetic readiness failure was escalated and isolated from real production incidents.'
 
   close-recovered-incident:
     name: Close recovered readiness incident
