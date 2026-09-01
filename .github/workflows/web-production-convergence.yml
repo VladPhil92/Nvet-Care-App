@@ -71,7 +71,11 @@ jobs:
           fi
 
       - name: Verify isolated staging identity and discovery
-        run: node mobile/e2e/preflight.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node mobile/e2e/preflight.mjs
+          echo 'RC_STAGING_PREFLIGHT_CURRENT=true' >> "$GITHUB_ENV"
 
       - name: Verify production backend readiness now
         shell: bash
