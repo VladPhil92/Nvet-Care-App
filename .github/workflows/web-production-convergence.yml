@@ -1,0 +1,123 @@
+name: Web Production Convergence
+
+on:
+  schedule:
+    - cron: '12 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: nvet-web-production-convergence
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  converge:
+    name: Certify web + backend technical convergence
+    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 15
+    env:
+      E2E_API_URL: ${{ secrets.E2E_API_URL }}
+      E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
+      E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
+      E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
+      E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
+
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate staging evidence inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=''
+          [ -z "$E2E_API_URL" ] && missing="$missing E2E_API_URL"
+          [ -z "$E2E_CLIENT_EMAIL" ] && missing="$missing E2E_CLIENT_EMAIL"
+          [ -z "$E2E_CLIENT_PASSWORD" ] && missing="$missing E2E_CLIENT_PASSWORD"
+          [ -z "$E2E_VET_EMAIL" ] && missing="$missing E2E_VET_EMAIL"
+          [ -z "$E2E_VET_PASSWORD" ] && missing="$missing E2E_VET_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing staging environment secrets:$missing"
+            exit 1
+          fi
+
+          if ! printf '%s' "$E2E_API_URL" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
+            echo '::error::E2E_API_URL must be an absolute HTTPS URL ending in /api.'
+            exit 1
+          fi
+
+      - name: Verify isolated staging identity and discovery
+        run: node mobile/e2e/preflight.mjs
+
+      - name: Verify production backend readiness now
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://backend-production-a476.up.railway.app/api/health/ready'
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          code="$(curl --silent --show-error --location --max-time 15 --output "$tmp" --write-out '%{http_code}' "$url")"
+          test "$code" = '200'
+          node - "$tmp" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (body?.status !== 'ok' || body?.checks?.database?.status !== 'up' || typeof body?.revision !== 'string') {
+            process.exit(1);
+          }
+          console.log(`Production backend ready at revision ${body.revision}`);
+          NODE
+
+      - name: Verify ctgone.com federated Nvet connectivity now
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://ctgone.com/api/nvetcareapp/health'
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          code="$(curl --silent --show-error --location --max-time 15 --output "$tmp" --write-out '%{http_code}' "$url")"
+          test "$code" = '200'
+          node - "$tmp" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (body?.status !== 'ok' || body?.dependency !== 'nvet-backend') process.exit(1);
+          console.log('ctgone.com -> Nvet backend connectivity is healthy.');
+          NODE
+
+      - name: Enforce machine-verifiable RC gates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RC_ENFORCE: 'true'
+        run: node scripts/verify-release-candidate-readiness.mjs --runtime --machine-only
+
+      - name: Publish full RC report without masking operator blockers
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RC_ENFORCE: 'false'
+        run: node scripts/verify-release-candidate-readiness.mjs --runtime
+
+      - name: Convergence summary
+        shell: bash
+        run: |
+          {
+            echo '## Web Production Convergence'
+            echo '- Isolated staging readiness + CLIENT/VET authentication: passed.'
+            echo '- Production backend readiness: passed.'
+            echo '- ctgone.com → Nvet backend connectivity: passed.'
+            echo '- Machine-verifiable RC gates: passed.'
+            echo '- External backup/restore/alerting/payment evidence remains independently required for RC promotion.'
+          } >> "$GITHUB_STEP_SUMMARY"
