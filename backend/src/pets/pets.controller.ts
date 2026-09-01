@@ -15,8 +15,12 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
 } from "@nestjs/common";
+import { UserRole } from "@prisma/client";
 import { PetsService } from "./pets.service";
+import { ClinicalRecordService } from "./clinical-record.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
 import { CreatePetDto, UpdatePetDto } from "./dto/pet.dto";
 import { UpdatePetHealthProfileDto } from "./dto/pet-health-profile.dto";
 
@@ -30,7 +34,10 @@ import { UpdatePetHealthProfileDto } from "./dto/pet-health-profile.dto";
 @Controller("pets")
 @UseGuards(JwtAuthGuard)
 export class PetsController {
-  constructor(private readonly petsService: PetsService) {}
+  constructor(
+    private readonly petsService: PetsService,
+    private readonly clinicalRecordService: ClinicalRecordService,
+  ) {}
 
   @Get("me")
   async getMyPets(@Request() req) {
@@ -44,6 +51,16 @@ export class PetsController {
     windowDays: number,
   ) {
     return this.petsService.getPreventiveAgenda(req.user.id, windowDays);
+  }
+
+  @Get(":id/clinical-record")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.CLIENT)
+  async getClinicalRecord(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.clinicalRecordService.getClientRecord(req.user.id, id);
   }
 
   @Get(":id")
