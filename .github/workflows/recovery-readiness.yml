@@ -1,0 +1,172 @@
+name: Nvet Recovery Readiness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/prisma/**'
+      - 'backend/scripts/production-predeploy.mjs'
+      - '.github/workflows/recovery-readiness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/prisma/**'
+      - 'backend/scripts/production-predeploy.mjs'
+      - '.github/workflows/recovery-readiness.yml'
+  schedule:
+    - cron: '41 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-recovery-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  recovery-drill:
+    name: Logical backup and isolated restore rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nvet_recovery
+          POSTGRES_PASSWORD: nvet_recovery_ci_only
+          POSTGRES_DB: nvet_source
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nvet_recovery -d nvet_source"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SOURCE_DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_source?schema=public
+      RESTORE_DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_restore?schema=public
+      DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_source?schema=public
+      NVET_ALLOW_E2E_SEED: 'true'
+      NVET_SEED_TARGET: test
+      E2E_CLIENT_EMAIL: recovery-client@nvetcare.invalid
+      E2E_VET_EMAIL: recovery-vet@nvetcare.invalid
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - name: Install repository dependencies
+        run: npm ci
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Generate ephemeral recovery fixture passwords
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "E2E_CLIENT_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+          echo "E2E_VET_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+
+      - name: Materialize canonical schema and deterministic fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx prisma validate --schema backend/prisma/schema.prisma
+          npx prisma generate --schema backend/prisma/schema.prisma
+          npx prisma db push --schema backend/prisma/schema.prisma --skip-generate
+          npm run seed:e2e --workspace=backend
+
+      - name: Capture source integrity fingerprint
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          users="$(psql "$SOURCE_DATABASE_URL" -Atc 'select count(*) from users')"
+          pets="$(psql "$SOURCE_DATABASE_URL" -Atc 'select count(*) from pets')"
+          appointments="$(psql "$SOURCE_DATABASE_URL" -Atc 'select count(*) from appointments')"
+
+          test "$users" -ge 2
+          test "$pets" -ge 1
+          test "$appointments" -ge 2
+
+          echo "users=$users" >> "$GITHUB_OUTPUT"
+          echo "pets=$pets" >> "$GITHUB_OUTPUT"
+          echo "appointments=$appointments" >> "$GITHUB_OUTPUT"
+
+      - name: Produce logical backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          pg_dump "$SOURCE_DATABASE_URL" \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --file=/tmp/nvet-recovery.dump
+          test -s /tmp/nvet-recovery.dump
+          sha256sum /tmp/nvet-recovery.dump | tee /tmp/nvet-recovery.sha256
+
+      - name: Restore into isolated empty database
+        shell: bash
+        env:
+          PGPASSWORD: nvet_recovery_ci_only
+        run: |
+          set -euo pipefail
+          createdb -h localhost -U nvet_recovery nvet_restore
+          pg_restore \
+            --dbname="$RESTORE_DATABASE_URL" \
+            --no-owner \
+            --no-acl \
+            --exit-on-error \
+            /tmp/nvet-recovery.dump
+
+      - name: Verify restored domain integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          restored_users="$(psql "$RESTORE_DATABASE_URL" -Atc 'select count(*) from users')"
+          restored_pets="$(psql "$RESTORE_DATABASE_URL" -Atc 'select count(*) from pets')"
+          restored_appointments="$(psql "$RESTORE_DATABASE_URL" -Atc 'select count(*) from appointments')"
+
+          test "$restored_users" = '${{ steps.source.outputs.users }}'
+          test "$restored_pets" = '${{ steps.source.outputs.pets }}'
+          test "$restored_appointments" = '${{ steps.source.outputs.appointments }}'
+
+          test "$(psql "$RESTORE_DATABASE_URL" -Atc "select count(*) from pets where id='00000000-0000-4000-8000-000000000101'")" = '1'
+          test "$(psql "$RESTORE_DATABASE_URL" -Atc "select count(*) from appointments where id in ('00000000-0000-4000-8000-000000000201','00000000-0000-4000-8000-000000000202')")" = '2'
+
+          DATABASE_URL="$RESTORE_DATABASE_URL" npx prisma db execute \
+            --schema backend/prisma/schema.prisma \
+            --stdin <<'SQL'
+          SELECT 1;
+          SQL
+
+      - name: Publish recovery evidence summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Nvet Recovery Readiness'
+            echo ''
+            echo "- Candidate SHA: \`${GITHUB_SHA}\`"
+            echo '- PostgreSQL source: ephemeral Postgres 16 service.'
+            echo '- Backup format: pg_dump custom archive, no owner/ACL coupling.'
+            echo '- Restore target: independently created empty database.'
+            echo '- Integrity verification: users, pets, appointments and deterministic fixture IDs.'
+            if [ -f /tmp/nvet-recovery.sha256 ]; then
+              echo "- Dump checksum: \`$(cut -d' ' -f1 /tmp/nvet-recovery.sha256)\`"
+            fi
+            echo ''
+            echo '> This proves the application-level logical recovery procedure. It does not replace provider-level production backup evidence or a provider restore drill.'
+          } >> "$GITHUB_STEP_SUMMARY"
