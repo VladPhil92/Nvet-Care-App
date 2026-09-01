@@ -24,7 +24,7 @@ jobs:
     name: Detect Android-impacting changes
     runs-on: ubuntu-latest
     outputs:
-      android-native: ${{ steps.filter.outputs.android_native }}
+      android_native: ${{ steps.filter.outputs.android_native }}
     steps:
       - name: Checkout full history for diff classification
         uses: actions/checkout@v7
@@ -50,8 +50,10 @@ jobs:
             HEAD_SHA="$GITHUB_SHA"
           fi
 
-          # New branches / malformed event refs fail closed: run Android.
-          if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+          # New branches / malformed or unavailable refs fail closed: run Android.
+          if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" || "$BASE_SHA" =~ ^0+$ ]] || \
+             ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || \
+             ! git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
             echo "Unable to establish a trustworthy diff; Android Native will run."
             echo "android_native=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -175,7 +177,7 @@ jobs:
   android-native:
     name: Android Native (Gradle)
     needs: [changes]
-    if: needs.changes.outputs.android-native == 'true'
+    if: needs.changes.outputs.android_native == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
