@@ -126,8 +126,9 @@ export class ClinicalRecordService {
       },
       summary: {
         completedAttendances: records.length,
-        documentedAttendances: records.filter((record) => record.hasClinicalNote)
-          .length,
+        documentedAttendances: records.filter(
+          (record) => record.hasClinicalNote,
+        ).length,
         ownerReportedProfileAvailable: ownerReported !== null,
       },
       provenance: {
@@ -145,10 +146,7 @@ export class ClinicalRecordService {
     }
 
     const profile = value as JsonObject;
-    if (
-      profile.schemaVersion !== 1 ||
-      profile.source !== "OWNER_REPORTED"
-    ) {
+    if (profile.schemaVersion !== 1 || profile.source !== "OWNER_REPORTED") {
       return null;
     }
 
