@@ -4,13 +4,24 @@ on:
   schedule:
     - cron: '8,23,38,53 * * * *'
   workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: 'Create a synthetic readiness failure to drill the incident path'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: nvet-production-backend-health-canary
   cancel-in-progress: true
+
+env:
+  SIMULATE_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_failure || false }}
+  INCIDENT_TITLE: '[ALERT] Nvet production backend readiness degraded'
 
 jobs:
   canary:
@@ -23,13 +34,20 @@ jobs:
         run: |
           set -euo pipefail
           url='https://backend-production-a476.up.railway.app/api/health/ready'
+          attempts=3
 
-          for attempt in 1 2 3; do
+          if [ "$SIMULATE_FAILURE" = 'true' ]; then
+            echo 'Synthetic incident drill enabled. Production will not be mutated.'
+            url='http://127.0.0.1:9/nvet-readiness-drill'
+            attempts=1
+          fi
+
+          for attempt in $(seq 1 "$attempts"); do
             tmp="$(mktemp)"
             code="$(curl --silent --show-error --location --max-time 12 \
               --output "$tmp" --write-out '%{http_code}' "$url" || true)"
 
-            echo "Attempt ${attempt}/3 -> HTTP ${code:-000}"
+            echo "Attempt ${attempt}/${attempts} -> HTTP ${code:-000}"
 
             if [ "$code" = '200' ] && node - "$tmp" <<'NODE'
           const fs = require('fs');
@@ -47,8 +65,143 @@ jobs:
             fi
 
             rm -f "$tmp"
-            sleep 10
+            if [ "$attempt" -lt "$attempts" ]; then
+              sleep 10
+            fi
           done
 
-          echo '❌ Canonical Nvet backend readiness contract is not healthy.'
+          if [ "$SIMULATE_FAILURE" = 'true' ]; then
+            echo '❌ Synthetic readiness failure generated for incident-path verification.'
+          else
+            echo '❌ Canonical Nvet backend readiness contract is not healthy.'
+          fi
           exit 1
+
+  escalate-incident:
+    name: Escalate sustained readiness incident
+    needs: canary
+    if: always() && needs.canary.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Create or update incident issue
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const repo = process.env.GITHUB_REPOSITORY;
+          const token = process.env.GH_TOKEN;
+          const title = process.env.INCIDENT_TITLE;
+          const simulated = process.env.SIMULATE_FAILURE === 'true';
+          const runUrl = `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+          const headers = {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          };
+
+          async function request(path, init = {}) {
+            const response = await fetch(`https://api.github.com/repos/${repo}${path}`, {
+              ...init,
+              headers: { ...headers, ...(init.headers || {}) },
+            });
+            if (!response.ok) {
+              throw new Error(`GitHub incident API ${path} failed: HTTP ${response.status}`);
+            }
+            return response.status === 204 ? null : response.json();
+          }
+
+          const issues = await request('/issues?state=open&per_page=100');
+          const existing = issues.find((issue) => !issue.pull_request && issue.title === title);
+          const timestamp = new Date().toISOString();
+          const drillNote = simulated
+            ? '**Synthetic drill:** this run intentionally failed the canary and did not mutate production.'
+            : '**Production incident:** the public readiness contract failed after retries.';
+          const body = [
+            drillNote,
+            '',
+            `Detected: ${timestamp}`,
+            `Run: ${runUrl}`,
+            '',
+            'Immediate checks:',
+            '- Railway production deployment status',
+            '- `/api/health/ready` database dependency',
+            '- recent backend logs and Sentry events',
+            '- CTG One → Nvet access canary',
+            '',
+            'This issue is automatically closed after a later healthy canary run.',
+          ].join('\n');
+
+          if (existing) {
+            await request(`/issues/${existing.number}/comments`, {
+              method: 'POST',
+              body: JSON.stringify({ body }),
+            });
+            console.log(`Updated existing incident #${existing.number}`);
+          } else {
+            const created = await request('/issues', {
+              method: 'POST',
+              body: JSON.stringify({ title, body }),
+            });
+            console.log(`Created incident #${created.number}`);
+          }
+          NODE
+
+  close-recovered-incident:
+    name: Close recovered readiness incident
+    needs: canary
+    if: always() && needs.canary.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Close any open readiness incident
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const repo = process.env.GITHUB_REPOSITORY;
+          const token = process.env.GH_TOKEN;
+          const title = process.env.INCIDENT_TITLE;
+          const runUrl = `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+          const headers = {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          };
+
+          async function request(path, init = {}) {
+            const response = await fetch(`https://api.github.com/repos/${repo}${path}`, {
+              ...init,
+              headers: { ...headers, ...(init.headers || {}) },
+            });
+            if (!response.ok) {
+              throw new Error(`GitHub recovery API ${path} failed: HTTP ${response.status}`);
+            }
+            return response.status === 204 ? null : response.json();
+          }
+
+          const issues = await request('/issues?state=open&per_page=100');
+          const existing = issues.find((issue) => !issue.pull_request && issue.title === title);
+          if (!existing) {
+            console.log('No open production-readiness incident to close.');
+            process.exit(0);
+          }
+
+          await request(`/issues/${existing.number}/comments`, {
+            method: 'POST',
+            body: JSON.stringify({
+              body: `✅ Readiness recovered at ${new Date().toISOString()}. Healthy canary: ${runUrl}`,
+            }),
+          });
+          await request(`/issues/${existing.number}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ state: 'closed', state_reason: 'completed' }),
+          });
+          console.log(`Closed recovered incident #${existing.number}`);
+          NODE
