@@ -1,0 +1,70 @@
+name: Railway Staging Deployment Diagnostics
+
+on:
+  push:
+    branches:
+      - hotfix/staging-deploy-diagnostics-20260901
+    paths:
+      - '.github/workflows/staging-deploy-diagnostics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    name: Read failed Railway staging logs
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 5
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      DEPLOYMENT_ID: 47a117bb-5930-418f-a618-f84c9618555b
+
+    steps:
+      - name: Require Railway diagnostic token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$RAILWAY_API_TOKEN" ]; then
+            echo '::error::RAILWAY_API_TOKEN is not configured in the GitHub staging environment.'
+            exit 1
+          fi
+
+      - name: Fetch deployment and build logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const endpoint = 'https://backboard.railway.com/graphql/v2';
+          const deploymentId = process.env.DEPLOYMENT_ID;
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: `query Diagnose($deploymentId: String!) {
+                deployment(id: $deploymentId) { id status createdAt }
+                buildLogs(deploymentId: $deploymentId, limit: 200) { timestamp message severity }
+                deploymentLogs(deploymentId: $deploymentId, limit: 200) { timestamp message severity }
+              }`,
+              variables: { deploymentId },
+            }),
+          });
+          const text = await response.text();
+          if (!response.ok) throw new Error(`Railway HTTP ${response.status}: ${text.slice(0, 1000)}`);
+          const payload = JSON.parse(text);
+          if (payload.errors?.length) {
+            throw new Error(payload.errors.map((error) => error.message).join('; '));
+          }
+          console.log(`DEPLOYMENT ${payload.data?.deployment?.id} STATUS ${payload.data?.deployment?.status}`);
+          console.log('--- BUILD LOGS ---');
+          for (const row of payload.data?.buildLogs ?? []) {
+            console.log(`${row.timestamp ?? ''} [${row.severity ?? 'unknown'}] ${row.message ?? ''}`);
+          }
+          console.log('--- DEPLOYMENT LOGS ---');
+          for (const row of payload.data?.deploymentLogs ?? []) {
+            console.log(`${row.timestamp ?? ''} [${row.severity ?? 'unknown'}] ${row.message ?? ''}`);
+          }
+          NODE
