@@ -2,6 +2,8 @@
 #
 # Jobs en paralelo para backend, mobile, Android native y dashboard.
 # El repositorio usa npm workspaces y un package-lock.json canónico en la raíz.
+# Android Native es el gate más costoso; se ejecuta solo cuando el cambio
+# puede afectar el artefacto Android, manteniendo fail-closed ante refs dudosas.
 name: CI
 
 on:
@@ -18,6 +20,56 @@ env:
   NODE_VERSION: '22.x'
 
 jobs:
+  changes:
+    name: Detect Android-impacting changes
+    runs-on: ubuntu-latest
+    outputs:
+      android_native: ${{ steps.filter.outputs.android_native }}
+    steps:
+      - name: Checkout full history for diff classification
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify Android impact
+        id: filter
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="$PR_BASE_SHA"
+            HEAD_SHA="$PR_HEAD_SHA"
+          else
+            BASE_SHA="$BEFORE_SHA"
+            HEAD_SHA="$GITHUB_SHA"
+          fi
+
+          # New branches / malformed or unavailable refs fail closed: run Android.
+          if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" || "$BASE_SHA" =~ ^0+$ ]] || \
+             ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || \
+             ! git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
+            echo "Unable to establish a trustworthy diff; Android Native will run."
+            echo "android_native=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          printf '%s\n' "$CHANGED_FILES"
+
+          if grep -Eq '^(mobile/|package\.json$|package-lock\.json$|\.github/workflows/ci\.yml$)' <<< "$CHANGED_FILES"; then
+            echo "Android-impacting change detected."
+            echo "android_native=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Android-impacting paths changed; expensive native packaging can be skipped safely."
+            echo "android_native=false" >> "$GITHUB_OUTPUT"
+          fi
+
   backend:
     name: Backend (NestJS)
     runs-on: ubuntu-latest
@@ -124,6 +176,8 @@ jobs:
 
   android-native:
     name: Android Native (Gradle)
+    needs: [changes]
+    if: needs.changes.outputs.android_native == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -225,11 +279,15 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [backend, mobile, android-native, dashboard]
+    needs: [changes, backend, mobile, android-native, dashboard]
     if: always()
     steps:
-      - name: Verify all jobs passed
+      - name: Verify all required jobs passed
         run: |
+          if [[ "${{ needs.changes.result }}" != "success" ]]; then
+            echo "Change classifier failed: ${{ needs.changes.result }}"
+            exit 1
+          fi
           if [[ "${{ needs.backend.result }}" != "success" ]]; then
             echo "Backend failed: ${{ needs.backend.result }}"
             exit 1
@@ -238,7 +296,7 @@ jobs:
             echo "Mobile failed: ${{ needs.mobile.result }}"
             exit 1
           fi
-          if [[ "${{ needs.android-native.result }}" != "success" ]]; then
+          if [[ "${{ needs.android-native.result }}" != "success" && "${{ needs.android-native.result }}" != "skipped" ]]; then
             echo "Android Native failed: ${{ needs.android-native.result }}"
             exit 1
           fi
@@ -246,4 +304,4 @@ jobs:
             echo "Dashboard failed: ${{ needs.dashboard.result }}"
             exit 1
           fi
-          echo "All CI jobs passed."
+          echo "CI passed. Android Native result: ${{ needs.android-native.result }}"
