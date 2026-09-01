@@ -28,19 +28,28 @@ jobs:
     name: Verify canonical Railway backend readiness
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      readiness: ${{ steps.probe.outputs.readiness }}
+      simulated: ${{ steps.probe.outputs.simulated }}
     steps:
-      - name: Check public readiness contract
+      - name: Probe public readiness contract
+        id: probe
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           url='https://backend-production-a476.up.railway.app/api/health/ready'
           attempts=3
+          simulated='false'
 
           if [ "$SIMULATE_FAILURE" = 'true' ]; then
             echo 'Synthetic incident drill enabled. Production will not be mutated.'
             url='http://127.0.0.1:9/nvet-readiness-drill'
             attempts=1
+            simulated='true'
           fi
+
+          echo "simulated=$simulated" >> "$GITHUB_OUTPUT"
 
           for attempt in $(seq 1 "$attempts"); do
             tmp="$(mktemp)"
@@ -60,6 +69,7 @@ jobs:
           NODE
             then
               echo '✅ Canonical Nvet backend is ready.'
+              echo 'readiness=healthy' >> "$GITHUB_OUTPUT"
               rm -f "$tmp"
               exit 0
             fi
@@ -70,17 +80,40 @@ jobs:
             fi
           done
 
-          if [ "$SIMULATE_FAILURE" = 'true' ]; then
-            echo '❌ Synthetic readiness failure generated for incident-path verification.'
+          echo 'readiness=unhealthy' >> "$GITHUB_OUTPUT"
+          if [ "$simulated" = 'true' ]; then
+            echo '✅ Synthetic readiness failure generated for incident-path verification.'
           else
             echo '❌ Canonical Nvet backend readiness contract is not healthy.'
           fi
           exit 1
 
+      - name: Validate synthetic drill contract
+        if: env.SIMULATE_FAILURE == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ steps.probe.outcome }}' != 'failure' ]; then
+            echo 'Synthetic drill did not produce the expected failed readiness probe.'
+            exit 1
+          fi
+          if [ '${{ steps.probe.outputs.readiness }}' != 'unhealthy' ]; then
+            echo 'Synthetic drill did not publish readiness=unhealthy.'
+            exit 1
+          fi
+          echo '✅ Synthetic failure was detected without mutating production.'
+
+      - name: Enforce real production readiness
+        if: env.SIMULATE_FAILURE != 'true' && steps.probe.outcome == 'failure'
+        shell: bash
+        run: |
+          echo '❌ Real production readiness failed after retries.'
+          exit 1
+
   escalate-incident:
     name: Escalate sustained readiness incident
     needs: canary
-    if: always() && needs.canary.result == 'failure'
+    if: always() && needs.canary.outputs.readiness == 'unhealthy'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
@@ -118,7 +151,7 @@ jobs:
           const existing = issues.find((issue) => !issue.pull_request && issue.title === title);
           const timestamp = new Date().toISOString();
           const drillNote = simulated
-            ? '**Synthetic drill:** this run intentionally failed the canary and did not mutate production.'
+            ? '**Synthetic drill:** this run intentionally failed the readiness probe and did not mutate production.'
             : '**Production incident:** the public readiness contract failed after retries.';
           const body = [
             drillNote,
@@ -150,10 +183,16 @@ jobs:
           }
           NODE
 
+      - name: Certify synthetic escalation
+        if: env.SIMULATE_FAILURE == 'true'
+        shell: bash
+        run: |
+          echo '✅ Synthetic readiness failure was escalated through the production incident path.'
+
   close-recovered-incident:
     name: Close recovered readiness incident
     needs: canary
-    if: always() && needs.canary.result == 'success'
+    if: always() && needs.canary.result == 'success' && needs.canary.outputs.readiness == 'healthy'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
