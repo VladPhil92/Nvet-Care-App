@@ -1,15 +1,23 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { AppointmentStatus, Prisma, TransactionStatus } from "@prisma/client";
+import {
+  AppointmentStatus,
+  Prisma,
+  TransactionStatus,
+  UserRole,
+} from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { PetsService } from "../pets/pets.service";
 
 const DAY_MS = 86_400_000;
 const PREVENTIVE_WINDOW_DAYS = 60;
 const APPOINTMENT_LOOKBACK_DAYS = 90;
+
+type NotificationAudience = "CLIENT" | "VET";
 
 type NotificationSeed = {
   dedupeKey: string;
@@ -57,18 +65,20 @@ export class NotificationsService {
     private readonly petsService: PetsService,
   ) {}
 
-  async listForUser(userId: string, rawLimit?: string) {
+  async listForUser(userId: string, role: UserRole, rawLimit?: string) {
     const limit = this.parseLimit(rawLimit);
-    await this.syncDerivedNotifications(userId);
+    const audience = this.requireInboxAudience(role);
+    await this.syncDerivedNotifications(userId, audience);
+    const where = this.inboxWhere(userId, audience);
 
     const [items, total, unread] = await Promise.all([
       this.prisma.notification.findMany({
-        where: { userId },
+        where,
         orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
         take: limit,
       }),
-      this.prisma.notification.count({ where: { userId } }),
-      this.prisma.notification.count({ where: { userId, readAt: null } }),
+      this.prisma.notification.count({ where }),
+      this.prisma.notification.count({ where: { ...where, readAt: null } }),
     ]);
 
     return {
@@ -78,17 +88,21 @@ export class NotificationsService {
     };
   }
 
-  async getUnreadCount(userId: string) {
-    await this.syncDerivedNotifications(userId);
+  async getUnreadCount(userId: string, role: UserRole) {
+    const audience = this.requireInboxAudience(role);
+    await this.syncDerivedNotifications(userId, audience);
+    const where = this.inboxWhere(userId, audience);
     const unread = await this.prisma.notification.count({
-      where: { userId, readAt: null },
+      where: { ...where, readAt: null },
     });
     return { unread };
   }
 
-  async markRead(userId: string, notificationId: string) {
+  async markRead(userId: string, role: UserRole, notificationId: string) {
+    const audience = this.requireInboxAudience(role);
+    const where = this.inboxWhere(userId, audience);
     const notification = await this.prisma.notification.findFirst({
-      where: { id: notificationId, userId },
+      where: { ...where, id: notificationId },
     });
     if (!notification) {
       throw new NotFoundException("Notificación no encontrada");
@@ -101,11 +115,13 @@ export class NotificationsService {
     });
   }
 
-  async markAllRead(userId: string) {
-    await this.syncDerivedNotifications(userId);
+  async markAllRead(userId: string, role: UserRole) {
+    const audience = this.requireInboxAudience(role);
+    await this.syncDerivedNotifications(userId, audience);
     const now = new Date();
+    const where = this.inboxWhere(userId, audience);
     const result = await this.prisma.notification.updateMany({
-      where: { userId, readAt: null },
+      where: { ...where, readAt: null },
       data: { readAt: now },
     });
     return { updated: result.count, readAt: now.toISOString() };
@@ -120,7 +136,35 @@ export class NotificationsService {
     return limit;
   }
 
-  private async syncDerivedNotifications(userId: string) {
+  private requireInboxAudience(role: UserRole): NotificationAudience {
+    if (role === UserRole.CLIENT) return "CLIENT";
+    if (role === UserRole.VET) return "VET";
+    throw new ForbiddenException(
+      "El centro de notificaciones está disponible solo para clientes y veterinarios",
+    );
+  }
+
+  private inboxWhere(
+    userId: string,
+    audience: NotificationAudience,
+  ): Prisma.NotificationWhereInput {
+    if (audience === "VET") {
+      return {
+        userId,
+        dedupeKey: { contains: ":VET:" },
+      };
+    }
+
+    return {
+      userId,
+      NOT: { dedupeKey: { contains: ":VET:" } },
+    };
+  }
+
+  private async syncDerivedNotifications(
+    userId: string,
+    audience: NotificationAudience,
+  ) {
     const materializedAt = new Date();
     const recentCutoff = new Date(
       materializedAt.getTime() - APPOINTMENT_LOOKBACK_DAYS * DAY_MS,
@@ -132,14 +176,15 @@ export class NotificationsService {
       AppointmentStatus.DISPUTED,
     ];
 
-    const vetProfile = await this.prisma.vetProfile.findUnique({
-      where: { userId },
-      select: { id: true },
-    });
+    let seeds: NotificationSeed[] = [];
 
-    let seeds: NotificationSeed[];
+    if (audience === "VET") {
+      const vetProfile = await this.prisma.vetProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (!vetProfile) return;
 
-    if (vetProfile) {
       const appointments = await this.prisma.appointment.findMany({
         where: {
           vetId: vetProfile.id,
@@ -245,6 +290,7 @@ export class NotificationsService {
             dueAt: item.dueAt,
             status: item.status,
             daysUntilDue: item.daysUntilDue,
+            audience: "CLIENT",
           },
         });
       }
@@ -252,9 +298,6 @@ export class NotificationsService {
 
     if (seeds.length === 0) return;
 
-    // Do not rewrite existing notifications during badge polling. The unique
-    // userId + dedupeKey contract makes this replay-safe while skipDuplicates
-    // turns repeat synchronization into a no-op at the storage layer.
     await this.prisma.notification.createMany({
       data: seeds.map((seed) => ({
         userId,
@@ -275,10 +318,8 @@ export class NotificationsService {
     appointment: AppointmentForNotification,
   ): NotificationSeed[] {
     const current = this.clientAppointmentStatusSeed(appointment);
-    const payment = this.clientPaymentSeed(appointment);
-    const seeds = [current, payment].filter(
-      (seed): seed is NotificationSeed => seed !== null,
-    );
+    const seeds = current ? [current] : [];
+    seeds.push(...this.paymentSeeds(appointment, "CLIENT"));
 
     if (appointment.status === AppointmentStatus.CONFIRMED) {
       const reminder = this.appointmentReminderSeed(appointment, "CLIENT");
@@ -292,10 +333,8 @@ export class NotificationsService {
     appointment: VetAppointmentForNotification,
   ): NotificationSeed[] {
     const current = this.vetAppointmentStatusSeed(appointment);
-    const payment = this.vetPaymentSeed(appointment);
-    const seeds = [current, payment].filter(
-      (seed): seed is NotificationSeed => seed !== null,
-    );
+    const seeds = current ? [current] : [];
+    seeds.push(...this.paymentSeeds(appointment, "VET"));
 
     if (appointment.status === AppointmentStatus.CONFIRMED) {
       const reminder = this.appointmentReminderSeed(appointment, "VET");
@@ -307,7 +346,7 @@ export class NotificationsService {
 
   private appointmentReminderSeed(
     appointment: AppointmentForNotification,
-    audience: "CLIENT" | "VET",
+    audience: NotificationAudience,
   ): NotificationSeed | null {
     const today = this.utcDateOnly(new Date());
     const appointmentDay = this.utcDateOnly(appointment.date);
@@ -316,8 +355,12 @@ export class NotificationsService {
     );
     if (daysUntil < 0 || daysUntil > 1) return null;
 
+    const dateKey = appointmentDay.toISOString().slice(0, 10);
     return {
-      dedupeKey: `appointment:${appointment.id}:${audience}:REMINDER:${appointmentDay.toISOString().slice(0, 10)}`,
+      dedupeKey:
+        audience === "CLIENT"
+          ? `appointment:${appointment.id}:REMINDER:${dateKey}`
+          : `appointment:${appointment.id}:VET:REMINDER:${dateKey}`,
       type: "APPOINTMENT_REMINDER",
       category: "APPOINTMENT",
       title:
@@ -333,7 +376,7 @@ export class NotificationsService {
       metadata: {
         appointmentId: appointment.id,
         petId: appointment.pet.id,
-        appointmentDate: appointmentDay.toISOString().slice(0, 10),
+        appointmentDate: dateKey,
         time: appointment.time,
         audience,
       },
@@ -344,7 +387,7 @@ export class NotificationsService {
     appointment: AppointmentForNotification,
   ): NotificationSeed | null {
     const base = {
-      dedupeKey: `appointment:${appointment.id}:CLIENT:${appointment.status}`,
+      dedupeKey: `appointment:${appointment.id}:${appointment.status}`,
       category: "APPOINTMENT" as const,
       actionPath: "/nvetcareapp/dashboard/citas",
       metadata: {
@@ -484,78 +527,128 @@ export class NotificationsService {
     }
   }
 
-  private clientPaymentSeed(
+  private paymentSeeds(
     appointment: AppointmentForNotification,
-  ): NotificationSeed | null {
+    audience: NotificationAudience,
+  ): NotificationSeed[] {
     const transaction = appointment.transaction;
     if (!transaction || transaction.status === TransactionStatus.PENDING) {
-      return null;
+      return [];
     }
 
-    const base = this.paymentSeedBase(appointment, transaction, "CLIENT");
-    switch (transaction.status) {
-      case TransactionStatus.VERIFYING:
-        return {
-          ...base,
-          type: "PAYMENT_VERIFYING",
-          title: "Pago en verificación",
-          message: `El pago de la atención de ${appointment.pet.name} está siendo verificado.`,
-          occurredAt: transaction.updatedAt,
-        };
-      case TransactionStatus.CONFIRMED:
-        return {
-          ...base,
-          type: "PAYMENT_CONFIRMED",
-          title: "Pago confirmado",
-          message: `Confirmamos el pago de ${this.formatCop(transaction.amountCop)} para la atención de ${appointment.pet.name}.`,
-          occurredAt: transaction.verifiedAt ?? transaction.updatedAt,
-        };
-      case TransactionStatus.LIQUIDATED:
-        return {
-          ...base,
-          type: "PAYMENT_LIQUIDATED",
-          title: "Pago completado",
-          message: `El pago de ${this.formatCop(transaction.amountCop)} quedó liquidado correctamente.`,
-          occurredAt: transaction.liquidatedAt ?? transaction.updatedAt,
-        };
-      case TransactionStatus.DISPUTED:
-        return {
-          ...base,
-          type: "PAYMENT_DISPUTED",
-          title: "Pago en revisión",
-          message: `El pago asociado a la atención de ${appointment.pet.name} está en revisión.`,
-          occurredAt: transaction.updatedAt,
-        };
-      case TransactionStatus.FAILED:
-        return {
-          ...base,
-          type: "PAYMENT_FAILED",
-          title: "Pago no procesado",
-          message: `No fue posible procesar el pago de la atención de ${appointment.pet.name}.`,
-          occurredAt: transaction.updatedAt,
-        };
-      default:
-        return null;
+    const seeds: NotificationSeed[] = [];
+
+    if (transaction.verifiedAt) {
+      const confirmed = this.paymentStatusSeed(
+        appointment,
+        transaction,
+        audience,
+        TransactionStatus.CONFIRMED,
+        transaction.verifiedAt,
+      );
+      if (confirmed) seeds.push(confirmed);
     }
+
+    if (transaction.liquidatedAt) {
+      const liquidated = this.paymentStatusSeed(
+        appointment,
+        transaction,
+        audience,
+        TransactionStatus.LIQUIDATED,
+        transaction.liquidatedAt,
+      );
+      if (liquidated) seeds.push(liquidated);
+    }
+
+    const currentAlreadyReconstructed =
+      (transaction.status === TransactionStatus.CONFIRMED &&
+        Boolean(transaction.verifiedAt)) ||
+      (transaction.status === TransactionStatus.LIQUIDATED &&
+        Boolean(transaction.liquidatedAt));
+
+    if (!currentAlreadyReconstructed) {
+      const current = this.paymentStatusSeed(
+        appointment,
+        transaction,
+        audience,
+        transaction.status,
+        transaction.updatedAt,
+      );
+      if (current) seeds.push(current);
+    }
+
+    return seeds;
   }
 
-  private vetPaymentSeed(
+  private paymentStatusSeed(
     appointment: AppointmentForNotification,
+    transaction: TransactionForNotification,
+    audience: NotificationAudience,
+    status: TransactionStatus,
+    occurredAt: Date,
   ): NotificationSeed | null {
-    const transaction = appointment.transaction;
-    if (!transaction || transaction.status === TransactionStatus.PENDING) {
-      return null;
+    const base = this.paymentSeedBase(
+      appointment,
+      transaction,
+      audience,
+      status,
+    );
+
+    if (audience === "CLIENT") {
+      switch (status) {
+        case TransactionStatus.VERIFYING:
+          return {
+            ...base,
+            type: "PAYMENT_VERIFYING",
+            title: "Pago en verificación",
+            message: `El pago de la atención de ${appointment.pet.name} está siendo verificado.`,
+            occurredAt,
+          };
+        case TransactionStatus.CONFIRMED:
+          return {
+            ...base,
+            type: "PAYMENT_CONFIRMED",
+            title: "Pago confirmado",
+            message: `Confirmamos el pago de ${this.formatCop(transaction.amountCop)} para la atención de ${appointment.pet.name}.`,
+            occurredAt,
+          };
+        case TransactionStatus.LIQUIDATED:
+          return {
+            ...base,
+            type: "PAYMENT_LIQUIDATED",
+            title: "Pago completado",
+            message: `El pago de ${this.formatCop(transaction.amountCop)} quedó liquidado correctamente.`,
+            occurredAt,
+          };
+        case TransactionStatus.DISPUTED:
+          return {
+            ...base,
+            type: "PAYMENT_DISPUTED",
+            title: "Pago en revisión",
+            message: `El pago asociado a la atención de ${appointment.pet.name} está en revisión.`,
+            occurredAt,
+          };
+        case TransactionStatus.FAILED:
+          return {
+            ...base,
+            type: "PAYMENT_FAILED",
+            title: "Pago no procesado",
+            message: `No fue posible procesar el pago de la atención de ${appointment.pet.name}.`,
+            occurredAt,
+          };
+        default:
+          return null;
+      }
     }
 
-    const base = this.paymentSeedBase(appointment, transaction, "VET");
-    switch (transaction.status) {
+    switch (status) {
       case TransactionStatus.VERIFYING:
         return {
           ...base,
           type: "VET_PAYMENT_VERIFYING",
           title: "Pago en verificación",
           message: `El pago de la atención de ${appointment.pet.name} está siendo verificado.`,
-          occurredAt: transaction.updatedAt,
+          occurredAt,
         };
       case TransactionStatus.CONFIRMED:
         return {
@@ -563,7 +656,7 @@ export class NotificationsService {
           type: "VET_PAYMENT_CONFIRMED",
           title: "Pago confirmado",
           message: `El pago de ${this.formatCop(transaction.amountCop)} para ${appointment.pet.name} fue confirmado.`,
-          occurredAt: transaction.verifiedAt ?? transaction.updatedAt,
+          occurredAt,
         };
       case TransactionStatus.LIQUIDATED:
         return {
@@ -571,7 +664,7 @@ export class NotificationsService {
           type: "VET_PAYOUT_LIQUIDATED",
           title: "Ingreso liquidado",
           message: `La liquidación de ${this.formatCop(transaction.amountCop)} asociada a ${appointment.pet.name} quedó registrada.`,
-          occurredAt: transaction.liquidatedAt ?? transaction.updatedAt,
+          occurredAt,
         };
       case TransactionStatus.DISPUTED:
         return {
@@ -579,7 +672,7 @@ export class NotificationsService {
           type: "VET_PAYMENT_DISPUTED",
           title: "Pago en revisión",
           message: `El pago asociado a la atención de ${appointment.pet.name} entró en revisión.`,
-          occurredAt: transaction.updatedAt,
+          occurredAt,
         };
       case TransactionStatus.FAILED:
         return {
@@ -587,7 +680,7 @@ export class NotificationsService {
           type: "VET_PAYMENT_FAILED",
           title: "Pago no procesado",
           message: `El pago asociado a la atención de ${appointment.pet.name} no pudo procesarse.`,
-          occurredAt: transaction.updatedAt,
+          occurredAt,
         };
       default:
         return null;
@@ -597,10 +690,11 @@ export class NotificationsService {
   private paymentSeedBase(
     appointment: AppointmentForNotification,
     transaction: TransactionForNotification,
-    audience: "CLIENT" | "VET",
+    audience: NotificationAudience,
+    status: TransactionStatus,
   ) {
     return {
-      dedupeKey: `transaction:${transaction.id}:${audience}:${transaction.status}`,
+      dedupeKey: `transaction:${transaction.id}:${audience}:${status}`,
       category: "PAYMENT" as const,
       actionPath:
         audience === "VET"
@@ -610,7 +704,7 @@ export class NotificationsService {
         appointmentId: appointment.id,
         petId: appointment.pet.id,
         transactionId: transaction.id,
-        status: transaction.status,
+        status,
         amountCop: transaction.amountCop,
         paymentMethod: transaction.paymentMethod,
         audience,
