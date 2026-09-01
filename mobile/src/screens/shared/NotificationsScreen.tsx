@@ -124,8 +124,23 @@ export default function NotificationsScreen({ navigation }: Props) {
           <EmptyState
             glyph="⚠️"
             title="No pudimos cargar tus notificaciones"
-            subtitle="Verifica tu conexión y desliza para volver a intentar."
+            subtitle="Verifica tu conexión y vuelve a intentarlo."
           />
+          <Pressable
+            onPress={handleRefresh}
+            disabled={inboxQuery.isFetching}
+            accessibilityRole="button"
+            accessibilityLabel="Reintentar cargar notificaciones"
+            style={({ pressed }) => [
+              styles.retryButton,
+              pressed && { opacity: 0.85 },
+              inboxQuery.isFetching && { opacity: 0.55 },
+            ]}
+          >
+            <Text style={styles.retryText}>
+              {inboxQuery.isFetching ? 'Reintentando…' : 'Reintentar'}
+            </Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -226,6 +241,15 @@ const styles = StyleSheet.create({
   skeletonWrap: { padding: 16, gap: 10 },
   listContent: { padding: 16, paddingBottom: 40, flexGrow: 1 },
   emptyBox: { marginTop: 60, paddingHorizontal: 16 },
+  retryButton: {
+    alignSelf: 'center',
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: UI_COLORS.sage,
+  },
+  retryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   card: {
     flexDirection: 'row',
     alignItems: 'flex-start',
