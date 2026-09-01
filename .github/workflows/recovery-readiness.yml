@@ -82,6 +82,26 @@ jobs:
           echo "E2E_VET_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
           echo "E2E_ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
 
+      - name: Verify staging deploy is independent from fixture credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          env \
+            -u E2E_CLIENT_EMAIL \
+            -u E2E_CLIENT_PASSWORD \
+            -u E2E_VET_EMAIL \
+            -u E2E_VET_PASSWORD \
+            -u E2E_ADMIN_EMAIL \
+            -u E2E_ADMIN_PASSWORD \
+            NODE_ENV=staging \
+            NVET_ALLOW_E2E_SEED=true \
+            NVET_SEED_TARGET=staging \
+            npm run deploy:preflight --workspace=backend
+
+          # The predeploy must apply schema/runtime guards but must not create
+          # any E2E identities when their secret-backed credentials are absent.
+          test "$(psql "$SOURCE_PG_URL" -Atc "select count(*) from users where email like '%@nvetcare.invalid'")" = '0'
+
       - name: Materialize canonical schema and deterministic fixtures
         shell: bash
         run: |
@@ -167,6 +187,7 @@ jobs:
             echo ''
             echo "- Candidate SHA: \`${GITHUB_SHA}\`"
             echo '- PostgreSQL source: ephemeral Postgres 16 service.'
+            echo '- Staging deploy contract: schema/runtime predeploy passes with E2E credentials intentionally absent; fixture certification stays separate.'
             echo '- Backup format: pg_dump custom archive, no owner/ACL coupling.'
             echo '- Restore target: independently created empty database.'
             echo '- Integrity verification: client, vet, staging-only ADMIN fixture, pets, appointments and deterministic fixture IDs.'
