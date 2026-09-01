@@ -15,7 +15,7 @@ describe("ClinicalRecordService V3", () => {
     jest.clearAllMocks();
   });
 
-  it("separates OWNER_REPORTED data from VET_AUTHORED completed care", async () => {
+  it("separates OWNER_REPORTED data from VET_AUTHORED historically completed care", async () => {
     petFindUnique.mockResolvedValue({
       id: "pet-1",
       ownerId: "owner-1",
@@ -85,10 +85,51 @@ describe("ClinicalRecordService V3", () => {
         where: expect.objectContaining({
           petId: "pet-1",
           clientId: "owner-1",
-          status: "COMPLETED",
+          completedAt: { not: null },
         }),
       }),
     );
+  });
+
+  it("keeps completion provenance independent of the appointment current status", async () => {
+    petFindUnique.mockResolvedValue({
+      id: "pet-1",
+      ownerId: "owner-1",
+      name: "Luna",
+      species: "DOG",
+      breed: null,
+      weight: null,
+      birthDate: null,
+      photo: null,
+      healthProfile: null,
+      healthProfileVersion: 1,
+      healthProfileUpdatedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    appointmentFindMany.mockResolvedValue([
+      {
+        id: "appointment-disputed",
+        serviceType: "Consulta",
+        date: new Date("2026-08-10T00:00:00.000Z"),
+        time: "10:00",
+        diagnosis: "Diagnóstico persistido",
+        treatment: null,
+        completedAt: new Date("2026-08-10T15:30:00.000Z"),
+        updatedAt: new Date("2026-08-11T12:00:00.000Z"),
+        vet: { user: { firstName: "Ana", lastName: "Pérez" } },
+      },
+    ]);
+
+    const result = await service.getClientRecord("owner-1", "pet-1");
+
+    expect(result.vetAuthored.records).toHaveLength(1);
+    expect(result.vetAuthored.records[0].appointmentId).toBe(
+      "appointment-disputed",
+    );
+    const where = appointmentFindMany.mock.calls[0][0].where;
+    expect(where.completedAt).toEqual({ not: null });
+    expect(where).not.toHaveProperty("status");
   });
 
   it("fails closed when the authenticated user does not own the pet", async () => {
