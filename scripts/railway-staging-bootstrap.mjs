@@ -10,18 +10,30 @@ const stagingName = process.env.STAGING_ENVIRONMENT || 'staging';
 const backendName = process.env.BACKEND_SERVICE || 'nvet-staging-backend';
 const postgresName = process.env.POSTGRES_SERVICE || 'nvet-staging-postgres';
 const repository = process.env.NVET_REPOSITORY || 'VladPhil92/Nvet-Care-App';
+const e2eClientEmail = process.env.E2E_CLIENT_EMAIL?.trim();
+const e2eClientPassword = process.env.E2E_CLIENT_PASSWORD;
+const e2eVetEmail = process.env.E2E_VET_EMAIL?.trim();
+const e2eVetPassword = process.env.E2E_VET_PASSWORD;
 
 for (const [name, value] of Object.entries({
   RAILWAY_API_TOKEN: token,
   PROJECT_ID: projectId,
   FRONTEND_URL: frontendUrl,
   GITHUB_SHA: commitSha,
+  E2E_CLIENT_EMAIL: e2eClientEmail,
+  E2E_CLIENT_PASSWORD: e2eClientPassword,
+  E2E_VET_EMAIL: e2eVetEmail,
+  E2E_VET_PASSWORD: e2eVetPassword,
 })) {
   if (!value) throw new Error(`${name} is required`);
 }
 
 if (!/^https:\/\/[^\s]+$/.test(frontendUrl)) {
   throw new Error('FRONTEND_URL must be an absolute HTTPS URL');
+}
+
+if (e2eClientEmail.toLowerCase() === e2eVetEmail.toLowerCase()) {
+  throw new Error('E2E client and vet emails must be different');
 }
 
 async function graphql(query, variables = {}) {
@@ -204,6 +216,10 @@ try {
     NVET_CTG_IDENTITY_EXCHANGE_ENABLED: 'false',
     NVET_ALLOW_E2E_SEED: 'true',
     NVET_SEED_TARGET: 'staging',
+    E2E_CLIENT_EMAIL: e2eClientEmail,
+    E2E_CLIENT_PASSWORD: e2eClientPassword,
+    E2E_VET_EMAIL: e2eVetEmail,
+    E2E_VET_PASSWORD: e2eVetPassword,
   };
 
   const backendData = await graphql(

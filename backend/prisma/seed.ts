@@ -19,18 +19,14 @@ const FIXTURE_IDS = {
   confirmedAppointment: "00000000-0000-4000-8000-000000000202",
 };
 
-const DEFAULTS = {
-  clientEmail: "cliente@nvetcare.test",
-  clientPassword: "TestClient123!",
-  vetEmail: "vet@nvetcare.test",
-  vetPassword: "TestVet123!",
-};
-
 const E2E_VET_SPECIALTIES = ["Consulta general", "Emergencias"];
 
-function env(name: string, fallback: string): string {
+function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
-  return value || fallback;
+  if (!value) {
+    throw new Error(`E2E seed refused: ${name} is required.`);
+  }
+  return value;
 }
 
 function assertSeedAllowed(): void {
@@ -73,10 +69,10 @@ async function main(): Promise<void> {
 
   assertSeedAllowed();
 
-  const clientEmail = env("E2E_CLIENT_EMAIL", DEFAULTS.clientEmail).toLowerCase();
-  const clientPassword = env("E2E_CLIENT_PASSWORD", DEFAULTS.clientPassword);
-  const vetEmail = env("E2E_VET_EMAIL", DEFAULTS.vetEmail).toLowerCase();
-  const vetPassword = env("E2E_VET_PASSWORD", DEFAULTS.vetPassword);
+  const clientEmail = requiredEnv("E2E_CLIENT_EMAIL").toLowerCase();
+  const clientPassword = requiredEnv("E2E_CLIENT_PASSWORD");
+  const vetEmail = requiredEnv("E2E_VET_EMAIL").toLowerCase();
+  const vetPassword = requiredEnv("E2E_VET_PASSWORD");
 
   if (clientEmail === vetEmail) {
     throw new Error("E2E seed refused: client and vet emails must be different.");
