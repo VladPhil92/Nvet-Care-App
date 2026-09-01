@@ -58,6 +58,7 @@ async function readManifest() {
     'ctgOneAccessCanaryMaxAgeHours',
     'recoveryDrillMaxAgeHours',
     'alertDrillMaxAgeHours',
+    'paymentRailApplicationMaxAgeHours',
   ]) {
     const value = manifest.policy?.[key];
     if (!Number.isFinite(value) || value <= 0) fail(`Invalid RC policy value: ${key}`);
@@ -213,6 +214,27 @@ async function auditRuntime(manifest) {
       : staging
         ? `${stagingAge.toFixed(1)}h old run=${staging.id}`
         : 'no successful staging E2E run or current preflight proof',
+  });
+
+  const transferRail = latestRun(
+    nvetRuns,
+    'Nvet Transfer Payment Rail Certification',
+    (run) =>
+      run.head_branch === 'main' &&
+      run.status === 'completed' &&
+      run.conclusion === 'success',
+  );
+  const transferRailAge = transferRail
+    ? hoursSince(transferRail.updated_at || transferRail.created_at)
+    : Number.POSITIVE_INFINITY;
+  checks.push({
+    ok:
+      Boolean(transferRail) &&
+      transferRailAge <= manifest.policy.paymentRailApplicationMaxAgeHours,
+    label: 'TRANSFER application rail certification freshness',
+    detail: transferRail
+      ? `${transferRailAge.toFixed(1)}h old run=${transferRail.id}; CLIENT→VET→ADMIN lifecycle only`
+      : 'no successful staging TRANSFER application certification',
   });
 
   const ctgCanary = latestRun(ctgRuns, 'Nvet Production Access Canary', (run) => run.conclusion === 'success');
