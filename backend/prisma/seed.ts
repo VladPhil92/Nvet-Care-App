@@ -29,6 +29,23 @@ function requiredEnv(name: string): string {
   return value;
 }
 
+function optionalCredentialPair(
+  emailName: string,
+  passwordName: string,
+): { email: string; password: string } | null {
+  const email = process.env[emailName]?.trim();
+  const password = process.env[passwordName];
+
+  if (Boolean(email) !== Boolean(password)) {
+    throw new Error(
+      `E2E seed refused: ${emailName} and ${passwordName} must be configured together.`,
+    );
+  }
+
+  if (!email || !password) return null;
+  return { email: email.toLowerCase(), password };
+}
+
 function assertSeedAllowed(): void {
   const target = process.env.NVET_SEED_TARGET?.trim().toLowerCase();
   const enabled = process.env.NVET_ALLOW_E2E_SEED === "true";
@@ -73,15 +90,28 @@ async function main(): Promise<void> {
   const clientPassword = requiredEnv("E2E_CLIENT_PASSWORD");
   const vetEmail = requiredEnv("E2E_VET_EMAIL").toLowerCase();
   const vetPassword = requiredEnv("E2E_VET_PASSWORD");
+  const adminCredentials = optionalCredentialPair(
+    "E2E_ADMIN_EMAIL",
+    "E2E_ADMIN_PASSWORD",
+  );
 
-  if (clientEmail === vetEmail) {
-    throw new Error("E2E seed refused: client and vet emails must be different.");
+  const fixtureEmails = [
+    clientEmail,
+    vetEmail,
+    ...(adminCredentials ? [adminCredentials.email] : []),
+  ];
+  if (new Set(fixtureEmails).size !== fixtureEmails.length) {
+    throw new Error("E2E seed refused: fixture identities must use different emails.");
   }
 
-  const [clientPasswordHash, vetPasswordHash] = await Promise.all([
-    passwordService.hash(clientPassword),
-    passwordService.hash(vetPassword),
-  ]);
+  const [clientPasswordHash, vetPasswordHash, adminPasswordHash] =
+    await Promise.all([
+      passwordService.hash(clientPassword),
+      passwordService.hash(vetPassword),
+      adminCredentials
+        ? passwordService.hash(adminCredentials.password)
+        : Promise.resolve(null),
+    ]);
 
   const client = await prisma.user.upsert({
     where: { email: clientEmail },
@@ -143,6 +173,39 @@ async function main(): Promise<void> {
     },
   });
 
+  let adminEmail: string | null = null;
+  if (adminCredentials && adminPasswordHash) {
+    adminEmail = adminCredentials.email;
+    await prisma.user.upsert({
+      where: { email: adminCredentials.email },
+      update: {
+        passwordHash: adminPasswordHash,
+        role: UserRole.ADMIN,
+        firstName: "Administrador",
+        lastName: "E2E",
+        emailVerified: true,
+        isActive: true,
+        deactivatedAt: null,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+        recoveryCodesHash: [],
+        passwordChangedAt: new Date(),
+      },
+      create: {
+        email: adminCredentials.email,
+        passwordHash: adminPasswordHash,
+        role: UserRole.ADMIN,
+        firstName: "Administrador",
+        lastName: "E2E",
+        emailVerified: true,
+        isActive: true,
+        passwordChangedAt: new Date(),
+      },
+    });
+  }
+
   const vetProfile = await prisma.vetProfile.upsert({
     where: { userId: vetUser.id },
     update: {
@@ -188,8 +251,9 @@ async function main(): Promise<void> {
     },
   });
 
-  // Reset only records owned by the dedicated E2E fixture identities. This
-  // makes repeated staging runs deterministic without touching unrelated data.
+  // Reset only records owned by the dedicated E2E fixture client/vet. The
+  // optional ADMIN fixture has no domain data and is never used outside
+  // test/staging, so repeated runs cannot touch unrelated operator accounts.
   await prisma.$transaction([
     prisma.appointment.deleteMany({
       where: {
@@ -282,6 +346,7 @@ async function main(): Promise<void> {
         target: process.env.NVET_SEED_TARGET,
         client: clientEmail,
         vet: vetEmail,
+        admin: adminEmail,
         fixtures: {
           petId: pet.id,
           pendingAppointmentId: FIXTURE_IDS.pendingAppointment,
