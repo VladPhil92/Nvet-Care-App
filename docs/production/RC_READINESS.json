@@ -11,22 +11,22 @@
     "productionBackupConfigured": {
       "status": "pending",
       "evidence": null,
-      "note": "Verify provider-level automatic production backups."
+      "note": "Verify provider-level automatic production backups. Repository recovery rehearsals do not replace provider backup evidence."
     },
     "restoreDrillVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Run and date a non-destructive restore drill before RC promotion."
+      "note": "Nvet Recovery Readiness now proves the application-level pg_dump/pg_restore procedure. Run and date a non-destructive provider-level production restore drill before RC promotion."
     },
     "productionAlertingVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Verify an alert path for sustained readiness degradation/down."
+      "note": "The production readiness canary now opens/updates an incident issue on sustained failure and closes it after recovery. Execute the synthetic failure drill and retain the workflow/issue evidence before marking verified."
     },
     "paymentRailVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Verify at least one intended MVP payment rail end-to-end before commercial RC promotion."
+      "note": "Verify at least one intended MVP payment rail end-to-end. TRANSFER is the current candidate rail; CTG remains disabled and PSE now fails closed in production while its adapter is still sandbox/mock."
     }
   },
   "postRcTracks": {
