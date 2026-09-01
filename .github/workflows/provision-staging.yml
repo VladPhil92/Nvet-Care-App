@@ -4,103 +4,122 @@ on:
   workflow_dispatch:
     inputs:
       project_id:
-        description: 'Railway project ID that currently hosts Nvet Care production'
+        description: 'Railway project ID that owns the Nvet services'
         required: true
         type: string
-      frontend_url:
-        description: 'Allowed frontend origin for staging links/CORS'
+      expected_project_name:
+        description: 'Exact Railway project name used as a safety guard'
         required: true
-        default: 'https://ctgone.com'
+        default: 'Nvet Care App'
         type: string
-      confirm:
-        description: 'Type provision-staging exactly'
+      confirmation:
+        description: 'Type PROVISION_ISOLATED_STAGING to continue'
         required: true
+        default: 'NO'
         type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: nvet-isolated-staging-bootstrap
+  group: nvet-provision-isolated-staging
   cancel-in-progress: false
 
-env:
-  NODE_VERSION: '22.x'
-  STAGING_ENVIRONMENT: staging
-  BACKEND_SERVICE: nvet-staging-backend
-  POSTGRES_SERVICE: nvet-staging-postgres
-  E2E_CLIENT_EMAIL: cliente@nvetcare.test
-  E2E_CLIENT_PASSWORD: TestClient123!
-  E2E_VET_EMAIL: vet@nvetcare.test
-  E2E_VET_PASSWORD: TestVet123!
-
 jobs:
-  provision:
-    name: Provision Railway staging and certify preflight
+  provision-isolated-staging:
+    name: Provision isolated Railway staging
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'PROVISION_ISOLATED_STAGING'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    environment: staging
+    timeout-minutes: 25
     env:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       PROJECT_ID: ${{ inputs.project_id }}
-      FRONTEND_URL: ${{ inputs.frontend_url }}
+      EXPECTED_PROJECT_NAME: ${{ inputs.expected_project_name }}
+      FRONTEND_URL: https://ctgone.com
+      STAGING_ENVIRONMENT: staging
+      BACKEND_SERVICE: nvet-staging-backend
+      POSTGRES_SERVICE: nvet-staging-postgres
+      NVET_REPOSITORY: VladPhil92/Nvet-Care-App
+      E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
+      E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
+      E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
+      E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
 
     steps:
-      - name: Require explicit authorization
-        run: |
-          set -euo pipefail
-          if [ "${{ inputs.confirm }}" != "provision-staging" ]; then
-            echo '::error::Confirmation refused. Type provision-staging exactly.'
-            exit 1
-          fi
-          if [ -z "$RAILWAY_API_TOKEN" ]; then
-            echo '::error::Missing repository secret RAILWAY_API_TOKEN.'
-            exit 1
-          fi
-          if [ -z "$PROJECT_ID" ]; then
-            echo '::error::Railway project_id is required.'
-            exit 1
-          fi
-          if ! printf '%s' "$FRONTEND_URL" | grep -Eq '^https://[^[:space:]]+$'; then
-            echo '::error::frontend_url must be an absolute HTTPS URL.'
-            exit 1
-          fi
-
-      - name: Checkout canonical mainline source
-        uses: actions/checkout@v4
+      - name: Checkout canonical main
+        uses: actions/checkout@v7
+        with:
+          ref: main
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '22.x'
 
-      - name: Validate staging bootstrap contract
+      - name: Validate secret-backed staging inputs
+        shell: bash
         run: |
-          node --check scripts/railway-staging-bootstrap.mjs
-          node --check backend/scripts/production-predeploy.mjs
-          node --check backend/scripts/railway-runtime-smoke.mjs
+          set -euo pipefail
+          missing=''
+          [ -z "$RAILWAY_API_TOKEN" ] && missing="$missing RAILWAY_API_TOKEN"
+          [ -z "$E2E_CLIENT_EMAIL" ] && missing="$missing E2E_CLIENT_EMAIL"
+          [ -z "$E2E_CLIENT_PASSWORD" ] && missing="$missing E2E_CLIENT_PASSWORD"
+          [ -z "$E2E_VET_EMAIL" ] && missing="$missing E2E_VET_EMAIL"
+          [ -z "$E2E_VET_PASSWORD" ] && missing="$missing E2E_VET_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required staging secrets:$missing"
+            exit 1
+          fi
+          if [ "$E2E_CLIENT_EMAIL" = "$E2E_VET_EMAIL" ]; then
+            echo '::error::CLIENT and VET fixture identities must be different.'
+            exit 1
+          fi
 
-      - name: Provision isolated Railway environment via Public API
+      - name: Verify Railway project identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const endpoint = 'https://backboard.railway.com/graphql/v2';
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: 'query Project($id: String!) { project(id: $id) { id name } }',
+              variables: { id: process.env.PROJECT_ID },
+            }),
+          });
+          const payload = await response.json();
+          if (!response.ok || payload.errors?.length) {
+            throw new Error(`Railway project verification failed: HTTP ${response.status}`);
+          }
+          const project = payload.data?.project;
+          if (project?.id !== process.env.PROJECT_ID) {
+            throw new Error('Railway token cannot read the requested project.');
+          }
+          if (project.name !== process.env.EXPECTED_PROJECT_NAME) {
+            throw new Error(`Railway project-name guard failed: received ${project.name}`);
+          }
+          console.log(`Railway project verified: ${project.name}`);
+          NODE
+
+      - name: Provision isolated staging
         run: node scripts/railway-staging-bootstrap.mjs
 
-      - name: Certify staging API fixtures and emergency discovery
+      - name: Verify newly provisioned fixture identities
         run: node mobile/e2e/preflight.mjs
 
-      - name: Publish non-secret staging handoff
+      - name: Provisioning summary
+        shell: bash
         run: |
           {
-            echo '## Nvet Care isolated staging provisioned'
-            echo ''
-            echo "- Environment: \`$STAGING_ENVIRONMENT\`"
-            echo "- Environment ID: \`$STAGING_ENVIRONMENT_ID\`"
-            echo "- Backend service: \`$BACKEND_SERVICE\`"
-            echo "- Backend service ID: \`$STAGING_BACKEND_SERVICE_ID\`"
-            echo "- PostgreSQL service: \`$POSTGRES_SERVICE\`"
-            echo "- API: \`$STAGING_API_URL\`"
-            echo '- PostgreSQL: isolated private-network service with persistent volume; no public database endpoint was created.'
-            echo '- Schema preflight: applied inside Railway predeploy.'
-            echo '- Deterministic E2E seed: applied inside isolated staging predeploy.'
-            echo '- CTG One identity exchange: deliberately disabled in synthetic staging.'
-            echo '- API readiness + client/vet auth + emergency search preflight: passed.'
-            echo ''
-            echo 'Next gate: Android Detox against this staging API, then RC1 release-readiness.'
+            echo '## Isolated staging provisioned'
+            echo "- API: $STAGING_API_URL"
+            echo '- PostgreSQL remains on Railway private networking.'
+            echo '- CLIENT/VET fixture credentials came exclusively from the GitHub staging environment.'
+            echo '- Backend readiness, fixture login and discovery preflight passed.'
           } >> "$GITHUB_STEP_SUMMARY"
