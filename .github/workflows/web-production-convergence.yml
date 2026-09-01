@@ -2,7 +2,7 @@ name: Web Production Convergence
 
 on:
   workflow_run:
-    workflows: ['CI']
+    workflows: ['Nvet Transfer Payment Rail Certification']
     types: [completed]
   schedule:
     - cron: '12 */6 * * *'
@@ -18,6 +18,10 @@ concurrency:
 
 env:
   NODE_VERSION: '22.x'
+  RAILWAY_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
+  RAILWAY_STAGING_ENVIRONMENT_ID: 9267d965-e5e4-4c6f-af93-001c73cf62b4
+  RAILWAY_STAGING_SERVICE_ID: dc5c2eee-3f8d-4416-8854-a921ea694735
+  RAILWAY_PRODUCTION_SERVICE_ID: 42e734a0-931b-45c8-a091-4334b54e9d1c
 
 jobs:
   converge:
@@ -33,11 +37,7 @@ jobs:
     timeout-minutes: 15
     env:
       RC_CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-      E2E_API_URL: ${{ secrets.E2E_API_URL }}
-      E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
-      E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
-      E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
-      E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
     steps:
       - name: Checkout certified candidate
@@ -86,33 +86,33 @@ jobs:
           console.log('ctgone.com -> Nvet backend connectivity is healthy.');
           NODE
 
-      - name: Validate staging evidence inputs
+      - name: Load autonomous staging evidence session
         id: staging_inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          missing=''
-          [ -z "$E2E_API_URL" ] && missing="$missing E2E_API_URL"
-          [ -z "$E2E_CLIENT_EMAIL" ] && missing="$missing E2E_CLIENT_EMAIL"
-          [ -z "$E2E_CLIENT_PASSWORD" ] && missing="$missing E2E_CLIENT_PASSWORD"
-          [ -z "$E2E_VET_EMAIL" ] && missing="$missing E2E_VET_EMAIL"
-          [ -z "$E2E_VET_PASSWORD" ] && missing="$missing E2E_VET_PASSWORD"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing staging environment secrets:$missing"
-            exit 1
-          fi
+        run: node scripts/railway-staging-session.mjs load
 
-          if ! printf '%s' "$E2E_API_URL" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
-            echo '::error::E2E_API_URL must be an absolute HTTPS URL ending in /api.'
-            exit 1
-          fi
-
-      - name: Verify isolated staging identity and discovery
+      - name: Verify isolated staging candidate, identity and discovery
         id: staging
         shell: bash
         run: |
           set -euo pipefail
           node mobile/e2e/preflight.mjs
+
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          code="$(curl --silent --show-error --location --max-time 15 --output "$tmp" --write-out '%{http_code}' "${E2E_API_URL%/}/health/ready")"
+          test "$code" = '200'
+          node - "$tmp" "$RC_CANDIDATE_SHA" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const expected = process.argv[3].slice(0, 12).toLowerCase();
+          const revision = String(body?.revision || '').toLowerCase();
+          if (!revision.startsWith(expected)) {
+            console.error(`Staging candidate mismatch: expected ${expected}, received ${body?.revision ?? 'missing'}`);
+            process.exit(1);
+          }
+          console.log(`Staging candidate revision verified: ${body.revision}`);
+          NODE
+
           echo 'RC_STAGING_PREFLIGHT_CURRENT=true' >> "$GITHUB_ENV"
 
       - name: Enforce machine-verifiable RC gates
@@ -148,10 +148,10 @@ jobs:
             echo "- Candidate: $RC_CANDIDATE_SHA"
             echo "- Production backend readiness: $(outcome_label '${{ steps.production.outcome }}')"
             echo "- ctgone.com → Nvet backend connectivity: $(outcome_label '${{ steps.ctg.outcome }}')"
-            echo "- Staging evidence inputs: $(outcome_label '${{ steps.staging_inputs.outcome }}')"
-            echo "- Isolated staging identity/discovery: $(outcome_label '${{ steps.staging.outcome }}')"
+            echo "- Railway staging session: $(outcome_label '${{ steps.staging_inputs.outcome }}')"
+            echo "- Isolated staging candidate/identity/discovery: $(outcome_label '${{ steps.staging.outcome }}')"
             echo "- Machine-verifiable RC gates: $(outcome_label '${{ steps.machine.outcome }}')"
             echo "- Full RC evidence report: $(outcome_label '${{ steps.report.outcome }}')"
             echo ''
-            echo '> Staging remains fail-closed. A staging configuration failure must not hide independent production or CTG One health evidence.'
+            echo '> Automatic chain: CI → isolated staging → TRANSFER application certification → convergence. External provider backup/restore and real-funds evidence remain separate promotion gates.'
           } >> "$GITHUB_STEP_SUMMARY"
