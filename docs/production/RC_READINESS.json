@@ -21,9 +21,9 @@
       "note": "Nvet Recovery Readiness proves the application-level pg_dump/pg_restore procedure. Run and date a non-destructive provider-level production restore drill before RC promotion."
     },
     "productionAlertingVerified": {
-      "status": "pending",
-      "evidence": null,
-      "note": "The production readiness canary now isolates synthetic drills from real incidents. A successful synthetic push drill must create and close a dedicated [DRILL] issue before this evidence is marked verified."
+      "status": "verified",
+      "evidence": "GitHub Actions run 33467741703 (success) + closed synthetic drill issue #115 on 2026-09-01",
+      "note": "Verified: an isolated synthetic readiness failure was detected, escalated through the GitHub incident API, recorded in dedicated [DRILL] issue #115, and automatically closed without mutating production or reusing the real [ALERT] incident."
     },
     "paymentRailVerified": {
       "status": "pending",
