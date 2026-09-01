@@ -156,7 +156,8 @@ export class HealthService {
     const heapUsedMB = Math.round(usage.heapUsed / 1024 / 1024);
     const heapTotalMB = Math.round(usage.heapTotal / 1024 / 1024);
     const rssMB = Math.round(usage.rss / 1024 / 1024);
-    const utilization = usage.heapTotal > 0 ? usage.heapUsed / usage.heapTotal : 0;
+    const utilization =
+      usage.heapTotal > 0 ? usage.heapUsed / usage.heapTotal : 0;
 
     return {
       status: utilization > 0.9 ? "down" : "up",
