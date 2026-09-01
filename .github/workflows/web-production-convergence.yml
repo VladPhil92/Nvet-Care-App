@@ -1,6 +1,9 @@
 name: Web Production Convergence
 
 on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
   schedule:
     - cron: '12 */6 * * *'
   workflow_dispatch:
@@ -19,11 +22,17 @@ env:
 jobs:
   converge:
     name: Certify web + backend technical convergence
-    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 15
     env:
+      RC_CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       E2E_API_URL: ${{ secrets.E2E_API_URL }}
       E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
       E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
@@ -31,10 +40,10 @@ jobs:
       E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
 
     steps:
-      - name: Checkout canonical main
+      - name: Checkout certified candidate
         uses: actions/checkout@v7
         with:
-          ref: main
+          ref: ${{ env.RC_CANDIDATE_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -115,6 +124,7 @@ jobs:
         run: |
           {
             echo '## Web Production Convergence'
+            echo "- Candidate: $RC_CANDIDATE_SHA"
             echo '- Isolated staging readiness + CLIENT/VET authentication: passed.'
             echo '- Production backend readiness: passed.'
             echo '- ctgone.com → Nvet backend connectivity: passed.'
