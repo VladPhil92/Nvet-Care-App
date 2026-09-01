@@ -39,6 +39,14 @@ export class PaymentsController {
     private readonly idempotencyService: IdempotencyService,
   ) {}
 
+  private assertPseRailAvailable(): void {
+    if (process.env.NODE_ENV === "production") {
+      throw new ServiceUnavailableException(
+        "PSE payments are unavailable until a production gateway adapter is certified end-to-end",
+      );
+    }
+  }
+
   /**
    * POST /payments/process
    *
@@ -46,6 +54,8 @@ export class PaymentsController {
    * en memoria del service. Funciona a través de reinicios y múltiples
    * instancias. CTG permanece cerrado mientras no exista un ledger de saldo
    * del cliente: confirmar una cita sin débito real sería un fallo financiero.
+   * PSE también falla cerrado en producción mientras PaymentsService conserve
+   * el adapter sandbox/mock; un stub nunca puede contarse como rail productivo.
    */
   @Post("process")
   @UseGuards(RolesGuard)
@@ -60,6 +70,10 @@ export class PaymentsController {
       throw new ServiceUnavailableException(
         "CTG payments are temporarily unavailable until the client wallet ledger is enabled",
       );
+    }
+
+    if (dto.paymentMethod === PaymentMethod.PSE) {
+      this.assertPseRailAvailable();
     }
 
     const key = headerKey ?? dto.idempotencyKey;
@@ -131,9 +145,10 @@ export class PaymentsController {
   }
 
   /**
-   * PSE initiation is also replay-safe. The provider adapter is still sandbox
-   * code in PaymentsService; production deployment must configure a real
-   * gateway before exposing this method to end users.
+   * PSE initiation is replay-safe in non-production environments, but the
+   * current PaymentsService implementation still returns a sandbox URL.
+   * Production therefore fails closed until a real provider adapter and its
+   * webhook lifecycle have been certified end-to-end.
    */
   @Post("pse/initiate")
   @UseGuards(RolesGuard)
@@ -144,6 +159,8 @@ export class PaymentsController {
     @Body() dto: InitiatePsePaymentDto,
     @Headers("idempotency-key") headerKey?: string,
   ) {
+    this.assertPseRailAvailable();
+
     const key = headerKey ?? dto.idempotencyKey;
     if (!key) {
       return this.paymentsService.initiatePse(req.user.id, dto);
