@@ -6,6 +6,7 @@ on:
       - feat/autonomous-staging-certification-20260901
     paths:
       - 'scripts/railway-staging-session.mjs'
+      - 'scripts/certify-transfer-payment-rail.mjs'
       - 'backend/prisma/seed.ts'
       - '.github/workflows/phase-11e-staging-smoke.yml'
 
