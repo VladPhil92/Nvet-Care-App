@@ -1,0 +1,39 @@
+name: Payment Certification Readiness Hotfix Smoke
+
+on:
+  push:
+    branches:
+      - fix/transfer-cert-readiness-stability-20260901
+    paths:
+      - 'scripts/certify-transfer-payment-rail.mjs'
+      - '.github/workflows/payment-readiness-hotfix-smoke.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-payment-readiness-hotfix-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 12
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
+      RAILWAY_STAGING_ENVIRONMENT_ID: 9267d965-e5e4-4c6f-af93-001c73cf62b4
+      RAILWAY_STAGING_SERVICE_ID: dc5c2eee-3f8d-4416-8854-a921ea694735
+      RAILWAY_PRODUCTION_SERVICE_ID: 42e734a0-931b-45c8-a091-4334b54e9d1c
+      NVET_PAYMENT_CERTIFICATION_TARGET: staging
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+      - name: Load current staging session
+        run: node scripts/railway-staging-session.mjs load
+      - name: Certify stable readiness and TRANSFER lifecycle
+        run: node scripts/certify-transfer-payment-rail.mjs
