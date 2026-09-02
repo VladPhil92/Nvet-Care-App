@@ -1,6 +1,6 @@
 # Fase 13 — Android Production
 
-**Estado:** infraestructura de release en desarrollo; publicación en Google Play bloqueada hasta completar evidencia externa.
+**Estado:** infraestructura de release en desarrollo; compatibilidad Android 16 revisada; publicación en Google Play bloqueada hasta completar evidencia externa.
 
 ## Objetivo
 
@@ -16,6 +16,21 @@ La aplicación mantiene `applicationId = com.nvetcare`, JDK 17 y React Native ac
 - Gradle wrapper `8.11.1`.
 
 No se introduce AGP 9 ni una migración mayor de React Native dentro de la ventana de estabilización del release. La prioridad es cumplir API 36 con el menor cambio de superficie compatible.
+
+## Compatibilidad Android 16 / API 36
+
+El review de cambios de comportamiento de Android 16 queda versionado en `docs/production/ANDROID_16_BEHAVIOR_REVIEW.md` y protegido por `scripts/verify-android16-compatibility.mjs`.
+
+Para la ventana de estabilización 1.0:
+
+- edge-to-edge permanece habilitado y no se usa el opt-out eliminado por API 36;
+- `SafeAreaProvider` permanece como contrato raíz para manejo de insets;
+- predictive back se desactiva temporalmente de forma explícita con `android:enableOnBackInvokedCallback="false"` hasta migrar y certificar la navegación en dispositivos;
+- la app continúa phone-first y usa el modo de compatibilidad `android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY=true` mientras no exista una certificación específica de tablet/foldable;
+- el deep link móvil continúa restringido al esquema `nvetcare://`;
+- no se agregan permisos de red local, Health Connect ni almacenamiento amplio que el producto 1.0 no necesita.
+
+Esta evidencia cierra el gate documental/técnico `android16BehaviorReviewCompleted`, pero **no** sustituye `physicalDeviceSmokeVerified`, `dataSafetyReviewed` ni ninguna evidencia de Play Console.
 
 ## Cadena de release
 
