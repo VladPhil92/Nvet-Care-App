@@ -5,6 +5,7 @@ import { LoggerModule } from "nestjs-pino";
 
 import { AllExceptionsFilter } from "./filters/all-exceptions.filter";
 import { LoggingInterceptor } from "./interceptors/logging.interceptor";
+import { PublicVetPrivacyInterceptor } from "./interceptors/public-vet-privacy.interceptor";
 import { RequestIdMiddleware } from "./middlewares/request-id.middleware";
 import { pinoConfig } from "./logger/pino.config";
 import { throttlerConfig } from "./throttler/throttler.config";
@@ -14,11 +15,9 @@ import { throttlerConfig } from "./throttler/throttler.config";
  *  - Logger estructurado (pino)
  *  - Rate limiting (throttler)
  *  - Filter global de excepciones
- *  - Interceptor global de logging de slow requests
+ *  - Logging de requests
+ *  - Privacy allowlist del directorio veterinario público
  *  - Middleware de request-id
- *
- * Marcado como @Global para que sus providers estén disponibles
- * en cualquier módulo sin necesidad de importarlo.
  */
 @Global()
 @Module({
@@ -34,6 +33,10 @@ import { throttlerConfig } from "./throttler/throttler.config";
     {
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: PublicVetPrivacyInterceptor,
     },
     {
       provide: APP_GUARD,
