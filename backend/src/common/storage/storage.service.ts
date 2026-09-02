@@ -2,10 +2,15 @@ import {
   Injectable,
   Logger,
   InternalServerErrorException,
+  BadRequestException,
 } from "@nestjs/common";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as crypto from "crypto";
+import {
+  AllowedMime,
+  MagicBytesValidator,
+} from "../security/magic-bytes.service";
 
 export type StorageVisibility = "public" | "private";
 
@@ -24,12 +29,20 @@ interface ParsedCloudinaryKey {
   publicId: string;
 }
 
+const SUPPORTED_UPLOAD_MIMES: AllowedMime[] = [
+  "image/jpeg",
+  "image/png",
+  "application/pdf",
+];
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 /**
  * StorageService — centralized file-storage boundary.
  *
- * Sensitive domains (verification documents, transfer evidence) must call
- * upload(..., { visibility: "private" }). Private Cloudinary assets use
- * authenticated delivery and are only read through this backend service.
+ * Every persisted upload is validated by magic bytes before it reaches disk or
+ * Cloudinary. Verification documents and transfer evidence are automatically
+ * forced to private storage regardless of the caller option, preventing a new
+ * caller from accidentally making those domains public.
  */
 @Injectable()
 export class StorageService {
@@ -38,7 +51,7 @@ export class StorageService {
   private readonly uploadDir: string;
   private readonly cloudinaryFolder: string;
 
-  constructor() {
+  constructor(private readonly magicBytes: MagicBytesValidator) {
     const configured = (process.env.STORAGE_DRIVER ?? "").toLowerCase();
     this.driver = configured === "cloudinary" ? "cloudinary" : "local";
     this.uploadDir =
@@ -61,7 +74,17 @@ export class StorageService {
     folder: string,
     options?: { filename?: string; visibility?: StorageVisibility },
   ): Promise<UploadResult> {
-    const visibility = options?.visibility ?? "public";
+    this.validateUpload(file);
+
+    const sensitiveFolder =
+      folder === "verification" ||
+      folder.startsWith("verification/") ||
+      folder === "transfers" ||
+      folder.startsWith("transfers/");
+    const visibility: StorageVisibility = sensitiveFolder
+      ? "private"
+      : options?.visibility ?? "public";
+
     if (this.driver === "cloudinary") {
       return this.uploadToCloudinary(file, folder, {
         filename: options?.filename,
@@ -92,6 +115,21 @@ export class StorageService {
       return this.readFromCloudinary(storageKey);
     }
     return this.readFromLocal(storageKey);
+  }
+
+  private validateUpload(file: Express.Multer.File): void {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException("Archivo vacío");
+    }
+    if (file.size > MAX_UPLOAD_BYTES || file.buffer.length > MAX_UPLOAD_BYTES) {
+      throw new BadRequestException("Archivo demasiado grande. Máximo 10 MB");
+    }
+    if (!SUPPORTED_UPLOAD_MIMES.includes(file.mimetype as AllowedMime)) {
+      throw new BadRequestException(
+        "Tipo de archivo no permitido. Solo JPEG, PNG o PDF",
+      );
+    }
+    this.magicBytes.validate(file, file.mimetype as AllowedMime);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -152,7 +190,6 @@ export class StorageService {
   private resolveLocalStorageKey(storageKey: string): string {
     if (path.isAbsolute(storageKey)) return storageKey;
 
-    // Legacy records stored /uploads/<folder>/<file>. Keep migration readable.
     if (storageKey.startsWith("/uploads/")) {
       return path.join(this.uploadDir, storageKey.replace(/^\/uploads\//, ""));
     }
@@ -235,8 +272,6 @@ export class StorageService {
 
   private async readFromCloudinary(storageKey: string): Promise<Buffer> {
     try {
-      // Legacy public URLs remain readable during migration without exposing
-      // them in new API responses.
       if (/^https:\/\//i.test(storageKey)) {
         return this.fetchBuffer(storageKey);
       }
@@ -302,7 +337,6 @@ export class StorageService {
       };
     }
 
-    // Legacy secure_url format: .../upload/v123/nvetcare/folder/file.ext
     if (/^https:\/\//i.test(storageKey)) {
       const url = new URL(storageKey);
       const marker = "/upload/";
