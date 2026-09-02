@@ -1,6 +1,13 @@
 import { apiClient } from './api'
 
 export type VetTier = 'FREE' | 'PRO' | 'ELITE'
+export type VetVerificationState =
+  | 'NONE'
+  | 'PENDING'
+  | 'IN_REVIEW'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'EXPIRED'
 export type VetSortBy =
   | 'relevance'
   | 'rating'
@@ -47,10 +54,6 @@ export interface VetReview {
   }
 }
 
-/**
- * Shape público canónico devuelto por el backend. Se conservan algunos campos
- * planos opcionales para compatibilidad con componentes legacy durante Fase 1.
- */
 export interface Vet {
   id: string
   userId: string
@@ -80,6 +83,16 @@ export interface Vet {
   prices?: VetPrice[]
   schedules?: VetSchedule[]
   reviews?: VetReview[]
+}
+
+export interface CreateVetProfileInput {
+  licenseNumber: string
+  comvezcolNumber?: string
+  specialties?: string[]
+  universityName?: string
+  graduationYear?: number
+  bio?: string
+  yearsExperience?: number
 }
 
 export interface VetSearchFilters {
@@ -112,6 +125,28 @@ export interface VetScheduleSlot {
   available: boolean
 }
 
+export interface VerificationStatusResponse {
+  status: VetVerificationState
+  overallStatus?: VetVerificationState
+  verificationStatus?: VetVerificationState
+  isVerified?: boolean
+  submittedAt?: string
+  reviewedAt?: string
+  rejectionReason?: string
+  notes?: string
+  documents?: Array<{
+    type: string
+    required?: boolean
+    status: string
+    documentId?: string
+    fileName?: string
+    uploadedAt?: string
+    reviewNotes?: string
+    rejectionReason?: string | null
+  }>
+  [key: string]: unknown
+}
+
 class VetService {
   async searchVets(filters: VetSearchFilters = {}): Promise<VetSearchResponse> {
     const response = await apiClient.get<VetSearchResponse>('/vets', { params: filters })
@@ -125,6 +160,11 @@ class VetService {
 
   async getMyProfile(): Promise<Vet> {
     const response = await apiClient.get<Vet>('/vets/me')
+    return response.data
+  }
+
+  async createMyProfile(data: CreateVetProfileInput): Promise<Vet> {
+    const response = await apiClient.post<Vet>('/vets/me', data)
     return response.data
   }
 
@@ -189,26 +229,25 @@ class VetService {
     await apiClient.delete(`/vets/me/prices/${priceId}`)
   }
 
-  async uploadVerificationDocuments(formData: FormData): Promise<{
-    status?: 'PENDING' | 'APPROVED' | 'REJECTED'
-    message?: string
-    [key: string]: unknown
-  }> {
-    const response = await apiClient.post('/vets/me/verification/upload', formData, {
+  async uploadVerificationDocument(formData: FormData): Promise<unknown> {
+    const response = await apiClient.post('/vets/me/verification/documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     return response.data
   }
 
-  async getVerificationStatus(): Promise<{
-    status: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED'
-    submittedAt?: string
-    reviewedAt?: string
-    notes?: string
-    [key: string]: unknown
-  }> {
-    const response = await apiClient.get('/vets/me/verification')
+  async submitVerification(): Promise<unknown> {
+    const response = await apiClient.post('/vets/me/verification/submit')
     return response.data
+  }
+
+  async getVerificationStatus(): Promise<VerificationStatusResponse> {
+    const response = await apiClient.get<VerificationStatusResponse>('/vets/me/verification')
+    const data = response.data
+    return {
+      ...data,
+      status: data.status ?? data.verificationStatus ?? data.overallStatus ?? 'NONE',
+    }
   }
 
   async getMyScheduleExceptions(startDate: string, endDate: string): Promise<ScheduleException[]> {
