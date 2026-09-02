@@ -86,7 +86,7 @@ export class StorageService {
     const sensitiveFolder = this.isSensitiveFolder(folder);
     const visibility: StorageVisibility = sensitiveFolder
       ? "private"
-      : options?.visibility ?? "public";
+      : (options?.visibility ?? "public");
 
     if (
       sensitiveFolder &&
@@ -305,7 +305,9 @@ export class StorageService {
       return this.fetchBuffer(url);
     } catch (err) {
       this.logger.error(`Cloudinary read failed: ${(err as Error).message}`);
-      throw new InternalServerErrorException("No se pudo leer el archivo seguro");
+      throw new InternalServerErrorException(
+        "No se pudo leer el archivo seguro",
+      );
     }
   }
 
@@ -326,13 +328,16 @@ export class StorageService {
   }
 
   private encodeCloudinaryKey(input: ParsedCloudinaryKey): string {
-    const encodedPublicId = Buffer.from(input.publicId, "utf8").toString("base64url");
+    const encodedPublicId = Buffer.from(input.publicId, "utf8").toString(
+      "base64url",
+    );
     return `cloudinary:v1:${input.visibility}:${input.resourceType}:${encodedPublicId}`;
   }
 
   private parseCloudinaryKey(storageKey: string): ParsedCloudinaryKey {
     if (storageKey.startsWith("cloudinary:v1:")) {
-      const [, , visibility, resourceType, encodedPublicId] = storageKey.split(":");
+      const [, , visibility, resourceType, encodedPublicId] =
+        storageKey.split(":");
       if (
         (visibility !== "public" && visibility !== "private") ||
         !resourceType ||
@@ -360,7 +365,9 @@ export class StorageService {
       const marker = "/upload/";
       const idx = url.pathname.indexOf(marker);
       if (idx >= 0) {
-        const tail = url.pathname.slice(idx + marker.length).replace(/^v\d+\//, "");
+        const tail = url.pathname
+          .slice(idx + marker.length)
+          .replace(/^v\d+\//, "");
         return {
           visibility: "public",
           resourceType: "image",
@@ -369,7 +376,11 @@ export class StorageService {
       }
     }
 
-    return { visibility: "public", resourceType: "image", publicId: storageKey };
+    return {
+      visibility: "public",
+      resourceType: "image",
+      publicId: storageKey,
+    };
   }
 
   private hasCloudinaryEnv(): boolean {
