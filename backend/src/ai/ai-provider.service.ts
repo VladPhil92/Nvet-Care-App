@@ -60,7 +60,9 @@ export class AiProviderService {
     ).replace(/\/$/, "");
 
     const controller = new AbortController();
-    const timeoutMs = Number(this.config.get<string>("AI_ASSIST_TIMEOUT_MS") || 15000);
+    const timeoutMs = Number(
+      this.config.get<string>("AI_ASSIST_TIMEOUT_MS") || 15000,
+    );
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -108,7 +110,9 @@ export class AiProviderService {
           .find((content) => content.type === "output_text")?.text;
 
       if (!outputText) {
-        this.logger.warn(`AI provider returned no structured output model=${this.getModel()}`);
+        this.logger.warn(
+          `AI provider returned no structured output model=${this.getModel()}`,
+        );
         throw new BadGatewayException({
           code: "AI_EMPTY_RESPONSE",
           message: "La asistencia IA devolvió una respuesta vacía.",
@@ -118,14 +122,19 @@ export class AiProviderService {
       try {
         return JSON.parse(outputText) as T;
       } catch {
-        this.logger.warn(`AI provider returned invalid JSON model=${this.getModel()}`);
+        this.logger.warn(
+          `AI provider returned invalid JSON model=${this.getModel()}`,
+        );
         throw new BadGatewayException({
           code: "AI_INVALID_RESPONSE",
           message: "La asistencia IA devolvió una respuesta inválida.",
         });
       }
     } catch (error) {
-      if (error instanceof BadGatewayException || error instanceof ServiceUnavailableException) {
+      if (
+        error instanceof BadGatewayException ||
+        error instanceof ServiceUnavailableException
+      ) {
         throw error;
       }
       if (error instanceof Error && error.name === "AbortError") {
@@ -134,7 +143,10 @@ export class AiProviderService {
           message: "La asistencia IA tardó demasiado en responder.",
         });
       }
-      this.logger.error("Unexpected AI provider failure", error instanceof Error ? error.stack : undefined);
+      this.logger.error(
+        "Unexpected AI provider failure",
+        error instanceof Error ? error.stack : undefined,
+      );
       throw new BadGatewayException({
         code: "AI_PROVIDER_UNAVAILABLE",
         message: "La asistencia IA no está disponible temporalmente.",
