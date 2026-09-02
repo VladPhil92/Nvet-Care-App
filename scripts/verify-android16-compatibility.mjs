@@ -61,7 +61,9 @@ for (const section of [
   'Safer intent resolution',
   'What remains external',
 ]) {
-  requireMatch(review, new RegExp(section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `review section missing: ${section}`);
+  if (!review.includes(section)) {
+    throw new Error(`Android 16 compatibility contract mismatch: review section missing: ${section}`);
+  }
 }
 
 console.log('Android 16 compatibility contract valid: targetApi=36, stabilization decisions explicit.');
