@@ -20,6 +20,7 @@
     "dashboard": "cd dashboard && npm run dev",
     "backend:test": "cd backend && npm run test",
     "backend:migrate": "cd backend && npx prisma migrate dev",
+    "security:convergence": "node scripts/security-convergence-gate.mjs",
     "install:all": "npm install && cd mobile && npm install && cd ../backend && npm install && cd ../dashboard && npm install"
   },
   "engines": {
