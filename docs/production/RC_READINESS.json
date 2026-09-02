@@ -14,12 +14,12 @@
     "productionBackupConfigured": {
       "status": "pending",
       "evidence": null,
-      "note": "Verify provider-level automatic production backups. Repository recovery rehearsals do not replace provider backup evidence."
+      "note": "Verify provider-level automatic production backups with the read-only Nvet Production Backup Evidence workflow defined in .github/workflows/production-backup-evidence.yml. A successful provider metadata audit may satisfy this gate; repository pg_dump/pg_restore rehearsals alone may not. See docs/production/RC_EVIDENCE_RUNBOOK.md."
     },
     "restoreDrillVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Nvet Recovery Readiness proves the application-level pg_dump/pg_restore procedure. Run and date a non-destructive provider-level production restore drill before RC promotion."
+      "note": "Nvet Recovery Readiness proves the application-level pg_dump/pg_restore procedure. A provider-level Railway restore changes mounted-volume state and therefore remains an operator-controlled maintenance drill; retain dated redacted evidence before RC promotion. See docs/production/RC_EVIDENCE_RUNBOOK.md."
     },
     "productionAlertingVerified": {
       "status": "verified",
@@ -29,7 +29,7 @@
     "paymentRailVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "The machine gate now certifies TRANSFER autonomously in isolated Railway staging using runtime-rotated synthetic CLIENT/VET/ADMIN credentials and the exact candidate SHA. That application proof remains separate from this external gate: keep paymentRailVerified pending until a controlled real bank transfer is retained as operator evidence showing actual funds movement. CTG remains disabled and PSE remains fail-closed in production while its adapter is sandbox/mock."
+      "note": "The machine gate certifies TRANSFER autonomously in isolated Railway staging using runtime-rotated synthetic CLIENT/VET/ADMIN credentials and the exact candidate SHA. Keep this external gate pending until a controlled real bank transfer is retained as redacted operator evidence showing actual funds movement; an application state alone is insufficient. CTG remains disabled and PSE remains fail-closed while its adapter is sandbox/mock. See docs/production/RC_EVIDENCE_RUNBOOK.md."
     }
   },
   "postRcTracks": {
