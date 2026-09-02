@@ -10,20 +10,16 @@ import ClientHomeStack from './stacks/ClientHomeStack'
 import ClientSearchStack from './stacks/ClientSearchStack'
 import ClientAppointmentsStack from './stacks/ClientAppointmentsStack'
 import ClientProfileStack from './stacks/ClientProfileStack'
+import AiAssistantScreen from '../screens/shared/AiAssistantScreen'
 
 const Tab = createBottomTabNavigator<ClientTabParamList>()
 
 /**
  * ClientNavigator — bottom tabs para usuarios CLIENT.
  *
- * Alineado con el mockup oficial (5 tabs):
- *   Inicio · Servicios · Citas · Mensajes · Perfil
- *
- * Estilo:
- *  - Active: verde principal #34B27A + dot accent naranja en mensajes
- *  - Inactive: Colors.inkMuted (#454D54) — cumple AAA
- *  - Iconos del sistema oficial line+nodes (Icon component)
- *  - `lazy: true` para startup time óptimo
+ * Inicio · Servicios · Citas · IA · Perfil
+ * La asistencia IA es contextual a las mascotas del usuario y no sustituye
+ * la consulta veterinaria ni modifica historias clínicas.
  */
 export default function ClientNavigator() {
   return (
@@ -85,6 +81,17 @@ export default function ClientNavigator() {
           tabBarAccessibilityLabel: 'Mis citas',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="calendar" focused={focused} accent="sage" showAccentDot />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="ClientAi"
+        component={AiAssistantScreen}
+        options={{
+          tabBarLabel: 'IA',
+          tabBarAccessibilityLabel: 'Asistente Nvet Care AI',
+          tabBarIcon: ({ focused }) => (
+            <TabBarIcon name="chat" focused={focused} accent="sage" showAccentDot />
           ),
         }}
       />

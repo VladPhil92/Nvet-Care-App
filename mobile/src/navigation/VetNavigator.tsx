@@ -12,6 +12,7 @@ import VetScheduleStack from './stacks/VetScheduleStack'
 import VetEarningsStack from './stacks/VetEarningsStack'
 import VetProfileStack from './stacks/VetProfileStack'
 import VetOnboardingScreen from '../screens/vet/VetOnboardingScreen'
+import AiAssistantScreen from '../screens/shared/AiAssistantScreen'
 
 const Tab = createBottomTabNavigator<VetTabParamList>()
 
@@ -21,6 +22,7 @@ const Tab = createBottomTabNavigator<VetTabParamList>()
  * El rol ya fue definido al registrarse. Antes de montar módulos que dependen
  * de VetProfile, comprobamos que el perfil profesional exista; cuentas VET
  * nuevas o legacy sin perfil pasan por un onboarding profesional de una sola vez.
+ * El copiloto IA opera únicamente sobre citas autorizadas del veterinario.
  */
 export default function VetNavigator() {
   const profileQuery = useMyVetProfileQuery()
@@ -87,6 +89,17 @@ export default function VetNavigator() {
           tabBarAccessibilityLabel: 'Mi agenda',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="calendar" focused={focused} accent="gold" />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="VetAi"
+        component={AiAssistantScreen}
+        options={{
+          tabBarLabel: 'Copiloto',
+          tabBarAccessibilityLabel: 'Copiloto clínico de inteligencia artificial',
+          tabBarIcon: ({ focused }) => (
+            <TabBarIcon name="chat" focused={focused} accent="gold" showAccentDot />
           ),
         }}
       />
