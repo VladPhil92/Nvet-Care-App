@@ -1,4 +1,4 @@
-import { apiClient } from './api'
+import { apiClient, getErrorMessage } from './api'
 import {
   secureStorage,
   profileCache,
@@ -13,6 +13,8 @@ export interface LoginCredentials {
   deviceLabel?: string
 }
 
+export type LoginPayload = LoginCredentials
+
 export interface RegisterData {
   email: string
   password: string
@@ -22,6 +24,8 @@ export interface RegisterData {
   role: 'CLIENT' | 'VET'
 }
 
+export type RegisterPayload = RegisterData
+
 export interface AuthUser {
   id: string
   email: string
@@ -29,7 +33,7 @@ export interface AuthUser {
   firstName?: string
   lastName?: string
   phone?: string
-  avatar?: string
+  avatar?: string | null
   emailVerified?: boolean
   twoFactorEnabled?: boolean
   vetProfile?: {
@@ -44,6 +48,8 @@ export interface AuthUser {
   }
 }
 
+export type User = AuthUser
+
 export interface AuthResponse {
   accessToken: string
   refreshToken: string
@@ -51,6 +57,29 @@ export interface AuthResponse {
   requiresEmailVerification?: boolean
   remainingRecoveryCodes?: number
   warning?: string | null
+}
+
+export type LoginResponse = AuthResponse
+
+export interface TwoFactorEnrollResponse {
+  secret: string
+  otpauthUrl: string
+  encryptedSecret: string
+}
+
+export interface TwoFactorConfirmResponse {
+  recoveryCodes: string[]
+  message: string
+}
+
+export interface ActiveSession {
+  id: string
+  userAgent: string | null
+  ipAddress: string | null
+  deviceLabel: string | null
+  lastUsedAt: string
+  createdAt: string
+  expiresAt: string
 }
 
 export class TwoFactorRequiredError extends Error {
@@ -149,7 +178,7 @@ class AuthService {
     return response.data
   }
 
-  async refreshToken(): Promise<string> {
+  async refresh(): Promise<{ accessToken: string; refreshToken: string }> {
     const refreshToken = await secureStorage.getRefreshToken()
     if (!refreshToken) throw new Error('No refresh token available')
 
@@ -159,7 +188,17 @@ class AuthService {
     }>('/auth/refresh', { refreshToken })
 
     await secureStorage.setTokens(response.data)
-    return response.data.accessToken
+    return response.data
+  }
+
+  async refreshToken(): Promise<string> {
+    return (await this.refresh()).accessToken
+  }
+
+  async me(): Promise<AuthUser> {
+    const response = await apiClient.get<AuthUser>('/auth/me')
+    await profileCache.set(response.data as CachedProfile)
+    return response.data
   }
 
   async getCurrentUser(): Promise<AuthUser | null> {
@@ -175,6 +214,11 @@ class AuthService {
 
   async isAuthenticated(): Promise<boolean> {
     return Boolean(await this.getAccessToken())
+  }
+
+  async hasActiveSession(): Promise<boolean> {
+    await this.ensureLegacySessionPurged()
+    return (await secureStorage.getTokens()) !== null
   }
 
   async updateUserData(userData: Partial<AuthUser>): Promise<void> {
@@ -217,11 +261,7 @@ class AuthService {
     return response.data
   }
 
-  async startTwoFactorEnrollment(): Promise<{
-    secret: string
-    otpauthUrl: string
-    encryptedSecret: string
-  }> {
+  async startTwoFactorEnrollment(): Promise<TwoFactorEnrollResponse> {
     const response = await apiClient.post('/auth/2fa/enroll')
     return response.data
   }
@@ -229,7 +269,7 @@ class AuthService {
   async confirmTwoFactorEnrollment(
     encryptedSecret: string,
     code: string,
-  ): Promise<{ recoveryCodes: string[]; message: string }> {
+  ): Promise<TwoFactorConfirmResponse> {
     const response = await apiClient.post('/auth/2fa/confirm', {
       encryptedSecret,
       code,
@@ -257,13 +297,21 @@ class AuthService {
     return response.data
   }
 
-  async getActiveSessions(): Promise<unknown[]> {
-    const response = await apiClient.get('/auth/sessions')
+  async listSessions(): Promise<ActiveSession[]> {
+    const response = await apiClient.get<ActiveSession[]>('/auth/sessions')
     return response.data
+  }
+
+  async getActiveSessions(): Promise<ActiveSession[]> {
+    return this.listSessions()
   }
 
   async revokeSession(sessionId: string): Promise<void> {
     await apiClient.delete(`/auth/sessions/${sessionId}`)
+  }
+
+  getErrorMessage(error: unknown): string {
+    return getErrorMessage(error)
   }
 }
 
