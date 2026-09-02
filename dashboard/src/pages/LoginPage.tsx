@@ -3,7 +3,11 @@ import { T, F } from '../theme/tokens'
 import { Btn } from '../components/UI'
 import { useAuthStore } from '../stores/useAuthStore'
 
-export default function LoginPage() {
+interface LoginPageProps {
+  onRegister?: () => void
+}
+
+export default function LoginPage({ onRegister }: LoginPageProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const { login, isLoading, error, clearError } = useAuthStore()
@@ -134,7 +138,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="••••••••••••"
                 required
                 autoComplete="current-password"
                 style={inputStyle}
@@ -163,6 +167,40 @@ export default function LoginPage() {
               {isLoading ? 'Ingresando…' : 'Ingresar'}
             </Btn>
           </form>
+
+          {onRegister && (
+            <div
+              style={{
+                marginTop: 22,
+                paddingTop: 20,
+                borderTop: `1px solid ${T.line}`,
+                textAlign: 'center',
+                fontFamily: F.sans,
+                fontSize: 13,
+                color: T.inkMuted,
+              }}
+            >
+              ¿Aún no tienes cuenta?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  clearError()
+                  onRegister()
+                }}
+                style={{
+                  border: 0,
+                  background: 'transparent',
+                  padding: 0,
+                  color: T.sage,
+                  fontFamily: F.sans,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Crear cuenta
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
