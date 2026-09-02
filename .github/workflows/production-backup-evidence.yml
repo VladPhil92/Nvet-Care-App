@@ -1,0 +1,94 @@
+name: Nvet Production Backup Evidence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-backup-evidence.yml'
+      - 'scripts/audit-railway-production-backups.mjs'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/RC_EVIDENCE_RUNBOOK.md'
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-production-backup-evidence
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.x'
+  RAILWAY_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
+  RAILWAY_PRODUCTION_ENVIRONMENT_ID: 7f93c67e-5a63-4aae-80b6-90979a9b60b1
+  RAILWAY_EXPECTED_PROJECT_NAME: Nvet Care App
+  RAILWAY_PRODUCTION_POSTGRES_SERVICE: Postgres
+
+jobs:
+  audit-production-backups:
+    name: Verify Railway production backup schedules
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 5
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate read-only audit credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$RAILWAY_API_TOKEN" ]; then
+            echo '::error::RAILWAY_API_TOKEN is required to inspect Railway backup metadata.'
+            exit 1
+          fi
+
+      - name: Audit provider backup configuration
+        run: node scripts/audit-railway-production-backups.mjs
+
+      - name: Upload redacted provider evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: railway-production-backup-evidence
+          path: .artifacts/production-backup-evidence.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Publish evidence boundary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Railway Production Backup Evidence'
+            echo ''
+            if [ -f .artifacts/production-backup-evidence.json ]; then
+              node <<'NODE'
+          const fs = require('fs');
+          const evidence = JSON.parse(fs.readFileSync('.artifacts/production-backup-evidence.json', 'utf8'));
+          console.log(`- Observed: ${evidence.observedAt}`);
+          console.log(`- Production DB service: ${evidence.postgres.serviceName}`);
+          console.log(`- Volume: ${evidence.postgres.volumeName}`);
+          console.log(`- Configured backup schedules: ${evidence.scheduleCount}`);
+          console.log(`- Visible backups: ${evidence.backupCount}`);
+          console.log(`- Verdict: **${evidence.verdict}**`);
+          NODE
+            else
+              echo '- No evidence artifact was produced; inspect the failed audit step.'
+            fi
+            echo ''
+            echo '> This workflow is read-only. It can verify that Railway automatic volume-backup schedules exist, but it never creates, deletes, locks or restores a backup.'
+            echo '> A provider-level restore drill and real-bank-transfer evidence remain independent RC gates.'
+          } >> "$GITHUB_STEP_SUMMARY"
