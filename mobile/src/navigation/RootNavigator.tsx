@@ -4,7 +4,6 @@ import { ActivityIndicator, View, StyleSheet, Text } from 'react-native'
 
 import type { RootStackParamList } from './types'
 import { useCurrentUserQuery } from '../hooks/queries/useMobileQueries'
-import { useUserMode } from '../hooks/useUserMode'
 
 import AuthNavigator from './AuthNavigator'
 import ClientNavigator from './ClientNavigator'
@@ -20,16 +19,13 @@ const Stack = createNativeStackNavigator<RootStackParamList>()
  *  1. Cargando (`isPending` && primera query): splash con spinner
  *  2. No autenticado: AuthStack (Login/Register)
  *  3. Autenticado como CLIENT: ClientNavigator (bottom tabs Sage)
- *  4. Autenticado con role=VET y modo='VET': VetNavigator (bottom tabs Gold)
- *  5. Autenticado con role=VET pero modo='CLIENT': ClientNavigator
- *     (un vet puede operar como cliente para reservar para sus propias mascotas)
- *  6. Autenticado como ADMIN: ClientNavigator por ahora (admin usa el dashboard web)
+ *  4. Autenticado como VET: VetNavigator (bottom tabs Gold)
+ *  5. Autenticado como ADMIN/SUPERADMIN: ClientNavigator por ahora
+ *     (la operación administrativa vive en el dashboard web).
  *
- * Decisiones:
- *  - El `key` del Stack.Navigator cambia cuando cambia el rol/modo, forzando
- *    un re-mount limpio (evita memory leaks de listeners en stacks viejos).
- *  - `ChatModal` es accesible desde cualquier estado autenticado vía
- *    `navigation.navigate('ChatModal', { appointmentId })`.
+ * El rol persistido por el backend es la única autoridad para decidir el
+ * dashboard. Un VET ya no puede caer accidentalmente en la interfaz CLIENT
+ * por un estado local de "modo".
  */
 
 const COLORS = {
@@ -51,17 +47,13 @@ function SplashScreen() {
 
 export default function RootNavigator() {
   const { data: user, isPending, isError } = useCurrentUserQuery()
-  const { mode } = useUserMode()
 
-  // Splash mientras decidimos el flujo (primera carga)
   if (isPending) {
     return <SplashScreen />
   }
 
   const isAuthenticated = !!user && !isError
-  const role = user?.role
-  const isVet = role === 'VET'
-  const showVetUI = isVet && mode === 'VET'
+  const isVet = user?.role === 'VET'
 
   return (
     <Stack.Navigator
@@ -69,18 +61,11 @@ export default function RootNavigator() {
         headerShown: false,
         animation: 'fade',
       }}
-      // Cambiar key cuando el flujo principal cambia → re-mount limpio
-      key={
-        isAuthenticated
-          ? showVetUI
-            ? 'vet-flow'
-            : 'client-flow'
-          : 'auth-flow'
-      }
+      key={isAuthenticated ? (isVet ? 'vet-flow' : 'client-flow') : 'auth-flow'}
     >
       {!isAuthenticated ? (
         <Stack.Screen name="Auth" component={AuthNavigator} />
-      ) : showVetUI ? (
+      ) : isVet ? (
         <>
           <Stack.Screen name="Vet" component={VetNavigator} />
           <Stack.Screen
