@@ -236,6 +236,14 @@ class VetService {
     return response.data
   }
 
+  /**
+   * Compatibilidad temporal para hooks legacy. El contrato correcto es un
+   * documento por FormData y la pantalla nueva usa uploadVerificationDocument.
+   */
+  async uploadVerificationDocuments(formData: FormData): Promise<unknown> {
+    return this.uploadVerificationDocument(formData)
+  }
+
   async submitVerification(): Promise<unknown> {
     const response = await apiClient.post('/vets/me/verification/submit')
     return response.data
