@@ -9,15 +9,6 @@ import helmet from "helmet";
 import compression = require("compression");
 import { AppModule } from "./app.module";
 
-// Phase 4 of the CTG One -> Nvet identity bridge is a launched production
-// capability. A legacy Railway variable may still contain
-// NVET_CTG_IDENTITY_EXCHANGE_ENABLED=false from the pre-launch rollout. Do not
-// let that stale value silently disable production SSO. Operators retain an
-// explicit emergency kill switch through NVET_CTG_IDENTITY_EXCHANGE_DISABLED.
-//
-// The Supabase project URL is a public issuer identifier; JWT signature,
-// issuer, audience and expiry remain verified by CtgIdentityService against
-// Supabase JWKS.
 const CTG_ONE_PRODUCTION_SUPABASE_URL =
   "https://mdscwjvlihdiflcvghhk.supabase.co";
 
@@ -38,19 +29,6 @@ function applyIdentityLaunchDefaults(): void {
   process.env.NVET_CTG_SUPABASE_URL ??= CTG_ONE_PRODUCTION_SUPABASE_URL;
 }
 
-/**
- * Bootstrap del backend Nvet Care.
- *
- * Stack de seguridad / performance aplicado en orden:
- *  1. Sentry (más arriba) — captura errores desde el primer momento
- *  2. helmet — security headers (CSP, HSTS, X-Frame-Options)
- *  3. compression — gzip/brotli sobre el body
- *  4. CORS estricto — whitelist de orígenes
- *  5. Body limits — 1 MB JSON / 10 MB raw
- *  6. ValidationPipe — whitelist + transform + forbidNonWhitelisted
- *  7. Trust proxy — X-Forwarded-* respetado tras LB / CDN
- *  8. Graceful shutdown — drena conexiones en SIGTERM/SIGINT
- */
 async function bootstrap() {
   applyIdentityLaunchDefaults();
 
@@ -99,7 +77,6 @@ async function bootstrap() {
     }),
   );
 
-  // Preserve the exact body bytes used by external webhook signatures.
   const expressApp = app.getHttpAdapter().getInstance();
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const express = require("express");
@@ -130,6 +107,7 @@ async function bootstrap() {
       "X-Request-Id",
       "Idempotency-Key",
       "X-Idempotency-Key",
+      "X-Nvet-Session-Mode",
     ],
     exposedHeaders: ["X-Request-Id"],
     maxAge: 86_400,
