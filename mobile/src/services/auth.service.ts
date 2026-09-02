@@ -14,13 +14,13 @@ export interface RegisterData {
   firstName: string
   lastName: string
   phone?: string
-  role?: 'CLIENT' | 'VET' | 'ADMIN'
+  role: 'CLIENT' | 'VET'
 }
 
 export interface AuthUser {
   id: string
   email: string
-  role: 'CLIENT' | 'VET' | 'ADMIN'
+  role: 'CLIENT' | 'VET' | 'ADMIN' | 'SUPERADMIN'
   firstName?: string
   lastName?: string
   phone?: string
@@ -33,7 +33,7 @@ export interface AuthUser {
     ctgBalance?: number
     rating?: number
     isVerified: boolean
-    verificationStatus?: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED'
+    verificationStatus?: 'NONE' | 'PENDING' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'EXPIRED'
   }
 }
 
@@ -66,10 +66,7 @@ class AuthService {
   }
 
   async register(data: RegisterData): Promise<AuthResponse> {
-    const response = await apiClient.post<AuthResponse>('/auth/register', {
-      ...data,
-      role: data.role ?? 'CLIENT',
-    })
+    const response = await apiClient.post<AuthResponse>('/auth/register', data)
     const { accessToken, refreshToken, user } = response.data
 
     await AsyncStorage.multiSet([
