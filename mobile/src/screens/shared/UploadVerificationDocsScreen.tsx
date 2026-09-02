@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Card,
   Button,
@@ -20,26 +21,9 @@ import {
 import DocumentPickerCard, {
   PickedDocument,
 } from '../../components/common/DocumentPickerCard'
-import { useUploadVerificationMutation } from '../../hooks/queries/useMobileMutations'
+import vetService from '../../services/vet.service'
+import { qk } from '../../lib/queryKeys'
 import { pickImage } from '../../utils/imagePicker'
-
-/**
- * UploadVerificationDocsScreen — subida de documentos para verificación vet.
- *
- * Documentos requeridos:
- *  1. Cédula (ID) — frente y reverso
- *  2. Tarjeta profesional COMVEZCOL
- *  3. Diploma de Medicina Veterinaria
- *  4. Certificado de antecedentes (opcional)
- *
- * + datos: número de tarjeta profesional + año de emisión
- *
- * Decisiones:
- *  - DocumentPickerCard placeholder hasta integrar `expo-image-picker`
- *  - Validación: los 3 primeros docs son obligatorios + número de tarjeta válido
- *  - FormData multipart construida al submit
- *  - Tras éxito → navigation.goBack() y `useMyVerificationStatusQuery` ya invalida
- */
 
 interface Props {
   navigation: any
@@ -52,7 +36,16 @@ interface DocsState {
   backgroundCheck: PickedDocument | null
 }
 
+type VerificationDocumentType =
+  | 'ID_DOCUMENT'
+  | 'COMVEZCOL_CARD'
+  | 'PROFESSIONAL_DEGREE'
+  | 'ADDITIONAL'
+
+const COMVEZCOL_FORMAT = /^\d{4,6}-\d$/
+
 export default function UploadVerificationDocsScreen({ navigation }: Props) {
+  const queryClient = useQueryClient()
   const [docs, setDocs] = useState<DocsState>({
     idDocument: null,
     licenseDocument: null,
@@ -60,10 +53,8 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
     backgroundCheck: null,
   })
   const [licenseNumber, setLicenseNumber] = useState('')
-  const [issuedYear, setIssuedYear] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
-
-  const uploadMutation = useUploadVerificationMutation()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handlePickDoc = useCallback(async (key: keyof DocsState) => {
     const picked = await pickImage()
@@ -76,60 +67,80 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
   const validate = useCallback((): boolean => {
     const errs: Record<string, string> = {}
     if (!docs.idDocument) errs.idDocument = 'Documento de identidad requerido'
-    if (!docs.licenseDocument)
-      errs.licenseDocument = 'Tarjeta profesional requerida'
+    if (!docs.licenseDocument) errs.licenseDocument = 'Tarjeta profesional requerida'
     if (!docs.diploma) errs.diploma = 'Diploma requerido'
-    if (!licenseNumber.match(/^\d{4,8}$/))
-      errs.licenseNumber = 'Número COMVEZCOL inválido (4-8 dígitos)'
-    const year = parseInt(issuedYear, 10)
-    if (!year || year < 1980 || year > new Date().getFullYear())
-      errs.issuedYear = 'Año de emisión inválido'
+    if (!COMVEZCOL_FORMAT.test(licenseNumber.trim())) {
+      errs.licenseNumber = 'Número COMVEZCOL inválido. Usa el formato 12345-6'
+    }
     setErrors(errs)
     return Object.keys(errs).length === 0
-  }, [docs, licenseNumber, issuedYear])
+  }, [docs, licenseNumber])
+
+  const uploadDocument = useCallback(
+    async (
+      document: PickedDocument,
+      documentType: VerificationDocumentType,
+      documentNumber?: string,
+    ) => {
+      const formData = new FormData()
+      formData.append('documentType', documentType)
+      if (documentNumber) formData.append('documentNumber', documentNumber)
+      formData.append('file', {
+        uri: document.uri,
+        name: document.name,
+        type: document.type,
+      } as any)
+      await vetService.uploadVerificationDocument(formData)
+    },
+    [],
+  )
 
   const handleSubmit = useCallback(async () => {
-    if (!validate()) return
+    if (!validate() || isSubmitting) return
 
+    setIsSubmitting(true)
     try {
-      const formData = new FormData()
-      formData.append('licenseNumber', licenseNumber)
-      formData.append('issuedYear', issuedYear)
+      await uploadDocument(docs.idDocument!, 'ID_DOCUMENT')
+      await uploadDocument(
+        docs.licenseDocument!,
+        'COMVEZCOL_CARD',
+        licenseNumber.trim(),
+      )
+      await uploadDocument(docs.diploma!, 'PROFESSIONAL_DEGREE')
 
-      const appendIfExists = (
-        key: string,
-        doc: PickedDocument | null,
-      ) => {
-        if (doc) {
-          formData.append(key, {
-            uri: doc.uri,
-            name: doc.name,
-            type: doc.type,
-          } as any)
-        }
-      }
-      appendIfExists('idDocument', docs.idDocument)
-      appendIfExists('licenseDocument', docs.licenseDocument)
-      appendIfExists('diploma', docs.diploma)
       if (docs.backgroundCheck) {
-        appendIfExists('backgroundCheck', docs.backgroundCheck)
+        await uploadDocument(docs.backgroundCheck, 'ADDITIONAL')
       }
 
-      await uploadMutation.mutateAsync({ formData })
+      await vetService.submitVerification()
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.vets.me.verification() }),
+        queryClient.invalidateQueries({ queryKey: qk.vets.me.profile() }),
+      ])
 
       Alert.alert(
         'Solicitud enviada',
-        'Tu verificación está en proceso de revisión. Te notificaremos en 24-48 horas hábiles.',
+        'Tus documentos quedaron cargados y la verificación fue enviada a revisión.',
         [{ text: 'Entendido', onPress: () => navigation.goBack() }],
       )
     } catch (err: any) {
       Alert.alert(
         'Error al enviar',
         err?.response?.data?.message ||
-          'No pudimos procesar tu solicitud. Intenta de nuevo.',
+          'No pudimos procesar tu solicitud. Los documentos que sí alcanzaron a cargarse se conservan y puedes reintentar.',
       )
+    } finally {
+      setIsSubmitting(false)
     }
-  }, [validate, licenseNumber, issuedYear, docs, uploadMutation, navigation])
+  }, [
+    validate,
+    isSubmitting,
+    docs,
+    licenseNumber,
+    uploadDocument,
+    queryClient,
+    navigation,
+  ])
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -154,25 +165,23 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
             <Badge label="🔒 Procesamiento seguro" tone="info" outline size="sm" />
             <Text style={styles.introTitle}>Sube tus documentos</Text>
             <Text style={styles.introBody}>
-              Tu solicitud será revisada en 24-48 h hábiles. Los archivos se
-              transmiten encriptados y no se comparten con terceros.
+              Se cargarán individualmente bajo el contrato seguro del backend y,
+              cuando estén los tres documentos obligatorios, la solicitud se
+              enviará automáticamente a revisión.
             </Text>
           </Card>
 
-          {/* Documentos */}
           <View style={styles.docsSection}>
             <Text style={styles.sectionTitle}>Documentos requeridos</Text>
 
             <DocumentPickerCard
               label="Cédula de ciudadanía"
-              description="Foto clara del frente del documento"
+              description="Foto clara del documento de identidad"
               required
               glyph="🆔"
               document={docs.idDocument}
               onPick={() => handlePickDoc('idDocument')}
-              onRemove={() =>
-                setDocs((p) => ({ ...p, idDocument: null }))
-              }
+              onRemove={() => setDocs((p) => ({ ...p, idDocument: null }))}
               error={errors.idDocument}
             />
 
@@ -185,9 +194,7 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
               glyph="🎓"
               document={docs.licenseDocument}
               onPick={() => handlePickDoc('licenseDocument')}
-              onRemove={() =>
-                setDocs((p) => ({ ...p, licenseDocument: null }))
-              }
+              onRemove={() => setDocs((p) => ({ ...p, licenseDocument: null }))}
               error={errors.licenseDocument}
             />
 
@@ -207,62 +214,38 @@ export default function UploadVerificationDocsScreen({ navigation }: Props) {
             <View style={{ height: 16 }} />
 
             <DocumentPickerCard
-              label="Certificado de antecedentes (opcional)"
-              description="Aumenta tu confiabilidad ante los clientes"
+              label="Documento adicional (opcional)"
+              description="Certificación o soporte profesional complementario"
               glyph="🏥"
               document={docs.backgroundCheck}
               onPick={() => handlePickDoc('backgroundCheck')}
-              onRemove={() =>
-                setDocs((p) => ({ ...p, backgroundCheck: null }))
-              }
+              onRemove={() => setDocs((p) => ({ ...p, backgroundCheck: null }))}
             />
           </View>
 
-          {/* Datos de la tarjeta */}
           <View style={styles.docsSection}>
-            <Text style={styles.sectionTitle}>Datos de tu tarjeta</Text>
+            <Text style={styles.sectionTitle}>Datos de la tarjeta</Text>
             <Text style={styles.fieldLabel}>Número COMVEZCOL</Text>
             <TextInput
               value={licenseNumber}
               onChangeText={setLicenseNumber}
-              placeholder="12345"
+              placeholder="12345-6"
               placeholderTextColor={UI_COLORS.muted}
               style={[styles.input, errors.licenseNumber && styles.inputError]}
-              keyboardType="numeric"
+              autoCapitalize="none"
               maxLength={8}
               accessibilityLabel="Número de tarjeta COMVEZCOL"
             />
             {errors.licenseNumber && (
               <Text style={styles.errorText}>{errors.licenseNumber}</Text>
             )}
-
-            <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
-              Año de emisión
-            </Text>
-            <TextInput
-              value={issuedYear}
-              onChangeText={setIssuedYear}
-              placeholder="2018"
-              placeholderTextColor={UI_COLORS.muted}
-              style={[styles.input, errors.issuedYear && styles.inputError]}
-              keyboardType="numeric"
-              maxLength={4}
-              accessibilityLabel="Año de emisión de la tarjeta"
-            />
-            {errors.issuedYear && (
-              <Text style={styles.errorText}>{errors.issuedYear}</Text>
-            )}
           </View>
 
           <View style={{ marginTop: 24 }}>
             <Button
-              label={
-                uploadMutation.isPending
-                  ? 'Enviando solicitud…'
-                  : 'Enviar para revisión'
-              }
+              label={isSubmitting ? 'Enviando solicitud…' : 'Enviar para revisión'}
               onPress={handleSubmit}
-              loading={uploadMutation.isPending}
+              loading={isSubmitting}
               fullWidth
               accent="gold"
             />
