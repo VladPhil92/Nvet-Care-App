@@ -1,8 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
-
-// ============================================================
-// CONFIGURACIÓN
-// ============================================================
+import { browserSession } from './session'
 
 export const API_URL =
   import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
@@ -12,10 +9,7 @@ const UPLOAD_TIMEOUT_MS = 60000
 const MAX_RETRIES = 3
 const RETRY_BASE_DELAY_MS = 300
 const RETRYABLE_STATUS = [408, 425, 429, 500, 502, 503, 504]
-
-// ============================================================
-// HELPERS
-// ============================================================
+const SESSION_MODE_HEADER = 'X-Nvet-Session-Mode'
 
 function genRequestId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -46,32 +40,30 @@ export function getErrorMessage(error: unknown): string {
   )
 }
 
-// ============================================================
-// CLIENTE HTTP RESILIENTE
-// ============================================================
-
 const inFlightGets = new Map<string, Promise<unknown>>()
 let refreshTokenPromise: Promise<string> | null = null
 
-async function performTokenRefresh(): Promise<string> {
+/**
+ * Browser refresh uses only the HttpOnly cookie. The refresh token is never
+ * read or written by JavaScript and never enters local/session storage.
+ */
+export async function performTokenRefresh(): Promise<string> {
   if (refreshTokenPromise) return refreshTokenPromise
 
   refreshTokenPromise = (async () => {
     try {
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (!refreshToken) throw new Error('No refresh token available')
-
       const response = await axios.post(
         `${API_URL}/auth/refresh`,
-        { refreshToken },
-        { timeout: DEFAULT_TIMEOUT_MS }
+        {},
+        {
+          timeout: DEFAULT_TIMEOUT_MS,
+          withCredentials: true,
+          headers: { [SESSION_MODE_HEADER]: 'cookie' },
+        },
       )
-
-      const { accessToken, refreshToken: newRefreshToken } = response.data
-      localStorage.setItem('accessToken', accessToken)
-      if (newRefreshToken) {
-        localStorage.setItem('refreshToken', newRefreshToken)
-      }
+      const accessToken = response.data?.accessToken
+      if (!accessToken) throw new Error('No access token returned from refresh')
+      browserSession.setAccessToken(accessToken)
       return accessToken
     } finally {
       refreshTokenPromise = null
@@ -88,8 +80,10 @@ class ApiClient {
     this.client = axios.create({
       baseURL: API_URL,
       timeout: DEFAULT_TIMEOUT_MS,
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
+        [SESSION_MODE_HEADER]: 'cookie',
       },
     })
 
@@ -97,16 +91,16 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // ---------- REQUEST ----------
     this.client.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
-        const token = localStorage.getItem('accessToken')
+        const token = browserSession.getAccessToken()
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`
         }
 
         if (config.headers) {
           config.headers['X-Request-Id'] = genRequestId()
+          config.headers[SESSION_MODE_HEADER] = 'cookie'
         }
 
         const isUpload =
@@ -118,10 +112,9 @@ class ApiClient {
 
         return config
       },
-      (error) => Promise.reject(error)
+      (error) => Promise.reject(error),
     )
 
-    // ---------- RESPONSE ----------
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
@@ -134,7 +127,6 @@ class ApiClient {
 
         if (!originalRequest) return Promise.reject(error)
 
-        // --- Auth refresh (401) ---
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true
           try {
@@ -144,15 +136,11 @@ class ApiClient {
             }
             return this.client(originalRequest)
           } catch (refreshError) {
-            localStorage.removeItem('accessToken')
-            localStorage.removeItem('refreshToken')
-            // No redirigir desde el cliente HTTP; dejar que la app maneje el estado.
-            // (los componentes consumirán useAuthStore.isAuthenticated)
+            browserSession.clear()
             return Promise.reject(refreshError)
           }
         }
 
-        // --- Retry con backoff (errores transitorios, solo GET) ---
         const status = error.response?.status
         const isRetryable =
           (originalRequest.method === 'get' || originalRequest.method === 'GET') &&
@@ -169,7 +157,7 @@ class ApiClient {
         }
 
         return Promise.reject(error)
-      }
+      },
     )
   }
 
@@ -179,7 +167,7 @@ class ApiClient {
 
   public async dedupedGet<T = unknown>(
     url: string,
-    params?: Record<string, unknown>
+    params?: Record<string, unknown>,
   ): Promise<T> {
     const key = `${url}?${JSON.stringify(params || {})}`
     const existing = inFlightGets.get(key)
