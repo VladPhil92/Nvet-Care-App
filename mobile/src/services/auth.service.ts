@@ -1,5 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { apiClient } from './api'
+import {
+  secureStorage,
+  profileCache,
+  purgeLegacyPlaintextSession,
+  type CachedProfile,
+} from '../lib/secureStorage'
 
 export interface LoginCredentials {
   email: string
@@ -25,6 +30,8 @@ export interface AuthUser {
   lastName?: string
   phone?: string
   avatar?: string
+  emailVerified?: boolean
+  twoFactorEnabled?: boolean
   vetProfile?: {
     id: string
     licenseNumber?: string
@@ -41,9 +48,55 @@ export interface AuthResponse {
   accessToken: string
   refreshToken: string
   user: AuthUser
+  requiresEmailVerification?: boolean
+  remainingRecoveryCodes?: number
+  warning?: string | null
+}
+
+export class TwoFactorRequiredError extends Error {
+  readonly email: string
+  readonly password: string
+
+  constructor(email: string, password: string) {
+    super('Se requiere código del autenticador')
+    this.name = 'TwoFactorRequiredError'
+    this.email = email
+    this.password = password
+  }
 }
 
 class AuthService {
+  private legacyPurged = false
+
+  private async ensureLegacySessionPurged(): Promise<void> {
+    if (this.legacyPurged) return
+    await purgeLegacyPlaintextSession()
+    this.legacyPurged = true
+  }
+
+  private async persistSession(data: AuthResponse): Promise<void> {
+    if (!data.accessToken || !data.refreshToken) {
+      throw new Error('El servidor no devolvió una sesión completa')
+    }
+
+    await this.ensureLegacySessionPurged()
+    await secureStorage.setTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    })
+    await profileCache.set(data.user as CachedProfile)
+  }
+
+  private async clearSession(): Promise<void> {
+    await Promise.all([
+      secureStorage.clearTokens().catch(() => undefined),
+      profileCache.clear(),
+      purgeLegacyPlaintextSession(),
+    ])
+  }
+
+  async login(credentials: LoginCredentials): Promise<AuthResponse>
+  async login(email: string, password: string): Promise<AuthResponse>
   async login(
     credentialsOrEmail: LoginCredentials | string,
     password?: string,
@@ -53,75 +106,81 @@ class AuthService {
         ? { email: credentialsOrEmail, password: password ?? '' }
         : credentialsOrEmail
 
-    const response = await apiClient.post<AuthResponse>('/auth/login', credentials)
-    const { accessToken, refreshToken, user } = response.data
+    try {
+      const response = await apiClient.post<AuthResponse>('/auth/login', credentials)
+      await this.persistSession(response.data)
+      return response.data
+    } catch (error: any) {
+      if (error?.response?.data?.error === 'TWO_FACTOR_REQUIRED') {
+        throw new TwoFactorRequiredError(credentials.email, credentials.password)
+      }
+      throw error
+    }
+  }
 
-    await AsyncStorage.multiSet([
-      ['accessToken', accessToken],
-      ['refreshToken', refreshToken],
-      ['user', JSON.stringify(user)],
-    ])
-
+  async loginWithRecoveryCode(payload: {
+    email: string
+    password: string
+    recoveryCode: string
+  }): Promise<AuthResponse> {
+    const response = await apiClient.post<AuthResponse>('/auth/login/recovery', payload)
+    await this.persistSession(response.data)
     return response.data
   }
 
   async register(data: RegisterData): Promise<AuthResponse> {
     const response = await apiClient.post<AuthResponse>('/auth/register', data)
-    const { accessToken, refreshToken, user } = response.data
-
-    await AsyncStorage.multiSet([
-      ['accessToken', accessToken],
-      ['refreshToken', refreshToken],
-      ['user', JSON.stringify(user)],
-    ])
-
+    await this.persistSession(response.data)
     return response.data
   }
 
   async logout(): Promise<void> {
+    const refreshToken = await secureStorage.getRefreshToken().catch(() => null)
     try {
-      await apiClient.post('/auth/logout')
+      await apiClient.post('/auth/logout', refreshToken ? { refreshToken } : {})
     } finally {
-      await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'user'])
+      await this.clearSession()
     }
+  }
+
+  async logoutAllDevices(): Promise<{ revoked: number }> {
+    const response = await apiClient.post<{ revoked: number }>('/auth/logout-all')
+    await this.clearSession()
+    return response.data
   }
 
   async refreshToken(): Promise<string> {
-    const refreshToken = await AsyncStorage.getItem('refreshToken')
-    if (!refreshToken) {
-      throw new Error('No refresh token available')
-    }
+    const refreshToken = await secureStorage.getRefreshToken()
+    if (!refreshToken) throw new Error('No refresh token available')
 
-    const response = await apiClient.post('/auth/refresh', { refreshToken })
-    const { accessToken, refreshToken: newRefreshToken } = response.data
+    const response = await apiClient.post<{
+      accessToken: string
+      refreshToken: string
+    }>('/auth/refresh', { refreshToken })
 
-    await AsyncStorage.setItem('accessToken', accessToken)
-    if (newRefreshToken) {
-      await AsyncStorage.setItem('refreshToken', newRefreshToken)
-    }
-
-    return accessToken
+    await secureStorage.setTokens(response.data)
+    return response.data.accessToken
   }
 
   async getCurrentUser(): Promise<AuthUser | null> {
-    const userStr = await AsyncStorage.getItem('user')
-    return userStr ? (JSON.parse(userStr) as AuthUser) : null
+    await this.ensureLegacySessionPurged()
+    const profile = await profileCache.get()
+    return profile as AuthUser | null
   }
 
   async getAccessToken(): Promise<string | null> {
-    return AsyncStorage.getItem('accessToken')
+    await this.ensureLegacySessionPurged()
+    return secureStorage.getAccessToken()
   }
 
   async isAuthenticated(): Promise<boolean> {
-    const token = await this.getAccessToken()
-    return !!token
+    return Boolean(await this.getAccessToken())
   }
 
   async updateUserData(userData: Partial<AuthUser>): Promise<void> {
     const currentUser = await this.getCurrentUser()
     if (currentUser) {
-      const updatedUser = { ...currentUser, ...userData }
-      await AsyncStorage.setItem('user', JSON.stringify(updatedUser))
+      await profileCache.set({ ...currentUser, ...userData } as CachedProfile)
     }
   }
 
@@ -132,9 +191,79 @@ class AuthService {
     avatar?: string
   }): Promise<AuthUser> {
     const response = await apiClient.patch<AuthUser>('/users/me', data)
-    const updatedUser = response.data
-    await this.updateUserData(updatedUser)
-    return updatedUser
+    await this.updateUserData(response.data)
+    return response.data
+  }
+
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const response = await apiClient.post('/auth/forgot-password', { email })
+    return response.data
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    const response = await apiClient.post('/auth/reset-password', { token, newPassword })
+    return response.data
+  }
+
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const response = await apiClient.post('/auth/change-password', {
+      currentPassword,
+      newPassword,
+    })
+    await this.clearSession()
+    return response.data
+  }
+
+  async startTwoFactorEnrollment(): Promise<{
+    secret: string
+    otpauthUrl: string
+    encryptedSecret: string
+  }> {
+    const response = await apiClient.post('/auth/2fa/enroll')
+    return response.data
+  }
+
+  async confirmTwoFactorEnrollment(
+    encryptedSecret: string,
+    code: string,
+  ): Promise<{ recoveryCodes: string[]; message: string }> {
+    const response = await apiClient.post('/auth/2fa/confirm', {
+      encryptedSecret,
+      code,
+    })
+    return response.data
+  }
+
+  async disableTwoFactor(password: string, code: string): Promise<void> {
+    await apiClient.post('/auth/2fa/disable', { password, code })
+  }
+
+  async sendVerificationEmail(): Promise<{
+    message: string
+    expiresInHours: number
+  }> {
+    const response = await apiClient.post('/auth/send-verification-email')
+    return response.data
+  }
+
+  async verifyEmail(token: string): Promise<{
+    message: string
+    emailVerified: boolean
+  }> {
+    const response = await apiClient.post('/auth/verify-email', { token })
+    return response.data
+  }
+
+  async getActiveSessions(): Promise<unknown[]> {
+    const response = await apiClient.get('/auth/sessions')
+    return response.data
+  }
+
+  async revokeSession(sessionId: string): Promise<void> {
+    await apiClient.delete(`/auth/sessions/${sessionId}`)
   }
 }
 
