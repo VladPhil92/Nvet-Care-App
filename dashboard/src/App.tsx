@@ -1,18 +1,22 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import AdminDashboard from './pages/AdminDashboard'
 import VetPanel from './pages/VetPanel'
+import VetOnboardingPage from './pages/VetOnboardingPage'
 import ClientDashboard from './pages/ClientDashboard'
 import TiersPage from './pages/TiersPage'
 import AccountingPage from './pages/AccountingPage'
 import TrackingPage from './pages/TrackingPage'
 import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
 import Sidebar from './components/Sidebar'
 import { useResponsive } from './hooks/useResponsive'
 import { useAuthStore } from './stores/useAuthStore'
+import { useVetProfileQuery } from './hooks/queries/useVetQueries'
 import { QueryProvider } from './lib/QueryProvider'
 import { T, F } from './theme/tokens'
 
 type AdminPage = 'admin' | 'vet' | 'tiers' | 'accounting' | 'tracking'
+type PublicAuthPage = 'login' | 'register'
 
 function AdminApp() {
   const [page, setPage] = useState<AdminPage>('admin')
@@ -89,6 +93,17 @@ function ProfessionalShell({ children }: { children: ReactNode }) {
   )
 }
 
+function VetExperience() {
+  const profileQuery = useVetProfileQuery(true)
+  const status = (profileQuery.error as { response?: { status?: number } } | null)?.response?.status
+
+  return (
+    <ProfessionalShell>
+      {profileQuery.isError && status === 404 ? <VetOnboardingPage /> : <VetPanel mode="live" />}
+    </ProfessionalShell>
+  )
+}
+
 function UnknownRole() {
   const { logout, isLoading } = useAuthStore()
 
@@ -140,6 +155,7 @@ function UnknownRole() {
 }
 
 function AppContent() {
+  const [authPage, setAuthPage] = useState<PublicAuthPage>('login')
   const { user, isAuthenticated, checkAuth } = useAuthStore()
 
   useEffect(() => {
@@ -147,18 +163,18 @@ function AppContent() {
   }, [checkAuth])
 
   if (!isAuthenticated || !user) {
-    return <LoginPage />
+    return authPage === 'register' ? (
+      <RegisterPage onLogin={() => setAuthPage('login')} />
+    ) : (
+      <LoginPage onRegister={() => setAuthPage('register')} />
+    )
   }
 
   switch (user.role) {
     case 'CLIENT':
       return <ClientDashboard />
     case 'VET':
-      return (
-        <ProfessionalShell>
-          <VetPanel mode="live" />
-        </ProfessionalShell>
-      )
+      return <VetExperience />
     case 'ADMIN':
     case 'SUPERADMIN':
       return <AdminApp />

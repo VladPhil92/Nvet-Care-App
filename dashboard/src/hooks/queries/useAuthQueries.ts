@@ -70,7 +70,7 @@ interface RegisterVars {
   firstName: string
   lastName: string
   phone?: string
-  role: 'CLIENT' | 'VET' | 'ADMIN'
+  role: 'CLIENT' | 'VET'
 }
 
 export function useRegisterMutation() {

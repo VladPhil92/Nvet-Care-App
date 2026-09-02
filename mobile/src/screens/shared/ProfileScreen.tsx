@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Switch,
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -20,21 +19,16 @@ import {
   useMyVerificationStatusQuery,
 } from '../../hooks/queries/useMobileQueries'
 import { useLogoutMutation } from '../../hooks/queries/useMobileMutations'
-import { useUserMode } from '../../hooks/useUserMode'
 import { useI18n } from '../../i18n/I18nProvider'
 import LanguageSwitcher from '../../components/common/LanguageSwitcher'
 
 /**
- * ProfileScreen — perfil del usuario con switch de modo Cliente/Vet.
+ * ProfileScreen — perfil de cuenta basado en el rol persistido por backend.
  *
- * Refactorizado para consumir React Query (eliminada mock data).
- *
- * Capacidades:
- *  - Header con avatar de iniciales + nombre + email del current user
- *  - Switch de modo (CLIENT / VET) con validación de verificación
- *  - Lista de menús con navegación a Wallet, Notifications, Settings, etc.
- *  - Logout con confirmación + `useLogoutMutation` (limpia React Query cache)
- *  - Estados loading/error tratados con Skeleton
+ * El tipo de cuenta se define al registrarse y no se puede alternar mediante
+ * estado local. CLIENT conserva el dashboard de usuario y VET conserva el
+ * dashboard profesional. La verificación profesional es un estado distinto
+ * del rol y solo controla la capacidad de ofrecer servicios públicamente.
  */
 
 interface Props {
@@ -42,51 +36,21 @@ interface Props {
 }
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { mode, toggleMode } = useUserMode()
   const { t } = useI18n()
   const userQuery = useCurrentUserQuery()
-  const verificationQuery = useMyVerificationStatusQuery({
-    enabled: mode === 'VET' || userQuery.data?.role === 'VET',
-  })
+  const user = userQuery.data
+  const isVet = user?.role === 'VET'
+  const verificationQuery = useMyVerificationStatusQuery({ enabled: isVet })
   const logoutMutation = useLogoutMutation()
 
-  const user = userQuery.data
   const verification = verificationQuery.data
-
   const isVetVerified = verification?.status === 'APPROVED'
-  const isPendingVerification = verification?.status === 'PENDING'
+  const isPendingVerification =
+    verification?.status === 'PENDING' || verification?.status === 'IN_REVIEW'
 
   const initials = (
     (user?.firstName?.[0] ?? '') + (user?.lastName?.[0] ?? '')
   ).toUpperCase() || '?'
-
-  const handleModeToggle = useCallback(() => {
-    if (mode === 'CLIENT') {
-      if (isVetVerified) {
-        toggleMode()
-      } else if (isPendingVerification) {
-        Alert.alert(
-          t('profile.pendingVerification'),
-          t('auth.forgotPassword.subtitle'),
-          [{ text: t('common.confirm') }],
-        )
-      } else {
-        Alert.alert(
-          t('profile.modeVet'),
-          t('profile.becomeVetSubtitle'),
-          [
-            { text: t('common.cancel'), style: 'cancel' },
-            {
-              text: t('profile.becomeVet'),
-              onPress: () => navigation.navigate('VetVerification'),
-            },
-          ],
-        )
-      }
-    } else {
-      toggleMode()
-    }
-  }, [mode, isVetVerified, isPendingVerification, toggleMode, navigation, t])
 
   const handleLogout = useCallback(() => {
     Alert.alert(
@@ -106,7 +70,6 @@ export default function ProfileScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.avatar}>
             {userQuery.isLoading ? (
@@ -126,7 +89,7 @@ export default function ProfileScreen({ navigation }: Props) {
                 {user.firstName} {user.lastName}
               </Text>
               <Text style={styles.email}>{user.email}</Text>
-              {user.role === 'VET' && isVetVerified && (
+              {isVet && isVetVerified && (
                 <View style={{ marginTop: 8 }}>
                   <Badge label={`✓ ${t('profile.verifiedBadge')}`} tone="success" size="sm" />
                 </View>
@@ -137,55 +100,30 @@ export default function ProfileScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* Mode switch */}
         <Section title={t('profile.sections.mode').toUpperCase()}>
           <Card>
-            <View style={styles.modeRow}>
+            <View style={styles.roleRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modeTitle}>
-                  {mode === 'CLIENT' ? t('profile.modeClient') : t('profile.modeVet')}
+                <Text style={styles.roleTitle}>
+                  {isVet ? 'Cuenta veterinaria' : 'Usuario regular'}
                 </Text>
-                <Text style={styles.modeSubtitle}>
-                  {mode === 'CLIENT'
-                    ? t('profile.clientDescription')
-                    : t('profile.vetDescription')}
+                <Text style={styles.roleSubtitle}>
+                  {isVet
+                    ? 'Tu rol profesional define este dashboard. La habilitación pública depende de la verificación de credenciales.'
+                    : 'Tu rol de usuario define este dashboard para gestionar mascotas, citas y servicios.'}
                 </Text>
               </View>
-              <Switch
-                value={mode === 'VET'}
-                onValueChange={handleModeToggle}
-                trackColor={{
-                  false: UI_COLORS.border,
-                  true: UI_COLORS.sage,
-                }}
-                thumbColor={mode === 'VET' ? UI_COLORS.gold : UI_COLORS.card}
-                accessibilityLabel="Cambiar modo"
-              />
+              <Badge label={isVet ? 'VET' : 'CLIENT'} tone={isVet ? 'gold' : 'sage'} size="sm" />
             </View>
 
-            {mode === 'CLIENT' && isPendingVerification && (
+            {isVet && isPendingVerification && (
               <View style={{ marginTop: 12 }}>
                 <Badge label={`⏱ ${t('profile.pendingVerification')}`} tone="warning" outline size="sm" />
               </View>
             )}
           </Card>
-
-          {mode === 'CLIENT' && !isVetVerified && !isPendingVerification && (
-            <Pressable
-              onPress={() => navigation.navigate('VetVerification')}
-              style={styles.upsellCard}
-              accessibilityRole="button"
-              accessibilityLabel={t('profile.becomeVet')}
-            >
-              <Text style={styles.upsellTitle}>{t('profile.becomeVet')}</Text>
-              <Text style={styles.upsellSubtitle}>
-                {t('profile.becomeVetSubtitle')}
-              </Text>
-            </Pressable>
-          )}
         </Section>
 
-        {/* Cuenta */}
         <Section title={t('profile.sections.account').toUpperCase()}>
           <Card>
             <MenuRow
@@ -198,12 +136,26 @@ export default function ProfileScreen({ navigation }: Props) {
               label={t('profile.menu.notifications')}
               onPress={() => navigation.navigate('Notifications')}
             />
-            {mode === 'VET' && (
-              <MenuRow
-                glyph="📋"
-                label={t('profile.menu.services')}
-                onPress={() => navigation.navigate('PriceManagement')}
-              />
+            {isVet && (
+              <>
+                <MenuRow
+                  glyph="✅"
+                  label="Verificación profesional"
+                  value={
+                    isVetVerified
+                      ? 'Aprobada'
+                      : isPendingVerification
+                        ? 'En revisión'
+                        : 'Pendiente'
+                  }
+                  onPress={() => navigation.navigate('VetVerification')}
+                />
+                <MenuRow
+                  glyph="📋"
+                  label={t('profile.menu.services')}
+                  onPress={() => navigation.navigate('PriceManagement')}
+                />
+              </>
             )}
             <MenuRow
               glyph="👤"
@@ -213,14 +165,12 @@ export default function ProfileScreen({ navigation }: Props) {
           </Card>
         </Section>
 
-        {/* Idioma */}
         <Section title="IDIOMA">
           <Card>
             <LanguageSwitcher />
           </Card>
         </Section>
 
-        {/* Seguridad */}
         <Section title={t('profile.sections.security').toUpperCase()}>
           <Card>
             <MenuRow
@@ -241,7 +191,6 @@ export default function ProfileScreen({ navigation }: Props) {
           </Card>
         </Section>
 
-        {/* Soporte */}
         <Section title={t('profile.sections.support').toUpperCase()}>
           <Card>
             <MenuRow glyph="❓" label={t('profile.menu.help')} />
@@ -250,7 +199,6 @@ export default function ProfileScreen({ navigation }: Props) {
           </Card>
         </Section>
 
-        {/* Logout */}
         <Pressable
           onPress={handleLogout}
           style={({ pressed }) => [
@@ -332,25 +280,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 8,
   },
-  modeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  modeTitle: { fontSize: 15, fontWeight: '700', color: UI_COLORS.text, marginBottom: 2 },
-  modeSubtitle: { fontSize: 12, color: UI_COLORS.muted, lineHeight: 17 },
-  upsellCard: {
-    marginTop: 8,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: UI_COLORS.gold,
-    borderStyle: 'dashed',
-    backgroundColor: '#C9A9610a',
-  },
-  upsellTitle: { fontSize: 14, fontWeight: '700', color: UI_COLORS.gold },
-  upsellSubtitle: {
-    fontSize: 12,
-    color: UI_COLORS.muted,
-    marginTop: 4,
-    lineHeight: 16,
-  },
+  roleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  roleTitle: { fontSize: 15, fontWeight: '700', color: UI_COLORS.text, marginBottom: 2 },
+  roleSubtitle: { fontSize: 12, color: UI_COLORS.muted, lineHeight: 17 },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
