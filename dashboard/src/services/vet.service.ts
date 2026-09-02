@@ -60,6 +60,16 @@ export interface VetProfile {
   verificationDocuments?: VerificationDocument[]
 }
 
+export interface CreateVetProfileInput {
+  licenseNumber: string
+  comvezcolNumber?: string
+  specialties?: string[]
+  universityName?: string
+  graduationYear?: number
+  bio?: string
+  yearsExperience?: number
+}
+
 export interface VetEarnings {
   totalEarnings: number
   totalCommissions: number
@@ -105,6 +115,7 @@ export interface VetAppointment {
 
 export interface VetVerificationStatus {
   verificationStatus: string
+  overallStatus?: string
   isVerified: boolean
   verifiedAt?: string | null
   rejectionReason?: string | null
@@ -142,6 +153,11 @@ class VetService {
     return dedupedGet<VetProfile>('/vets/me')
   }
 
+  async createProfile(input: CreateVetProfileInput): Promise<VetProfile> {
+    const response = await apiClient.post<VetProfile>('/vets/me', input)
+    return response.data
+  }
+
   getEarnings(params: { startDate?: string; endDate?: string } = {}): Promise<VetEarnings> {
     return dedupedGet<VetEarnings>('/vets/me/earnings', params)
   }
@@ -158,8 +174,12 @@ class VetService {
     return dedupedGet<VetPrice[]>('/vets/me/prices', { activeOnly: String(activeOnly) })
   }
 
-  getVerification(): Promise<VetVerificationStatus> {
-    return dedupedGet<VetVerificationStatus>('/vets/me/verification')
+  async getVerification(): Promise<VetVerificationStatus> {
+    const data = await dedupedGet<VetVerificationStatus>('/vets/me/verification')
+    return {
+      ...data,
+      verificationStatus: data.verificationStatus || data.overallStatus || 'NONE',
+    }
   }
 
   getActiveChats(): Promise<VetChatSummary[]> {
