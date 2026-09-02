@@ -209,7 +209,9 @@ export class AiAssistService {
     });
 
     if (!appointment) {
-      throw new NotFoundException("Appointment not found for this veterinarian");
+      throw new NotFoundException(
+        "Appointment not found for this veterinarian",
+      );
     }
 
     const history = await this.prisma.appointment.findMany({
@@ -285,7 +287,11 @@ export class AiAssistService {
     petId: string,
     sourceAppointments: number,
     result: ClientAiGuidance,
-    meta: { provider: string; model: string | null; safetyRuleTriggered: boolean },
+    meta: {
+      provider: string;
+      model: string | null;
+      safetyRuleTriggered: boolean;
+    },
   ) {
     return {
       kind: "CLIENT_CARE_GUIDANCE",
