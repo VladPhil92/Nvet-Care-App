@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { secureStorage } from '../lib/secureStorage'
 
 // ============================================================
 // CONFIGURACIÓN
@@ -11,8 +11,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
  * - Desarrollo/test sin NVET_API_URL: localhost.
  * - Android release: Gradle exige NVET_API_URL HTTPS antes de generar el AAB.
  * - Staging/E2E: el workflow inyecta la URL del entorno correspondiente.
- *
- * No contiene secretos: es únicamente el endpoint público del backend.
  */
 export const API_URL = '__NVET_API_URL__'
 
@@ -20,14 +18,12 @@ const DEFAULT_TIMEOUT_MS = 15000
 const UPLOAD_TIMEOUT_MS = 60000
 const MAX_RETRIES = 3
 const RETRY_BASE_DELAY_MS = 300
-// Status codes que disparan retry (idempotentes o transitorios)
 const RETRYABLE_STATUS = [408, 425, 429, 500, 502, 503, 504]
 
 // ============================================================
 // HELPERS
 // ============================================================
 
-/** UUID v4 ligero para correlacionar requests entre cliente y servidor. */
 function genRequestId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0
@@ -36,14 +32,12 @@ function genRequestId(): string {
   })
 }
 
-/** Pausa con jitter para distribuir reintentos y evitar thundering herd. */
 function backoffDelay(attempt: number): Promise<void> {
   const exp = RETRY_BASE_DELAY_MS * Math.pow(2, attempt)
   const jitter = Math.random() * RETRY_BASE_DELAY_MS
   return new Promise((resolve) => setTimeout(resolve, exp + jitter))
 }
 
-/** Construye un mensaje user-friendly a partir de un AxiosError. */
 export function getErrorMessage(error: unknown): string {
   const err = error as AxiosError<{ message?: string }>
   if (!err?.isAxiosError) return 'Ocurrió un error inesperado'
@@ -59,14 +53,7 @@ export function getErrorMessage(error: unknown): string {
 // CLIENTE HTTP RESILIENTE
 // ============================================================
 
-/**
- * Mapa de requests GET en vuelo para deduplicación.
- * Si dos componentes piden el mismo recurso simultáneamente,
- * compartirán la misma promise → 1 sola petición de red.
- */
 const inFlightGets = new Map<string, Promise<unknown>>()
-
-/** Promise singleton para refresh de token (evita race conditions). */
 let refreshTokenPromise: Promise<string> | null = null
 
 async function performTokenRefresh(): Promise<string> {
@@ -74,23 +61,26 @@ async function performTokenRefresh(): Promise<string> {
 
   refreshTokenPromise = (async () => {
     try {
-      const refreshToken = await AsyncStorage.getItem('refreshToken')
+      const refreshToken = await secureStorage.getRefreshToken()
       if (!refreshToken) throw new Error('No refresh token available')
 
       const response = await axios.post(
         `${API_URL}/auth/refresh`,
         { refreshToken },
-        { timeout: DEFAULT_TIMEOUT_MS }
+        { timeout: DEFAULT_TIMEOUT_MS },
       )
 
       const { accessToken, refreshToken: newRefreshToken } = response.data
-      await AsyncStorage.setItem('accessToken', accessToken)
-      if (newRefreshToken) {
-        await AsyncStorage.setItem('refreshToken', newRefreshToken)
+      if (!accessToken || !newRefreshToken) {
+        throw new Error('Server did not return a complete rotated session')
       }
+
+      await secureStorage.setTokens({
+        accessToken,
+        refreshToken: newRefreshToken,
+      })
       return accessToken
     } finally {
-      // Permitir nuevos refresh después de que termine este (éxito o falla)
       refreshTokenPromise = null
     }
   })()
@@ -114,21 +104,17 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // ---------- REQUEST ----------
     this.client.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
-        // 1. JWT auth
-        const token = await AsyncStorage.getItem('accessToken')
+        const token = await secureStorage.getAccessToken()
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`
         }
 
-        // 2. Request ID para correlación de logs
         if (config.headers) {
           config.headers['X-Request-Id'] = genRequestId()
         }
 
-        // 3. Timeout extendido para uploads multipart
         const isUpload =
           typeof config.headers?.['Content-Type'] === 'string' &&
           config.headers['Content-Type'].includes('multipart/form-data')
@@ -138,10 +124,9 @@ class ApiClient {
 
         return config
       },
-      (error) => Promise.reject(error)
+      (error) => Promise.reject(error),
     )
 
-    // ---------- RESPONSE ----------
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
@@ -151,7 +136,6 @@ class ApiClient {
 
         if (!originalRequest) return Promise.reject(error)
 
-        // --- Auth refresh (401) ---
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true
           try {
@@ -161,12 +145,11 @@ class ApiClient {
             }
             return this.client(originalRequest)
           } catch (refreshError) {
-            await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'user'])
+            await secureStorage.clearTokens().catch(() => undefined)
             return Promise.reject(refreshError)
           }
         }
 
-        // --- Retry con backoff (errores transitorios) ---
         const status = error.response?.status
         const isRetryable =
           (originalRequest.method === 'get' || originalRequest.method === 'GET') &&
@@ -183,7 +166,7 @@ class ApiClient {
         }
 
         return Promise.reject(error)
-      }
+      },
     )
   }
 
@@ -191,14 +174,9 @@ class ApiClient {
     return this.client
   }
 
-  /**
-   * GET deduplicado: si la misma URL+params está en vuelo, reutiliza la promise.
-   * Útil para evitar tormentas de requests cuando varios componentes
-   * piden el mismo recurso al montarse simultáneamente.
-   */
   public async dedupedGet<T = unknown>(
     url: string,
-    params?: Record<string, unknown>
+    params?: Record<string, unknown>,
   ): Promise<T> {
     const key = `${url}?${JSON.stringify(params || {})}`
     const existing = inFlightGets.get(key)
@@ -219,6 +197,4 @@ class ApiClient {
 const apiClientInstance = new ApiClient()
 export const apiClient = apiClientInstance.getClient()
 export const dedupedGet = apiClientInstance.dedupedGet.bind(apiClientInstance)
-
-// Default export para compatibilidad con servicios existentes (`import api from './api'`)
 export default apiClient
