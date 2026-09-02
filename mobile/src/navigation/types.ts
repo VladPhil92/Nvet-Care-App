@@ -23,6 +23,7 @@ export type ClientTabParamList = {
   ClientHome: undefined
   ClientSearch: NavigatorScreenParams<ClientSearchStackParamList> | undefined
   ClientAppointments: undefined
+  ClientAi: undefined
   ClientProfile: undefined
 }
 
@@ -74,6 +75,7 @@ export type VetProfileStackParamList = {
 export type VetTabParamList = {
   VetDashboard: undefined
   VetSchedule: undefined
+  VetAi: undefined
   VetEarnings: undefined
   VetProfile: NavigatorScreenParams<VetProfileStackParamList> | undefined
 }
