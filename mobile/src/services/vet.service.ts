@@ -230,7 +230,7 @@ class VetService {
   }
 
   async uploadVerificationDocument(formData: FormData): Promise<unknown> {
-    const response = await apiClient.post('/vets/me/verification/documents', formData, {
+    const response = await apiClient.post('/vets/me/verification/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     return response.data
