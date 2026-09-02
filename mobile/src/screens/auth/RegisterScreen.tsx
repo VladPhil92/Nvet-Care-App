@@ -29,6 +29,9 @@ const COLORS = {
   error: '#C53030',
 } as const
 
+const STRONG_PASSWORD =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]).{12,128}$/
+
 type Role = 'CLIENT' | 'VET'
 
 export default function RegisterScreen({ navigation, route }: RegisterScreenProps) {
@@ -71,8 +74,12 @@ export default function RegisterScreen({ navigation, route }: RegisterScreenProp
     if (lastName.trim().length < 2) e.lastName = 'Ingresa tu apellido'
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
       e.email = 'Correo inválido'
-    if (password.length < 8) e.password = 'Mínimo 8 caracteres'
-    if (phone && !/^\+?[\d\s-]{7,15}$/.test(phone)) e.phone = 'Teléfono inválido'
+    if (!STRONG_PASSWORD.test(password)) {
+      e.password = 'Mínimo 12 caracteres con mayúscula, minúscula, número y símbolo'
+    }
+    if (phone && !/^\+?[1-9]\d{7,14}$/.test(phone.replace(/[\s-]/g, ''))) {
+      e.phone = 'Usa un número válido, por ejemplo +573001234567'
+    }
     setErrors(e)
     return Object.keys(e).length === 0
   }, [firstName, lastName, email, password, phone])
@@ -106,10 +113,9 @@ export default function RegisterScreen({ navigation, route }: RegisterScreenProp
 
           <Text style={styles.heading}>Crear cuenta</Text>
           <Text style={styles.subheading}>
-            Únete a la plataforma de cuidado veterinario a domicilio
+            Elige tu tipo de cuenta. Este rol definirá tu dashboard en Nvet Care.
           </Text>
 
-          {/* Role selector */}
           <View style={styles.roleRow}>
             {(['CLIENT', 'VET'] as Role[]).map((r) => (
               <Pressable
@@ -125,7 +131,7 @@ export default function RegisterScreen({ navigation, route }: RegisterScreenProp
                 accessibilityRole="radio"
                 accessibilityState={{ selected: role === r }}
                 accessibilityLabel={
-                  r === 'CLIENT' ? 'Soy cliente' : 'Soy veterinario'
+                  r === 'CLIENT' ? 'Usuario regular' : 'Soy veterinario'
                 }
               >
                 <Text
@@ -134,7 +140,7 @@ export default function RegisterScreen({ navigation, route }: RegisterScreenProp
                     role === r && styles.roleBtnTextActive,
                   ]}
                 >
-                  {r === 'CLIENT' ? '🐾  Soy cliente' : '⚕️  Soy veterinario'}
+                  {r === 'CLIENT' ? '🐾  Usuario regular' : '⚕️  Soy veterinario'}
                 </Text>
               </Pressable>
             ))}
@@ -143,14 +149,14 @@ export default function RegisterScreen({ navigation, route }: RegisterScreenProp
           {role === 'VET' && (
             <View style={styles.vetNotice}>
               <Text style={styles.vetNoticeText}>
-                Como veterinario deberás completar la verificación profesional
-                (Tarjeta COMVEZCOL, título y documento de identidad) antes de
-                poder ofrecer servicios.
+                Tu cuenta abrirá el Dashboard Veterinario. Podrás configurar tu
+                perfil, agenda y servicios; antes de aparecer públicamente y
+                atender pacientes deberás completar la verificación profesional
+                (Tarjeta COMVEZCOL, título y documento de identidad).
               </Text>
             </View>
           )}
 
-          {/* Name */}
           <View style={styles.row}>
             <View style={[styles.fieldGroup, { flex: 1, marginRight: 8 }]}>
               <Text style={styles.label}>Nombre</Text>
@@ -186,7 +192,6 @@ export default function RegisterScreen({ navigation, route }: RegisterScreenProp
             </View>
           </View>
 
-          {/* Email */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Correo electrónico</Text>
             <TextInput
@@ -205,7 +210,6 @@ export default function RegisterScreen({ navigation, route }: RegisterScreenProp
             {errors.email && <Text style={styles.error}>{errors.email}</Text>}
           </View>
 
-          {/* Phone */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Teléfono (opcional)</Text>
             <TextInput
@@ -223,13 +227,12 @@ export default function RegisterScreen({ navigation, route }: RegisterScreenProp
             {errors.phone && <Text style={styles.error}>{errors.phone}</Text>}
           </View>
 
-          {/* Password */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Contraseña</Text>
             <TextInput
               value={password}
               onChangeText={setPassword}
-              placeholder="Mínimo 8 caracteres"
+              placeholder="12+ caracteres, con número y símbolo"
               placeholderTextColor={COLORS.muted}
               style={[styles.input, errors.password && styles.inputError]}
               secureTextEntry
@@ -262,7 +265,9 @@ export default function RegisterScreen({ navigation, route }: RegisterScreenProp
             {isSubmitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.submitText}>Crear cuenta</Text>
+              <Text style={styles.submitText}>
+                {role === 'VET' ? 'Crear cuenta veterinaria' : 'Crear cuenta de usuario'}
+              </Text>
             )}
           </Pressable>
         </ScrollView>
