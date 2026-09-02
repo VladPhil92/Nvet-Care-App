@@ -17,6 +17,7 @@ import { PetsModule } from "./pets/pets.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { ProfileModule } from "./profile/profile.module";
 import { WaitlistModule } from "./waitlist/waitlist.module";
+import { AiModule } from "./ai/ai.module";
 
 /**
  * Orden de imports importante:
@@ -51,6 +52,7 @@ import { WaitlistModule } from "./waitlist/waitlist.module";
     NotificationsModule,
     ProfileModule,
     WaitlistModule,
+    AiModule,
   ],
 })
 export class AppModule {}
