@@ -58,9 +58,9 @@
       "note": "At least two physical Android devices must complete login, pet, booking, appointment and recovery smoke tests."
     },
     "android16BehaviorReviewCompleted": {
-      "status": "pending",
-      "evidence": null,
-      "note": "Android 16/API 36 behavior and permission changes relevant to Nvet Care must be reviewed before production rollout."
+      "status": "verified",
+      "evidence": "docs/production/ANDROID_16_BEHAVIOR_REVIEW.md + scripts/verify-android16-compatibility.mjs",
+      "note": "Android 16/API 36 behavior changes were reviewed against the current mobile architecture; explicit predictive-back and large-screen stabilization decisions are enforced by CI while external physical-device evidence remains separate."
     }
   }
 }

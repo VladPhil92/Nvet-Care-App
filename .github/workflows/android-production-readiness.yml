@@ -5,11 +5,14 @@ on:
     branches: [main]
     paths:
       - 'mobile/android/**'
+      - 'mobile/App.tsx'
       - '.github/workflows/release-android.yml'
       - '.github/workflows/android-production-readiness.yml'
       - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/ANDROID_16_BEHAVIOR_REVIEW.md'
       - 'docs/PHASE_13_ANDROID_PRODUCTION.md'
       - 'scripts/verify-android-production-readiness.mjs'
+      - 'scripts/verify-android16-compatibility.mjs'
       - '.github/workflows/ci.yml'
   schedule:
     - cron: '41 12 * * *'
@@ -44,6 +47,8 @@ jobs:
           node-version: '22.x'
       - name: Validate Phase 13 contract
         run: node scripts/verify-android-production-readiness.mjs --contract-only
+      - name: Validate Android 16 compatibility contract
+        run: node scripts/verify-android16-compatibility.mjs
 
   audit:
     name: Audit live Android production evidence
@@ -60,5 +65,7 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22.x'
+      - name: Validate Android 16 compatibility contract
+        run: node scripts/verify-android16-compatibility.mjs
       - name: Audit current main Android evidence
         run: node scripts/verify-android-production-readiness.mjs --runtime
