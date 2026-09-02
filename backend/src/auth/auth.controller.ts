@@ -56,7 +56,10 @@ export class AuthController {
     @Req() req: any,
     @Res({ passthrough: true }) res: any,
   ) {
-    const result = await this.authService.register(dto, this.extractContext(req));
+    const result = await this.authService.register(
+      dto,
+      this.extractContext(req),
+    );
     return this.finalizeSessionResponse(result, req, res);
   }
 
@@ -117,7 +120,8 @@ export class AuthController {
   ) {
     const cookieMode = this.isCookieSession(req);
     const refreshToken =
-      dto.refreshToken || (cookieMode ? this.readCookie(req, WEB_REFRESH_COOKIE) : undefined);
+      dto.refreshToken ||
+      (cookieMode ? this.readCookie(req, WEB_REFRESH_COOKIE) : undefined);
 
     if (!refreshToken) {
       throw new BadRequestException("Refresh token requerido");
@@ -148,10 +152,7 @@ export class AuthController {
   @Post("logout-all")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async logoutAll(
-    @Req() req: any,
-    @Res({ passthrough: true }) res: any,
-  ) {
+  async logoutAll(@Req() req: any, @Res({ passthrough: true }) res: any) {
     const result = await this.authService.logoutAllSessions(req.user.id);
     this.clearRefreshCookie(res);
     return result;
@@ -302,7 +303,9 @@ export class AuthController {
   }
 
   private isCookieSession(req: any): boolean {
-    return String(req.headers?.[WEB_SESSION_HEADER] || "").toLowerCase() === "cookie";
+    return (
+      String(req.headers?.[WEB_SESSION_HEADER] || "").toLowerCase() === "cookie"
+    );
   }
 
   private setRefreshCookie(res: any, refreshToken: string): void {
