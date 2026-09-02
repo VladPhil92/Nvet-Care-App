@@ -41,8 +41,19 @@ function requireText(rel, pattern, purpose) {
 // ---------------------------------------------------------------------------
 // 1. Mobile auth has one canonical runtime and no plaintext bearer storage.
 // ---------------------------------------------------------------------------
-if (exists('mobile/src/services/auth.service.v2.ts')) {
-  failures.push('Canonical mobile auth: auth.service.v2.ts must not coexist with auth.service.ts')
+const legacyAuthFacade = 'mobile/src/services/auth.service.v2.ts'
+if (exists(legacyAuthFacade)) {
+  const facade = read(legacyAuthFacade)
+  const containsImplementation =
+    /(?:apiClient|secureStorage|AsyncStorage|axios|class\s+Auth|const\s+authService\s*=|create\()/m.test(
+      facade,
+    )
+  const redirectsToCanonical = /from\s+['"]\.\/auth\.service['"]/.test(facade)
+  if (containsImplementation || !redirectsToCanonical) {
+    failures.push(
+      'Canonical mobile auth: auth.service.v2.ts may only be a pure re-export of ./auth.service',
+    )
+  }
 }
 
 requireFile(
@@ -53,6 +64,11 @@ requireText(
   'mobile/src/services/api.ts',
   /secureStorage\.getAccessToken\(\)/,
   'Mobile HTTP auth must read the access token from protected storage',
+)
+requireText(
+  'mobile/src/stores/useChatStore.ts',
+  /secureStorage\.getAccessToken\(\)/,
+  'Mobile WebSocket auth must read the access token from protected storage',
 )
 
 for (const rel of walk('mobile/src')) {
@@ -146,7 +162,8 @@ if (failures.length > 0) {
 }
 
 console.log('✅ Security convergence gate passed')
-console.log('   - mobile session storage: protected + canonical')
+console.log('   - mobile session storage: protected + one canonical auth implementation')
+console.log('   - mobile WebSocket authentication: protected token vault')
 console.log('   - dashboard refresh token: HttpOnly cookie')
 console.log('   - public veterinarian responses: allowlisted')
 console.log('   - sensitive uploads: magic-bytes + private storage contract')
