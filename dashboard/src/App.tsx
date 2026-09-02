@@ -6,6 +6,7 @@ import TiersPage from './pages/TiersPage'
 import AccountingPage from './pages/AccountingPage'
 import TrackingPage from './pages/TrackingPage'
 import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
 import Sidebar from './components/Sidebar'
 import { useResponsive } from './hooks/useResponsive'
 import { useAuthStore } from './stores/useAuthStore'
@@ -13,6 +14,7 @@ import { QueryProvider } from './lib/QueryProvider'
 import { T, F } from './theme/tokens'
 
 type AdminPage = 'admin' | 'vet' | 'tiers' | 'accounting' | 'tracking'
+type PublicAuthPage = 'login' | 'register'
 
 function AdminApp() {
   const [page, setPage] = useState<AdminPage>('admin')
@@ -140,6 +142,7 @@ function UnknownRole() {
 }
 
 function AppContent() {
+  const [authPage, setAuthPage] = useState<PublicAuthPage>('login')
   const { user, isAuthenticated, checkAuth } = useAuthStore()
 
   useEffect(() => {
@@ -147,7 +150,11 @@ function AppContent() {
   }, [checkAuth])
 
   if (!isAuthenticated || !user) {
-    return <LoginPage />
+    return authPage === 'register' ? (
+      <RegisterPage onLogin={() => setAuthPage('login')} />
+    ) : (
+      <LoginPage onRegister={() => setAuthPage('register')} />
+    )
   }
 
   switch (user.role) {
