@@ -3,19 +3,18 @@ import {
   Logger,
   InternalServerErrorException,
   BadRequestException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as crypto from "crypto";
-import {
-  AllowedMime,
-  MagicBytesValidator,
-} from "../security/magic-bytes.service";
+import { MagicBytesValidator } from "../security/magic-bytes.service";
+import type { AllowedMime } from "../security/magic-bytes.service";
 
 export type StorageVisibility = "public" | "private";
 
 export interface UploadResult {
-  /** Public URL or opaque private locator. Never expose private locators publicly. */
+  /** Public URL for public assets; opaque provider storage key for private assets. */
   url: string;
   /** Stable provider key used for delete/read operations. */
   storageKey: string;
@@ -41,8 +40,12 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
  *
  * Every persisted upload is validated by magic bytes before it reaches disk or
  * Cloudinary. Verification documents and transfer evidence are automatically
- * forced to private storage regardless of the caller option, preventing a new
- * caller from accidentally making those domains public.
+ * forced to private storage regardless of the caller option.
+ *
+ * Production bootstrap remains available even if legacy deployments have not
+ * configured private object storage yet; however sensitive uploads fail closed
+ * until Cloudinary credentials are installed. This avoids turning a security
+ * migration into an application-wide outage.
  */
 @Injectable()
 export class StorageService {
@@ -53,7 +56,11 @@ export class StorageService {
 
   constructor(private readonly magicBytes: MagicBytesValidator) {
     const configured = (process.env.STORAGE_DRIVER ?? "").toLowerCase();
-    this.driver = configured === "cloudinary" ? "cloudinary" : "local";
+    const cloudinaryReady = this.hasCloudinaryEnv();
+    this.driver =
+      configured === "cloudinary" || (!configured && cloudinaryReady)
+        ? "cloudinary"
+        : "local";
     this.uploadDir =
       process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
     this.cloudinaryFolder = process.env.CLOUDINARY_UPLOAD_FOLDER ?? "nvetcare";
@@ -63,8 +70,8 @@ export class StorageService {
     if (this.driver === "cloudinary") {
       this.assertCloudinaryEnv();
     } else if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "STORAGE_DRIVER=local is not allowed in production for Nvet Care",
+      this.logger.error(
+        "Private object storage is not configured. Sensitive uploads will remain fail-closed until Cloudinary is configured.",
       );
     }
   }
@@ -76,14 +83,22 @@ export class StorageService {
   ): Promise<UploadResult> {
     this.validateUpload(file);
 
-    const sensitiveFolder =
-      folder === "verification" ||
-      folder.startsWith("verification/") ||
-      folder === "transfers" ||
-      folder.startsWith("transfers/");
+    const sensitiveFolder = this.isSensitiveFolder(folder);
     const visibility: StorageVisibility = sensitiveFolder
       ? "private"
       : options?.visibility ?? "public";
+
+    if (
+      sensitiveFolder &&
+      process.env.NODE_ENV === "production" &&
+      this.driver !== "cloudinary"
+    ) {
+      throw new ServiceUnavailableException({
+        code: "PRIVATE_STORAGE_NOT_CONFIGURED",
+        message:
+          "La carga de documentos sensibles está temporalmente deshabilitada hasta certificar almacenamiento privado.",
+      });
+    }
 
     if (this.driver === "cloudinary") {
       return this.uploadToCloudinary(file, folder, {
@@ -117,6 +132,15 @@ export class StorageService {
     return this.readFromLocal(storageKey);
   }
 
+  private isSensitiveFolder(folder: string): boolean {
+    return (
+      folder === "verification" ||
+      folder.startsWith("verification/") ||
+      folder === "transfers" ||
+      folder.startsWith("transfers/")
+    );
+  }
+
   private validateUpload(file: Express.Multer.File): void {
     if (!file?.buffer?.length) {
       throw new BadRequestException("Archivo vacío");
@@ -133,7 +157,7 @@ export class StorageService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // LOCAL DRIVER — development/test only
+  // LOCAL DRIVER — development/test only for sensitive content
   // ─────────────────────────────────────────────────────────────────────────
 
   private async uploadToLocal(
@@ -156,13 +180,9 @@ export class StorageService {
       throw new InternalServerErrorException("No se pudo guardar el archivo");
     }
 
-    const url =
-      options.visibility === "public"
-        ? `/uploads/public/${folder}/${fileName}`
-        : `private://local/${folder}/${fileName}`;
-
+    const publicUrl = `/uploads/public/${folder}/${fileName}`;
     return {
-      url,
+      url: options.visibility === "public" ? publicUrl : filePath,
       storageKey: filePath,
       driver: "local",
       visibility: options.visibility,
@@ -238,10 +258,8 @@ export class StorageService {
       });
 
       return {
-        url:
-          options.visibility === "public"
-            ? result.secure_url
-            : `private://cloudinary/${result.public_id}`,
+        // Sensitive callers persist an opaque provider key, never a delivery URL.
+        url: options.visibility === "public" ? result.secure_url : storageKey,
         storageKey,
         driver: "cloudinary",
         visibility: options.visibility,
@@ -352,6 +370,14 @@ export class StorageService {
     }
 
     return { visibility: "public", resourceType: "image", publicId: storageKey };
+  }
+
+  private hasCloudinaryEnv(): boolean {
+    return [
+      process.env.CLOUDINARY_CLOUD_NAME,
+      process.env.CLOUDINARY_API_KEY,
+      process.env.CLOUDINARY_API_SECRET,
+    ].every(Boolean);
   }
 
   private async getCloudinary(): Promise<any> {
