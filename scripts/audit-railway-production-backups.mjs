@@ -43,116 +43,6 @@ async function graphql(query, variables = {}) {
   return payload.data;
 }
 
-function unwrap(type) {
-  let current = type;
-  while (current?.ofType) current = current.ofType;
-  return current;
-}
-
-function isRequired(type) {
-  return type?.kind === 'NON_NULL';
-}
-
-function typeRef(type) {
-  if (!type) return '';
-  if (type.kind === 'NON_NULL') return `${typeRef(type.ofType)}!`;
-  if (type.kind === 'LIST') return `[${typeRef(type.ofType)}]`;
-  return type.name || '';
-}
-
-function escapeGraphqlString(value) {
-  return JSON.stringify(String(value));
-}
-
-async function introspectType(name) {
-  const data = await graphql(
-    `query IntrospectType($name: String!) {
-      __type(name: $name) {
-        kind
-        name
-        fields {
-          name
-          args { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
-          type { kind name ofType { kind name ofType { kind name ofType { kind name } } } }
-        }
-      }
-    }`,
-    { name },
-  );
-  return data.__type;
-}
-
-function scalarFields(type) {
-  return (type?.fields || [])
-    .filter((field) => {
-      const base = unwrap(field.type);
-      return ['SCALAR', 'ENUM'].includes(base?.kind) && (field.args || []).every((arg) => !isRequired(arg.type));
-    })
-    .map((field) => field.name)
-    .filter((name) => !['secret', 'token', 'password'].some((word) => name.toLowerCase().includes(word)))
-    .slice(0, 24);
-}
-
-async function selectionForField(field) {
-  const direct = field.type;
-  const base = unwrap(direct);
-  if (!base) return '';
-  if (['SCALAR', 'ENUM'].includes(base.kind)) return '';
-
-  const type = await introspectType(base.name);
-  const directScalars = scalarFields(type);
-  if (directScalars.length) return `{ ${directScalars.join(' ')} }`;
-
-  const edges = type?.fields?.find((candidate) => candidate.name === 'edges');
-  if (edges) {
-    const edgeType = await introspectType(unwrap(edges.type)?.name);
-    const node = edgeType?.fields?.find((candidate) => candidate.name === 'node');
-    if (node) {
-      const nodeType = await introspectType(unwrap(node.type)?.name);
-      const nodeScalars = scalarFields(nodeType);
-      if (nodeScalars.length) return `{ edges { node { ${nodeScalars.join(' ')} } } }`;
-    }
-  }
-
-  const nodes = type?.fields?.find((candidate) => candidate.name === 'nodes');
-  if (nodes) {
-    const nodeType = await introspectType(unwrap(nodes.type)?.name);
-    const nodeScalars = scalarFields(nodeType);
-    if (nodeScalars.length) return `{ nodes { ${nodeScalars.join(' ')} } }`;
-  }
-
-  throw new Error(`Unable to build a safe scalar selection for Railway field ${field.name}:${typeRef(field.type)}`);
-}
-
-function valueCount(value) {
-  if (Array.isArray(value)) return value.length;
-  if (Array.isArray(value?.edges)) return value.edges.length;
-  if (Array.isArray(value?.nodes)) return value.nodes.length;
-  if (value == null) return 0;
-  if (typeof value === 'object') return Object.keys(value).length ? 1 : 0;
-  return value ? 1 : 0;
-}
-
-async function executeVolumeInstanceQuery(field, volumeInstanceId) {
-  const args = field.args || [];
-  const requiredArgs = args.filter((arg) => isRequired(arg.type));
-  const volumeArg = args.find((arg) => /volumeinstanceid/i.test(arg.name));
-  if (!volumeArg) {
-    throw new Error(`Railway field ${field.name} does not expose a volumeInstanceId argument`);
-  }
-  const unsupportedRequired = requiredArgs.filter((arg) => arg.name !== volumeArg.name);
-  if (unsupportedRequired.length) {
-    throw new Error(
-      `Railway field ${field.name} requires unsupported args: ${unsupportedRequired.map((arg) => arg.name).join(', ')}`,
-    );
-  }
-
-  const selection = await selectionForField(field);
-  const query = `query ProductionVolumeEvidence { ${field.name}(${volumeArg.name}: ${escapeGraphqlString(volumeInstanceId)}) ${selection} }`;
-  const data = await graphql(query);
-  return data[field.name];
-}
-
 const projectData = await graphql(
   `query ProductionStorage($id: String!) {
     project(id: $id) {
@@ -218,52 +108,40 @@ if (postgresCandidates.length !== 1) {
 }
 
 const postgres = postgresCandidates[0];
+const variables = { volumeInstanceId: postgres.id };
 
-const schema = await graphql(`query BackupSchema {
-  __schema {
-    queryType {
-      fields {
-        name
-        args { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } }
-        type { kind name ofType { kind name ofType { kind name ofType { kind name } } } }
-      }
+const backupData = await graphql(
+  `query volumeInstanceBackupList($volumeInstanceId: String!) {
+    volumeInstanceBackupList(volumeInstanceId: $volumeInstanceId) {
+      id
+      name
+      createdAt
+      expiresAt
+      usedMB
+      referencedMB
     }
-  }
-}`);
-
-const queryFields = schema.__schema?.queryType?.fields || [];
-const backupFields = queryFields.filter((field) => /backup/i.test(field.name));
-const scheduleCandidates = backupFields.filter(
-  (field) => /schedule/i.test(field.name) && (field.args || []).some((arg) => /volumeinstanceid/i.test(arg.name)),
-);
-const backupListCandidates = backupFields.filter(
-  (field) =>
-    !/schedule/i.test(field.name) &&
-    (field.args || []).some((arg) => /volumeinstanceid/i.test(arg.name)) &&
-    (/list/i.test(field.name) || /backup/i.test(field.name)),
+  }`,
+  variables,
 );
 
-if (!scheduleCandidates.length) {
-  throw new Error(
-    `Railway schema exposes no backup-schedule query scoped by volumeInstanceId. Backup-related query fields: ${backupFields
-      .map((field) => field.name)
-      .join(', ') || 'none'}`,
-  );
-}
+const scheduleData = await graphql(
+  `query volumeInstanceBackupScheduleList($volumeInstanceId: String!) {
+    volumeInstanceBackupScheduleList(volumeInstanceId: $volumeInstanceId) {
+      id
+      name
+      cron
+      kind
+      retentionSeconds
+      createdAt
+    }
+  }`,
+  variables,
+);
 
-const scheduleField =
-  scheduleCandidates.find((field) => /volumeinstance.*backup.*schedule/i.test(field.name)) || scheduleCandidates[0];
-const schedules = await executeVolumeInstanceQuery(scheduleField, postgres.id);
-const scheduleCount = valueCount(schedules);
-
-let backups = null;
-let backupField = null;
-if (backupListCandidates.length) {
-  backupField =
-    backupListCandidates.find((field) => field.name === 'volumeInstanceBackupList') || backupListCandidates[0];
-  backups = await executeVolumeInstanceQuery(backupField, postgres.id);
-}
-const backupCount = valueCount(backups);
+const backups = backupData.volumeInstanceBackupList || [];
+const schedules = scheduleData.volumeInstanceBackupScheduleList || [];
+const scheduleCount = schedules.length;
+const backupCount = backups.length;
 
 const evidence = {
   schemaVersion: 1,
@@ -280,8 +158,8 @@ const evidence = {
     mountPath: postgres.mountPath,
   },
   railwaySchema: {
-    scheduleQuery: scheduleField.name,
-    backupListQuery: backupField?.name || null,
+    scheduleQuery: 'volumeInstanceBackupScheduleList',
+    backupListQuery: 'volumeInstanceBackupList',
   },
   scheduleCount,
   backupCount,
@@ -296,7 +174,6 @@ mkdirSync(evidencePath.split('/').slice(0, -1).join('/') || '.', { recursive: tr
 writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
 
 console.log(`Production PostgreSQL volume: ${postgres.volumeName} (${postgres.id})`);
-console.log(`Railway backup schedule query: ${scheduleField.name}`);
 console.log(`Configured backup schedules: ${scheduleCount}`);
 console.log(`Visible backups: ${backupCount}`);
 console.log(`Evidence written to ${evidencePath}`);
