@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { VerificationStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
+import { MailService } from "../common/mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   ProfessionalRegistryCheckStatus,
@@ -28,7 +30,12 @@ const OFFICIAL_REGISTRY_URL =
 
 @Injectable()
 export class ProfessionalRegistryService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ProfessionalRegistryService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
 
   async getForUser(userId: string) {
     const vet = await this.prisma.vetProfile.findUnique({
@@ -82,6 +89,12 @@ export class ProfessionalRegistryService {
         comvezcolNumber: true,
         verificationStatus: true,
         isVerified: true,
+        user: {
+          select: {
+            email: true,
+            firstName: true,
+          },
+        },
       },
     });
 
@@ -104,6 +117,17 @@ export class ProfessionalRegistryService {
         "La evidencia del chequeo oficial debe tener al menos 10 caracteres.",
       );
     }
+
+    const previousRows = await this.prisma.$queryRawUnsafe<
+      Array<{ status: ProfessionalRegistryCheckStatus }>
+    >(
+      `SELECT status
+         FROM "vet_professional_registry_checks"
+        WHERE "vet_profile_id" = $1
+        LIMIT 1`,
+      vetProfileId,
+    );
+    const previousStatus = previousRows?.[0]?.status ?? null;
 
     const checkId = randomUUID();
     await this.prisma.$executeRawUnsafe(
@@ -137,6 +161,21 @@ export class ProfessionalRegistryService {
         isAvailableNow: false,
       },
     });
+
+    if (
+      canActivate &&
+      previousStatus !== ProfessionalRegistryCheckStatus.VERIFIED
+    ) {
+      const result = await this.mail.sendVetApproval({
+        to: vet.user.email,
+        firstName: vet.user.firstName ?? "Veterinario",
+      });
+      if (!result.ok) {
+        this.logger.warn(
+          `Vet operational approval email failed for vetProfileId=${vetProfileId}: ${result.reason}`,
+        );
+      }
+    }
 
     return this.getForVetProfile(vetProfileId);
   }
