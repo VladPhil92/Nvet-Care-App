@@ -9,31 +9,28 @@ import { Observable, map } from "rxjs";
 /**
  * Last-mile privacy boundary for the anonymous veterinarian directory.
  *
- * The domain service contains private operational fields (exact coordinates,
- * contact data, balances and verification metadata) because authenticated
- * veterinarian/admin flows need them. Public HTTP responses are therefore
- * rebuilt from an explicit allowlist here. Adding a new Prisma field cannot
- * accidentally make it public via object spread.
+ * Public responses are rebuilt from explicit allowlists. No Prisma record or
+ * nested relation is spread directly into an anonymous response, so adding a
+ * new database field cannot make it public by accident.
  */
 @Injectable()
 export class PublicVetPrivacyInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const req = context.switchToHttp().getRequest();
-    if (!this.isAnonymousVetDirectoryRequest(req)) {
+    if (!this.isPublicVetRequest(req)) {
       return next.handle();
     }
 
     return next.handle().pipe(map((payload) => this.sanitizePayload(payload)));
   }
 
-  private isAnonymousVetDirectoryRequest(req: any): boolean {
+  private isPublicVetRequest(req: any): boolean {
     if (req.method !== "GET") return false;
 
     const path = String(req.path || req.originalUrl || "").split("?")[0];
     if (path === "/api/vets" || path === "/vets") return true;
 
-    const detailPattern = /^\/(?:api\/)?vets\/[0-9a-f-]{36}$/i;
-    return detailPattern.test(path);
+    return /^\/(?:api\/)?vets\/[0-9a-f-]{36}(?:\/prices)?$/i.test(path);
   }
 
   private sanitizePayload(payload: any): any {
@@ -44,8 +41,16 @@ export class PublicVetPrivacyInterceptor implements NestInterceptor {
       };
     }
 
+    if (Array.isArray(payload)) {
+      return payload.map((item) =>
+        this.looksLikePrice(item) ? this.toPublicPrice(item) : item,
+      );
+    }
+
     if (payload && typeof payload === "object" && payload.id) {
-      return this.toPublicVet(payload);
+      return this.looksLikePrice(payload)
+        ? this.toPublicPrice(payload)
+        : this.toPublicVet(payload);
     }
 
     return payload;
@@ -54,7 +59,6 @@ export class PublicVetPrivacyInterceptor implements NestInterceptor {
   private toPublicVet(vet: any) {
     const user = vet?.user
       ? {
-          id: vet.user.id,
           firstName: vet.user.firstName,
           lastName: vet.user.lastName,
           avatar: vet.user.avatar,
@@ -76,11 +80,62 @@ export class PublicVetPrivacyInterceptor implements NestInterceptor {
       city: vet.city,
       department: vet.department,
       distance: vet.distance,
-      prices: vet.prices,
-      schedules: vet.schedules,
-      reviews: vet.reviews,
+      prices: Array.isArray(vet.prices)
+        ? vet.prices.map((price: any) => this.toPublicPrice(price))
+        : undefined,
+      schedules: Array.isArray(vet.schedules)
+        ? vet.schedules.map((schedule: any) => this.toPublicSchedule(schedule))
+        : undefined,
+      reviews: Array.isArray(vet.reviews)
+        ? vet.reviews.map((review: any) => this.toPublicReview(review))
+        : undefined,
       completedAppointments: vet.completedAppointments,
       totalReviews: vet.totalReviews,
+    };
+  }
+
+  private looksLikePrice(value: any): boolean {
+    return Boolean(value && "serviceName" in value && "priceCop" in value);
+  }
+
+  private toPublicPrice(price: any) {
+    return {
+      id: price.id,
+      serviceName: price.serviceName,
+      priceCop: price.priceCop,
+      priceCtg: price.priceCtg,
+      isActive: price.isActive,
+    };
+  }
+
+  private toPublicSchedule(schedule: any) {
+    return {
+      id: schedule.id,
+      dayOfWeek: schedule.dayOfWeek,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+      slotDuration: schedule.slotDuration,
+      isActive: schedule.isActive,
+    };
+  }
+
+  private toPublicReview(review: any) {
+    const lastInitial = review?.client?.lastName
+      ? `${String(review.client.lastName).trim().charAt(0)}.`
+      : undefined;
+
+    return {
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      createdAt: review.createdAt,
+      client: review.client
+        ? {
+            firstName: review.client.firstName,
+            lastName: lastInitial,
+            avatar: review.client.avatar,
+          }
+        : undefined,
     };
   }
 }
