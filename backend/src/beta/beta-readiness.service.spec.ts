@@ -1,4 +1,5 @@
 import { VerificationStatus } from "@prisma/client";
+import { BETA_EVIDENCE_GATES } from "./beta-evidence.constants";
 import { BetaReadinessService } from "./beta-readiness.service";
 
 describe("BetaReadinessService", () => {
@@ -15,6 +16,31 @@ describe("BetaReadinessService", () => {
     isBookingEnabled: jest.fn(() => true),
   } as any;
 
+  const evidence = {
+    getPromotionSummary: jest.fn(),
+  } as any;
+
+  const verifiedEvidenceSummary = () => ({
+    program: "closed-beta-cartagena",
+    ledger: "audit_logs",
+    appendOnly: true,
+    totalGates: BETA_EVIDENCE_GATES.length,
+    verifiedGates: BETA_EVIDENCE_GATES.length,
+    pendingGates: 0,
+    conflictedGates: 0,
+    eligibleForOperatorActivation: true,
+    commercialLaunchAuthorized: false,
+    gates: BETA_EVIDENCE_GATES.map((gate) => ({
+      gate,
+      status: "VERIFIED",
+      approvedEvidenceCount: 1,
+      conflictCount: 0,
+      expiredCount: 0,
+      latestApprovedEvidenceId: `${gate}-evidence`,
+    })),
+    generatedAt: new Date().toISOString(),
+  });
+
   const originalSupportOwner = process.env.NVET_BETA_SUPPORT_OWNER;
   const originalSupportChannel = process.env.NVET_BETA_SUPPORT_CHANNEL;
 
@@ -26,7 +52,8 @@ describe("BetaReadinessService", () => {
     process.env.NVET_BETA_SUPPORT_CHANNEL = "configured-route";
     access.isEnabled.mockReturnValue(false);
     access.isBookingEnabled.mockReturnValue(true);
-    service = new BetaReadinessService(prisma, access);
+    evidence.getPromotionSummary.mockResolvedValue(verifiedEvidenceSummary());
+    service = new BetaReadinessService(prisma, access, evidence);
   });
 
   afterAll(() => {
@@ -42,7 +69,7 @@ describe("BetaReadinessService", () => {
     }
   });
 
-  it("reports ready-to-enable when all local machine gates pass without exposing identifiers", async () => {
+  it("reports ready-to-enable only when local and evidence gates pass", async () => {
     prisma.vetProfile.count.mockResolvedValue(3);
     access.getConfiguredClientCount.mockReturnValue(12);
 
@@ -61,16 +88,43 @@ describe("BetaReadinessService", () => {
     });
     expect(snapshot.localActivationReady).toBe(true);
     expect(snapshot.activation.machineActivationReady).toBe(true);
+    expect(snapshot.activation.operatorActivationEligible).toBe(true);
     expect(snapshot.activation.state).toBe("ready-to-enable");
     expect(snapshot.activation.blockingReasons).toEqual([]);
     expect(snapshot.activation.externalEvidenceRequired).toBe(true);
     expect(snapshot.activation.commercialLaunchAuthorized).toBe(false);
+    expect(snapshot.promotion.verifiedGates).toBe(BETA_EVIDENCE_GATES.length);
     expect(snapshot.cohort.configuredClients).toBe(12);
     expect(snapshot.vetCoverage.verifiedActiveVets).toBe(3);
     expect(snapshot.privacy.cohortHashesExposed).toBe(false);
     expect(JSON.stringify(snapshot)).not.toContain(
       "NVET_CLOSED_BETA_CLIENT_HASHES",
     );
+  });
+
+  it("keeps activation blocked when local gates pass but evidence is incomplete", async () => {
+    prisma.vetProfile.count.mockResolvedValue(3);
+    access.getConfiguredClientCount.mockReturnValue(12);
+    const summary = verifiedEvidenceSummary();
+    summary.gates[0] = {
+      ...summary.gates[0],
+      status: "PENDING",
+      approvedEvidenceCount: 0,
+      latestApprovedEvidenceId: null,
+    } as any;
+    evidence.getPromotionSummary.mockResolvedValue({
+      ...summary,
+      verifiedGates: BETA_EVIDENCE_GATES.length - 1,
+      pendingGates: 1,
+      eligibleForOperatorActivation: false,
+    });
+
+    const snapshot = await service.getCartagenaSnapshot();
+
+    expect(snapshot.localActivationReady).toBe(true);
+    expect(snapshot.activation.operatorActivationEligible).toBe(false);
+    expect(snapshot.activation.state).toBe("blocked");
+    expect(snapshot.promotion.blockingGates).toContain("rcPromoted");
   });
 
   it("blocks local activation when veterinarian coverage is insufficient", async () => {
@@ -114,7 +168,7 @@ describe("BetaReadinessService", () => {
     );
   });
 
-  it("reports active only when closed beta and booking are enabled with all machine gates satisfied", async () => {
+  it("reports active only when beta is enabled and operator activation is eligible", async () => {
     prisma.vetProfile.count.mockResolvedValue(4);
     access.getConfiguredClientCount.mockReturnValue(20);
     access.isEnabled.mockReturnValue(true);
@@ -123,11 +177,11 @@ describe("BetaReadinessService", () => {
     const snapshot = await service.getCartagenaSnapshot();
 
     expect(snapshot.activation.state).toBe("active");
-    expect(snapshot.activation.machineActivationReady).toBe(true);
+    expect(snapshot.activation.operatorActivationEligible).toBe(true);
     expect(snapshot.activation.commercialLaunchAuthorized).toBe(false);
   });
 
-  it("reports paused when the booking kill switch is active", async () => {
+  it("reports paused when the booking kill switch is active after eligibility", async () => {
     prisma.vetProfile.count.mockResolvedValue(4);
     access.getConfiguredClientCount.mockReturnValue(20);
     access.isEnabled.mockReturnValue(true);
@@ -139,7 +193,7 @@ describe("BetaReadinessService", () => {
     expect(snapshot.runtime.bookingEnabled).toBe(false);
   });
 
-  it("reports misconfigured if beta is enabled before local machine gates pass", async () => {
+  it("reports misconfigured if beta is enabled before all activation gates pass", async () => {
     prisma.vetProfile.count.mockResolvedValue(1);
     access.getConfiguredClientCount.mockReturnValue(0);
     access.isEnabled.mockReturnValue(true);

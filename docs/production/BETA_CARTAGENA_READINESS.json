@@ -20,7 +20,13 @@
       "misconfigured"
     ],
     "machineActivationIncludesSupportReadiness": true,
-    "machineReadinessNeverAuthorizesCommercialLaunch": true
+    "machineReadinessNeverAuthorizesCommercialLaunch": true,
+    "evidenceControlPlaneSummaryEndpoint": "GET /api/beta/evidence/summary",
+    "evidenceControlPlaneHistoryEndpoint": "GET /api/beta/evidence/history",
+    "evidenceLedger": "audit_logs",
+    "evidenceLedgerAppendOnly": true,
+    "operatorActivationRequiresAllEvidenceGates": true,
+    "manifestEvidenceNeverAutoMutated": true
   },
   "requiredEvidence": {
     "rcPromoted": {

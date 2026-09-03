@@ -15,6 +15,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
     { id: 'vet', label: 'Vet Tester', icon: '⚕' },
     { id: 'tiers', label: 'Planes', icon: '◆' },
     { id: 'accounting', label: 'Contabilidad', icon: '₱' },
+    { id: 'evidence', label: 'Evidencia', icon: '✓' },
     { id: 'tracking', label: 'Tracking', icon: '⊙' },
     { id: 'mobile', label: 'Mobile', icon: '📱' },
   ]
