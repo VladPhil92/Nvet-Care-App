@@ -104,6 +104,12 @@ includes(sidebar, "id: 'evidence'", 'Dashboard sidebar')
 includes(page, "'/beta/evidence/summary'", 'Evidence dashboard')
 includes(page, "'/beta/evidence/history'", 'Evidence dashboard')
 includes(page, "'/beta/evidence'", 'Evidence dashboard')
+includes(page, "'/beta/activation'", 'Activation dashboard')
+includes(page, "'/beta/activation/authorize'", 'Activation dashboard')
+includes(page, "'/beta/activation/revoke'", 'Activation dashboard')
+includes(page, 'Autorizar beta controlada', 'Activation dashboard')
+includes(page, 'production · cuenta para activación', 'Activation dashboard')
+includes(page, 'staging · solo informativa', 'Activation dashboard')
 
 if (manifest.policy?.evidenceLedger !== 'audit_logs') {
   fail('Manifest evidenceLedger must be audit_logs.')
@@ -137,5 +143,5 @@ if (manifest.policy?.manifestEvidenceNeverAutoMutated !== true) {
 }
 
 console.log(
-  `Beta activation control contract valid: ${codeGates.length} production gates, append-only evidence + authorization ledgers, booking fail-closed.`,
+  `Beta activation control contract valid: ${codeGates.length} production gates, append-only evidence + authorization ledgers, booking fail-closed, admin activation UI wired.`,
 )
