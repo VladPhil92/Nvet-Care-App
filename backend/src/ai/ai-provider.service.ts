@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { randomUUID } from "node:crypto";
 
 interface GenerateStructuredInput {
   schemaName: string;
@@ -64,6 +65,7 @@ export class AiProviderService {
       this.config.get<string>("AI_ASSIST_TIMEOUT_MS") || 15000,
     );
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const clientRequestId = `nvet-ai-${randomUUID()}`;
 
     try {
       const response = await fetch(`${baseUrl}/responses`, {
@@ -72,6 +74,7 @@ export class AiProviderService {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
+          "X-Client-Request-Id": clientRequestId,
         },
         body: JSON.stringify({
           model: this.getModel(),
@@ -90,10 +93,12 @@ export class AiProviderService {
         }),
       });
 
+      const providerRequestId =
+        response.headers.get("x-request-id") || "missing";
       const body = (await response.json()) as OpenAiResponseBody;
       if (!response.ok) {
         this.logger.warn(
-          `AI provider request failed status=${response.status} model=${this.getModel()}`,
+          `AI provider request failed status=${response.status} model=${this.getModel()} clientRequestId=${clientRequestId} providerRequestId=${providerRequestId}`,
         );
         throw new BadGatewayException({
           code: "AI_PROVIDER_ERROR",
@@ -111,7 +116,7 @@ export class AiProviderService {
 
       if (!outputText) {
         this.logger.warn(
-          `AI provider returned no structured output model=${this.getModel()}`,
+          `AI provider returned no structured output model=${this.getModel()} clientRequestId=${clientRequestId} providerRequestId=${providerRequestId}`,
         );
         throw new BadGatewayException({
           code: "AI_EMPTY_RESPONSE",
@@ -123,7 +128,7 @@ export class AiProviderService {
         return JSON.parse(outputText) as T;
       } catch {
         this.logger.warn(
-          `AI provider returned invalid JSON model=${this.getModel()}`,
+          `AI provider returned invalid JSON model=${this.getModel()} clientRequestId=${clientRequestId} providerRequestId=${providerRequestId}`,
         );
         throw new BadGatewayException({
           code: "AI_INVALID_RESPONSE",
@@ -138,13 +143,16 @@ export class AiProviderService {
         throw error;
       }
       if (error instanceof Error && error.name === "AbortError") {
+        this.logger.warn(
+          `AI provider timeout model=${this.getModel()} clientRequestId=${clientRequestId}`,
+        );
         throw new ServiceUnavailableException({
           code: "AI_TIMEOUT",
           message: "La asistencia IA tardó demasiado en responder.",
         });
       }
       this.logger.error(
-        "Unexpected AI provider failure",
+        `Unexpected AI provider failure clientRequestId=${clientRequestId}`,
         error instanceof Error ? error.stack : undefined,
       );
       throw new BadGatewayException({

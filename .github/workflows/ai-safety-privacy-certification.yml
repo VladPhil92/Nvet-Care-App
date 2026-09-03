@@ -1,0 +1,40 @@
+name: AI Safety & Privacy Certification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/ai/**'
+      - 'backend/src/auth/guards/verified-vet.guard.ts'
+      - 'scripts/ai-safety-privacy-certification-gate.mjs'
+      - '.github/workflows/ai-safety-privacy-certification.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/ai/**'
+      - 'backend/src/auth/guards/verified-vet.guard.ts'
+      - 'scripts/ai-safety-privacy-certification-gate.mjs'
+      - '.github/workflows/ai-safety-privacy-certification.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-safety-privacy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: AI Safety & Privacy Certification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+
+      - name: Enforce AI clinical safety and privacy boundaries
+        run: node scripts/ai-safety-privacy-certification-gate.mjs
