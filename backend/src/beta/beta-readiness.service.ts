@@ -1,10 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { VerificationStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { BETA_LEGAL_DOCUMENTS } from "./beta-legal.constants";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 
 const MAX_INITIAL_CLIENTS = 50;
 const MIN_VERIFIED_VETS = 3;
+const CRITICAL_INCIDENT_TARGET_MINUTES = 30;
 
 @Injectable()
 export class BetaReadinessService {
@@ -30,6 +32,12 @@ export class BetaReadinessService {
     const cohortConfigured = configuredClients > 0;
     const cohortWithinLimit = configuredClients <= MAX_INITIAL_CLIENTS;
     const vetCoverageSatisfied = verifiedActiveVets >= MIN_VERIFIED_VETS;
+    const supportOwnerConfigured = Boolean(
+      process.env.NVET_BETA_SUPPORT_OWNER?.trim(),
+    );
+    const supportChannelConfigured = Boolean(
+      process.env.NVET_BETA_SUPPORT_CHANNEL?.trim(),
+    );
 
     return {
       phase: 12,
@@ -50,11 +58,24 @@ export class BetaReadinessService {
         minimumRequired: MIN_VERIFIED_VETS,
         satisfied: vetCoverageSatisfied,
       },
+      legal: {
+        termsVersion: BETA_LEGAL_DOCUMENTS.terms.version,
+        privacyVersion: BETA_LEGAL_DOCUMENTS.privacy.version,
+        effectiveAt: BETA_LEGAL_DOCUMENTS.effectiveAt,
+        explicitAcceptanceEnforcedForBooking: true,
+      },
+      support: {
+        ownerConfigured: supportOwnerConfigured,
+        channelConfigured: supportChannelConfigured,
+        configured: supportOwnerConfigured && supportChannelConfigured,
+        criticalIncidentTargetMinutes: CRITICAL_INCIDENT_TARGET_MINUTES,
+      },
       localActivationReady:
         cohortConfigured && cohortWithinLimit && vetCoverageSatisfied,
       privacy: {
         rawClientIdentifiersExposed: false,
         cohortHashesExposed: false,
+        supportContactExposed: false,
       },
       generatedAt: new Date().toISOString(),
     } as const;
