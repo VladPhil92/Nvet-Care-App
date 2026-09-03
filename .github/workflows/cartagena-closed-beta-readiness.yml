@@ -8,14 +8,19 @@ on:
       - 'backend/src/appointments/appointments.service.ts'
       - 'backend/src/appointments/appointments.module.ts'
       - 'backend/.env.example'
+      - 'dashboard/src/App.tsx'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'dashboard/src/pages/BetaEvidencePage.tsx'
       - 'docs/production/BETA_CARTAGENA_READINESS.json'
       - 'docs/production/RC_READINESS.json'
       - 'docs/production/CARTAGENA_BETA_OPERATIONS_RUNBOOK.md'
       - 'docs/PHASE_12_CARTAGENA_CLOSED_BETA.md'
       - 'docs/PHASE_12C_BETA_OPERATIONAL_ACTIVATION_READINESS.md'
+      - 'docs/PHASE_12D_BETA_EVIDENCE_CONTROL_PLANE.md'
       - 'scripts/verify-cartagena-beta-readiness.mjs'
       - 'scripts/verify-cartagena-beta-evidence-inheritance.mjs'
       - 'scripts/verify-beta-operational-activation-readiness.mjs'
+      - 'scripts/verify-beta-evidence-control-plane.mjs'
       - '.github/workflows/cartagena-closed-beta-readiness.yml'
   schedule:
     - cron: '29 12 * * *'
@@ -54,6 +59,8 @@ jobs:
         run: node scripts/verify-cartagena-beta-evidence-inheritance.mjs
       - name: Verify operational activation-state contract
         run: node scripts/verify-beta-operational-activation-readiness.mjs
+      - name: Verify evidence control plane contract
+        run: node scripts/verify-beta-evidence-control-plane.mjs
 
   audit:
     name: Audit live Cartagena beta evidence
@@ -74,5 +81,7 @@ jobs:
         run: node scripts/verify-cartagena-beta-evidence-inheritance.mjs
       - name: Verify operational activation-state contract
         run: node scripts/verify-beta-operational-activation-readiness.mjs
+      - name: Verify evidence control plane contract
+        run: node scripts/verify-beta-evidence-control-plane.mjs
       - name: Audit current main beta evidence
         run: node scripts/verify-cartagena-beta-readiness.mjs --runtime
