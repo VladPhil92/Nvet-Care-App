@@ -18,6 +18,7 @@ import { AppointmentsService } from "./appointments.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { EmailVerifiedGuard } from "../auth/guards/email-verified.guard";
+import { VerifiedVetGuard } from "../auth/guards/verified-vet.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { IdempotencyService } from "../common/security/idempotency.service";
 import { UserRole } from "@prisma/client";
@@ -52,7 +53,7 @@ export class AppointmentsController {
   }
 
   @Get("today")
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   async getTodayAppointments(@Request() req) {
     return this.appointmentsService.getTodayAppointments(req.user.vetProfileId);
@@ -168,7 +169,7 @@ export class AppointmentsController {
   }
 
   @Patch(":id/status")
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   async updateAppointmentStatus(
     @Param("id") id: string,
@@ -191,7 +192,7 @@ export class AppointmentsController {
    * Update vet GPS location during an in-progress appointment
    */
   @Patch(":id/location")
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   async updateVetLocation(
     @Param("id") id: string,
@@ -209,10 +210,10 @@ export class AppointmentsController {
 
   /**
    * POST /appointments/:id/clinical-notes
-   * Add clinical notes (diagnosis, treatment) - vets only
+   * Add clinical notes (diagnosis, treatment) - verified vets only
    */
   @Post(":id/clinical-notes")
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   async addClinicalNotes(
     @Param("id") id: string,
