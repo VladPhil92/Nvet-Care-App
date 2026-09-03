@@ -25,10 +25,12 @@ env:
   RAILWAY_PRODUCTION_ENVIRONMENT_ID: 7f93c67e-5a63-4aae-80b6-90979a9b60b1
   RAILWAY_EXPECTED_PROJECT_NAME: Nvet Care App
   RAILWAY_PRODUCTION_POSTGRES_SERVICE: Postgres
+  RAILWAY_MAX_BACKUP_AGE_HOURS: '48'
+  RAILWAY_MIN_BACKUP_RETENTION_HOURS: '168'
 
 jobs:
   audit-production-backups:
-    name: Verify Railway production backup schedules
+    name: Verify Railway production backup schedules and freshness
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 5
@@ -55,7 +57,7 @@ jobs:
             exit 1
           fi
 
-      - name: Audit provider backup configuration
+      - name: Audit provider backup configuration and freshness
         run: node scripts/audit-railway-production-backups.mjs
 
       - name: Upload redacted provider evidence
@@ -83,12 +85,15 @@ jobs:
           console.log(`- Volume: ${evidence.postgres.volumeName}`);
           console.log(`- Configured backup schedules: ${evidence.scheduleCount}`);
           console.log(`- Visible backups: ${evidence.backupCount}`);
+          console.log(`- Latest backup age: ${evidence.latestBackup?.ageHours ?? 'n/a'} h`);
+          console.log(`- Required retention: ${evidence.policy?.minRetentionHours ?? 'n/a'} h`);
+          console.log(`- Freshness policy: <= ${evidence.policy?.maxBackupAgeHours ?? 'n/a'} h`);
           console.log(`- Verdict: **${evidence.verdict}**`);
           NODE
             else
               echo '- No evidence artifact was produced; inspect the failed audit step.'
             fi
             echo ''
-            echo '> This workflow is read-only. It can verify that Railway automatic volume-backup schedules exist, but it never creates, deletes, locks or restores a backup.'
+            echo '> This workflow is read-only. Verification requires a configured Railway backup schedule, at least one visible recent backup and minimum retention.'
             echo '> A provider-level restore drill and real-bank-transfer evidence remain independent RC gates.'
           } >> "$GITHUB_STEP_SUMMARY"

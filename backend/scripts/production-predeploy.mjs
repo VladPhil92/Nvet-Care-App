@@ -24,63 +24,12 @@ const shouldSeedIsolatedStaging =
 
 const steps = [
   {
-    name: 'Sincronizar Prisma schema (sin aceptar pérdida de datos)',
-    command: 'npx',
-    args: [
-      'prisma',
-      'db',
-      'push',
-      '--schema',
-      'prisma/schema.prisma',
-      '--skip-generate',
-    ],
-  },
-  {
-    name: 'Aplicar identidad SUPERADMIN canónica de CTG One',
-    command: 'npx',
-    args: [
-      'prisma',
-      'db',
-      'execute',
-      '--file',
-      'prisma/migrations/manual/ctg_superadmin_identity_v1.sql',
-      '--schema',
-      'prisma/schema.prisma',
-    ],
-  },
-  {
-    name: 'Aplicar guard de integridad de reservas',
-    command: 'npx',
-    args: [
-      'prisma',
-      'db',
-      'execute',
-      '--file',
-      'prisma/migrations/manual/booking_integrity_v1.sql',
-      '--schema',
-      'prisma/schema.prisma',
-    ],
-  },
-  {
-    name: 'Aplicar almacenamiento privado de ubicación en vivo',
-    command: 'npx',
-    args: [
-      'prisma',
-      'db',
-      'execute',
-      '--file',
-      'prisma/migrations/manual/live_location_v1.sql',
-      '--schema',
-      'prisma/schema.prisma',
-    ],
+    name: 'Aplicar convergencia versionada de base de datos',
+    command: 'node',
+    args: ['scripts/database-migrate.mjs'],
   },
 ];
 
-// Deployment readiness and test-fixture readiness are separate contracts.
-// Staging may deploy schema/runtime safely even when its secret-backed E2E
-// identities are not installed yet. In that case the deploy succeeds but the
-// Staging E2E / Web Production Convergence gates remain fail-closed. This avoids
-// turning missing test credentials into an application deployment outage.
 if (shouldSeedIsolatedStaging) {
   steps.push({
     name: 'Sembrar fixtures E2E deterministas en staging aislado',
@@ -121,11 +70,11 @@ for (const step of steps) {
 if (process.env.NODE_ENV === 'staging') {
   console.log(
     shouldSeedIsolatedStaging
-      ? '\n✅ Predeploy de staging completado y fixtures E2E sembrados.'
-      : '\n✅ Predeploy de staging completado sin fixtures; el gate E2E permanece independiente y fail-closed.',
+      ? '\n✅ Predeploy de staging completado con migraciones versionadas y fixtures E2E.'
+      : '\n✅ Predeploy de staging completado con migraciones versionadas; fixtures pendientes de su gate independiente.',
   );
 } else {
   console.log(
-    '\n✅ Predeploy de producción completado sin aceptar pérdida de datos.',
+    '\n✅ Predeploy de producción completado mediante Prisma Migrate + ledger SQL inmutable.',
   );
 }

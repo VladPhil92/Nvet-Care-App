@@ -40,7 +40,8 @@ lerna-debug.log*
 .env.test
 
 # Prisma
-prisma/migrations/**/migration.sql
+# Migration SQL is intentionally versioned. Ignoring migration.sql makes
+# production schema reconstruction impossible and forces unsafe db-push drift.
 
 # Temp files
 *.swp
