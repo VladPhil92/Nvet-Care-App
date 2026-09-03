@@ -1,9 +1,7 @@
 # CI workflow for Nvet Care Platform monorepo.
 #
-# Jobs en paralelo para backend, mobile, Android native y dashboard.
+# Jobs en paralelo para security convergence, backend, mobile, Android native y dashboard.
 # El repositorio usa npm workspaces y un package-lock.json canónico en la raíz.
-# Android Native es el gate más costoso; se ejecuta solo cuando el cambio
-# puede afectar el artefacto Android, manteniendo fail-closed ante refs dudosas.
 name: CI
 
 on:
@@ -50,7 +48,6 @@ jobs:
             HEAD_SHA="$GITHUB_SHA"
           fi
 
-          # New branches / malformed or unavailable refs fail closed: run Android.
           if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" || "$BASE_SHA" =~ ^0+$ ]] || \
              ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || \
              ! git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
@@ -69,6 +66,21 @@ jobs:
             echo "No Android-impacting paths changed; expensive native packaging can be skipped safely."
             echo "android_native=false" >> "$GITHUB_OUTPUT"
           fi
+
+  security-convergence:
+    name: Security Convergence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enforce secure canonical runtime boundaries
+        run: node scripts/security-convergence-gate.mjs
 
   backend:
     name: Backend (NestJS)
@@ -216,7 +228,6 @@ jobs:
         working-directory: mobile/android
         env:
           GOOGLE_MAPS_ANDROID_API_KEY: ci-placeholder
-          # CI compila un AAB técnico no firmado/no distribuible. El release real exige URL explícita.
           NVET_API_URL: https://ci.invalid/api
         run: ./gradlew assembleDebug assembleAndroidTest bundleRelease -DtestBuildType=debug --no-daemon --stacktrace
 
@@ -279,13 +290,17 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [changes, backend, mobile, android-native, dashboard]
+    needs: [changes, security-convergence, backend, mobile, android-native, dashboard]
     if: always()
     steps:
       - name: Verify all required jobs passed
         run: |
           if [[ "${{ needs.changes.result }}" != "success" ]]; then
             echo "Change classifier failed: ${{ needs.changes.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.security-convergence.result }}" != "success" ]]; then
+            echo "Security Convergence failed: ${{ needs.security-convergence.result }}"
             exit 1
           fi
           if [[ "${{ needs.backend.result }}" != "success" ]]; then

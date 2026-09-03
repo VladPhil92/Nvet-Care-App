@@ -1,182 +1,135 @@
-/**
- * SecureStorage — almacenamiento de tokens sensibles con keychain nativo.
- *
- * Por qué no usamos AsyncStorage para tokens:
- *   - AsyncStorage almacena en `NSUserDefaults` (iOS) o `SharedPreferences` (Android)
- *     que NO están cifrados y son leíbles por cualquier app con acceso al sandbox.
- *   - Tokens robados → atacante puede impersonar al usuario completo.
- *
- * Por qué usamos Keychain:
- *   - iOS Keychain: cifrado con la clave del Secure Enclave del dispositivo
- *   - Android Keystore: hardware-backed key cuando está disponible
- *   - Resistente a ataques en dispositivos rooted/jailbroken
- *
- * Estrategia:
- *   - Tokens (access + refresh): Keychain
- *   - User profile (cache): AsyncStorage (no sensible, mejora UX offline)
- *   - 2FA secret encriptado intermedio: SessionStorage en memoria (nunca persistido)
- *
- * Fallback: si `react-native-keychain` no está disponible (e.g. tests jest),
- * se usa AsyncStorage con prefijo `@secure:` (NO seguro, solo para dev/test).
- */
-
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { NativeModules, Platform } from 'react-native'
 
 /**
- * Interfaz del Keychain — definida aquí para no requerir import en tests.
- * En runtime real, importamos `react-native-keychain` solo si está disponible.
+ * SecureStorage — almacenamiento canónico de sesión.
+ *
+ * Android release/dev usa un módulo nativo propio respaldado por Android
+ * Keystore. Los tokens se cifran con AES-256-GCM y únicamente el ciphertext
+ * se persiste en SharedPreferences. No existe fallback a AsyncStorage en
+ * runtime: si el vault seguro no está disponible, la autenticación falla
+ * cerrada en vez de degradar silenciosamente la seguridad.
+ *
+ * iOS no tiene proyecto nativo certificado todavía (track phase-14). Cuando
+ * exista, deberá implementar la misma interfaz usando Keychain antes de
+ * habilitar un release iOS.
  */
-type KeychainModule = {
-  setGenericPassword: (
-    username: string,
-    password: string,
-    options?: {
-      service?: string
-      accessControl?: string
-      accessible?: string
-    },
-  ) => Promise<unknown>
-  getGenericPassword: (options?: {
-    service?: string
-  }) => Promise<{ username: string; password: string } | false>
-  resetGenericPassword: (options?: { service?: string }) => Promise<boolean>
-  ACCESSIBLE: Record<string, string>
-  ACCESS_CONTROL: Record<string, string>
-}
 
-const SERVICE = 'com.nvetcare.tokens'
-const FALLBACK_PREFIX = '@secure:'
-
-let keychainModule: KeychainModule | null | undefined
-
-/**
- * Lazy load del módulo. Returns null si no está disponible (e.g. en jest).
- */
-function getKeychain(): KeychainModule | null {
-  if (keychainModule !== undefined) return keychainModule
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    keychainModule = require('react-native-keychain') as KeychainModule
-    return keychainModule
-  } catch {
-    keychainModule = null
-    return null
-  }
-}
-
-interface TokenBundle {
+type TokenBundle = {
   accessToken: string
   refreshToken: string
 }
 
+type NativeSecureStorage = {
+  setTokens(accessToken: string, refreshToken: string): Promise<void>
+  getTokens(): Promise<TokenBundle | null>
+  clearTokens(): Promise<void>
+}
+
+const nativeVault = NativeModules.NvetSecureStorage as NativeSecureStorage | undefined
+let testTokens: TokenBundle | null = null
+
+function isTestEnvironment(): boolean {
+  return typeof process !== 'undefined' && process.env.NODE_ENV === 'test'
+}
+
+function requireNativeVault(): NativeSecureStorage {
+  if (nativeVault) return nativeVault
+
+  if (isTestEnvironment()) {
+    return {
+      async setTokens(accessToken: string, refreshToken: string) {
+        testTokens = { accessToken, refreshToken }
+      },
+      async getTokens() {
+        return testTokens
+      },
+      async clearTokens() {
+        testTokens = null
+      },
+    }
+  }
+
+  throw new Error(
+    `SECURE_STORAGE_UNAVAILABLE: Nvet requires native protected token storage on ${Platform.OS}.`,
+  )
+}
+
 export const secureStorage = {
-  /**
-   * Guarda los tokens en el keychain con la cuenta como `username`.
-   * Si keychain no está disponible, hace fallback a AsyncStorage.
-   */
   async setTokens(tokens: TokenBundle): Promise<void> {
-    const kc = getKeychain()
-    const payload = JSON.stringify(tokens)
-
-    if (kc) {
-      await kc.setGenericPassword('nvetcare-user', payload, {
-        service: SERVICE,
-        // ACCESSIBLE.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY:
-        //  - Solo accesible tras el primer unlock del dispositivo
-        //  - No se sincroniza a iCloud / otros devices del usuario
-        accessible: kc.ACCESSIBLE?.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
-      })
-      return
-    }
-    await AsyncStorage.setItem(`${FALLBACK_PREFIX}tokens`, payload)
+    await requireNativeVault().setTokens(tokens.accessToken, tokens.refreshToken)
   },
 
-  /**
-   * Lee los tokens del keychain. Returns null si no hay sesión activa.
-   */
   async getTokens(): Promise<TokenBundle | null> {
-    const kc = getKeychain()
-    if (kc) {
-      const result = await kc.getGenericPassword({ service: SERVICE })
-      if (!result) return null
-      try {
-        return JSON.parse(result.password) as TokenBundle
-      } catch {
-        // payload corrupto, limpiar
-        await this.clearTokens()
-        return null
-      }
-    }
-    const raw = await AsyncStorage.getItem(`${FALLBACK_PREFIX}tokens`)
-    if (!raw) return null
-    try {
-      return JSON.parse(raw) as TokenBundle
-    } catch {
-      return null
-    }
+    return requireNativeVault().getTokens()
   },
 
-  /**
-   * Borra los tokens (logout o token revocado por el servidor).
-   */
   async clearTokens(): Promise<void> {
-    const kc = getKeychain()
-    if (kc) {
-      await kc.resetGenericPassword({ service: SERVICE })
-      return
-    }
-    await AsyncStorage.removeItem(`${FALLBACK_PREFIX}tokens`)
+    await requireNativeVault().clearTokens()
   },
 
-  /**
-   * Acceso rápido al accessToken sin parsear todo el bundle.
-   * Para usar en interceptors HTTP.
-   */
   async getAccessToken(): Promise<string | null> {
     const tokens = await this.getTokens()
     return tokens?.accessToken ?? null
   },
 
-  /**
-   * Acceso rápido al refreshToken (usado por el refresh interceptor).
-   */
   async getRefreshToken(): Promise<string | null> {
     const tokens = await this.getTokens()
     return tokens?.refreshToken ?? null
   },
 
-  /**
-   * Indica si la implementación actual es REALMENTE segura (keychain) o
-   * fallback (AsyncStorage). El componente Settings puede mostrar warning si
-   * `isSecure() === false` para alertar al usuario.
-   */
   isSecure(): boolean {
-    return getKeychain() !== null
+    return Boolean(nativeVault)
   },
 }
 
 // =====================================================================
-// Profile cache — AsyncStorage (no sensible)
+// Profile cache — AsyncStorage (non-secret UI cache only)
 // =====================================================================
 
-/**
- * Cache del perfil del usuario para mostrar UI offline.
- * NO contiene credenciales, solo nombre/email/avatar.
- */
+export interface CachedProfile {
+  id: string
+  email: string
+  firstName?: string
+  lastName?: string
+  role?: string
+  phone?: string
+  avatar?: string | null
+  vetProfile?: unknown
+}
+
 export const profileCache = {
-  async set(profile: { id: string; email: string; firstName: string; lastName: string; avatar?: string | null }) {
+  async set(profile: CachedProfile): Promise<void> {
     await AsyncStorage.setItem('@profile', JSON.stringify(profile))
   },
-  async get(): Promise<{ id: string; email: string; firstName: string; lastName: string; avatar?: string } | null> {
+
+  async get(): Promise<CachedProfile | null> {
     const raw = await AsyncStorage.getItem('@profile')
     if (!raw) return null
     try {
-      return JSON.parse(raw)
+      return JSON.parse(raw) as CachedProfile
     } catch {
+      await AsyncStorage.removeItem('@profile')
       return null
     }
   },
+
   async clear(): Promise<void> {
     await AsyncStorage.removeItem('@profile')
   },
+}
+
+/**
+ * One-way cleanup for releases that previously stored session tokens in
+ * AsyncStorage. The values are deliberately discarded rather than migrated:
+ * plaintext legacy tokens must not be copied into the new vault because a
+ * potentially exposed session should be re-authenticated and rotated.
+ */
+export async function purgeLegacyPlaintextSession(): Promise<void> {
+  await AsyncStorage.multiRemove([
+    'accessToken',
+    'refreshToken',
+    'user',
+    '@secure:tokens',
+  ])
 }

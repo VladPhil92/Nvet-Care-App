@@ -34,6 +34,8 @@ export interface SendResult {
   ok: boolean;
   providerMessageId?: string;
   error?: string;
+  /** Compatibility alias for legacy callers; new code should prefer `error`. */
+  reason?: string;
   driver: string;
 }
 
@@ -142,13 +144,14 @@ export class MailService {
     dashboardLink?: string;
   }): Promise<SendResult> {
     const rendered = vetApprovalTemplate(params);
-    return this.send({
+    const result = await this.send({
       to: params.to,
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
       category: "vet_verification_approved",
     });
+    return result.ok ? result : { ...result, reason: result.error };
   }
 
   // ============================================================

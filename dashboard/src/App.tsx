@@ -154,13 +154,36 @@ function UnknownRole() {
   )
 }
 
+function SessionRestoreScreen() {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        background: T.canvas,
+        color: T.inkMuted,
+        fontFamily: F.sans,
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      Restaurando sesión segura…
+    </div>
+  )
+}
+
 function AppContent() {
   const [authPage, setAuthPage] = useState<PublicAuthPage>('login')
-  const { user, isAuthenticated, checkAuth } = useAuthStore()
+  const { user, isAuthenticated, isLoading, checkAuth } = useAuthStore()
 
   useEffect(() => {
-    checkAuth()
+    void checkAuth()
   }, [checkAuth])
+
+  if (isLoading) {
+    return <SessionRestoreScreen />
+  }
 
   if (!isAuthenticated || !user) {
     return authPage === 'register' ? (

@@ -7,8 +7,10 @@ import {
   Param,
   UseGuards,
   Req,
+  Res,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from "@nestjs/common";
 import { Throttle, seconds } from "@nestjs/throttler";
 
@@ -30,32 +32,10 @@ import {
   CtgIdentityExchangeDto,
 } from "./dto/auth.dto";
 
-/**
- * AuthController — endpoints de autenticación production-grade.
- *
- * Rate limiting agresivo en endpoints sensibles (register, login, forgot-password)
- * para mitigar brute force y email enumeration.
- *
- * Mapa de endpoints:
- *   POST   /auth/register                  — Crear cuenta
- *   POST   /auth/login                     — Login (con 2FA opcional)
- *   POST   /auth/login/recovery            — Login con recovery code (perdió TOTP)
- *   POST   /auth/ctg-identity-exchange     — Login vía sesión CTG One (docs/identity/ADR-001)
- *   POST   /auth/refresh                   — Renovar access token
- *   POST   /auth/logout                    — Cerrar sesión actual
- *   POST   /auth/logout-all                — Cerrar TODAS las sesiones
- *   POST   /auth/forgot-password           — Iniciar reset de contraseña
- *   POST   /auth/reset-password            — Completar reset con token de email
- *   POST   /auth/change-password           — Cambiar password autenticado
- *   POST   /auth/2fa/enroll                — Generar QR + secret de 2FA
- *   POST   /auth/2fa/confirm               — Confirmar enrollment (escaneó QR)
- *   POST   /auth/2fa/disable               — Deshabilitar 2FA
- *   POST   /auth/send-verification-email   — Solicitar nuevo email de verificación
- *   POST   /auth/verify-email              — Activar cuenta con token recibido
- *   GET    /auth/me                        — Obtener usuario actual
- *   GET    /auth/sessions                  — Listar sesiones activas
- *   DELETE /auth/sessions/:id              — Revocar sesión específica
- */
+const WEB_REFRESH_COOKIE = "nvet_refresh";
+const WEB_SESSION_HEADER = "x-nvet-session-mode";
+const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 @Controller("auth")
 export class AuthController {
   constructor(
@@ -71,34 +51,45 @@ export class AuthController {
   @Post("register")
   @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() dto: RegisterDto, @Req() req: any) {
-    return this.authService.register(dto, this.extractContext(req));
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const result = await this.authService.register(
+      dto,
+      this.extractContext(req),
+    );
+    return this.finalizeSessionResponse(result, req, res);
   }
 
   @Post("login")
   @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto, @Req() req: any) {
-    return this.authService.login(dto, this.extractContext(req));
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const result = await this.authService.login(dto, this.extractContext(req));
+    return this.finalizeSessionResponse(result, req, res);
   }
 
   @Post("login/recovery")
   @Throttle({ default: { limit: 3, ttl: seconds(300) } })
   @HttpCode(HttpStatus.OK)
-  async loginWithRecovery(@Body() dto: TwoFactorRecoveryDto, @Req() req: any) {
-    return this.authService.loginWithRecoveryCode(
+  async loginWithRecovery(
+    @Body() dto: TwoFactorRecoveryDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const result = await this.authService.loginWithRecoveryCode(
       dto,
       this.extractContext(req),
     );
+    return this.finalizeSessionResponse(result, req, res);
   }
 
-  /**
-   * Server-to-server únicamente (BFF de ctgone.com o una app nativa con su
-   * propia sesión Supabase) -- nunca un fetch directo desde una pestaña de
-   * navegador, ver THREAT_MODEL.md § New trust boundary. Rate limit igual
-   * de estricto que login: sigue siendo alcanzable por cualquiera que
-   * tenga un access token de Supabase válido.
-   */
   @Post("ctg-identity-exchange")
   @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   @HttpCode(HttpStatus.OK)
@@ -113,38 +104,64 @@ export class AuthController {
   // TOKEN MANAGEMENT
   // ============================================================
 
+  /**
+   * Native clients send refreshToken in the body. Browser dashboards opt into
+   * cookie mode with X-Nvet-Session-Mode: cookie and never expose the refresh
+   * token to JavaScript. Cookie mode requires the custom header so a third-party
+   * page cannot silently use the refresh cookie without a CORS preflight.
+   */
   @Post("refresh")
   @Throttle({ default: { limit: 30, ttl: seconds(60) } })
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() dto: RefreshTokenDto, @Req() req: any) {
-    return this.authService.refreshToken(
-      dto.refreshToken,
+  async refresh(
+    @Body() dto: RefreshTokenDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const cookieMode = this.isCookieSession(req);
+    const refreshToken =
+      dto.refreshToken ||
+      (cookieMode ? this.readCookie(req, WEB_REFRESH_COOKIE) : undefined);
+
+    if (!refreshToken) {
+      throw new BadRequestException("Refresh token requerido");
+    }
+
+    const result = await this.authService.refreshToken(
+      refreshToken,
       this.extractContext(req),
     );
+    return this.finalizeSessionResponse(result, req, res);
   }
 
   @Post("logout")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@Req() req: any, @Body("refreshToken") refreshToken?: string) {
-    await this.authService.logout(req.user.id, refreshToken);
+  async logout(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+    @Body("refreshToken") refreshToken?: string,
+  ) {
+    const cookieToken = this.isCookieSession(req)
+      ? this.readCookie(req, WEB_REFRESH_COOKIE)
+      : undefined;
+    await this.authService.logout(req.user.id, refreshToken || cookieToken);
+    this.clearRefreshCookie(res);
   }
 
   @Post("logout-all")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async logoutAll(@Req() req: any) {
-    return this.authService.logoutAllSessions(req.user.id);
+  async logoutAll(@Req() req: any, @Res({ passthrough: true }) res: any) {
+    const result = await this.authService.logoutAllSessions(req.user.id);
+    this.clearRefreshCookie(res);
+    return result;
   }
 
   // ============================================================
-  // PASSWORD RESET (público) + CHANGE (autenticado)
+  // PASSWORD RESET + CHANGE
   // ============================================================
 
-  /**
-   * Inicia el flujo de recuperación. Rate limit muy estricto:
-   * 3 intentos por 15min por IP → mitiga email-enumeration y email-bombing.
-   */
   @Post("forgot-password")
   @Throttle({ default: { limit: 3, ttl: seconds(900) } })
   @HttpCode(HttpStatus.OK)
@@ -153,10 +170,6 @@ export class AuthController {
     return this.passwordResetService.requestReset(dto.email, ipAddress);
   }
 
-  /**
-   * Completa el flujo: usuario llega del email con `token` + nueva password.
-   * Rate limit medio: 5 intentos por 15min para tolerar copy-paste erróneo.
-   */
   @Post("reset-password")
   @Throttle({ default: { limit: 5, ttl: seconds(900) } })
   @HttpCode(HttpStatus.OK)
@@ -172,20 +185,20 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 5, ttl: seconds(300) } })
   @HttpCode(HttpStatus.OK)
-  async changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
+  async changePassword(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+    @Body() dto: ChangePasswordDto,
+  ) {
     await this.authService.changePassword(req.user.id, dto);
+    this.clearRefreshCookie(res);
     return { message: "Contraseña actualizada. Inicia sesión nuevamente." };
   }
 
   // ============================================================
-  // 2FA (Google Authenticator / TOTP)
+  // 2FA
   // ============================================================
 
-  /**
-   * Inicia enrollment: genera secret + URI otpauth (QR).
-   * El frontend convierte `otpauthUrl` en QR y guarda `encryptedSecret`
-   * temporalmente para enviarlo en /confirm.
-   */
   @Post("2fa/enroll")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -193,11 +206,6 @@ export class AuthController {
     return this.authService.startTwoFactorEnrollment(req.user.id);
   }
 
-  /**
-   * Confirma enrollment: el cliente envía el primer código TOTP que genera
-   * el autenticador + el `encryptedSecret` recibido en /enroll.
-   * Si el código es válido, habilita 2FA y retorna 10 recovery codes.
-   */
   @Post("2fa/confirm")
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -207,7 +215,7 @@ export class AuthController {
   ) {
     const { encryptedSecret, code } = body;
     if (!encryptedSecret || !code) {
-      throw new Error("encryptedSecret y code son requeridos");
+      throw new BadRequestException("encryptedSecret y code son requeridos");
     }
     const result = await this.authService.confirmTwoFactorEnrollment(
       req.user.id,
@@ -233,11 +241,6 @@ export class AuthController {
   // EMAIL VERIFICATION
   // ============================================================
 
-  /**
-   * Solicita un nuevo email de verificación. Requiere autenticación
-   * para evitar abuso (atacantes generando spam contra cualquier email).
-   * Rate limit estricto: 3 emails por 15 min por IP.
-   */
   @Post("send-verification-email")
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 3, ttl: seconds(900) } })
@@ -250,11 +253,6 @@ export class AuthController {
     });
   }
 
-  /**
-   * Activa la cuenta consumiendo el token recibido por email.
-   * Endpoint público (cualquiera con el link puede activar la cuenta).
-   * Rate limit medio: 5 intentos por 15min para tolerar copy-paste erróneo.
-   */
   @Post("verify-email")
   @Throttle({ default: { limit: 5, ttl: seconds(900) } })
   @HttpCode(HttpStatus.OK)
@@ -274,12 +272,6 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async getCurrentUser(@Req() req: any) {
     const user = await this.authService.getUserById(req.user.id);
-
-    // JwtStrategy is the authorization boundary that derives the effective
-    // role (including canonical SUPERADMIN promotion and fail-closed downgrade
-    // of any non-canonical SUPERADMIN row). `/auth/me` must report that same
-    // effective role so every dashboard renders the authority the backend is
-    // actually enforcing, rather than a stale database label.
     return { ...user, role: req.user.role };
   }
 
@@ -299,6 +291,55 @@ export class AuthController {
   // ============================================================
   // INTERNAL
   // ============================================================
+
+  private finalizeSessionResponse(result: any, req: any, res: any) {
+    if (!this.isCookieSession(req) || !result?.refreshToken) {
+      return result;
+    }
+
+    this.setRefreshCookie(res, result.refreshToken);
+    const { refreshToken: _refreshToken, ...browserSafeResult } = result;
+    return browserSafeResult;
+  }
+
+  private isCookieSession(req: any): boolean {
+    return (
+      String(req.headers?.[WEB_SESSION_HEADER] || "").toLowerCase() === "cookie"
+    );
+  }
+
+  private setRefreshCookie(res: any, refreshToken: string): void {
+    const production = process.env.NODE_ENV === "production";
+    res.cookie(WEB_REFRESH_COOKIE, refreshToken, {
+      httpOnly: true,
+      secure: production,
+      sameSite: production ? "none" : "lax",
+      path: "/api/auth",
+      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+    });
+  }
+
+  private clearRefreshCookie(res: any): void {
+    const production = process.env.NODE_ENV === "production";
+    res.clearCookie(WEB_REFRESH_COOKIE, {
+      httpOnly: true,
+      secure: production,
+      sameSite: production ? "none" : "lax",
+      path: "/api/auth",
+    });
+  }
+
+  private readCookie(req: any, name: string): string | undefined {
+    const raw = String(req.headers?.cookie || "");
+    for (const part of raw.split(";")) {
+      const [key, ...valueParts] = part.trim().split("=");
+      if (key === name) {
+        const value = valueParts.join("=");
+        return value ? decodeURIComponent(value) : undefined;
+      }
+    }
+    return undefined;
+  }
 
   private extractContext(req: any): { ipAddress?: string; userAgent?: string } {
     const ipAddress =

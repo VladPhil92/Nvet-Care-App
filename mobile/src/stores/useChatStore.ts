@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import io, { Socket } from 'socket.io-client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../services/api';
 import chatService from '../services/chat.service';
+import { secureStorage } from '../lib/secureStorage';
 
 interface Message {
   id: string;
@@ -58,16 +58,12 @@ interface ChatState {
   typingUsers: string[];
   error: string | null;
 
-  // Reconnection state
   reconnectAttempt: number;
   isReconnecting: boolean;
   connectionDead: boolean;
-  /** Timer activo para el próximo intento de reconexión. */
   reconnectTimer: ReturnType<typeof setTimeout> | null;
-  /** Appointment al que estamos conectados (necesario para reconnect). */
   currentAppointmentId: string | null;
 
-  // Actions
   connectSocket: (appointmentId: string) => Promise<void>;
   disconnectSocket: () => void;
   reconnect: () => Promise<void>;
@@ -99,26 +95,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
   currentAppointmentId: null,
 
   connectSocket: async (appointmentId: string) => {
-    // Limpiar timer pendiente si lo hay
     const existingTimer = get().reconnectTimer
     if (existingTimer) clearTimeout(existingTimer)
 
     try {
-      const token = await AsyncStorage.getItem('accessToken');
+      // WebSocket authentication follows the same canonical protected-session
+      // boundary as HTTP. No bearer credential may be read from AsyncStorage.
+      const token = await secureStorage.getAccessToken();
       if (!token) {
         throw new Error('No authentication token found');
       }
 
-      // Desactivamos el reconnect automático de socket.io: lo manejamos
-      // nosotros para tener control sobre el comportamiento (jitter,
-      // cap de intentos, resync HTTP al reconectar).
       const socket = io(API_URL.replace('/api', ''), {
         auth: { token },
         transports: ['websocket'],
         reconnection: false,
       });
 
-      // ----- Connect -----
       socket.on('connect', async () => {
         const wasReconnect = get().reconnectAttempt > 0
         set({
@@ -130,22 +123,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
         socket.emit('joinAppointment', appointmentId);
 
-        // Si fue una reconexión, resync mensajes que pudimos haber perdido
         if (wasReconnect) {
           try {
             const messages = await chatService.getMessages(appointmentId);
             set({ messages });
           } catch (e) {
-            // No critíco; los próximos eventos llegarán por socket
             console.warn('Resync after reconnect failed:', e);
           }
         }
       });
 
-      // ----- Disconnect (intentar reconectar) -----
       socket.on('disconnect', (reason: string) => {
         set({ isConnected: false });
-        // No reintentar si la desconexión fue intencional o por logout
         if (reason === 'io client disconnect') return;
         get().reconnect();
       });
@@ -156,7 +145,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         get().reconnect();
       });
 
-      // ----- Mensajes -----
       socket.on('message', (message: Message) => {
         set((state) => ({
           messages: [...state.messages, message],
@@ -196,22 +184,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch (error: any) {
       console.error('Failed to connect socket:', error);
       set({ error: error.message || 'Error al conectar al chat' });
-      // Programar reintento
       get().reconnect();
     }
   },
 
-  /**
-   * Reintento controlado con backoff exponencial + jitter.
-   * Llamado automáticamente desde los handlers de disconnect/error.
-   */
   reconnect: async () => {
     const state = get();
 
-    // Ya estamos reintentando o no hay contexto
     if (state.isReconnecting || !state.currentAppointmentId) return;
 
-    // Cap de intentos: marcar como dead y dejar al usuario decidir
     if (state.reconnectAttempt >= RECONNECT_MAX_ATTEMPTS) {
       set({
         connectionDead: true,
@@ -235,7 +216,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         reconnectAttempt: s.reconnectAttempt + 1,
         reconnectTimer: null,
       }));
-      // Limpiar socket viejo antes de crear uno nuevo
       const oldSocket = get().socket;
       if (oldSocket) {
         oldSocket.removeAllListeners();
@@ -283,14 +263,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sendMessage: async (appointmentId: string, content: string) => {
     const { socket } = get();
     set({ isSending: true, error: null });
-    
+
     try {
       if (socket && socket.connected) {
-        // Send via WebSocket for real-time
         socket.emit('message', { appointmentId, content });
         set({ isSending: false });
       } else {
-        // Fallback to HTTP if socket not connected
         const message = await chatService.sendMessage(appointmentId, content);
         set((state) => ({
           messages: [...state.messages, message],
@@ -313,14 +291,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   }) => {
     const { socket } = get();
     set({ isSending: true, error: null });
-    
+
     try {
       if (socket && socket.connected) {
-        // Send via WebSocket
         socket.emit('sharePrice', { appointmentId, priceData });
         set({ isSending: false });
       } else {
-        // Fallback to HTTP
         const message = await chatService.sharePrice(appointmentId, priceData);
         set((state) => ({
           messages: [...state.messages, message],

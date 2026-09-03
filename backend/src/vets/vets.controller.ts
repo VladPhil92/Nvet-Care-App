@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Request,
+  Res,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
@@ -45,22 +46,6 @@ import {
   CreateVetProfileDto,
 } from "./dto/verification.dto";
 
-/**
- * VetsController — punto de entrada HTTP para todo el dominio veterinario.
- *
- * Responsabilidades:
- *  - Búsqueda y descubrimiento de vets (públicos)
- *  - Gestión del perfil propio (vet autenticado)
- *  - Verificación profesional (upload + status)
- *  - CRUD de precios (vet propio)
- *  - Earnings y analytics (vet propio)
- *  - Aprobación/rechazo de documentos (admin)
- *
- * Convenciones:
- *  - Endpoints públicos: GET /vets, GET /vets/:id (sin auth)
- *  - Endpoints "me": requieren JWT + role VET
- *  - Endpoints admin: requieren JWT + role ADMIN
- */
 @Controller("vets")
 export class VetsController {
   constructor(
@@ -69,27 +54,11 @@ export class VetsController {
     private readonly pricesService: PricesService,
   ) {}
 
-  // ============================================================
-  // BÚSQUEDA Y DESCUBRIMIENTO (público)
-  // ============================================================
-
-  /**
-   * GET /vets — búsqueda avanzada con geolocalización y filtros.
-   * Endpoint público (no requiere auth) para el flujo de descubrimiento del cliente.
-   */
   @Get()
   async searchVets(@Query() filters: SearchVetsDto) {
     return this.vetsService.searchVets(filters);
   }
 
-  // ============================================================
-  // PERFIL PROPIO DEL VETERINARIO
-  // (rutas estáticas /me/* deben ir ANTES de /:id para evitar colisión)
-  // ============================================================
-
-  /**
-   * GET /vets/me — perfil completo del vet autenticado.
-   */
   @Get("me")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -97,9 +66,6 @@ export class VetsController {
     return this.vetsService.getMyVetProfile(req.user.id);
   }
 
-  /**
-   * POST /vets/me — crear perfil de vet (primera vez tras registro).
-   */
   @Post("me")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -108,9 +74,6 @@ export class VetsController {
     return this.vetsService.createVetProfile(req.user.id, dto);
   }
 
-  /**
-   * PATCH /vets/me — actualizar perfil propio.
-   */
   @Patch("me")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -118,20 +81,12 @@ export class VetsController {
     return this.vetsService.updateVetProfile(req.user.id, dto);
   }
 
-  /**
-   * POST /vets/me/availability/toggle — alternar "disponible ahora"
-   * para el modo de servicios de emergencia.
-   */
   @Post("me/availability/toggle")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
   async toggleMyAvailability(@Request() req) {
     return this.vetsService.toggleAvailability(req.user.id);
   }
-
-  // ============================================================
-  // SCHEDULE EXCEPTIONS
-  // ============================================================
 
   @Get("me/schedule/exceptions")
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -170,9 +125,6 @@ export class VetsController {
     return this.vetsService.deleteScheduleException(req.user.id, dateStr);
   }
 
-  /**
-   * GET /vets/me/earnings — resumen de ingresos del vet con agregaciones.
-   */
   @Get("me/earnings")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -184,13 +136,6 @@ export class VetsController {
     return this.vetsService.getMyEarnings(req.user.id, { startDate, endDate });
   }
 
-  // ============================================================
-  // VERIFICACIÓN PROFESIONAL (vet propio)
-  // ============================================================
-
-  /**
-   * GET /vets/me/verification — estado de la verificación del vet.
-   */
   @Get("me/verification")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -198,13 +143,6 @@ export class VetsController {
     return this.verificationService.getVerificationStatus(req.user.id);
   }
 
-  /**
-   * POST /vets/me/verification/upload — subir un documento de verificación.
-   *
-   * Acepta `multipart/form-data` con:
-   *  - file: archivo (jpg/png/pdf, máx 10 MB)
-   *  - documentType, documentNumber?, issuedDate?, expiryDate?, issuedBy?
-   */
   @Post("me/verification/upload")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -231,10 +169,6 @@ export class VetsController {
     );
   }
 
-  /**
-   * POST /vets/me/verification/submit — enviar verificación a revisión.
-   * Requiere que todos los documentos obligatorios estén subidos.
-   */
   @Post("me/verification/submit")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -243,13 +177,6 @@ export class VetsController {
     return this.verificationService.submitForReview(req.user.id);
   }
 
-  // ============================================================
-  // GESTIÓN DE PRECIOS (vet propio)
-  // ============================================================
-
-  /**
-   * GET /vets/me/prices — listado de precios propios.
-   */
   @Get("me/prices")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -257,9 +184,6 @@ export class VetsController {
     return this.pricesService.getMyPrices(req.user.id, activeOnly === "true");
   }
 
-  /**
-   * POST /vets/me/prices — crear nuevo precio.
-   */
   @Post("me/prices")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -268,9 +192,6 @@ export class VetsController {
     return this.pricesService.createPrice(req.user.id, dto);
   }
 
-  /**
-   * POST /vets/me/prices/bulk — creación masiva (onboarding).
-   */
   @Post("me/prices/bulk")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -279,9 +200,6 @@ export class VetsController {
     return this.pricesService.bulkCreatePrices(req.user.id, dto.prices);
   }
 
-  /**
-   * PUT /vets/me/prices/:priceId — actualizar precio existente.
-   */
   @Put("me/prices/:priceId")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -293,9 +211,6 @@ export class VetsController {
     return this.pricesService.updatePrice(req.user.id, priceId, dto);
   }
 
-  /**
-   * DELETE /vets/me/prices/:priceId — eliminar precio (soft delete por defecto).
-   */
   @Delete("me/prices/:priceId")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -308,9 +223,6 @@ export class VetsController {
     await this.pricesService.deletePrice(req.user.id, priceId, hard === "true");
   }
 
-  /**
-   * GET /vets/me/prices/stats — estadísticas de precios y límite del tier.
-   */
   @Get("me/prices/stats")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VET)
@@ -318,13 +230,6 @@ export class VetsController {
     return this.pricesService.getPriceStats(req.user.id);
   }
 
-  // ============================================================
-  // ADMIN — Revisión de verificaciones
-  // ============================================================
-
-  /**
-   * GET /vets/admin/verifications/pending — lista de verificaciones pendientes.
-   */
   @Get("admin/verifications/pending")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -339,8 +244,33 @@ export class VetsController {
   }
 
   /**
-   * POST /vets/admin/documents/:documentId/approve — aprobar documento.
+   * Backend-mediated download for private professional documents. The storage
+   * key never leaves the API and the response cannot be cached by browsers or
+   * intermediary proxies.
    */
+  @Get("admin/documents/:documentId/file")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async downloadVerificationDocument(
+    @Param("documentId", ParseUUIDPipe) documentId: string,
+    @Res() res: any,
+  ) {
+    const document =
+      await this.verificationService.readVerificationDocument(documentId);
+
+    res.setHeader("Content-Type", document.mimeType);
+    res.setHeader("Content-Length", String(document.buffer.length));
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${document.fileName}"`,
+    );
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+    return res.status(HttpStatus.OK).send(document.buffer);
+  }
+
   @Post("admin/documents/:documentId/approve")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -357,9 +287,6 @@ export class VetsController {
     );
   }
 
-  /**
-   * POST /vets/admin/documents/:documentId/reject — rechazar documento.
-   */
   @Post("admin/documents/:documentId/reject")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -376,23 +303,12 @@ export class VetsController {
     );
   }
 
-  // ============================================================
-  // ENDPOINTS PÚBLICOS POR ID (deben ir AL FINAL)
-  // ============================================================
-
-  /**
-   * GET /vets/:id — detalles públicos de un veterinario.
-   * Solo retorna vets verificados y activos. El propio vet puede ver su perfil incluso sin verificar.
-   */
   @Get(":id")
   async getVetDetails(@Param("id", ParseUUIDPipe) id: string, @Request() req) {
-    const userId = req?.user?.id; // opcional (puede ser anónimo)
+    const userId = req?.user?.id;
     return this.vetsService.getVetDetails(id, userId);
   }
 
-  /**
-   * GET /vets/:id/prices — precios públicos de un vet.
-   */
   @Get(":id/prices")
   async getVetPrices(@Param("id", ParseUUIDPipe) id: string) {
     return this.pricesService.getVetPrices(id, true);

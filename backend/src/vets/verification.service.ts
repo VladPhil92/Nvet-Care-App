@@ -16,18 +16,12 @@ import {
 import * as path from "path";
 import * as crypto from "crypto";
 
-// ============================================
-// CONSTANTS
-// ============================================
-
-// Required documents for verification
 const REQUIRED_DOCUMENTS: DocumentType[] = [
   DocumentType.COMVEZCOL_CARD,
   DocumentType.PROFESSIONAL_DEGREE,
   DocumentType.ID_DOCUMENT,
 ];
 
-// Allowed file types
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/jpg",
@@ -35,10 +29,7 @@ const ALLOWED_MIME_TYPES = [
   "application/pdf",
 ];
 
-// Max file size (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
-// COMVEZCOL license number regex (format: ######-#)
 const COMVEZCOL_REGEX = /^\d{4,6}-\d{1}$/;
 
 @Injectable()
@@ -51,21 +42,6 @@ export class VerificationService {
     private storage: StorageService,
   ) {}
 
-  // ============================================
-  // DOCUMENT UPLOAD
-  // ============================================
-
-  /**
-   * Upload a verification document
-   *
-   * Flow:
-   * 1. Validate file type and size
-   * 2. Generate secure filename
-   * 3. Save file to disk (or S3 in production)
-   * 4. Create DB record
-   * 5. Optionally trigger OCR / COMVEZCOL validation
-   * 6. Update vet status to PENDING if all docs uploaded
-   */
   async uploadDocument(
     userId: string,
     documentType: DocumentType,
@@ -77,10 +53,8 @@ export class VerificationService {
       issuedBy?: string;
     },
   ) {
-    // Validations
     this.validateFile(file);
 
-    // Get vet profile
     const vet = await this.prisma.vetProfile.findUnique({
       where: { userId },
     });
@@ -91,14 +65,12 @@ export class VerificationService {
       );
     }
 
-    // Check if already approved
     if (vet.verificationStatus === VerificationStatus.APPROVED) {
       throw new BadRequestException(
         "Your account is already verified. Contact support to update documents.",
       );
     }
 
-    // Check if document type already uploaded and approved
     const existing = await this.prisma.verificationDocument.findFirst({
       where: {
         vetProfileId: vet.id,
@@ -113,16 +85,14 @@ export class VerificationService {
       );
     }
 
-    // Upload file via StorageService (local or Cloudinary depending on STORAGE_DRIVER)
     const hash = crypto.randomBytes(16).toString("hex");
     const ext = path.extname(file.originalname).toLowerCase();
+    const storedFileName = `${documentType}_${hash}${ext}`;
     const uploaded = await this.storage.upload(file, `verification/${vet.id}`, {
-      filename: `${documentType}_${hash}${ext}`,
+      filename: `${documentType}_${hash}`,
     });
-    const fileName = path.basename(uploaded.url);
-    const fileUrl = uploaded.url;
+    const fileUrl = uploaded.storageKey;
 
-    // Validate COMVEZCOL if applicable
     if (
       documentType === DocumentType.COMVEZCOL_CARD &&
       metadata?.documentNumber
@@ -130,14 +100,13 @@ export class VerificationService {
       this.validateComvezcolNumber(metadata.documentNumber);
     }
 
-    // If existing UPLOADED doc, delete old file and update record
     if (existing && existing.status === DocumentStatus.UPLOADED) {
       await this.storage.delete(existing.fileUrl).catch(() => {});
 
       const updated = await this.prisma.verificationDocument.update({
         where: { id: existing.id },
         data: {
-          fileName,
+          fileName: storedFileName,
           fileUrl,
           fileMimeType: file.mimetype,
           fileSize: file.size,
@@ -155,15 +124,14 @@ export class VerificationService {
       });
 
       await this.updateVerificationStatus(vet.id);
-      return updated;
+      return this.toVetSafeDocument(updated);
     }
 
-    // Create new document
     const doc = await this.prisma.verificationDocument.create({
       data: {
         vetProfileId: vet.id,
         type: documentType,
-        fileName,
+        fileName: storedFileName,
         fileUrl,
         fileMimeType: file.mimetype,
         fileSize: file.size,
@@ -175,15 +143,10 @@ export class VerificationService {
       },
     });
 
-    // Update verification status if all required docs uploaded
     await this.updateVerificationStatus(vet.id);
-
-    return doc;
+    return this.toVetSafeDocument(doc);
   }
 
-  /**
-   * Get verification status with document list
-   */
   async getVerificationStatus(userId: string) {
     const vet = await this.prisma.vetProfile.findUnique({
       where: { userId },
@@ -198,7 +161,6 @@ export class VerificationService {
       throw new NotFoundException("Vet profile not found");
     }
 
-    // Build status for each required document type
     const documentStatus = REQUIRED_DOCUMENTS.map((type) => {
       const docs = vet.verificationDocuments.filter((d) => d.type === type);
       const latest = docs[0];
@@ -218,7 +180,6 @@ export class VerificationService {
       };
     });
 
-    // Count required docs approved
     const approvedRequired = documentStatus.filter(
       (d) => d.status === DocumentStatus.APPROVED,
     ).length;
@@ -229,7 +190,6 @@ export class VerificationService {
         d.status === DocumentStatus.APPROVED,
     ).length;
 
-    // Estimated review time
     const estimatedReviewHours =
       vet.verificationStatus === VerificationStatus.PENDING ? 48 : null;
 
@@ -254,9 +214,6 @@ export class VerificationService {
     };
   }
 
-  /**
-   * Submit verification for review (all docs uploaded)
-   */
   async submitForReview(userId: string) {
     const vet = await this.prisma.vetProfile.findUnique({
       where: { userId },
@@ -273,7 +230,6 @@ export class VerificationService {
       throw new NotFoundException("Vet profile not found");
     }
 
-    // Validate all required docs uploaded
     const uploadedTypes = new Set(vet.verificationDocuments.map((d) => d.type));
     const missingDocs = REQUIRED_DOCUMENTS.filter(
       (type) => !uploadedTypes.has(type),
@@ -285,7 +241,6 @@ export class VerificationService {
       );
     }
 
-    // Update status to IN_REVIEW
     return this.prisma.vetProfile.update({
       where: { id: vet.id },
       data: {
@@ -294,13 +249,6 @@ export class VerificationService {
     });
   }
 
-  // ============================================
-  // ADMIN ACTIONS
-  // ============================================
-
-  /**
-   * Admin: Approve a document
-   */
   async approveDocument(
     adminUserId: string,
     documentId: string,
@@ -325,15 +273,10 @@ export class VerificationService {
       },
     });
 
-    // Check if all required docs approved → auto-approve vet
     await this.checkAndApproveVet(doc.vetProfileId);
-
-    return updated;
+    return this.toAdminSafeDocument(updated);
   }
 
-  /**
-   * Admin: Reject a document
-   */
   async rejectDocument(
     adminUserId: string,
     documentId: string,
@@ -362,7 +305,6 @@ export class VerificationService {
       },
     });
 
-    // Update vet status to REJECTED
     await this.prisma.vetProfile.update({
       where: { id: doc.vetProfileId },
       data: {
@@ -371,12 +313,9 @@ export class VerificationService {
       },
     });
 
-    return updated;
+    return this.toAdminSafeDocument(updated);
   }
 
-  /**
-   * Admin: Get pending verification requests
-   */
   async getPendingVerifications(
     filters: { limit?: number; offset?: number } = {},
   ) {
@@ -412,16 +351,45 @@ export class VerificationService {
       this.prisma.vetProfile.count({ where }),
     ]);
 
-    return { results, total, limit, offset, hasMore: offset + limit < total };
+    return {
+      results: results.map((vet) => ({
+        ...vet,
+        verificationDocuments: vet.verificationDocuments.map((doc) =>
+          this.toAdminSafeDocument(doc),
+        ),
+      })),
+      total,
+      limit,
+      offset,
+      hasMore: offset + limit < total,
+    };
   }
 
-  // ============================================
-  // PRIVATE HELPERS
-  // ============================================
+  async readVerificationDocument(documentId: string) {
+    const doc = await this.prisma.verificationDocument.findUnique({
+      where: { id: documentId },
+      select: {
+        id: true,
+        fileName: true,
+        fileUrl: true,
+        fileMimeType: true,
+        fileSize: true,
+      },
+    });
 
-  /**
-   * Validate uploaded file
-   */
+    if (!doc) {
+      throw new NotFoundException("Document not found");
+    }
+
+    const buffer = await this.storage.read(doc.fileUrl);
+    return {
+      buffer,
+      fileName: this.sanitizeDownloadName(doc.fileName),
+      mimeType: doc.fileMimeType,
+      expectedSize: doc.fileSize,
+    };
+  }
+
   private validateFile(file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException("File is required");
@@ -440,9 +408,6 @@ export class VerificationService {
     }
   }
 
-  /**
-   * Validate COMVEZCOL license number format
-   */
   private validateComvezcolNumber(licenseNumber: string) {
     if (!COMVEZCOL_REGEX.test(licenseNumber)) {
       throw new BadRequestException(
@@ -450,13 +415,10 @@ export class VerificationService {
       );
     }
 
-    // TODO: In production, integrate with COMVEZCOL API for real-time validation
-    // const isValid = await this.comvezcolApiClient.verify(licenseNumber);
+    // This is format validation + manual documentary review only. Integrate an
+    // authoritative registry interface if/when COMVEZCOL exposes one.
   }
 
-  /**
-   * Update vet verification status based on uploaded documents
-   */
   private async updateVerificationStatus(vetProfileId: string) {
     const docs = await this.prisma.verificationDocument.findMany({
       where: {
@@ -474,11 +436,10 @@ export class VerificationService {
       where: { id: vetProfileId },
     });
 
-    // If status is NONE or REJECTED and user just uploaded, move to PENDING
     if (
       hasAllRequired &&
-      (currentVet.verificationStatus === VerificationStatus.NONE ||
-        currentVet.verificationStatus === VerificationStatus.REJECTED)
+      (currentVet?.verificationStatus === VerificationStatus.NONE ||
+        currentVet?.verificationStatus === VerificationStatus.REJECTED)
     ) {
       await this.prisma.vetProfile.update({
         where: { id: vetProfileId },
@@ -490,9 +451,6 @@ export class VerificationService {
     }
   }
 
-  /**
-   * Check if all required docs approved and auto-approve vet
-   */
   private async checkAndApproveVet(vetProfileId: string) {
     const docs = await this.prisma.verificationDocument.findMany({
       where: {
@@ -530,60 +488,48 @@ export class VerificationService {
 
       if (!result.ok) {
         this.logger.warn(
-          `Vet approval email failed for vetProfileId=${vetProfileId}: ${result.error}`,
+          `Vet approval email failed for vetProfileId=${vetProfileId}: ${result.reason}`,
         );
       }
     }
   }
 
-  /**
-   * Get user-facing next steps based on status
-   */
-  private getNextSteps(
-    status: VerificationStatus,
-    uploadedCount: number,
-  ): string[] {
+  private toVetSafeDocument(doc: any) {
+    const { fileUrl: _fileUrl, ...safe } = doc;
+    return safe;
+  }
+
+  private toAdminSafeDocument(doc: any) {
+    const { fileUrl: _fileUrl, ...safe } = doc;
+    return {
+      ...safe,
+      fileEndpoint: `/api/vets/admin/documents/${doc.id}/file`,
+    };
+  }
+
+  private sanitizeDownloadName(name: string): string {
+    const basename = path.basename(name || "verification-document");
+    return basename.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 160);
+  }
+
+  private getNextSteps(status: VerificationStatus, uploadedCount: number) {
     switch (status) {
       case VerificationStatus.NONE:
-        return [
-          `Sube ${REQUIRED_DOCUMENTS.length - uploadedCount} documento(s) restante(s)`,
-          "Asegúrate que las imágenes sean claras y legibles",
-        ];
-
+        return uploadedCount === 0
+          ? "Upload required documents to begin verification"
+          : `Upload ${REQUIRED_DOCUMENTS.length - uploadedCount} remaining document(s)`;
       case VerificationStatus.PENDING:
-        return [
-          "Envía tus documentos a revisión",
-          "El tiempo estimado de revisión es 24-48 horas",
-        ];
-
+        return "Submit your documents for review";
       case VerificationStatus.IN_REVIEW:
-        return [
-          "Tu verificación está siendo revisada por nuestro equipo",
-          "Te notificaremos por email cuando el proceso termine",
-          "Tiempo estimado: 24-48 horas",
-        ];
-
+        return "Your documents are being reviewed. We'll notify you when complete";
       case VerificationStatus.APPROVED:
-        return [
-          "¡Felicitaciones! Ya puedes ofrecer tus servicios",
-          "Completa tu perfil con especialidades y precios",
-          "Configura tu agenda y disponibilidad",
-        ];
-
+        return "Your account is verified and active";
       case VerificationStatus.REJECTED:
-        return [
-          "Uno o más documentos fueron rechazados",
-          "Revisa las notas del admin y vuelve a subir los documentos correctos",
-        ];
-
+        return "Review the rejection reason and re-upload corrected documents";
       case VerificationStatus.EXPIRED:
-        return [
-          "Tus documentos están vencidos",
-          "Sube versiones actualizadas para continuar ofreciendo servicios",
-        ];
-
+        return "One or more documents have expired. Please upload current versions";
       default:
-        return [];
+        return "Contact support if you need assistance";
     }
   }
 }

@@ -1,32 +1,29 @@
 import { create } from 'zustand'
-import { authService, AuthResponse, LoginCredentials, RegisterData } from '../services/auth.service'
-
-interface User {
-  id: string
-  email: string
-  role: string
-  firstName?: string
-  lastName?: string
-}
+import {
+  authService,
+  AuthResponse,
+  LoginCredentials,
+  RegisterData,
+  type AuthUser,
+} from '../services/auth.service'
 
 interface AuthState {
-  user: User | null
+  user: AuthUser | null
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
 
-  // Actions
   login: (credentials: LoginCredentials) => Promise<void>
   register: (data: RegisterData) => Promise<void>
   logout: () => Promise<void>
-  checkAuth: () => void
+  checkAuth: () => Promise<void>
   clearError: () => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  user: authService.getCurrentUser(),
-  isAuthenticated: authService.isAuthenticated(),
-  isLoading: false,
+  user: null,
+  isAuthenticated: false,
+  isLoading: true,
   error: null,
 
   login: async (credentials) => {
@@ -40,6 +37,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       })
     } catch (error: any) {
       set({
+        user: null,
+        isAuthenticated: false,
         error: error.response?.data?.message || 'Error al iniciar sesión',
         isLoading: false,
       })
@@ -58,6 +57,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       })
     } catch (error: any) {
       set({
+        user: null,
+        isAuthenticated: false,
         error: error.response?.data?.message || 'Error al registrarse',
         isLoading: false,
       })
@@ -69,27 +70,24 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true })
     try {
       await authService.logout()
+    } finally {
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         error: null,
       })
-    } catch {
-      set({ isLoading: false })
-      // Limpiar estado local incluso si la llamada API falla
-      set({
-        user: null,
-        isAuthenticated: false,
-        error: null,
-      })
     }
   },
 
-  checkAuth: () => {
-    const user = authService.getCurrentUser()
-    const isAuthenticated = authService.isAuthenticated()
-    set({ user, isAuthenticated })
+  checkAuth: async () => {
+    set({ isLoading: true, error: null })
+    const user = await authService.restoreSession()
+    set({
+      user,
+      isAuthenticated: Boolean(user),
+      isLoading: false,
+    })
   },
 
   clearError: () => {
