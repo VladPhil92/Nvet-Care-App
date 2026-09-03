@@ -9,6 +9,7 @@ import {
 import { UserRole } from "@prisma/client";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
+import { VerifiedVetGuard } from "../auth/guards/verified-vet.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { AiAssistService } from "./ai-assist.service";
 import { ClientAiAssistDto, VetAiAssistDto } from "./dto/ai-assist.dto";
@@ -31,6 +32,7 @@ export class AiController {
   }
 
   @Post("vet-assist")
+  @UseGuards(VerifiedVetGuard)
   @Roles(UserRole.VET)
   vetAssist(@Request() req, @Body() dto: VetAiAssistDto) {
     return this.aiAssistService.vetAssist(req.user.id, dto);
