@@ -11,12 +11,15 @@ on:
       - 'dashboard/src/App.tsx'
       - 'dashboard/src/components/Sidebar.tsx'
       - 'dashboard/src/pages/BetaEvidencePage.tsx'
+      - 'dashboard/src/pages/BetaCohortPage.tsx'
       - 'docs/production/BETA_CARTAGENA_READINESS.json'
       - 'docs/production/RC_READINESS.json'
       - 'docs/production/CARTAGENA_BETA_OPERATIONS_RUNBOOK.md'
       - 'docs/PHASE_12_CARTAGENA_CLOSED_BETA.md'
       - 'docs/PHASE_12C_BETA_OPERATIONAL_ACTIVATION_READINESS.md'
       - 'docs/PHASE_12D_BETA_EVIDENCE_CONTROL_PLANE.md'
+      - 'docs/PHASE_12E_CONTROLLED_BETA_ACTIVATION_AUTHORIZATION.md'
+      - 'docs/PHASE_12F_BETA_COHORT_CONTROL_PLANE.md'
       - 'scripts/verify-cartagena-beta-readiness.mjs'
       - 'scripts/verify-cartagena-beta-evidence-inheritance.mjs'
       - 'scripts/verify-beta-operational-activation-readiness.mjs'
@@ -50,7 +53,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22.x'
       - name: Validate Phase 12 contract
@@ -59,7 +62,7 @@ jobs:
         run: node scripts/verify-cartagena-beta-evidence-inheritance.mjs
       - name: Verify operational activation-state contract
         run: node scripts/verify-beta-operational-activation-readiness.mjs
-      - name: Verify evidence control plane contract
+      - name: Verify evidence, cohort and activation control plane contract
         run: node scripts/verify-beta-evidence-control-plane.mjs
 
   audit:
@@ -74,14 +77,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22.x'
       - name: Verify inherited RC evidence cannot drift
         run: node scripts/verify-cartagena-beta-evidence-inheritance.mjs
       - name: Verify operational activation-state contract
         run: node scripts/verify-beta-operational-activation-readiness.mjs
-      - name: Verify evidence control plane contract
+      - name: Verify evidence, cohort and activation control plane contract
         run: node scripts/verify-beta-evidence-control-plane.mjs
       - name: Audit current main beta evidence
         run: node scripts/verify-cartagena-beta-readiness.mjs --runtime
