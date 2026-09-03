@@ -7,6 +7,16 @@ const productionEnvironmentId = process.env.RAILWAY_PRODUCTION_ENVIRONMENT_ID;
 const expectedProjectName = process.env.RAILWAY_EXPECTED_PROJECT_NAME || 'Nvet Care App';
 const expectedPostgresService = process.env.RAILWAY_PRODUCTION_POSTGRES_SERVICE || 'Postgres';
 const evidencePath = process.env.RC_BACKUP_EVIDENCE_PATH || '.artifacts/production-backup-evidence.json';
+const maxBackupAgeHours = parsePositiveNumber(
+  process.env.RAILWAY_MAX_BACKUP_AGE_HOURS,
+  48,
+  'RAILWAY_MAX_BACKUP_AGE_HOURS',
+);
+const minRetentionHours = parsePositiveNumber(
+  process.env.RAILWAY_MIN_BACKUP_RETENTION_HOURS,
+  168,
+  'RAILWAY_MIN_BACKUP_RETENTION_HOURS',
+);
 
 for (const [name, value] of Object.entries({
   RAILWAY_API_TOKEN: token,
@@ -14,6 +24,15 @@ for (const [name, value] of Object.entries({
   RAILWAY_PRODUCTION_ENVIRONMENT_ID: productionEnvironmentId,
 })) {
   if (!value) throw new Error(`${name} is required`);
+}
+
+function parsePositiveNumber(raw, fallback, name) {
+  if (raw == null || String(raw).trim() === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number`);
+  }
+  return value;
 }
 
 async function graphql(query, variables = {}) {
@@ -138,13 +157,31 @@ const scheduleData = await graphql(
   variables,
 );
 
-const backups = backupData.volumeInstanceBackupList || [];
+const backups = [...(backupData.volumeInstanceBackupList || [])].sort(
+  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+);
 const schedules = scheduleData.volumeInstanceBackupScheduleList || [];
 const scheduleCount = schedules.length;
 const backupCount = backups.length;
+const latestBackup = backups[0] || null;
+const latestBackupAgeHours = latestBackup
+  ? (Date.now() - new Date(latestBackup.createdAt).getTime()) / 3_600_000
+  : null;
+const latestBackupFresh =
+  latestBackupAgeHours !== null &&
+  latestBackupAgeHours >= 0 &&
+  latestBackupAgeHours <= maxBackupAgeHours;
+const requiredRetentionSeconds = minRetentionHours * 3600;
+const retentionSatisfied = schedules.some(
+  (schedule) => Number(schedule.retentionSeconds || 0) >= requiredRetentionSeconds,
+);
+const verdict =
+  scheduleCount > 0 && backupCount > 0 && latestBackupFresh && retentionSatisfied
+    ? 'verified'
+    : 'blocked';
 
 const evidence = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   evidenceType: 'railway-production-volume-backup-audit',
   observedAt: new Date().toISOString(),
   project: { id: project.id, name: project.name },
@@ -161,13 +198,34 @@ const evidence = {
     scheduleQuery: 'volumeInstanceBackupScheduleList',
     backupListQuery: 'volumeInstanceBackupList',
   },
+  policy: {
+    maxBackupAgeHours,
+    minRetentionHours,
+  },
   scheduleCount,
   backupCount,
+  latestBackup: latestBackup
+    ? {
+        id: latestBackup.id,
+        name: latestBackup.name,
+        createdAt: latestBackup.createdAt,
+        expiresAt: latestBackup.expiresAt,
+        usedMB: latestBackup.usedMB,
+        referencedMB: latestBackup.referencedMB,
+        ageHours: Number(latestBackupAgeHours.toFixed(2)),
+      }
+    : null,
+  checks: {
+    scheduleConfigured: scheduleCount > 0,
+    visibleBackupExists: backupCount > 0,
+    latestBackupFresh,
+    retentionSatisfied,
+  },
   schedules,
   backups,
-  verdict: scheduleCount > 0 ? 'verified' : 'blocked',
+  verdict,
   boundary:
-    'Read-only provider metadata audit. It proves configured Railway volume-backup schedules only; it does not prove a restore drill.',
+    'Read-only provider metadata audit. It proves configured Railway volume-backup schedules and a recent retained backup; it does not prove a restore drill.',
 };
 
 mkdirSync(evidencePath.split('/').slice(0, -1).join('/') || '.', { recursive: true });
@@ -176,8 +234,25 @@ writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
 console.log(`Production PostgreSQL volume: ${postgres.volumeName} (${postgres.id})`);
 console.log(`Configured backup schedules: ${scheduleCount}`);
 console.log(`Visible backups: ${backupCount}`);
+console.log(
+  `Latest backup age: ${latestBackupAgeHours === null ? 'n/a' : `${latestBackupAgeHours.toFixed(2)}h`}`,
+);
+console.log(`Retention >= ${minRetentionHours}h: ${retentionSatisfied}`);
 console.log(`Evidence written to ${evidencePath}`);
 
 if (scheduleCount < 1) {
   throw new Error('No Railway automatic backup schedule is configured for the production PostgreSQL volume');
+}
+if (backupCount < 1) {
+  throw new Error('Railway backup schedule exists, but no provider backup is visible yet');
+}
+if (!latestBackupFresh) {
+  throw new Error(
+    `Latest Railway backup exceeds the ${maxBackupAgeHours}h freshness policy`,
+  );
+}
+if (!retentionSatisfied) {
+  throw new Error(
+    `No Railway backup schedule satisfies the minimum ${minRetentionHours}h retention policy`,
+  );
 }
