@@ -135,7 +135,11 @@ export class BetaEvidenceService {
     const events = await this.getEvents();
     const evidenceIds = [...new Set(events.map((event) => event.evidenceId))];
     const evidence = evidenceIds
-      .map((id) => this.deriveEvidence(events.filter((event) => event.evidenceId === id)))
+      .map((id) =>
+        this.deriveEvidence(
+          events.filter((event) => event.evidenceId === id),
+        ),
+      )
       .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
     return {
@@ -151,8 +155,12 @@ export class BetaEvidenceService {
     const history = await this.getHistory();
     const gates = BETA_EVIDENCE_GATES.map((gate) => {
       const items = history.evidence.filter((item) => item.gate === gate);
-      const conflictCount = items.filter((item) => item.status === "CONFLICTED").length;
-      const expiredCount = items.filter((item) => item.status === "EXPIRED").length;
+      const conflictCount = items.filter(
+        (item) => item.status === "CONFLICTED",
+      ).length;
+      const expiredCount = items.filter(
+        (item) => item.status === "EXPIRED",
+      ).length;
       const approved = items.filter((item) => item.status === "APPROVED");
       const status: BetaGateStatus =
         conflictCount > 0
@@ -171,8 +179,12 @@ export class BetaEvidenceService {
       } as const;
     });
 
-    const verifiedGates = gates.filter((gate) => gate.status === "VERIFIED").length;
-    const conflictedGates = gates.filter((gate) => gate.status === "CONFLICTED").length;
+    const verifiedGates = gates.filter(
+      (gate) => gate.status === "VERIFIED",
+    ).length;
+    const conflictedGates = gates.filter(
+      (gate) => gate.status === "CONFLICTED",
+    ).length;
     const eligibleForOperatorActivation =
       verifiedGates === BETA_EVIDENCE_GATES.length && conflictedGates === 0;
 
@@ -182,7 +194,8 @@ export class BetaEvidenceService {
       appendOnly: true,
       totalGates: BETA_EVIDENCE_GATES.length,
       verifiedGates,
-      pendingGates: BETA_EVIDENCE_GATES.length - verifiedGates - conflictedGates,
+      pendingGates:
+        BETA_EVIDENCE_GATES.length - verifiedGates - conflictedGates,
       conflictedGates,
       eligibleForOperatorActivation,
       commercialLaunchAuthorized: false,
@@ -375,19 +388,31 @@ export class BetaEvidenceService {
       conflict: conflictReasons.length > 0,
       conflictReasons,
       submittedAt: submission.createdAt.toISOString(),
-      lastEventAt: sorted.at(-1)?.createdAt.toISOString() ?? submission.createdAt.toISOString(),
+      lastEventAt:
+        sorted.at(-1)?.createdAt.toISOString() ??
+        submission.createdAt.toISOString(),
       eventCount: sorted.length,
     };
   }
 
-  private parseMetadata(value: Prisma.JsonValue | null): EvidenceMetadata | null {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  private parseMetadata(
+    value: Prisma.JsonValue | null,
+  ): EvidenceMetadata | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
     const raw = value as Record<string, unknown>;
     if (raw.schemaVersion !== 1 || raw.program !== BETA_EVIDENCE_PROGRAM) {
       return null;
     }
-    if (!BETA_EVIDENCE_GATES.includes(raw.gate as BetaEvidenceGate)) return null;
-    if (!["SUBMITTED", "APPROVED", "REJECTED", "REVOKED"].includes(String(raw.eventType))) {
+    if (!BETA_EVIDENCE_GATES.includes(raw.gate as BetaEvidenceGate)) {
+      return null;
+    }
+    if (
+      !["SUBMITTED", "APPROVED", "REJECTED", "REVOKED"].includes(
+        String(raw.eventType),
+      )
+    ) {
       return null;
     }
     return raw as unknown as EvidenceMetadata;
@@ -399,7 +424,9 @@ export class BetaEvidenceService {
       throw new BadRequestException("Invalid evidence observation timestamp.");
     }
     if (observedAt.getTime() > Date.now() + FUTURE_CLOCK_SKEW_MS) {
-      throw new BadRequestException("Evidence observation timestamp is in the future.");
+      throw new BadRequestException(
+        "Evidence observation timestamp is in the future.",
+      );
     }
     return observedAt;
   }
@@ -407,7 +434,9 @@ export class BetaEvidenceService {
   private normalizeReference(value: string): string {
     const reference = value.trim();
     if (/\r|\n/.test(reference)) {
-      throw new BadRequestException("Evidence reference must be a single line.");
+      throw new BadRequestException(
+        "Evidence reference must be a single line.",
+      );
     }
     if (SENSITIVE_REFERENCE_PATTERN.test(reference)) {
       throw new BadRequestException(
