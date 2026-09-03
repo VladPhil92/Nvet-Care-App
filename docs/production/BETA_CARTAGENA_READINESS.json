@@ -21,32 +21,32 @@
     "productionBackupConfigured": {
       "status": "pending",
       "evidence": null,
-      "note": "Provider-level automatic backups must be verified."
+      "note": "Provider-level automatic backups must be verified. This gate is inherited from RC_READINESS.json and must not be promoted independently."
     },
     "restoreDrillVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "A dated non-destructive restore drill is required."
+      "note": "A dated non-destructive provider-level restore drill is required. This gate is inherited from RC_READINESS.json and must not be promoted independently."
     },
     "productionAlertingVerified": {
-      "status": "pending",
-      "evidence": null,
-      "note": "Sustained readiness degradation/down must reach an operator."
+      "status": "verified",
+      "evidence": "GitHub Actions run 33467741703 (success) + closed synthetic drill issue #115 on 2026-09-01",
+      "note": "Inherited from Phase 11: an isolated synthetic readiness failure was detected, escalated through the GitHub incident API and automatically closed without mutating production."
     },
     "paymentRailVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "At least one intended beta payment rail must be verified end-to-end."
+      "note": "At least one intended beta payment rail must be verified with controlled real funds movement. This gate is inherited from RC_READINESS.json and must not be promoted independently."
     },
     "cartagenaVetCoverageVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "At least three verified and active veterinarians must have Cartagena as their service city."
+      "note": "At least three verified and active veterinarians must have Cartagena as their service city. Use the admin-only GET /api/beta/readiness runtime snapshot as redacted count evidence."
     },
     "clientCohortConfigured": {
       "status": "pending",
       "evidence": null,
-      "note": "The initial invited client cohort must be loaded as SHA-256 Nvet user-id hashes in provider configuration."
+      "note": "The initial invited client cohort must be loaded as SHA-256 Nvet user-id hashes in provider configuration. GET /api/beta/readiness exposes only the configured count and never hashes or raw identifiers."
     },
     "supportOwnerConfirmed": {
       "status": "pending",
@@ -61,7 +61,7 @@
     "rollbackDrillVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Operations must verify that new bookings can be stopped without disabling authentication or history access."
+      "note": "Operations must verify that NVET_BOOKING_ENABLED=false stops new bookings without disabling authentication or history access."
     }
   }
 }
