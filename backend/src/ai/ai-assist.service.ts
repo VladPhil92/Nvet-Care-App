@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { AppointmentStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { AiProviderService } from "./ai-provider.service";
+import { AiSafetyPolicyService } from "./ai-safety-policy.service";
 import { ClientAiAssistDto, VetAiAssistDto } from "./dto/ai-assist.dto";
 import {
   CLIENT_GUIDANCE_SCHEMA,
@@ -44,34 +45,12 @@ REGLAS OBLIGATORIAS:
 - Devuelve exclusivamente el JSON solicitado por el esquema.
 `;
 
-const EMERGENCY_PATTERNS: RegExp[] = [
-  /no\s+(puede\s+)?respirar/i,
-  /dificultad\s+(para\s+)?respirar/i,
-  /se\s+ahoga/i,
-  /convulsi[oó]n/i,
-  /inconsciente/i,
-  /no\s+responde/i,
-  /sangrado\s+(muy\s+)?abundante/i,
-  /hemorragia/i,
-  /envenen/i,
-  /intoxic/i,
-  /veneno/i,
-  /abdomen\s+(muy\s+)?hinchado/i,
-  /arcadas\s+sin\s+vomitar/i,
-  /no\s+puede\s+orinar/i,
-  /atropell/i,
-  /ca[ií]da\s+de\s+(gran\s+)?altura/i,
-  /difficulty\s+breathing/i,
-  /seizure/i,
-  /unconscious/i,
-  /poison/i,
-];
-
 @Injectable()
 export class AiAssistService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly provider: AiProviderService,
+    private readonly safety: AiSafetyPolicyService,
   ) {}
 
   async clientAssist(userId: string, dto: ClientAiAssistDto) {
@@ -116,9 +95,7 @@ export class AiAssistService {
       },
     });
 
-    const emergencySignal = EMERGENCY_PATTERNS.some((pattern) =>
-      pattern.test(dto.question),
-    );
+    const emergencySignal = this.safety.hasEmergencySignal(dto.question);
 
     if (emergencySignal) {
       const result: ClientAiGuidance = {
@@ -166,6 +143,7 @@ export class AiAssistService {
       input: `Analiza el siguiente JSON de contexto y pregunta del propietario:\n${JSON.stringify(context)}`,
       maxOutputTokens: 1100,
     });
+    this.safety.assertSafeClientOutput(result);
 
     return this.wrapClientResult(pet.id, appointments.length, result, {
       provider: "openai",
@@ -201,9 +179,6 @@ export class AiAssistService {
             healthProfile: true,
             healthProfileUpdatedAt: true,
           },
-        },
-        client: {
-          select: { firstName: true, lastName: true },
         },
       },
     });
@@ -248,6 +223,7 @@ export class AiAssistService {
       input: `Analiza el siguiente JSON clínico y la solicitud del veterinario:\n${JSON.stringify(context)}`,
       maxOutputTokens: 1500,
     });
+    this.safety.assertSafeVetOutput(result);
 
     return {
       kind: "VET_CLINICAL_COPILOT",
@@ -261,7 +237,7 @@ export class AiAssistService {
       meta: {
         provider: "openai",
         model: this.provider.getModel(),
-        contextVersion: "v1",
+        contextVersion: "v2",
       },
     };
   }
@@ -278,6 +254,9 @@ export class AiAssistService {
         clientDiagnosis: false,
         autonomousPrescription: false,
         emergencyRuleLayer: true,
+        deterministicOutputPolicy: true,
+        clientPiiMinimizedForVetCopilot: true,
+        verifiedVetCopilotOnly: true,
         providerStorageRequested: false,
       },
     };
@@ -303,7 +282,7 @@ export class AiAssistService {
       result,
       meta: {
         ...meta,
-        contextVersion: "v1",
+        contextVersion: "v2",
       },
     };
   }
