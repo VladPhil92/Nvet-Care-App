@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS "vet_withdrawals" (
   "processing_at" TIMESTAMP(3),
   "paid_at" TIMESTAMP(3),
   "rejected_at" TIMESTAMP(3),
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  "updated_at" TIMESTAMP(3) NOT NULL
 );
 
 DO $$
