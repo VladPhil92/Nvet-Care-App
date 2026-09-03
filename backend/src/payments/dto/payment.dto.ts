@@ -136,7 +136,9 @@ export class RequestWithdrawalDto {
   @Type(() => Number)
   @IsInt({ message: "El retiro debe expresarse en pesos colombianos enteros" })
   @Min(50000, { message: "El retiro mínimo es 50.000 COP" })
-  @Max(50_000_000, { message: "El retiro máximo por solicitud es 50.000.000 COP" })
+  @Max(50_000_000, {
+    message: "El retiro máximo por solicitud es 50.000.000 COP",
+  })
   amountCop: number;
 
   @IsString()

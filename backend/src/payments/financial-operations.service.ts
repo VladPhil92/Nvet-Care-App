@@ -136,10 +136,14 @@ export class FinancialOperationsService {
     });
     if (!transaction) throw new NotFoundException("Transacción no encontrada");
     if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
-      throw new BadRequestException("La transacción no pertenece al rail TRANSFER");
+      throw new BadRequestException(
+        "La transacción no pertenece al rail TRANSFER",
+      );
     }
     if (!transaction.transferProofStorageKey) {
-      throw new NotFoundException("La transacción no tiene comprobante cargado");
+      throw new NotFoundException(
+        "La transacción no tiene comprobante cargado",
+      );
     }
 
     const buffer = await this.storage.read(transaction.transferProofStorageKey);
@@ -331,7 +335,8 @@ export class FinancialOperationsService {
 
     const destination = dto.accountInfo as PayoutDestination;
     const encryptedDestination = this.financialCrypto.encrypt(destination);
-    const destinationFingerprint = this.financialCrypto.fingerprint(destination);
+    const destinationFingerprint =
+      this.financialCrypto.fingerprint(destination);
     const destinationMasked = this.financialCrypto.mask(destination);
 
     return this.withSerializableRetry(async (tx) => {
@@ -340,7 +345,9 @@ export class FinancialOperationsService {
         include: { vetProfile: true },
       });
       if (!user?.vetProfile) {
-        throw new ForbiddenException("Solo veterinarios pueden solicitar retiros");
+        throw new ForbiddenException(
+          "Solo veterinarios pueden solicitar retiros",
+        );
       }
 
       const balance = await this.calculateWithdrawalBalance(
@@ -432,11 +439,7 @@ export class FinancialOperationsService {
     });
   }
 
-  async listAdminWithdrawals(
-    status?: string,
-    limit = 50,
-    offset = 0,
-  ) {
+  async listAdminWithdrawals(status?: string, limit = 50, offset = 0) {
     if (status && !WITHDRAWAL_STATUSES.includes(status as WithdrawalStatus)) {
       throw new BadRequestException("Estado de retiro inválido");
     }
@@ -499,27 +502,19 @@ export class FinancialOperationsService {
   }
 
   async approveWithdrawal(adminUserId: string, withdrawalId: string) {
-    return this.transitionWithdrawal(
-      withdrawalId,
-      "APPROVED",
-      {
-        approvedById: adminUserId,
-        approvedAt: new Date(),
-        rejectionReason: null,
-        rejectedAt: null,
-      },
-    );
+    return this.transitionWithdrawal(withdrawalId, "APPROVED", {
+      approvedById: adminUserId,
+      approvedAt: new Date(),
+      rejectionReason: null,
+      rejectedAt: null,
+    });
   }
 
   async markWithdrawalProcessing(adminUserId: string, withdrawalId: string) {
-    return this.transitionWithdrawal(
-      withdrawalId,
-      "PROCESSING",
-      {
-        processingAt: new Date(),
-        approvedById: adminUserId,
-      },
-    );
+    return this.transitionWithdrawal(withdrawalId, "PROCESSING", {
+      processingAt: new Date(),
+      approvedById: adminUserId,
+    });
   }
 
   async markWithdrawalPaid(
@@ -592,7 +587,9 @@ export class FinancialOperationsService {
   }
 
   private async calculateWithdrawalBalance(
-    tx: Pick<Prisma.TransactionClient, "transaction" | "vetWithdrawal"> | PrismaService,
+    tx:
+      | Pick<Prisma.TransactionClient, "transaction" | "vetWithdrawal">
+      | PrismaService,
     vetProfileId: string,
   ) {
     const [liquidated, committed, paid] = await Promise.all([

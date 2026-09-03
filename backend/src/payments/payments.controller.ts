@@ -334,10 +334,7 @@ export class PaymentsController {
   @Post("admin/settlements/run")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  async runSettlement(
-    @Request() req,
-    @Body() dto: RunSettlementDto,
-  ) {
+  async runSettlement(@Request() req, @Body() dto: RunSettlementDto) {
     return this.financialOperations.runSettlementBatch(
       req.user.id,
       dto.holdDays ?? 7,

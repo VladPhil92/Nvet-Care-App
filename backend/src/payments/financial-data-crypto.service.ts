@@ -49,7 +49,8 @@ export class FinancialDataCryptoService {
   }
 
   decrypt(payload: string): PayoutDestination {
-    const [version, ivEncoded, tagEncoded, ciphertextEncoded] = payload.split(".");
+    const [version, ivEncoded, tagEncoded, ciphertextEncoded] =
+      payload.split(".");
     if (
       version !== VERSION ||
       !ivEncoded ||
@@ -124,7 +125,11 @@ export class FinancialDataCryptoService {
 
     try {
       const decoded = Buffer.from(source, "base64");
-      if (decoded.length === 32 && decoded.toString("base64").replace(/=+$/, "") === source.replace(/=+$/, "")) {
+      if (
+        decoded.length === 32 &&
+        decoded.toString("base64").replace(/=+$/, "") ===
+          source.replace(/=+$/, "")
+      ) {
         return decoded;
       }
     } catch {
@@ -134,7 +139,8 @@ export class FinancialDataCryptoService {
     if (source.length < 32) {
       throw new ServiceUnavailableException({
         code: "FINANCIAL_ENCRYPTION_KEY_WEAK",
-        message: "La clave de cifrado financiero configurada no cumple la longitud mínima.",
+        message:
+          "La clave de cifrado financiero configurada no cumple la longitud mínima.",
       });
     }
 
