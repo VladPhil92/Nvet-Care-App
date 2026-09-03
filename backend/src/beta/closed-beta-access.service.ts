@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import * as crypto from "crypto";
+import { BetaActivationService } from "./beta-activation.service";
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 
 const DEFAULT_MARKET = "Cartagena de Indias";
@@ -11,7 +12,10 @@ const SHA256_HEX = /^[a-f0-9]{64}$/;
 
 @Injectable()
 export class ClosedBetaAccessService {
-  constructor(private readonly legalConsent?: BetaLegalConsentService) {}
+  constructor(
+    private readonly legalConsent?: BetaLegalConsentService,
+    private readonly activation?: BetaActivationService,
+  ) {}
 
   isEnabled(): boolean {
     return process.env.NVET_CLOSED_BETA_ENABLED === "true";
@@ -33,8 +37,8 @@ export class ClosedBetaAccessService {
   /**
    * Booking is the commercial boundary of the closed beta. Existing accounts
    * may still authenticate, recover access and manage their data while the
-   * beta is enabled, but only invited clients with the current legal consent
-   * can create new appointments.
+   * beta is enabled, but new appointments require an explicit, time-bounded
+   * operator authorization plus the invited cohort and current legal consent.
    */
   async assertBookingAllowed(
     clientId: string,
@@ -49,6 +53,15 @@ export class ClosedBetaAccessService {
     }
 
     if (!this.isEnabled()) return;
+
+    if (!this.activation) {
+      throw new ServiceUnavailableException({
+        error: "CLOSED_BETA_ACTIVATION_GATE_NOT_CONFIGURED",
+        message:
+          "La beta cerrada no puede aceptar reservas porque su autorización operacional no está configurada.",
+      });
+    }
+    await this.activation.assertActiveForBooking();
 
     const cohort = this.getClientHashes();
     if (cohort.size === 0) {
@@ -95,6 +108,7 @@ export class ClosedBetaAccessService {
       bookingEnabled: this.isBookingEnabled(),
       cohortConfigured: this.getConfiguredClientCount() > 0,
       legalAcceptanceRequired: this.isEnabled(),
+      operatorAuthorizationRequired: this.isEnabled(),
     } as const;
   }
 
