@@ -61,7 +61,10 @@ export class AiSafetyPolicyService {
   private assertNoAutonomousDose(value: unknown, surface: "client" | "vet") {
     for (const text of this.collectStrings(value)) {
       if (DOSE_PATTERNS.some((pattern) => pattern.test(text))) {
-        this.failClosed(surface, "autonomous medication dose/frequency detected");
+        this.failClosed(
+          surface,
+          "autonomous medication dose/frequency detected",
+        );
       }
     }
   }
