@@ -29,7 +29,10 @@ const ALWAYS_PRIVATE_FIELDS = new Set([
  */
 @Injectable()
 export class FinancialPrivacyInterceptor implements NestInterceptor {
-  intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
+  intercept(
+    _context: ExecutionContext,
+    next: CallHandler,
+  ): Observable<unknown> {
     return next.handle().pipe(map((value) => this.redact(value)));
   }
 
