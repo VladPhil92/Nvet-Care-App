@@ -16,22 +16,14 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { EmailVerifiedGuard } from "./guards/email-verified.guard";
 import { RolesGuard } from "./guards/roles.guard";
+import { VerifiedVetGuard } from "./guards/verified-vet.guard";
 import { WsJwtGuard, WsEmailVerifiedGuard } from "./guards/ws-jwt.guard";
 
 /**
  * AuthModule — wiring de todos los servicios de seguridad endurecidos.
  *
- * Servicios provisionados:
- *  - AuthService           → orquesta login/register/logout/refresh/2FA
- *  - PasswordService       → Argon2id + validación de fortaleza
- *  - PasswordResetService  → flujo de reset por email
- *  - TwoFactorService      → TOTP (Google Authenticator) + recovery codes
- *  - CtgIdentityService    → verifica tokens de Supabase (CTG One) contra su JWKS
- *  - TokenBlacklistService → revocación de JWT (Redis-backed en prod)
- *  - JwtStrategy           → validación de JWT en requests
- *  - JwtAuthGuard          → protege rutas autenticadas
- *  - RolesGuard            → autorización por rol
- *  - WsJwtGuard            → autenticación de WebSockets
+ * UserRole.VET is an onboarding identity. VerifiedVetGuard is a distinct
+ * operational authorization boundary for clinical and financial vet actions.
  */
 @Module({
   imports: [
@@ -61,6 +53,7 @@ import { WsJwtGuard, WsEmailVerifiedGuard } from "./guards/ws-jwt.guard";
     JwtAuthGuard,
     EmailVerifiedGuard,
     RolesGuard,
+    VerifiedVetGuard,
     WsJwtGuard,
     WsEmailVerifiedGuard,
   ],
@@ -72,6 +65,7 @@ import { WsJwtGuard, WsEmailVerifiedGuard } from "./guards/ws-jwt.guard";
     JwtAuthGuard,
     EmailVerifiedGuard,
     RolesGuard,
+    VerifiedVetGuard,
     WsJwtGuard,
     WsEmailVerifiedGuard,
     JwtModule,

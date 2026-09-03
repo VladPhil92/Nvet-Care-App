@@ -21,6 +21,7 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
+import { VerifiedVetGuard } from "../auth/guards/verified-vet.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { UserRole } from "@prisma/client";
 
@@ -82,7 +83,7 @@ export class VetsController {
   }
 
   @Post("me/availability/toggle")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   async toggleMyAvailability(@Request() req) {
     return this.vetsService.toggleAvailability(req.user.id);
@@ -126,7 +127,7 @@ export class VetsController {
   }
 
   @Get("me/earnings")
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   async getMyEarnings(
     @Request() req,
@@ -243,11 +244,6 @@ export class VetsController {
     });
   }
 
-  /**
-   * Backend-mediated download for private professional documents. The storage
-   * key never leaves the API and the response cannot be cached by browsers or
-   * intermediary proxies.
-   */
   @Get("admin/documents/:documentId/file")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

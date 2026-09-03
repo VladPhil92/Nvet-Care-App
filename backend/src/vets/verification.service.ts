@@ -465,12 +465,25 @@ export class VerificationService {
     );
 
     if (allApproved) {
+      const registryRows = await this.prisma.$queryRawUnsafe<
+        Array<{ status: string }>
+      >(
+        `SELECT status
+           FROM "vet_professional_registry_checks"
+          WHERE "vet_profile_id" = $1
+          LIMIT 1`,
+        vetProfileId,
+      );
+      const registryVerified = registryRows?.[0]?.status === "VERIFIED";
+
       const vet = await this.prisma.vetProfile.update({
         where: { id: vetProfileId },
         data: {
           verificationStatus: VerificationStatus.APPROVED,
           isVerified: true,
-          isActive: true,
+          // Documentary approval is necessary but not sufficient for practice.
+          // The DB trigger enforces the same invariant independently.
+          isActive: registryVerified,
           verifiedAt: new Date(),
           rejectionReason: null,
         },
@@ -481,15 +494,20 @@ export class VerificationService {
         },
       });
 
-      const result = await this.mail.sendVetApproval({
-        to: vet.user.email,
-        firstName: vet.user.firstName ?? "Veterinario",
-      });
+      // Support either verification order without sending a premature approval:
+      // registry-first + documents-last completes here; documents-first waits
+      // for ProfessionalRegistryService to complete the boundary.
+      if (registryVerified) {
+        const result = await this.mail.sendVetApproval({
+          to: vet.user.email,
+          firstName: vet.user.firstName ?? "Veterinario",
+        });
 
-      if (!result.ok) {
-        this.logger.warn(
-          `Vet approval email failed for vetProfileId=${vetProfileId}: ${result.reason}`,
-        );
+        if (!result.ok) {
+          this.logger.warn(
+            `Vet operational approval email failed for vetProfileId=${vetProfileId}: ${result.reason}`,
+          );
+        }
       }
     }
   }
@@ -523,7 +541,7 @@ export class VerificationService {
       case VerificationStatus.IN_REVIEW:
         return "Your documents are being reviewed. We'll notify you when complete";
       case VerificationStatus.APPROVED:
-        return "Your account is verified and active";
+        return "Documents approved. Operational access also requires official professional registry verification";
       case VerificationStatus.REJECTED:
         return "Review the rejection reason and re-upload corrected documents";
       case VerificationStatus.EXPIRED:
