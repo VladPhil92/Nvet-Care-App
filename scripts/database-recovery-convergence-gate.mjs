@@ -32,6 +32,19 @@ requireFile(baselinePath, 'Canonical Prisma baseline');
 requireFile('backend/prisma/migrations/migration_lock.toml', 'Prisma migration lock');
 requireFile('backend/scripts/database-migrate.mjs', 'Canonical migration runner');
 
+for (const manualFile of [
+  'auth_hardening_v2.sql',
+  'booking_integrity_v1.sql',
+  'ctg_superadmin_identity_v1.sql',
+  'live_location_v1.sql',
+  'resolve_todos.sql',
+]) {
+  requireFile(
+    `backend/prisma/manual-migrations/${manualFile}`,
+    `Manual SQL outside Prisma history: ${manualFile}`,
+  );
+}
+
 if (exists(baselinePath) && fs.statSync(full(baselinePath)).size < 5_000) {
   failures.push('Canonical Prisma baseline is unexpectedly small');
 }
@@ -48,11 +61,23 @@ if (/prisma\/migrations\/.*migration\.sql/.test(gitignore)) {
 }
 
 const migrationRoot = full('backend/prisma/migrations');
-const versioned = fs
+const migrationDirectories = fs
   .readdirSync(migrationRoot, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && entry.name !== 'manual')
+  .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
   .sort();
+
+for (const directory of migrationDirectories) {
+  if (!/^\d{14}_[a-z0-9_]+$/i.test(directory)) {
+    failures.push(
+      `Non-versioned directory inside prisma/migrations: ${directory}. Manual SQL belongs in prisma/manual-migrations.`,
+    );
+  }
+}
+
+const versioned = migrationDirectories.filter((directory) =>
+  /^\d{14}_[a-z0-9_]+$/i.test(directory),
+);
 if (versioned[0] !== baseline) {
   failures.push(`Baseline must be the first versioned migration; found ${versioned[0] ?? 'none'}`);
 }
@@ -83,6 +108,7 @@ for (const [pattern, purpose] of [
   [/_nvet_manual_migrations/, 'manual migration ledger'],
   [/createHash\(['"]sha256['"]\)|createHash\('sha256'\)/, 'manual migration checksum'],
   [/--skip-generate/, 'non-destructive legacy bridge'],
+  [/prisma\/manual-migrations\//, 'manual SQL isolation from Prisma migration history'],
 ]) {
   if (!pattern.test(runner)) failures.push(`Migration runner missing ${purpose}`);
 }
