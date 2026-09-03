@@ -6,6 +6,7 @@ import { LoggerModule } from "nestjs-pino";
 import { AllExceptionsFilter } from "./filters/all-exceptions.filter";
 import { LoggingInterceptor } from "./interceptors/logging.interceptor";
 import { PublicVetPrivacyInterceptor } from "./interceptors/public-vet-privacy.interceptor";
+import { FinancialPrivacyInterceptor } from "./interceptors/financial-privacy.interceptor";
 import { RequestIdMiddleware } from "./middlewares/request-id.middleware";
 import { pinoConfig } from "./logger/pino.config";
 import { throttlerConfig } from "./throttler/throttler.config";
@@ -17,6 +18,7 @@ import { throttlerConfig } from "./throttler/throttler.config";
  *  - Filter global de excepciones
  *  - Logging de requests
  *  - Privacy allowlist del directorio veterinario público
+ *  - Redacción fail-safe de secretos financieros en respuestas HTTP
  *  - Middleware de request-id
  */
 @Global()
@@ -37,6 +39,10 @@ import { throttlerConfig } from "./throttler/throttler.config";
     {
       provide: APP_INTERCEPTOR,
       useClass: PublicVetPrivacyInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: FinancialPrivacyInterceptor,
     },
     {
       provide: APP_GUARD,

@@ -1,7 +1,9 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -14,6 +16,7 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   ServiceUnavailableException,
+  StreamableFile,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -24,12 +27,17 @@ import { IdempotencyService } from "../common/security/idempotency.service";
 import { PaymentMethod, UserRole } from "@prisma/client";
 
 import { PaymentsService } from "./payments.service";
+import { FinancialOperationsService } from "./financial-operations.service";
 import {
   ProcessPaymentDto,
   VerifyTransferDto,
   InitiatePsePaymentDto,
   RequestWithdrawalDto,
   TransactionFiltersDto,
+  WithdrawalListFiltersDto,
+  RejectWithdrawalDto,
+  MarkWithdrawalPaidDto,
+  RunSettlementDto,
 } from "./dto/payment.dto";
 
 @Controller("payments")
@@ -37,6 +45,7 @@ import {
 export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
+    private readonly financialOperations: FinancialOperationsService,
     private readonly idempotencyService: IdempotencyService,
   ) {}
 
@@ -103,12 +112,32 @@ export class PaymentsController {
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: VerifyTransferDto,
   ) {
-    return this.paymentsService.verifyTransfer(req.user.id, id, file, dto);
+    return this.financialOperations.submitTransferProof(
+      req.user.id,
+      id,
+      file,
+      dto,
+    );
   }
 
   @Get("me/balance")
   async getMyBalance(@Request() req) {
-    return this.paymentsService.getBalance(req.user.id, req.user.role);
+    const base = await this.paymentsService.getBalance(
+      req.user.id,
+      req.user.role,
+    );
+    if (req.user.role !== UserRole.VET) return base;
+
+    const financial = await this.financialOperations.getBalanceForUser(
+      req.user.id,
+    );
+    return {
+      ...base,
+      copBalance: financial.availableCop,
+      lifetimeLiquidatedCop: financial.earnedCop,
+      reservedWithdrawalCop: financial.reservedCop,
+      paidWithdrawalCop: financial.paidCop,
+    };
   }
 
   @Get("transactions")
@@ -193,18 +222,20 @@ export class PaymentsController {
     @Query("startDate") startDate?: string,
     @Query("endDate") endDate?: string,
   ) {
-    const [summary, balance] = await Promise.all([
+    const [summary, financial] = await Promise.all([
       this.paymentsService.getEarningsSummary(req.user.id, {
         startDate,
         endDate,
       }),
-      this.paymentsService.getBalance(req.user.id, req.user.role),
+      this.financialOperations.getBalanceForUser(req.user.id),
     ]);
 
     return {
       ...summary,
-      pendingBalance: balance.pendingCop,
-      availableBalance: balance.copBalance,
+      availableBalance: financial.availableCop,
+      reservedWithdrawals: financial.reservedCop,
+      paidWithdrawals: financial.paidCop,
+      lifetimeLiquidatedBalance: financial.earnedCop,
     };
   }
 
@@ -212,8 +243,69 @@ export class PaymentsController {
   @UseGuards(RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   @HttpCode(HttpStatus.CREATED)
-  async requestWithdrawal(@Request() req, @Body() dto: RequestWithdrawalDto) {
-    return this.paymentsService.requestWithdrawal(req.user.id, dto);
+  async requestWithdrawal(
+    @Request() req,
+    @Body() dto: RequestWithdrawalDto,
+    @Headers("idempotency-key") idempotencyKey?: string,
+  ) {
+    const key = idempotencyKey?.trim();
+    if (!key || key.length < 8 || key.length > 64) {
+      throw new BadRequestException(
+        "Idempotency-Key es obligatorio para retiros y debe tener entre 8 y 64 caracteres",
+      );
+    }
+
+    const replay = await this.idempotencyService.execute({
+      key: `payments:withdrawal:${req.user.id}:${key}`,
+      endpoint: "POST /payments/withdrawals",
+      userId: req.user.id,
+      requestBody: dto,
+      operation: async () => ({
+        status: HttpStatus.CREATED,
+        body: JSON.parse(
+          JSON.stringify(
+            await this.financialOperations.requestWithdrawal(req.user.id, dto),
+          ),
+        ),
+      }),
+    });
+    return replay.result;
+  }
+
+  @Get("withdrawals")
+  @UseGuards(RolesGuard, VerifiedVetGuard)
+  @Roles(UserRole.VET)
+  async listMyWithdrawals(
+    @Request() req,
+    @Query() filters: WithdrawalListFiltersDto,
+  ) {
+    return this.financialOperations.listMyWithdrawals(
+      req.user.id,
+      filters.limit ?? 20,
+      filters.offset ?? 0,
+    );
+  }
+
+  @Delete("withdrawals/:id")
+  @UseGuards(RolesGuard, VerifiedVetGuard)
+  @Roles(UserRole.VET)
+  async cancelMyWithdrawal(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.financialOperations.cancelMyWithdrawal(req.user.id, id);
+  }
+
+  @Get("admin/transactions/:id/transfer-proof")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async readTransferProof(@Param("id", ParseUUIDPipe) id: string) {
+    const proof = await this.financialOperations.readTransferProof(id);
+    return new StreamableFile(proof.buffer, {
+      type: proof.mimeType,
+      disposition: `inline; filename="${proof.fileName}"`,
+      length: proof.buffer.length,
+    });
   }
 
   @Post("admin/transactions/:id/confirm-transfer")
@@ -224,7 +316,7 @@ export class PaymentsController {
     @Request() req,
     @Param("id", ParseUUIDPipe) id: string,
   ) {
-    return this.paymentsService.adminConfirmTransfer(req.user.id, id);
+    return this.financialOperations.confirmTransfer(req.user.id, id);
   }
 
   @Post("admin/transactions/:id/reject-transfer")
@@ -236,6 +328,84 @@ export class PaymentsController {
     @Param("id", ParseUUIDPipe) id: string,
     @Body("reason") reason: string,
   ) {
-    return this.paymentsService.adminRejectTransfer(req.user.id, id, reason);
+    return this.financialOperations.rejectTransfer(req.user.id, id, reason);
+  }
+
+  @Post("admin/settlements/run")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async runSettlement(@Request() req, @Body() dto: RunSettlementDto) {
+    return this.financialOperations.runSettlementBatch(
+      req.user.id,
+      dto.holdDays ?? 7,
+    );
+  }
+
+  @Get("admin/withdrawals")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async listAdminWithdrawals(@Query() filters: WithdrawalListFiltersDto) {
+    return this.financialOperations.listAdminWithdrawals(
+      filters.status,
+      filters.limit ?? 50,
+      filters.offset ?? 0,
+    );
+  }
+
+  @Get("admin/withdrawals/:id/payout-instructions")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getPayoutInstructions(@Param("id", ParseUUIDPipe) id: string) {
+    return this.financialOperations.getPayoutInstructions(id);
+  }
+
+  @Post("admin/withdrawals/:id/approve")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async approveWithdrawal(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.financialOperations.approveWithdrawal(req.user.id, id);
+  }
+
+  @Post("admin/withdrawals/:id/processing")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async markWithdrawalProcessing(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.financialOperations.markWithdrawalProcessing(req.user.id, id);
+  }
+
+  @Post("admin/withdrawals/:id/paid")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async markWithdrawalPaid(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: MarkWithdrawalPaidDto,
+  ) {
+    return this.financialOperations.markWithdrawalPaid(
+      req.user.id,
+      id,
+      dto.paymentReference,
+    );
+  }
+
+  @Post("admin/withdrawals/:id/reject")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async rejectWithdrawal(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: RejectWithdrawalDto,
+  ) {
+    return this.financialOperations.rejectWithdrawal(
+      req.user.id,
+      id,
+      dto.reason,
+    );
   }
 }

@@ -70,24 +70,24 @@ jobs:
           console.log(`Staging is still serving certified candidate ${body.revision}.`);
           NODE
 
-      - name: Certify staging transfer application lifecycle
-        run: node scripts/certify-transfer-payment-rail.mjs
+      - name: Certify private staging transfer lifecycle
+        run: node scripts/certify-transfer-payment-rail-v2.mjs
 
       - name: Publish certification boundary
         if: always()
         shell: bash
         run: |
           {
-            echo '## Nvet TRANSFER Payment Rail Certification'
+            echo '## Nvet TRANSFER Payment Rail Certification v2'
             echo ''
             echo "- Candidate: \`${RC_CANDIDATE_SHA}\`"
             echo '- Target: isolated Railway staging only.'
             echo '- Credentials: loaded from the runtime-rotated Railway staging session and masked in Actions.'
-            echo '- Required identities: CLIENT → VET → ADMIN.'
+            echo '- Required identities: CLIENT → verified VET → ADMIN.'
             echo '- Required transaction lifecycle: PENDING → VERIFYING → CONFIRMED.'
-            echo '- Appointment must become CONFIRMED and remain readable by the owning CLIENT.'
-            echo '- The proof fixture uses an allowed application/pdf upload; backend upload validation remains unchanged.'
+            echo '- Transfer evidence must be private, readable only through the authenticated admin endpoint and SHA-256 identical to the submitted proof.'
+            echo '- Private storage identifiers and legacy TRANSFER hashOnchain values must not appear in VET, ADMIN confirmation or CLIENT responses.'
             echo '- The synthetic appointment is cancelled after certification to release availability.'
             echo ''
-            echo '> A successful run proves the Nvet application rail and authorization/state-machine lifecycle. It does not prove that real funds moved through a bank. Keep `paymentRailVerified` pending until a controlled real transfer is retained as operator evidence.'
+            echo '> A successful run proves the Nvet application rail, professional authorization boundary, evidence integrity and response privacy. It does not prove that real funds moved through a bank. Keep `paymentRailVerified` pending until a controlled real transfer is retained as operator evidence.'
           } >> "$GITHUB_STEP_SUMMARY"

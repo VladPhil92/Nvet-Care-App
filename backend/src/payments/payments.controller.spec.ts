@@ -1,4 +1,7 @@
-import { ServiceUnavailableException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import { PaymentMethod } from "@prisma/client";
 
 import { PaymentsController } from "./payments.controller";
@@ -7,6 +10,11 @@ function createController() {
   const paymentsService = {
     processPayment: jest.fn(),
     initiatePse: jest.fn(),
+    getBalance: jest.fn(),
+  };
+  const financialOperations = {
+    requestWithdrawal: jest.fn(),
+    getBalanceForUser: jest.fn(),
   };
   const idempotencyService = {
     execute: jest.fn(),
@@ -15,9 +23,11 @@ function createController() {
   return {
     controller: new PaymentsController(
       paymentsService as never,
+      financialOperations as never,
       idempotencyService as never,
     ),
     paymentsService,
+    financialOperations,
     idempotencyService,
   };
 }
@@ -94,5 +104,63 @@ describe("PaymentsController production rail guards", () => {
 
     expect(paymentsService.initiatePse).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ transactionId: "tx-test" });
+  });
+
+  it("requires a persistent idempotency key for withdrawal requests", async () => {
+    process.env.NODE_ENV = "test";
+    const { controller, financialOperations, idempotencyService } =
+      createController();
+
+    await expect(
+      controller.requestWithdrawal(
+        { user: { id: "vet-1" } },
+        {
+          amountCop: 50_000,
+          paymentMethod: "NEQUI",
+          accountInfo: {
+            phoneNumber: "3001234567",
+            documentId: "123456789",
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(financialOperations.requestWithdrawal).not.toHaveBeenCalled();
+    expect(idempotencyService.execute).not.toHaveBeenCalled();
+  });
+
+  it("routes a withdrawal through persistent idempotency", async () => {
+    process.env.NODE_ENV = "test";
+    const { controller, financialOperations, idempotencyService } =
+      createController();
+    financialOperations.requestWithdrawal.mockResolvedValue({
+      withdrawal: { id: "withdrawal-1", status: "PENDING" },
+    });
+    idempotencyService.execute.mockImplementation(async ({ operation }) => {
+      const result = await operation();
+      return { result: result.body };
+    });
+
+    const result = await controller.requestWithdrawal(
+      { user: { id: "vet-1" } },
+      {
+        amountCop: 50_000,
+        paymentMethod: "NEQUI",
+        accountInfo: {
+          phoneNumber: "3001234567",
+          documentId: "123456789",
+        },
+      },
+      "withdraw-12345678",
+    );
+
+    expect(idempotencyService.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "payments:withdrawal:vet-1:withdraw-12345678",
+      }),
+    );
+    expect(result).toMatchObject({
+      withdrawal: { id: "withdrawal-1", status: "PENDING" },
+    });
   });
 });
