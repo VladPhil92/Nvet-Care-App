@@ -1,0 +1,43 @@
+name: Beta Privacy Support Rollback Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/beta/**'
+      - 'backend/src/appointments/appointments.service.ts'
+      - 'backend/.env.example'
+      - 'docs/legal/**'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/CARTAGENA_BETA_OPERATIONS_RUNBOOK.md'
+      - 'scripts/beta-privacy-support-rollback-gate.mjs'
+      - '.github/workflows/beta-privacy-support-rollback-certification.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/beta/**'
+      - 'backend/src/appointments/appointments.service.ts'
+      - 'backend/.env.example'
+      - 'docs/legal/**'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/CARTAGENA_BETA_OPERATIONS_RUNBOOK.md'
+      - 'scripts/beta-privacy-support-rollback-gate.mjs'
+      - '.github/workflows/beta-privacy-support-rollback-certification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    name: Beta Privacy, Support & Rollback Certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+      - name: Enforce evidence-honest beta operational boundaries
+        run: node scripts/beta-privacy-support-rollback-gate.mjs
