@@ -1,9 +1,5 @@
 import { ConflictException, ServiceUnavailableException } from "@nestjs/common";
-import * as crypto from "crypto";
 import { BetaActivationService } from "./beta-activation.service";
-
-const hash = (value: string) =>
-  crypto.createHash("sha256").update(value).digest("hex");
 
 describe("BetaActivationService", () => {
   const originalEnv = process.env;
@@ -37,6 +33,9 @@ describe("BetaActivationService", () => {
   const evidence = {
     getPromotionSummary: jest.fn(),
   } as any;
+  const cohort = {
+    getOperationalSnapshot: jest.fn(),
+  } as any;
   const actor = {
     id: "admin-user-id",
     role: "ADMIN",
@@ -45,12 +44,20 @@ describe("BetaActivationService", () => {
   };
   let service: BetaActivationService;
 
+  const healthyCohort = () => ({
+    ledger: "audit_logs",
+    appendOnly: true,
+    activeMemberships: 2,
+    eligibleActiveMembers: 2,
+    ineligibleMembers: 0,
+    maxInitialClients: 50,
+    remainingSlots: 48,
+    withinLimit: true,
+    configured: true,
+  });
+
   beforeEach(() => {
     process.env = { ...originalEnv };
-    process.env.NVET_CLOSED_BETA_CLIENT_HASHES = [
-      hash("client-1"),
-      hash("client-2"),
-    ].join(",");
     process.env.NVET_BETA_SUPPORT_OWNER = "beta-ops";
     process.env.NVET_BETA_SUPPORT_CHANNEL = "ops-channel";
     process.env.NVET_CLOSED_BETA_MARKET = "Cartagena de Indias";
@@ -61,7 +68,8 @@ describe("BetaActivationService", () => {
     evidence.getPromotionSummary.mockResolvedValue({
       eligibleForOperatorActivation: true,
     });
-    service = new BetaActivationService(prisma, evidence);
+    cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort());
+    service = new BetaActivationService(prisma, evidence, cohort);
   });
 
   afterAll(() => {
@@ -88,10 +96,25 @@ describe("BetaActivationService", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("detects live prerequisite drift and blocks bookings after authorization", async () => {
+  it("detects veterinarian prerequisite drift and blocks bookings after authorization", async () => {
     await service.authorize({}, actor);
     prisma.vetProfile.count.mockResolvedValue(2);
 
+    await expect(service.assertActiveForBooking()).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+  });
+
+  it("detects cohort eligibility drift and blocks bookings after authorization", async () => {
+    await service.authorize({}, actor);
+    cohort.getOperationalSnapshot.mockResolvedValue({
+      ...healthyCohort(),
+      eligibleActiveMembers: 1,
+      ineligibleMembers: 1,
+    });
+
+    const prerequisites = await service.getPrerequisites();
+    expect(prerequisites.blockers).toContain("COHORT_MEMBER_INELIGIBLE");
     await expect(service.assertActiveForBooking()).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
