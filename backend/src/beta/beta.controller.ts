@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   Request,
   UseGuards,
@@ -10,10 +11,18 @@ import { UserRole } from "@prisma/client";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
+import {
+  BetaEvidenceActor,
+  BetaEvidenceService,
+} from "./beta-evidence.service";
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import { BetaReadinessService } from "./beta-readiness.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 import { AcceptBetaLegalDto } from "./dto/accept-beta-legal.dto";
+import {
+  DecideBetaEvidenceDto,
+  SubmitBetaEvidenceDto,
+} from "./dto/beta-evidence.dto";
 
 @Controller("beta")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -22,6 +31,7 @@ export class BetaController {
     private readonly access: ClosedBetaAccessService,
     private readonly readiness: BetaReadinessService,
     private readonly legalConsent: BetaLegalConsentService,
+    private readonly evidence: BetaEvidenceService,
   ) {}
 
   @Get("policy")
@@ -46,5 +56,62 @@ export class BetaController {
   @Roles(UserRole.ADMIN)
   getReadiness() {
     return this.readiness.getCartagenaSnapshot();
+  }
+
+  @Get("evidence/summary")
+  @Roles(UserRole.ADMIN)
+  getEvidenceSummary() {
+    return this.evidence.getPromotionSummary();
+  }
+
+  @Get("evidence/history")
+  @Roles(UserRole.ADMIN)
+  getEvidenceHistory() {
+    return this.evidence.getHistory();
+  }
+
+  @Post("evidence")
+  @Roles(UserRole.ADMIN)
+  submitEvidence(@Request() req, @Body() dto: SubmitBetaEvidenceDto) {
+    return this.evidence.submit(dto, this.getEvidenceActor(req));
+  }
+
+  @Post("evidence/:evidenceId/approve")
+  @Roles(UserRole.ADMIN)
+  approveEvidence(
+    @Request() req,
+    @Param("evidenceId") evidenceId: string,
+    @Body() dto: DecideBetaEvidenceDto,
+  ) {
+    return this.evidence.approve(evidenceId, dto, this.getEvidenceActor(req));
+  }
+
+  @Post("evidence/:evidenceId/reject")
+  @Roles(UserRole.ADMIN)
+  rejectEvidence(
+    @Request() req,
+    @Param("evidenceId") evidenceId: string,
+    @Body() dto: DecideBetaEvidenceDto,
+  ) {
+    return this.evidence.reject(evidenceId, dto, this.getEvidenceActor(req));
+  }
+
+  @Post("evidence/:evidenceId/revoke")
+  @Roles(UserRole.ADMIN)
+  revokeEvidence(
+    @Request() req,
+    @Param("evidenceId") evidenceId: string,
+    @Body() dto: DecideBetaEvidenceDto,
+  ) {
+    return this.evidence.revoke(evidenceId, dto, this.getEvidenceActor(req));
+  }
+
+  private getEvidenceActor(req): BetaEvidenceActor {
+    return {
+      id: req.user.id,
+      role: req.user.role,
+      ip: req.ip ?? req.headers?.["x-forwarded-for"],
+      userAgent: req.headers?.["user-agent"],
+    };
   }
 }
