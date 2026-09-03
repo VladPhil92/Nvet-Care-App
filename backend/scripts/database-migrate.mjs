@@ -10,15 +10,15 @@ const MANUAL_LEDGER_TABLE = '_nvet_manual_migrations';
 const MANUAL_MIGRATIONS = [
   {
     name: 'ctg_superadmin_identity_v1',
-    file: 'prisma/migrations/manual/ctg_superadmin_identity_v1.sql',
+    file: 'prisma/manual-migrations/ctg_superadmin_identity_v1.sql',
   },
   {
     name: 'booking_integrity_v1',
-    file: 'prisma/migrations/manual/booking_integrity_v1.sql',
+    file: 'prisma/manual-migrations/booking_integrity_v1.sql',
   },
   {
     name: 'live_location_v1',
-    file: 'prisma/migrations/manual/live_location_v1.sql',
+    file: 'prisma/manual-migrations/live_location_v1.sql',
   },
 ];
 
