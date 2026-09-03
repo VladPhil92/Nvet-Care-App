@@ -9,8 +9,10 @@ on:
       - 'backend/src/appointments/appointments.module.ts'
       - 'backend/.env.example'
       - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/RC_READINESS.json'
       - 'docs/PHASE_12_CARTAGENA_CLOSED_BETA.md'
       - 'scripts/verify-cartagena-beta-readiness.mjs'
+      - 'scripts/verify-cartagena-beta-evidence-inheritance.mjs'
       - '.github/workflows/cartagena-closed-beta-readiness.yml'
   schedule:
     - cron: '29 12 * * *'
@@ -45,6 +47,8 @@ jobs:
           node-version: '22.x'
       - name: Validate Phase 12 contract
         run: node scripts/verify-cartagena-beta-readiness.mjs --contract-only
+      - name: Verify inherited RC evidence cannot drift
+        run: node scripts/verify-cartagena-beta-evidence-inheritance.mjs
 
   audit:
     name: Audit live Cartagena beta evidence
@@ -61,5 +65,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '22.x'
+      - name: Verify inherited RC evidence cannot drift
+        run: node scripts/verify-cartagena-beta-evidence-inheritance.mjs
       - name: Audit current main beta evidence
         run: node scripts/verify-cartagena-beta-readiness.mjs --runtime
