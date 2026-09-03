@@ -6,17 +6,10 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import {
-  AuditAction,
-  AuditSeverity,
-  Prisma,
-  UserRole,
-} from "@prisma/client";
+import { AuditAction, AuditSeverity, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { BETA_EVIDENCE_PROGRAM } from "./beta-evidence.constants";
-import {
-  BetaEvidenceActor,
-} from "./beta-evidence.service";
+import { BetaEvidenceActor } from "./beta-evidence.service";
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import {
   InviteBetaCohortMemberDto,
@@ -92,7 +85,9 @@ export class BetaCohortService {
 
     const current = await this.getDerivedMember(user.id);
     if (current?.status === "ACTIVE") {
-      throw new ConflictException("Client is already active in the beta cohort.");
+      throw new ConflictException(
+        "Client is already active in the beta cohort.",
+      );
     }
     if (current?.status === "CONFLICTED") {
       throw new ConflictException(
@@ -278,8 +273,9 @@ export class BetaCohortService {
     return {
       ...operational,
       members,
-      revokedMemberships: derived.filter((member) => member.status === "REVOKED")
-        .length,
+      revokedMemberships: derived.filter(
+        (member) => member.status === "REVOKED",
+      ).length,
       conflictedMemberships: derived.filter(
         (member) => member.status === "CONFLICTED",
       ).length,
@@ -375,10 +371,17 @@ export class BetaCohortService {
 
     return {
       userId: sorted[0].userId,
-      status: conflictReasons.length > 0 ? "CONFLICTED" : status === "MISSING" ? "REVOKED" : status,
+      status:
+        conflictReasons.length > 0
+          ? "CONFLICTED"
+          : status === "MISSING"
+            ? "REVOKED"
+            : status,
       invitedAt,
       revokedAt,
-      lastEventAt: sorted.at(-1)?.createdAt.toISOString() ?? sorted[0].createdAt.toISOString(),
+      lastEventAt:
+        sorted.at(-1)?.createdAt.toISOString() ??
+        sorted[0].createdAt.toISOString(),
       eventCount: sorted.length,
       conflictReasons,
     };
@@ -462,7 +465,9 @@ export class BetaCohortService {
 
   private assertEligibleUser(user: CohortUser) {
     if (user.role !== UserRole.CLIENT) {
-      throw new BadRequestException("Only CLIENT accounts can join the beta cohort.");
+      throw new BadRequestException(
+        "Only CLIENT accounts can join the beta cohort.",
+      );
     }
     if (!user.isActive) {
       throw new ConflictException("Client account is inactive.");
@@ -475,9 +480,7 @@ export class BetaCohortService {
   }
 
   private isEligibleUser(user: CohortUser): boolean {
-    return (
-      user.role === UserRole.CLIENT && user.isActive && user.emailVerified
-    );
+    return user.role === UserRole.CLIENT && user.isActive && user.emailVerified;
   }
 
   private normalizeIp(ip?: string): string | undefined {
