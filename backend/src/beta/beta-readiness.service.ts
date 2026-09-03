@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { VerificationStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { BetaActivationService } from "./beta-activation.service";
+import { BetaCohortService } from "./beta-cohort.service";
 import { BetaEvidenceService } from "./beta-evidence.service";
 import { BETA_LEGAL_DOCUMENTS } from "./beta-legal.constants";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
@@ -21,6 +22,7 @@ type ActivationState =
 type LocalBlocker =
   | "CLIENT_COHORT_NOT_CONFIGURED"
   | "CLIENT_COHORT_LIMIT_EXCEEDED"
+  | "COHORT_MEMBER_INELIGIBLE"
   | "CARTAGENA_VET_COVERAGE_INSUFFICIENT"
   | "SUPPORT_OWNER_NOT_CONFIGURED"
   | "SUPPORT_CHANNEL_NOT_CONFIGURED";
@@ -32,10 +34,11 @@ export class BetaReadinessService {
     private readonly access: ClosedBetaAccessService,
     private readonly evidence: BetaEvidenceService,
     private readonly authorization: BetaActivationService,
+    private readonly cohort: BetaCohortService,
   ) {}
 
   async getCartagenaSnapshot() {
-    const [verifiedActiveVets, evidencePromotion, authorization] =
+    const [verifiedActiveVets, evidencePromotion, authorization, cohort] =
       await Promise.all([
         this.prisma.vetProfile.count({
           where: {
@@ -50,11 +53,13 @@ export class BetaReadinessService {
         }),
         this.evidence.getPromotionSummary(),
         this.authorization.getStatus(),
+        this.cohort.getOperationalSnapshot(),
       ]);
 
-    const configuredClients = this.access.getConfiguredClientCount();
-    const cohortConfigured = configuredClients > 0;
-    const cohortWithinLimit = configuredClients <= MAX_INITIAL_CLIENTS;
+    const configuredClients = cohort.activeMemberships;
+    const cohortConfigured = cohort.configured;
+    const cohortWithinLimit = cohort.withinLimit;
+    const cohortMembersEligible = cohort.ineligibleMembers === 0;
     const vetCoverageSatisfied = verifiedActiveVets >= MIN_VERIFIED_VETS;
     const supportOwnerConfigured = Boolean(
       process.env.NVET_BETA_SUPPORT_OWNER?.trim(),
@@ -73,6 +78,9 @@ export class BetaReadinessService {
     }
     if (!cohortWithinLimit) {
       blockingReasons.push("CLIENT_COHORT_LIMIT_EXCEEDED");
+    }
+    if (!cohortMembersEligible) {
+      blockingReasons.push("COHORT_MEMBER_INELIGIBLE");
     }
     if (!vetCoverageSatisfied) {
       blockingReasons.push("CARTAGENA_VET_COVERAGE_INSUFFICIENT");
@@ -127,8 +135,14 @@ export class BetaReadinessService {
       cohort: {
         configured: cohortConfigured,
         configuredClients,
+        eligibleActiveMembers: cohort.eligibleActiveMembers,
+        ineligibleMembers: cohort.ineligibleMembers,
         maxInitialClients: MAX_INITIAL_CLIENTS,
+        remainingSlots: cohort.remainingSlots,
         withinLimit: cohortWithinLimit,
+        ledger: "audit_logs",
+        appendOnly: true,
+        membershipSource: "admin-control-plane",
       },
       vetCoverage: {
         verifiedActiveVets,
@@ -155,14 +169,17 @@ export class BetaReadinessService {
         authorizationRequiredForBooking: true,
         evidenceLedger: "audit_logs",
         authorizationLedger: "audit_logs",
+        cohortLedger: "audit_logs",
         requiredEvidenceManifest:
           "docs/production/BETA_CARTAGENA_READINESS.json",
       },
       privacy: {
         rawClientIdentifiersExposed: false,
         cohortHashesExposed: false,
+        environmentCohortHashesCanonical: false,
         supportContactExposed: false,
         evidenceReferencesAdminOnly: true,
+        cohortMemberDetailsAdminOnly: true,
       },
       generatedAt: new Date().toISOString(),
     } as const;
