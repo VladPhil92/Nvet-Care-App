@@ -81,19 +81,13 @@ export class BetaController {
 
   @Post("activation/authorize")
   @Roles(UserRole.ADMIN)
-  authorizeActivation(
-    @Request() req,
-    @Body() dto: AuthorizeBetaActivationDto,
-  ) {
+  authorizeActivation(@Request() req, @Body() dto: AuthorizeBetaActivationDto) {
     return this.activation.authorize(dto, this.getEvidenceActor(req));
   }
 
   @Post("activation/revoke")
   @Roles(UserRole.ADMIN)
-  revokeActivation(
-    @Request() req,
-    @Body() dto: RevokeBetaActivationDto,
-  ) {
+  revokeActivation(@Request() req, @Body() dto: RevokeBetaActivationDto) {
     return this.activation.revoke(dto, this.getEvidenceActor(req));
   }
 
