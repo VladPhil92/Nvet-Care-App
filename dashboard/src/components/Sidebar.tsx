@@ -16,6 +16,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
     { id: 'tiers', label: 'Planes', icon: '◆' },
     { id: 'accounting', label: 'Contabilidad', icon: '₱' },
     { id: 'evidence', label: 'Evidencia', icon: '✓' },
+    { id: 'cohort', label: 'Cohorte Beta', icon: '◎' },
     { id: 'tracking', label: 'Tracking', icon: '⊙' },
     { id: 'mobile', label: 'Mobile', icon: '📱' },
   ]
