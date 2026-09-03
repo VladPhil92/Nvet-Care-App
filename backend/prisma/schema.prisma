@@ -295,6 +295,7 @@ model VetProfile {
   schedules                    VetSchedule[]
   scheduleExceptions           ScheduleException[]
   professionalRegistryCheck    VetProfessionalRegistryCheck?
+  withdrawals                  VetWithdrawal[]
 
   @@index([verificationStatus])
   @@index([city])
@@ -501,6 +502,19 @@ model Transaction {
   transferCode          String? @map("transfer_code")
   externalTransactionId String? @map("external_transaction_id")
 
+  transferProofStorageKey String?   @map("transfer_proof_storage_key")
+  transferProofFileName   String?   @map("transfer_proof_file_name")
+  transferProofMimeType   String?   @map("transfer_proof_mime_type")
+  transferProofSha256     String?   @map("transfer_proof_sha256")
+  transferDate            DateTime? @map("transfer_date")
+  transferSubmittedAt     DateTime? @map("transfer_submitted_at")
+  transferReviewedById    String?   @map("transfer_reviewed_by_id")
+  transferRejectedAt      DateTime? @map("transfer_rejected_at")
+  transferRejectionReason String?   @db.Text @map("transfer_rejection_reason")
+
+  settlementBatchId String?                   @map("settlement_batch_id")
+  settlementBatch   FinancialSettlementBatch? @relation(fields: [settlementBatchId], references: [id], onDelete: SetNull)
+
   verifiedAt   DateTime? @map("verified_at")
   liquidatedAt DateTime? @map("liquidated_at")
 
@@ -509,8 +523,62 @@ model Transaction {
 
   @@index([status])
   @@index([paymentMethod])
+  @@index([settlementBatchId])
   @@index([status, paymentMethod, createdAt]) // Performance: panel admin con filtros combinados
   @@map("transactions")
+}
+
+model FinancialSettlementBatch {
+  id String @id @default(uuid())
+
+  cutoffAt DateTime @map("cutoff_at")
+  holdDays Int      @map("hold_days")
+
+  transactionCount   Int   @map("transaction_count")
+  totalGrossCop      Float @map("total_gross_cop")
+  totalCommissionCop Float @map("total_commission_cop")
+  totalNetCop        Float @map("total_net_cop")
+
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  transactions Transaction[]
+
+  @@index([createdAt])
+  @@map("financial_settlement_batches")
+}
+
+model VetWithdrawal {
+  id String @id @default(uuid())
+
+  vetProfileId String     @map("vet_profile_id")
+  vetProfile   VetProfile @relation(fields: [vetProfileId], references: [id], onDelete: Restrict)
+
+  amountCop Int    @map("amount_cop")
+  method    String
+  status    String @default("PENDING")
+
+  destinationCiphertext  String @db.Text @map("destination_ciphertext")
+  destinationFingerprint String @map("destination_fingerprint")
+  destinationMasked      String @map("destination_masked")
+
+  requestedById String  @map("requested_by_id")
+  approvedById  String? @map("approved_by_id")
+  paidById      String? @map("paid_by_id")
+
+  paymentReference String? @map("payment_reference")
+  rejectionReason  String? @db.Text @map("rejection_reason")
+
+  requestedAt  DateTime  @default(now()) @map("requested_at")
+  approvedAt   DateTime? @map("approved_at")
+  processingAt DateTime? @map("processing_at")
+  paidAt       DateTime? @map("paid_at")
+  rejectedAt   DateTime? @map("rejected_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([vetProfileId, status])
+  @@index([status, requestedAt])
+  @@map("vet_withdrawals")
 }
 
 model Price {
