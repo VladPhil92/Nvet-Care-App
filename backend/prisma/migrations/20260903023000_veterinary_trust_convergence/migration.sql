@@ -1,8 +1,8 @@
 -- Veterinary Trust Convergence
 --
--- Professional registry evidence is intentionally separate from Prisma-managed
--- domain models. COMVEZCOL exposes a public consultation surface, not a stable
--- application API contract, so Nvet records an auditable admin verification
+-- Professional registry evidence is intentionally separate from the upstream
+-- registry transport. COMVEZCOL exposes a public consultation surface, not a
+-- stable application API contract, so Nvet records an auditable admin check
 -- instead of scraping it and pretending that scrape is authoritative.
 
 CREATE TABLE IF NOT EXISTS "vet_professional_registry_checks" (
@@ -26,9 +26,27 @@ CREATE TABLE IF NOT EXISTS "vet_professional_registry_checks" (
     CHECK ("status" IN ('VERIFIED', 'NOT_FOUND', 'SANCTIONED', 'UNAVAILABLE'))
 );
 
+-- Legacy adoption may create the Prisma-modeled table before this migration is
+-- replayed. In that path CREATE TABLE IF NOT EXISTS is a no-op, so install the
+-- status constraint independently and idempotently.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'vet_professional_registry_checks_status_check'
+  ) THEN
+    ALTER TABLE "vet_professional_registry_checks"
+      ADD CONSTRAINT "vet_professional_registry_checks_status_check"
+      CHECK ("status" IN ('VERIFIED', 'NOT_FOUND', 'SANCTIONED', 'UNAVAILABLE'));
+  END IF;
+END
+$$;
+
 CREATE INDEX IF NOT EXISTS "vet_professional_registry_checks_status_idx"
   ON "vet_professional_registry_checks"("status");
 
+-- Existing profiles must be explicitly certified under the new trust model.
 UPDATE "vet_profiles"
 SET "is_active" = FALSE,
     "is_available_now" = FALSE
