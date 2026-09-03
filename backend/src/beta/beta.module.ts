@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { BetaController } from "./beta.controller";
+import { BetaEvidenceService } from "./beta-evidence.service";
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import { BetaReadinessService } from "./beta-readiness.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
@@ -9,11 +10,13 @@ import { ClosedBetaAccessService } from "./closed-beta-access.service";
   imports: [AuthModule],
   controllers: [BetaController],
   providers: [
+    BetaEvidenceService,
     BetaLegalConsentService,
     ClosedBetaAccessService,
     BetaReadinessService,
   ],
   exports: [
+    BetaEvidenceService,
     BetaLegalConsentService,
     ClosedBetaAccessService,
     BetaReadinessService,
