@@ -84,10 +84,7 @@ export class BetaController {
 
   @Post("cohort/invite")
   @Roles(UserRole.ADMIN)
-  inviteCohortMember(
-    @Request() req,
-    @Body() dto: InviteBetaCohortMemberDto,
-  ) {
+  inviteCohortMember(@Request() req, @Body() dto: InviteBetaCohortMemberDto) {
     return this.cohort.invite(dto, this.getEvidenceActor(req));
   }
 
