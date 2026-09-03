@@ -5,8 +5,10 @@ import { memoryStorage } from "multer";
 
 import { VetsController } from "./vets.controller";
 import { ScheduleController } from "./schedule.controller";
+import { ProfessionalRegistryController } from "./professional-registry.controller";
 import { VetsService } from "./vets.service";
 import { VerificationService } from "./verification.service";
+import { ProfessionalRegistryService } from "./professional-registry.service";
 import { PricesService } from "./prices.service";
 import { ScheduleService } from "./schedule.service";
 import { PublicVetLocationInterceptor } from "./public-location.interceptor";
@@ -41,10 +43,15 @@ import { AuthModule } from "../auth/auth.module";
       },
     }),
   ],
-  controllers: [VetsController, ScheduleController],
+  controllers: [
+    VetsController,
+    ScheduleController,
+    ProfessionalRegistryController,
+  ],
   providers: [
     VetsService,
     VerificationService,
+    ProfessionalRegistryService,
     PricesService,
     ScheduleService,
     {
@@ -52,6 +59,12 @@ import { AuthModule } from "../auth/auth.module";
       useClass: PublicVetLocationInterceptor,
     },
   ],
-  exports: [VetsService, VerificationService, PricesService, ScheduleService],
+  exports: [
+    VetsService,
+    VerificationService,
+    ProfessionalRegistryService,
+    PricesService,
+    ScheduleService,
+  ],
 })
 export class VetsModule {}
