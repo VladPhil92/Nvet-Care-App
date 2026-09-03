@@ -1,0 +1,53 @@
+name: Nvet Database Baseline Generator
+
+on:
+  push:
+    branches:
+      - feat/database-recovery-convergence
+    paths:
+      - '.github/workflows/database-baseline-generator.yml'
+      - 'backend/prisma/schema.prisma'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-baseline:
+    name: Generate canonical PostgreSQL baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --include=dev --legacy-peer-deps
+
+      - name: Generate baseline from empty database
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts
+          npx prisma migrate diff \
+            --from-empty \
+            --to-schema-datamodel backend/prisma/schema.prisma \
+            --script > .artifacts/migration.sql
+          test -s .artifacts/migration.sql
+          sha256sum .artifacts/migration.sql | tee .artifacts/migration.sha256
+
+      - name: Upload baseline artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nvet-prisma-baseline
+          path: |
+            .artifacts/migration.sql
+            .artifacts/migration.sha256
+          if-no-files-found: error
+          retention-days: 7
