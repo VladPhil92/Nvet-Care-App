@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/database-baseline-generator.yml'
       - 'backend/prisma/schema.prisma'
+      - 'backend/.gitignore'
   workflow_dispatch:
 
 permissions:
