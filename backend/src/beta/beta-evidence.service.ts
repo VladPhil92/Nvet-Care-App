@@ -153,13 +153,22 @@ export class BetaEvidenceService {
     const history = await this.getHistory();
     const gates = BETA_EVIDENCE_GATES.map((gate) => {
       const items = history.evidence.filter((item) => item.gate === gate);
-      const conflictCount = items.filter(
+      const productionItems = items.filter(
+        (item) => item.environment === "production",
+      );
+      const conflictCount = productionItems.filter(
         (item) => item.status === "CONFLICTED",
       ).length;
-      const expiredCount = items.filter(
+      const expiredCount = productionItems.filter(
         (item) => item.status === "EXPIRED",
       ).length;
-      const approved = items.filter((item) => item.status === "APPROVED");
+      const approved = productionItems.filter(
+        (item) => item.status === "APPROVED",
+      );
+      const stagingApprovedEvidenceCount = items.filter(
+        (item) =>
+          item.environment === "staging" && item.status === "APPROVED",
+      ).length;
       const status: BetaGateStatus =
         conflictCount > 0
           ? "CONFLICTED"
@@ -170,7 +179,9 @@ export class BetaEvidenceService {
       return {
         gate,
         status,
+        requiredEnvironment: "production" as const,
         approvedEvidenceCount: approved.length,
+        stagingApprovedEvidenceCount,
         conflictCount,
         expiredCount,
         latestApprovedEvidenceId: approved.at(-1)?.evidenceId ?? null,
@@ -190,6 +201,7 @@ export class BetaEvidenceService {
       program: BETA_EVIDENCE_PROGRAM,
       ledger: "audit_logs",
       appendOnly: true,
+      requiredEnvironment: "production" as const,
       totalGates: BETA_EVIDENCE_GATES.length,
       verifiedGates,
       pendingGates:
