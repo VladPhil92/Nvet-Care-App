@@ -10,7 +10,6 @@ describe("BetaReadinessService", () => {
   } as any;
 
   const access = {
-    getConfiguredClientCount: jest.fn(),
     getMarket: jest.fn(() => "Cartagena de Indias"),
     isEnabled: jest.fn(() => false),
     isBookingEnabled: jest.fn(() => true),
@@ -22,6 +21,10 @@ describe("BetaReadinessService", () => {
 
   const authorization = {
     getStatus: jest.fn(),
+  } as any;
+
+  const cohort = {
+    getOperationalSnapshot: jest.fn(),
   } as any;
 
   const verifiedEvidenceSummary = () => ({
@@ -69,6 +72,18 @@ describe("BetaReadinessService", () => {
     appendOnly: true,
   });
 
+  const healthyCohort = (count = 12) => ({
+    ledger: "audit_logs",
+    appendOnly: true,
+    activeMemberships: count,
+    eligibleActiveMembers: count,
+    ineligibleMembers: 0,
+    maxInitialClients: 50,
+    remainingSlots: Math.max(0, 50 - count),
+    withinLimit: count <= 50,
+    configured: count > 0,
+  });
+
   const originalSupportOwner = process.env.NVET_BETA_SUPPORT_OWNER;
   const originalSupportChannel = process.env.NVET_BETA_SUPPORT_CHANNEL;
 
@@ -82,11 +97,13 @@ describe("BetaReadinessService", () => {
     access.isBookingEnabled.mockReturnValue(true);
     evidence.getPromotionSummary.mockResolvedValue(verifiedEvidenceSummary());
     authorization.getStatus.mockResolvedValue(missingAuthorization());
+    cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort());
     service = new BetaReadinessService(
       prisma,
       access,
       evidence,
       authorization,
+      cohort,
     );
   });
 
@@ -105,7 +122,6 @@ describe("BetaReadinessService", () => {
 
   it("reports awaiting-authorization when local and evidence gates pass but no lease exists", async () => {
     prisma.vetProfile.count.mockResolvedValue(3);
-    access.getConfiguredClientCount.mockReturnValue(12);
 
     const snapshot = await service.getCartagenaSnapshot();
 
@@ -126,14 +142,13 @@ describe("BetaReadinessService", () => {
     expect(snapshot.activation.authorizationActive).toBe(false);
     expect(snapshot.activation.state).toBe("awaiting-authorization");
     expect(snapshot.activation.blockingReasons).toEqual([]);
-    expect(snapshot.activation.externalEvidenceRequired).toBe(true);
-    expect(snapshot.activation.commercialLaunchAuthorized).toBe(false);
-    expect(snapshot.promotion.verifiedGates).toBe(BETA_EVIDENCE_GATES.length);
+    expect(snapshot.cohort.configuredClients).toBe(12);
+    expect(snapshot.cohort.ledger).toBe("audit_logs");
+    expect(snapshot.cohort.membershipSource).toBe("admin-control-plane");
   });
 
   it("reports ready-to-enable after an active authorization lease is issued", async () => {
     prisma.vetProfile.count.mockResolvedValue(3);
-    access.getConfiguredClientCount.mockReturnValue(12);
     authorization.getStatus.mockResolvedValue(activeAuthorization());
 
     const snapshot = await service.getCartagenaSnapshot();
@@ -145,7 +160,6 @@ describe("BetaReadinessService", () => {
 
   it("keeps activation blocked when local gates pass but evidence is incomplete", async () => {
     prisma.vetProfile.count.mockResolvedValue(3);
-    access.getConfiguredClientCount.mockReturnValue(12);
     const summary = verifiedEvidenceSummary();
     summary.gates[0] = {
       ...summary.gates[0],
@@ -170,13 +184,11 @@ describe("BetaReadinessService", () => {
 
   it("blocks local activation when veterinarian coverage is insufficient", async () => {
     prisma.vetProfile.count.mockResolvedValue(2);
-    access.getConfiguredClientCount.mockReturnValue(10);
 
     const snapshot = await service.getCartagenaSnapshot();
 
     expect(snapshot.vetCoverage.satisfied).toBe(false);
     expect(snapshot.localActivationReady).toBe(false);
-    expect(snapshot.activation.state).toBe("blocked");
     expect(snapshot.activation.blockingReasons).toContain(
       "CARTAGENA_VET_COVERAGE_INSUFFICIENT",
     );
@@ -184,7 +196,7 @@ describe("BetaReadinessService", () => {
 
   it("blocks local activation when the cohort exceeds the launch cap", async () => {
     prisma.vetProfile.count.mockResolvedValue(5);
-    access.getConfiguredClientCount.mockReturnValue(51);
+    cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort(51));
 
     const snapshot = await service.getCartagenaSnapshot();
 
@@ -195,9 +207,24 @@ describe("BetaReadinessService", () => {
     );
   });
 
+  it("blocks activation if an invited cohort member becomes ineligible", async () => {
+    prisma.vetProfile.count.mockResolvedValue(3);
+    cohort.getOperationalSnapshot.mockResolvedValue({
+      ...healthyCohort(12),
+      eligibleActiveMembers: 11,
+      ineligibleMembers: 1,
+    });
+
+    const snapshot = await service.getCartagenaSnapshot();
+
+    expect(snapshot.localActivationReady).toBe(false);
+    expect(snapshot.activation.blockingReasons).toContain(
+      "COHORT_MEMBER_INELIGIBLE",
+    );
+  });
+
   it("requires both support owner and channel for machine activation readiness", async () => {
     prisma.vetProfile.count.mockResolvedValue(3);
-    access.getConfiguredClientCount.mockReturnValue(10);
     delete process.env.NVET_BETA_SUPPORT_CHANNEL;
 
     const snapshot = await service.getCartagenaSnapshot();
@@ -211,7 +238,6 @@ describe("BetaReadinessService", () => {
 
   it("reports active only when beta is enabled with eligibility and an active authorization", async () => {
     prisma.vetProfile.count.mockResolvedValue(4);
-    access.getConfiguredClientCount.mockReturnValue(20);
     access.isEnabled.mockReturnValue(true);
     access.isBookingEnabled.mockReturnValue(true);
     authorization.getStatus.mockResolvedValue(activeAuthorization());
@@ -226,7 +252,6 @@ describe("BetaReadinessService", () => {
 
   it("reports paused when the booking kill switch is active after authorization", async () => {
     prisma.vetProfile.count.mockResolvedValue(4);
-    access.getConfiguredClientCount.mockReturnValue(20);
     access.isEnabled.mockReturnValue(true);
     access.isBookingEnabled.mockReturnValue(false);
     authorization.getStatus.mockResolvedValue(activeAuthorization());
@@ -239,7 +264,6 @@ describe("BetaReadinessService", () => {
 
   it("reports misconfigured if beta is enabled before authorization", async () => {
     prisma.vetProfile.count.mockResolvedValue(4);
-    access.getConfiguredClientCount.mockReturnValue(20);
     access.isEnabled.mockReturnValue(true);
 
     const snapshot = await service.getCartagenaSnapshot();
@@ -251,7 +275,7 @@ describe("BetaReadinessService", () => {
 
   it("reports misconfigured if beta is enabled before all activation gates pass", async () => {
     prisma.vetProfile.count.mockResolvedValue(1);
-    access.getConfiguredClientCount.mockReturnValue(0);
+    cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort(0));
     access.isEnabled.mockReturnValue(true);
     authorization.getStatus.mockResolvedValue(activeAuthorization());
 

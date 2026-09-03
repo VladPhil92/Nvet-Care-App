@@ -12,6 +12,7 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { BetaActivationService } from "./beta-activation.service";
+import { BetaCohortService } from "./beta-cohort.service";
 import {
   BetaEvidenceActor,
   BetaEvidenceService,
@@ -24,6 +25,10 @@ import {
   AuthorizeBetaActivationDto,
   RevokeBetaActivationDto,
 } from "./dto/beta-activation.dto";
+import {
+  InviteBetaCohortMemberDto,
+  RevokeBetaCohortMemberDto,
+} from "./dto/beta-cohort.dto";
 import {
   DecideBetaEvidenceDto,
   SubmitBetaEvidenceDto,
@@ -38,6 +43,7 @@ export class BetaController {
     private readonly legalConsent: BetaLegalConsentService,
     private readonly evidence: BetaEvidenceService,
     private readonly activation: BetaActivationService,
+    private readonly cohort: BetaCohortService,
   ) {}
 
   @Get("policy")
@@ -62,6 +68,34 @@ export class BetaController {
   @Roles(UserRole.ADMIN)
   getReadiness() {
     return this.readiness.getCartagenaSnapshot();
+  }
+
+  @Get("cohort/me")
+  @Roles(UserRole.CLIENT)
+  getMyCohortStatus(@Request() req) {
+    return this.cohort.getSelfStatus(req.user.id);
+  }
+
+  @Get("cohort")
+  @Roles(UserRole.ADMIN)
+  getCohort() {
+    return this.cohort.getAdminSnapshot();
+  }
+
+  @Post("cohort/invite")
+  @Roles(UserRole.ADMIN)
+  inviteCohortMember(@Request() req, @Body() dto: InviteBetaCohortMemberDto) {
+    return this.cohort.invite(dto, this.getEvidenceActor(req));
+  }
+
+  @Post("cohort/:userId/revoke")
+  @Roles(UserRole.ADMIN)
+  revokeCohortMember(
+    @Request() req,
+    @Param("userId") userId: string,
+    @Body() dto: RevokeBetaCohortMemberDto,
+  ) {
+    return this.cohort.revoke(userId, dto, this.getEvidenceActor(req));
   }
 
   @Get("activation")

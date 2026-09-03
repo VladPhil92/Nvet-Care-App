@@ -3,18 +3,18 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import * as crypto from "crypto";
 import { BetaActivationService } from "./beta-activation.service";
+import { BetaCohortService } from "./beta-cohort.service";
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 
 const DEFAULT_MARKET = "Cartagena de Indias";
-const SHA256_HEX = /^[a-f0-9]{64}$/;
 
 @Injectable()
 export class ClosedBetaAccessService {
   constructor(
     private readonly legalConsent?: BetaLegalConsentService,
     private readonly activation?: BetaActivationService,
+    private readonly cohort?: BetaCohortService,
   ) {}
 
   isEnabled(): boolean {
@@ -30,15 +30,15 @@ export class ClosedBetaAccessService {
     return configured || DEFAULT_MARKET;
   }
 
-  getConfiguredClientCount(): number {
-    return this.getClientHashes().size;
+  async getConfiguredClientCount(): Promise<number> {
+    return this.cohort ? this.cohort.getActiveCount() : 0;
   }
 
   /**
    * Booking is the commercial boundary of the closed beta. Existing accounts
    * may still authenticate, recover access and manage their data while the
    * beta is enabled, but new appointments require an explicit, time-bounded
-   * operator authorization plus the invited cohort and current legal consent.
+   * operator authorization plus active cohort membership and legal consent.
    */
   async assertBookingAllowed(
     clientId: string,
@@ -63,23 +63,14 @@ export class ClosedBetaAccessService {
     }
     await this.activation.assertActiveForBooking();
 
-    const cohort = this.getClientHashes();
-    if (cohort.size === 0) {
+    if (!this.cohort) {
       throw new ServiceUnavailableException({
-        error: "CLOSED_BETA_COHORT_NOT_CONFIGURED",
+        error: "CLOSED_BETA_COHORT_GATE_NOT_CONFIGURED",
         message:
-          "La beta cerrada está habilitada pero su cohorte no está configurada.",
+          "La beta cerrada no puede aceptar reservas porque su control de cohorte no está configurado.",
       });
     }
-
-    const clientHash = this.hash(clientId);
-    if (!cohort.has(clientHash)) {
-      throw new ForbiddenException({
-        error: "CLOSED_BETA_ACCESS_REQUIRED",
-        message:
-          "Esta cuenta todavía no está habilitada para reservar durante la beta cerrada de Cartagena.",
-      });
-    }
+    await this.cohort.assertActiveMember(clientId);
 
     if (!this.isMarketCity(vetCity)) {
       throw new ForbiddenException({
@@ -100,26 +91,18 @@ export class ClosedBetaAccessService {
     await this.legalConsent.assertCurrentAcceptance(clientId);
   }
 
-  getPublicPolicy() {
+  async getPublicPolicy() {
+    const configuredClients = await this.getConfiguredClientCount();
     return {
       phase: 12,
       mode: this.isEnabled() ? "closed-beta" : "standard",
       market: this.getMarket(),
       bookingEnabled: this.isBookingEnabled(),
-      cohortConfigured: this.getConfiguredClientCount() > 0,
+      cohortConfigured: configuredClients > 0,
+      cohortSource: "auditable-control-plane",
       legalAcceptanceRequired: this.isEnabled(),
       operatorAuthorizationRequired: this.isEnabled(),
     } as const;
-  }
-
-  private getClientHashes(): Set<string> {
-    const raw = process.env.NVET_CLOSED_BETA_CLIENT_HASHES ?? "";
-    return new Set(
-      raw
-        .split(",")
-        .map((value) => value.trim().toLowerCase())
-        .filter((value) => SHA256_HEX.test(value)),
-    );
   }
 
   private isMarketCity(value?: string | null): boolean {
@@ -147,9 +130,5 @@ export class ClosedBetaAccessService {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
-  }
-
-  private hash(value: string): string {
-    return crypto.createHash("sha256").update(value).digest("hex");
   }
 }

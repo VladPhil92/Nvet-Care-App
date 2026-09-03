@@ -11,6 +11,7 @@ import {
   VerificationStatus,
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { BetaCohortService } from "./beta-cohort.service";
 import { BETA_EVIDENCE_PROGRAM } from "./beta-evidence.constants";
 import {
   BetaEvidenceActor,
@@ -26,7 +27,6 @@ const MAX_EVENT_ROWS = 500;
 const DEFAULT_LEASE_HOURS = 24;
 const MAX_INITIAL_CLIENTS = 50;
 const MIN_VERIFIED_VETS = 3;
-const SHA256_HEX = /^[a-f0-9]{64}$/;
 
 type ActivationEventType = "AUTHORIZED" | "REVOKED";
 type ActivationState =
@@ -58,6 +58,8 @@ export type BetaActivationPrerequisites = {
   verifiedActiveVets: number;
   minimumVerifiedVets: number;
   configuredClients: number;
+  eligibleCohortMembers: number;
+  ineligibleCohortMembers: number;
   maxInitialClients: number;
   supportConfigured: boolean;
   marketConfigured: boolean;
@@ -68,6 +70,7 @@ export class BetaActivationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly evidence: BetaEvidenceService,
+    private readonly cohort: BetaCohortService,
   ) {}
 
   async authorize(dto: AuthorizeBetaActivationDto, actor: BetaEvidenceActor) {
@@ -156,7 +159,7 @@ export class BetaActivationService {
   }
 
   async getPrerequisites(): Promise<BetaActivationPrerequisites> {
-    const [promotion, verifiedActiveVets] = await Promise.all([
+    const [promotion, verifiedActiveVets, cohort] = await Promise.all([
       this.evidence.getPromotionSummary(),
       this.prisma.vetProfile.count({
         where: {
@@ -169,9 +172,10 @@ export class BetaActivationService {
           },
         },
       }),
+      this.cohort.getOperationalSnapshot(),
     ]);
 
-    const configuredClients = this.getConfiguredClientCount();
+    const configuredClients = cohort.activeMemberships;
     const supportConfigured = Boolean(
       process.env.NVET_BETA_SUPPORT_OWNER?.trim() &&
       process.env.NVET_BETA_SUPPORT_CHANNEL?.trim(),
@@ -190,8 +194,11 @@ export class BetaActivationService {
     if (configuredClients === 0) {
       blockers.push("CLIENT_COHORT_NOT_CONFIGURED");
     }
-    if (configuredClients > MAX_INITIAL_CLIENTS) {
+    if (configuredClients > MAX_INITIAL_CLIENTS || !cohort.withinLimit) {
       blockers.push("CLIENT_COHORT_LIMIT_EXCEEDED");
+    }
+    if (cohort.ineligibleMembers > 0) {
+      blockers.push("COHORT_MEMBER_INELIGIBLE");
     }
     if (!supportConfigured) {
       blockers.push("SUPPORT_NOT_CONFIGURED");
@@ -207,6 +214,8 @@ export class BetaActivationService {
       verifiedActiveVets,
       minimumVerifiedVets: MIN_VERIFIED_VETS,
       configuredClients,
+      eligibleCohortMembers: cohort.eligibleActiveMembers,
+      ineligibleCohortMembers: cohort.ineligibleMembers,
       maxInitialClients: MAX_INITIAL_CLIENTS,
       supportConfigured,
       marketConfigured,
@@ -355,16 +364,6 @@ export class BetaActivationService {
       return null;
     }
     return raw as unknown as ActivationMetadata;
-  }
-
-  private getConfiguredClientCount(): number {
-    const raw = process.env.NVET_CLOSED_BETA_CLIENT_HASHES ?? "";
-    return new Set(
-      raw
-        .split(",")
-        .map((value) => value.trim().toLowerCase())
-        .filter((value) => SHA256_HEX.test(value)),
-    ).size;
   }
 
   private isCartagenaMarket(value?: string): boolean {
