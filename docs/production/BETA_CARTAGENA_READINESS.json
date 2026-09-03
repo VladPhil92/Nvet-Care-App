@@ -51,17 +51,17 @@
     "supportOwnerConfirmed": {
       "status": "pending",
       "evidence": null,
-      "note": "A named operational owner and escalation route must be confirmed before activation."
+      "note": "Runtime now reports redacted configuration readiness for NVET_BETA_SUPPORT_OWNER and NVET_BETA_SUPPORT_CHANNEL. Keep pending until a named owner, monitored route, approver and date are confirmed using CARTAGENA_BETA_OPERATIONS_RUNBOOK.md."
     },
     "privacyAndTermsReviewed": {
       "status": "pending",
       "evidence": null,
-      "note": "Beta-facing privacy/terms language and consent path must be reviewed."
+      "note": "Versioned beta terms/privacy drafts and an explicit append-only acceptance path now exist. Keep pending until the responsible legal/privacy review is documented; implementation alone is not approval."
     },
     "rollbackDrillVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "Operations must verify that NVET_BOOKING_ENABLED=false stops new bookings without disabling authentication or history access."
+      "note": "The kill-switch contract is implemented and documented. Keep pending until a provider-level drill proves NVET_BOOKING_ENABLED=false stops new bookings while authentication and history remain available, then restores normal beta gating."
     }
   }
 }
