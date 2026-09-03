@@ -12,8 +12,12 @@
     "bookingKillSwitch": "NVET_BOOKING_ENABLED=false",
     "cohortGate": "NVET_CLOSED_BETA_ENABLED=true",
     "activationDecisionEndpoint": "GET /api/beta/readiness",
+    "activationAuthorizationEndpoint": "POST /api/beta/activation/authorize",
+    "activationRevocationEndpoint": "POST /api/beta/activation/revoke",
+    "activationStatusEndpoint": "GET /api/beta/activation",
     "activationStates": [
       "blocked",
+      "awaiting-authorization",
       "ready-to-enable",
       "active",
       "paused",
@@ -25,7 +29,13 @@
     "evidenceControlPlaneHistoryEndpoint": "GET /api/beta/evidence/history",
     "evidenceLedger": "audit_logs",
     "evidenceLedgerAppendOnly": true,
+    "authorizationLedger": "audit_logs",
+    "authorizationLedgerAppendOnly": true,
+    "authorizationLeaseMaxHours": 168,
+    "productionEvidenceRequiredForActivation": true,
+    "bookingRequiresActiveAuthorization": true,
     "operatorActivationRequiresAllEvidenceGates": true,
+    "authorizationDoesNotMutateProviderConfig": true,
     "manifestEvidenceNeverAutoMutated": true
   },
   "requiredEvidence": {
@@ -67,12 +77,12 @@
     "supportOwnerConfirmed": {
       "status": "pending",
       "evidence": null,
-      "note": "Runtime now treats both NVET_BETA_SUPPORT_OWNER and NVET_BETA_SUPPORT_CHANNEL as machine activation gates, but keep this evidence pending until a named owner, monitored route, approver and date are confirmed using CARTAGENA_BETA_OPERATIONS_RUNBOOK.md."
+      "note": "Runtime treats both NVET_BETA_SUPPORT_OWNER and NVET_BETA_SUPPORT_CHANNEL as machine activation gates, but keep this evidence pending until a named owner, monitored route, approver and date are confirmed using CARTAGENA_BETA_OPERATIONS_RUNBOOK.md."
     },
     "privacyAndTermsReviewed": {
       "status": "pending",
       "evidence": null,
-      "note": "Versioned beta terms/privacy drafts and an explicit append-only acceptance path now exist. Keep pending until the responsible legal/privacy review is documented; implementation alone is not approval."
+      "note": "Versioned beta terms/privacy drafts and an explicit append-only acceptance path exist. Keep pending until the responsible legal/privacy review is documented; implementation alone is not approval."
     },
     "rollbackDrillVerified": {
       "status": "pending",
