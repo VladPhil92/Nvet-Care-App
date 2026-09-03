@@ -11,6 +11,15 @@
     "criticalIncidentTargetMinutes": 30,
     "bookingKillSwitch": "NVET_BOOKING_ENABLED=false",
     "cohortGate": "NVET_CLOSED_BETA_ENABLED=true",
+    "cohortLedger": "audit_logs",
+    "cohortLedgerAppendOnly": true,
+    "cohortMembershipSource": "admin-control-plane",
+    "legacyEnvCohortHashesAccepted": false,
+    "cohortMaximumClients": 50,
+    "cohortRequiresVerifiedActiveClient": true,
+    "cohortAdminEndpoint": "GET /api/beta/cohort",
+    "cohortSelfEndpoint": "GET /api/beta/cohort/me",
+    "cohortInviteEndpoint": "POST /api/beta/cohort/invite",
     "activationDecisionEndpoint": "GET /api/beta/readiness",
     "activationAuthorizationEndpoint": "POST /api/beta/activation/authorize",
     "activationRevocationEndpoint": "POST /api/beta/activation/revoke",
@@ -47,7 +56,7 @@
     "productionBackupConfigured": {
       "status": "pending",
       "evidence": null,
-      "note": "Provider-level automatic backups must be verified. This gate is inherited from RC_READINESS.json and must not be promoted independently."
+      "note": "Provider-level automatic backups must be verified. The provider audit on 2026-09-03 found zero configured schedules and zero visible backups, so this inherited RC gate remains blocked until Railway is configured and fresh evidence exists."
     },
     "restoreDrillVerified": {
       "status": "pending",
@@ -72,7 +81,7 @@
     "clientCohortConfigured": {
       "status": "pending",
       "evidence": null,
-      "note": "The initial invited client cohort must be loaded as SHA-256 Nvet user-id hashes in provider configuration. GET /api/beta/readiness exposes only the configured count and never hashes or raw identifiers."
+      "note": "The initial cohort is managed through the append-only admin control plane (GET/POST /api/beta/cohort), not provider environment hashes. Keep this gate pending until real verified CLIENT accounts have been invited and the admin readiness snapshot proves the intended cohort count and eligibility."
     },
     "supportOwnerConfirmed": {
       "status": "pending",
