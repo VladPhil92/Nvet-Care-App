@@ -203,7 +203,8 @@ export class BetaEvidenceService {
       requiredEnvironment: "production" as const,
       totalGates: BETA_EVIDENCE_GATES.length,
       verifiedGates,
-      pendingGates: BETA_EVIDENCE_GATES.length - verifiedGates - conflictedGates,
+      pendingGates:
+        BETA_EVIDENCE_GATES.length - verifiedGates - conflictedGates,
       conflictedGates,
       eligibleForOperatorActivation,
       commercialLaunchAuthorized: false,
