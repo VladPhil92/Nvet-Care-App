@@ -93,7 +93,8 @@ export class AiProviderService {
         }),
       });
 
-      const providerRequestId = response.headers.get("x-request-id") || "missing";
+      const providerRequestId =
+        response.headers.get("x-request-id") || "missing";
       const body = (await response.json()) as OpenAiResponseBody;
       if (!response.ok) {
         this.logger.warn(
