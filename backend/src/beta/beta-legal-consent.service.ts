@@ -113,7 +113,11 @@ export class BetaLegalConsentService {
     return (
       rows.find((row) => {
         const metadata = row.metadata;
-        if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+        if (
+          !metadata ||
+          typeof metadata !== "object" ||
+          Array.isArray(metadata)
+        ) {
           return false;
         }
         const value = metadata as Record<string, unknown>;
