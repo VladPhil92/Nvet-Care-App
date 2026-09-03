@@ -1,6 +1,6 @@
 # CI workflow for Nvet Care Platform monorepo.
 #
-# Jobs en paralelo para security convergence, backend, mobile, Android native y dashboard.
+# Jobs en paralelo para security, database/recovery, backend, mobile, Android native y dashboard.
 # El repositorio usa npm workspaces y un package-lock.json canónico en la raíz.
 name: CI
 
@@ -81,6 +81,21 @@ jobs:
 
       - name: Enforce secure canonical runtime boundaries
         run: node scripts/security-convergence-gate.mjs
+
+  database-recovery-convergence:
+    name: Database Recovery Convergence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enforce migration and recovery boundaries
+        run: node scripts/database-recovery-convergence-gate.mjs
 
   backend:
     name: Backend (NestJS)
@@ -290,7 +305,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [changes, security-convergence, backend, mobile, android-native, dashboard]
+    needs: [changes, security-convergence, database-recovery-convergence, backend, mobile, android-native, dashboard]
     if: always()
     steps:
       - name: Verify all required jobs passed
@@ -301,6 +316,10 @@ jobs:
           fi
           if [[ "${{ needs.security-convergence.result }}" != "success" ]]; then
             echo "Security Convergence failed: ${{ needs.security-convergence.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.database-recovery-convergence.result }}" != "success" ]]; then
+            echo "Database Recovery Convergence failed: ${{ needs.database-recovery-convergence.result }}"
             exit 1
           fi
           if [[ "${{ needs.backend.result }}" != "success" ]]; then
