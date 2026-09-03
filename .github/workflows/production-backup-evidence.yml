@@ -6,7 +6,9 @@ on:
     paths:
       - '.github/workflows/production-backup-evidence.yml'
       - 'scripts/audit-railway-production-backups.mjs'
+      - 'backend/src/beta/beta-activation.service.ts'
       - 'docs/production/RC_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
       - 'docs/production/RC_EVIDENCE_RUNBOOK.md'
   schedule:
     - cron: '17 3 * * *'
@@ -95,5 +97,6 @@ jobs:
             fi
             echo ''
             echo '> This workflow is read-only. Verification requires a configured Railway backup schedule, at least one visible recent backup and minimum retention.'
+            echo '> Controlled beta activation changes force a fresh provider audit before relying on backup evidence.'
             echo '> A provider-level restore drill and real-bank-transfer evidence remain independent RC gates.'
           } >> "$GITHUB_STEP_SUMMARY"

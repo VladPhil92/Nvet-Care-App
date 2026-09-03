@@ -1,0 +1,118 @@
+import { ConflictException, ServiceUnavailableException } from "@nestjs/common";
+import * as crypto from "crypto";
+import { BetaActivationService } from "./beta-activation.service";
+
+const hash = (value: string) =>
+  crypto.createHash("sha256").update(value).digest("hex");
+
+describe("BetaActivationService", () => {
+  const originalEnv = process.env;
+  const rows: any[] = [];
+  let sequence = 0;
+  const prisma = {
+    vetProfile: {
+      count: jest.fn(),
+    },
+    auditLog: {
+      create: jest.fn(async ({ data }) => {
+        sequence += 1;
+        const row = {
+          id: `event-${sequence}`,
+          ...data,
+          createdAt: new Date(Date.now() + sequence),
+        };
+        rows.push(row);
+        return row;
+      }),
+      findMany: jest.fn(async ({ where }) =>
+        rows
+          .filter(
+            (row) =>
+              row.targetType === where.targetType && row.action === where.action,
+          )
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+      ),
+    },
+  } as any;
+  const evidence = {
+    getPromotionSummary: jest.fn(),
+  } as any;
+  const actor = {
+    id: "admin-user-id",
+    role: "ADMIN",
+    ip: "127.0.0.1",
+    userAgent: "jest",
+  };
+  let service: BetaActivationService;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    process.env.NVET_CLOSED_BETA_CLIENT_HASHES = [
+      hash("client-1"),
+      hash("client-2"),
+    ].join(",");
+    process.env.NVET_BETA_SUPPORT_OWNER = "beta-ops";
+    process.env.NVET_BETA_SUPPORT_CHANNEL = "ops-channel";
+    process.env.NVET_CLOSED_BETA_MARKET = "Cartagena de Indias";
+    rows.length = 0;
+    sequence = 0;
+    jest.clearAllMocks();
+    prisma.vetProfile.count.mockResolvedValue(3);
+    evidence.getPromotionSummary.mockResolvedValue({
+      eligibleForOperatorActivation: true,
+    });
+    service = new BetaActivationService(prisma, evidence);
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it("issues a time-bounded authorization only when all prerequisites pass", async () => {
+    const result = await service.authorize({ durationHours: 24 }, actor);
+
+    expect(result.state).toBe("ACTIVE");
+    expect(result.authorizationId).toBeTruthy();
+    expect(Date.parse(result.expiresAt as string)).toBeGreaterThan(Date.now());
+    expect(rows).toHaveLength(1);
+  });
+
+  it("refuses authorization when production evidence is incomplete", async () => {
+    evidence.getPromotionSummary.mockResolvedValue({
+      eligibleForOperatorActivation: false,
+    });
+
+    await expect(service.authorize({}, actor)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("detects live prerequisite drift and blocks bookings after authorization", async () => {
+    await service.authorize({}, actor);
+    prisma.vetProfile.count.mockResolvedValue(2);
+
+    await expect(service.assertActiveForBooking()).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+  });
+
+  it("supports append-only revocation", async () => {
+    await service.authorize({}, actor);
+    const revoked = await service.revoke(
+      { reason: "Operator rollback drill." },
+      actor,
+    );
+
+    expect(revoked.state).toBe("REVOKED");
+    expect(rows).toHaveLength(2);
+  });
+
+  it("rejects a second active authorization", async () => {
+    await service.authorize({}, actor);
+
+    await expect(service.authorize({}, actor)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+});

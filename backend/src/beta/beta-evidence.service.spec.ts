@@ -45,7 +45,7 @@ describe("BetaEvidenceService", () => {
     service = new BetaEvidenceService(prisma);
   });
 
-  it("submits and approves evidence through the append-only audit ledger", async () => {
+  it("submits and approves production evidence through the append-only audit ledger", async () => {
     const submitted = await service.submit(
       {
         gate: "productionBackupConfigured",
@@ -65,8 +65,31 @@ describe("BetaEvidenceService", () => {
     expect(rows).toHaveLength(2);
 
     const summary = await service.getPromotionSummary();
+    expect(summary.requiredEnvironment).toBe("production");
     expect(summary.verifiedGates).toBe(1);
     expect(summary.eligibleForOperatorActivation).toBe(false);
+  });
+
+  it("never lets staging-only evidence satisfy a production activation gate", async () => {
+    const submitted = await service.submit(
+      {
+        gate: "restoreDrillVerified",
+        environment: "staging",
+        reference: "staging-restore-drill-2026-09-03",
+        observedAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+      actor,
+    );
+    await service.approve(submitted.evidenceId, {}, actor);
+
+    const summary = await service.getPromotionSummary();
+    const gate = summary.gates.find(
+      (item) => item.gate === "restoreDrillVerified",
+    );
+
+    expect(gate?.status).toBe("PENDING");
+    expect(gate?.approvedEvidenceCount).toBe(0);
+    expect(gate?.stagingApprovedEvidenceCount).toBe(1);
   });
 
   it("supports explicit revocation only after approval", async () => {
@@ -99,11 +122,15 @@ describe("BetaEvidenceService", () => {
       },
       actor,
     );
-    await service.reject(submitted.evidenceId, { reason: "Changes required." }, actor);
-
-    await expect(service.approve(submitted.evidenceId, {}, actor)).rejects.toBeInstanceOf(
-      ConflictException,
+    await service.reject(
+      submitted.evidenceId,
+      { reason: "Changes required." },
+      actor,
     );
+
+    await expect(
+      service.approve(submitted.evidenceId, {}, actor),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it("marks time-bounded evidence expired and blocks approval", async () => {
@@ -121,9 +148,9 @@ describe("BetaEvidenceService", () => {
     );
 
     expect(submitted.status).toBe("EXPIRED");
-    await expect(service.approve(submitted.evidenceId, {}, actor)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.approve(submitted.evidenceId, {}, actor),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it("never accepts a reference that appears to contain credentials", async () => {

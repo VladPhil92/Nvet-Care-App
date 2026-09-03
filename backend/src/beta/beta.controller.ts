@@ -11,6 +11,7 @@ import { UserRole } from "@prisma/client";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
+import { BetaActivationService } from "./beta-activation.service";
 import {
   BetaEvidenceActor,
   BetaEvidenceService,
@@ -19,6 +20,10 @@ import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import { BetaReadinessService } from "./beta-readiness.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 import { AcceptBetaLegalDto } from "./dto/accept-beta-legal.dto";
+import {
+  AuthorizeBetaActivationDto,
+  RevokeBetaActivationDto,
+} from "./dto/beta-activation.dto";
 import {
   DecideBetaEvidenceDto,
   SubmitBetaEvidenceDto,
@@ -32,6 +37,7 @@ export class BetaController {
     private readonly readiness: BetaReadinessService,
     private readonly legalConsent: BetaLegalConsentService,
     private readonly evidence: BetaEvidenceService,
+    private readonly activation: BetaActivationService,
   ) {}
 
   @Get("policy")
@@ -56,6 +62,33 @@ export class BetaController {
   @Roles(UserRole.ADMIN)
   getReadiness() {
     return this.readiness.getCartagenaSnapshot();
+  }
+
+  @Get("activation")
+  @Roles(UserRole.ADMIN)
+  async getActivation() {
+    const [status, prerequisites] = await Promise.all([
+      this.activation.getStatus(),
+      this.activation.getPrerequisites(),
+    ]);
+    return {
+      status,
+      prerequisites,
+      authorizationRequiredForBooking: true,
+      commercialLaunchAuthorized: false,
+    } as const;
+  }
+
+  @Post("activation/authorize")
+  @Roles(UserRole.ADMIN)
+  authorizeActivation(@Request() req, @Body() dto: AuthorizeBetaActivationDto) {
+    return this.activation.authorize(dto, this.getEvidenceActor(req));
+  }
+
+  @Post("activation/revoke")
+  @Roles(UserRole.ADMIN)
+  revokeActivation(@Request() req, @Body() dto: RevokeBetaActivationDto) {
+    return this.activation.revoke(dto, this.getEvidenceActor(req));
   }
 
   @Get("evidence/summary")

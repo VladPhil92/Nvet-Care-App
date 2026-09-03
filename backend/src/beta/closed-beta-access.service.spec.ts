@@ -10,6 +10,9 @@ describe("ClosedBetaAccessService", () => {
   const legalConsent = {
     assertCurrentAcceptance: jest.fn(),
   } as any;
+  const activation = {
+    assertActiveForBooking: jest.fn(),
+  } as any;
   let service: ClosedBetaAccessService;
 
   const hash = (value: string) =>
@@ -23,7 +26,8 @@ describe("ClosedBetaAccessService", () => {
     delete process.env.NVET_CLOSED_BETA_CLIENT_HASHES;
     jest.clearAllMocks();
     legalConsent.assertCurrentAcceptance.mockResolvedValue(undefined);
-    service = new ClosedBetaAccessService(legalConsent);
+    activation.assertActiveForBooking.mockResolvedValue(undefined);
+    service = new ClosedBetaAccessService(legalConsent, activation);
   });
 
   afterAll(() => {
@@ -32,17 +36,32 @@ describe("ClosedBetaAccessService", () => {
 
   it("does not change booking behavior while the beta gate is disabled", async () => {
     await expect(service.assertBookingAllowed("client-1", null)).resolves.toBeUndefined();
+    expect(activation.assertActiveForBooking).not.toHaveBeenCalled();
     expect(legalConsent.assertCurrentAcceptance).not.toHaveBeenCalled();
   });
 
-  it("allows an invited consenting client with a Cartagena veterinarian", async () => {
+  it("allows an invited consenting client with a Cartagena veterinarian and active authorization", async () => {
     process.env.NVET_CLOSED_BETA_ENABLED = "true";
     process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-1");
 
     await expect(
       service.assertBookingAllowed("client-1", "Cartagena de Indias, Bolívar"),
     ).resolves.toBeUndefined();
+    expect(activation.assertActiveForBooking).toHaveBeenCalledTimes(1);
     expect(legalConsent.assertCurrentAcceptance).toHaveBeenCalledWith("client-1");
+  });
+
+  it("fails closed before cohort checks when activation authorization is missing", async () => {
+    process.env.NVET_CLOSED_BETA_ENABLED = "true";
+    process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-1");
+    activation.assertActiveForBooking.mockRejectedValue(
+      new ServiceUnavailableException("activation-required"),
+    );
+
+    await expect(
+      service.assertBookingAllowed("client-1", "Cartagena"),
+    ).rejects.toThrow("activation-required");
+    expect(legalConsent.assertCurrentAcceptance).not.toHaveBeenCalled();
   });
 
   it("rejects a client outside the configured cohort before legal lookup", async () => {
@@ -82,7 +101,7 @@ describe("ClosedBetaAccessService", () => {
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
-  it("fails closed if beta is enabled but the legal service is not wired", async () => {
+  it("fails closed if beta is enabled but activation or legal services are not wired", async () => {
     process.env.NVET_CLOSED_BETA_ENABLED = "true";
     process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-1");
     const misconfigured = new ClosedBetaAccessService();
@@ -130,6 +149,7 @@ describe("ClosedBetaAccessService", () => {
       bookingEnabled: true,
       cohortConfigured: true,
       legalAcceptanceRequired: true,
+      operatorAuthorizationRequired: true,
     });
     expect(JSON.stringify(service.getPublicPolicy())).not.toContain(
       hash("client-1"),
