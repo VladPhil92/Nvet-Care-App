@@ -136,9 +136,7 @@ export class BetaEvidenceService {
     const evidenceIds = [...new Set(events.map((event) => event.evidenceId))];
     const evidence = evidenceIds
       .map((id) =>
-        this.deriveEvidence(
-          events.filter((event) => event.evidenceId === id),
-        ),
+        this.deriveEvidence(events.filter((event) => event.evidenceId === id)),
       )
       .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
