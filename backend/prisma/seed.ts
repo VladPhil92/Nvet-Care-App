@@ -17,10 +17,14 @@ const FIXTURE_IDS = {
   pet: "00000000-0000-4000-8000-000000000101",
   pendingAppointment: "00000000-0000-4000-8000-000000000201",
   confirmedAppointment: "00000000-0000-4000-8000-000000000202",
+  registryCheck: "00000000-0000-4000-8000-000000000301",
 };
 
 const E2E_VET_LICENSE = "NVET-E2E-0001";
+const E2E_VET_COMVEZCOL = "99999-9";
 const E2E_VET_SPECIALTIES = ["Consulta general", "Emergencias"];
+const OFFICIAL_REGISTRY_URL =
+  "https://consejoprofesionalmvz.gov.co/consulta-de-profesionales/";
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -63,8 +67,6 @@ function assertSeedAllowed(): void {
 }
 
 function bogotaDate(offsetDays = 0): Date {
-  // Convert the current instant to a synthetic UTC date that carries the
-  // current Bogota calendar day, then pin fixture appointments to noon local.
   const bogotaNow = new Date(Date.now() - 5 * 60 * 60 * 1000);
   return new Date(
     Date.UTC(
@@ -102,7 +104,9 @@ async function main(): Promise<void> {
     ...(adminCredentials ? [adminCredentials.email] : []),
   ];
   if (new Set(fixtureEmails).size !== fixtureEmails.length) {
-    throw new Error("E2E seed refused: fixture identities must use different emails.");
+    throw new Error(
+      "E2E seed refused: fixture identities must use different emails.",
+    );
   }
 
   const [clientPasswordHash, vetPasswordHash, adminPasswordHash] =
@@ -208,9 +212,10 @@ async function main(): Promise<void> {
   }
 
   // The professional fixture is canonical by license, not by user identity.
-  // This makes credential/email rotation safe: an existing staging profile is
-  // re-linked to the current synthetic VET user instead of attempting to create
-  // a duplicate license_number row.
+  // On first insertion the database trust trigger intentionally forces the
+  // profile inactive because no registry evidence exists yet. The synthetic
+  // registry evidence is created immediately below, and only then is the
+  // isolated staging veterinarian activated.
   const vetProfile = await prisma.vetProfile.upsert({
     where: { licenseNumber: E2E_VET_LICENSE },
     update: {
@@ -232,6 +237,7 @@ async function main(): Promise<void> {
       serviceRadius: 30,
       isAvailableNow: true,
       timezone: "America/Bogota",
+      comvezcolNumber: E2E_VET_COMVEZCOL,
     },
     create: {
       userId: vetUser.id,
@@ -253,17 +259,54 @@ async function main(): Promise<void> {
       serviceRadius: 30,
       isAvailableNow: true,
       timezone: "America/Bogota",
+      comvezcolNumber: E2E_VET_COMVEZCOL,
     },
   });
 
-  // Reset only the dedicated fixture domain records. Deterministic IDs are
-  // included explicitly so a prior CLIENT email can be rotated without leaving
-  // a pet/appointment behind that would collide on the next seed.
+  await prisma.vetProfessionalRegistryCheck.upsert({
+    where: { vetProfileId: vetProfile.id },
+    update: {
+      status: "VERIFIED",
+      checkedById: null,
+      evidence:
+        "Synthetic staging-only registry evidence for NVET-E2E-0001. Not a real professional identity.",
+      sourceUrl: OFFICIAL_REGISTRY_URL,
+      checkedAt: new Date(),
+    },
+    create: {
+      id: FIXTURE_IDS.registryCheck,
+      vetProfileId: vetProfile.id,
+      status: "VERIFIED",
+      checkedById: null,
+      evidence:
+        "Synthetic staging-only registry evidence for NVET-E2E-0001. Not a real professional identity.",
+      sourceUrl: OFFICIAL_REGISTRY_URL,
+      checkedAt: new Date(),
+    },
+  });
+
+  await prisma.vetProfile.update({
+    where: { id: vetProfile.id },
+    data: {
+      isVerified: true,
+      verificationStatus: VerificationStatus.APPROVED,
+      isActive: true,
+      isAvailableNow: true,
+    },
+  });
+
   await prisma.$transaction([
     prisma.appointment.deleteMany({
       where: {
         OR: [
-          { id: { in: [FIXTURE_IDS.pendingAppointment, FIXTURE_IDS.confirmedAppointment] } },
+          {
+            id: {
+              in: [
+                FIXTURE_IDS.pendingAppointment,
+                FIXTURE_IDS.confirmedAppointment,
+              ],
+            },
+          },
           { clientId: client.id },
           { vetId: vetProfile.id },
         ],
@@ -364,6 +407,7 @@ async function main(): Promise<void> {
           petId: pet.id,
           pendingAppointmentId: FIXTURE_IDS.pendingAppointment,
           confirmedAppointmentId: FIXTURE_IDS.confirmedAppointment,
+          registryCheckId: FIXTURE_IDS.registryCheck,
         },
       },
       null,
