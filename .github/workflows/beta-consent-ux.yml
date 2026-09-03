@@ -1,0 +1,30 @@
+name: Beta Consent UX Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/src/services/beta.service.ts'
+      - 'mobile/src/components/booking/PaymentMethodSelector.tsx'
+      - 'backend/src/beta/closed-beta-access.service.ts'
+      - 'scripts/verify-beta-consent-ux.mjs'
+      - 'docs/PHASE_12B_BETA_CONSENT_UX.md'
+      - '.github/workflows/beta-consent-ux.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Beta Consent UX Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+      - name: Verify server-authoritative consent UX
+        run: node scripts/verify-beta-consent-ux.mjs
