@@ -8,6 +8,20 @@ const MAX_INITIAL_CLIENTS = 50;
 const MIN_VERIFIED_VETS = 3;
 const CRITICAL_INCIDENT_TARGET_MINUTES = 30;
 
+type ActivationState =
+  | "blocked"
+  | "ready-to-enable"
+  | "active"
+  | "paused"
+  | "misconfigured";
+
+type LocalBlocker =
+  | "CLIENT_COHORT_NOT_CONFIGURED"
+  | "CLIENT_COHORT_LIMIT_EXCEEDED"
+  | "CARTAGENA_VET_COVERAGE_INSUFFICIENT"
+  | "SUPPORT_OWNER_NOT_CONFIGURED"
+  | "SUPPORT_CHANNEL_NOT_CONFIGURED";
+
 @Injectable()
 export class BetaReadinessService {
   constructor(
@@ -38,14 +52,49 @@ export class BetaReadinessService {
     const supportChannelConfigured = Boolean(
       process.env.NVET_BETA_SUPPORT_CHANNEL?.trim(),
     );
+    const supportConfigured =
+      supportOwnerConfigured && supportChannelConfigured;
+    const closedBetaEnabled = this.access.isEnabled();
+    const bookingEnabled = this.access.isBookingEnabled();
+
+    const blockingReasons: LocalBlocker[] = [];
+    if (!cohortConfigured) {
+      blockingReasons.push("CLIENT_COHORT_NOT_CONFIGURED");
+    }
+    if (!cohortWithinLimit) {
+      blockingReasons.push("CLIENT_COHORT_LIMIT_EXCEEDED");
+    }
+    if (!vetCoverageSatisfied) {
+      blockingReasons.push("CARTAGENA_VET_COVERAGE_INSUFFICIENT");
+    }
+    if (!supportOwnerConfigured) {
+      blockingReasons.push("SUPPORT_OWNER_NOT_CONFIGURED");
+    }
+    if (!supportChannelConfigured) {
+      blockingReasons.push("SUPPORT_CHANNEL_NOT_CONFIGURED");
+    }
+
+    const machineActivationReady = blockingReasons.length === 0;
+    const activationState = this.resolveActivationState({
+      machineActivationReady,
+      closedBetaEnabled,
+      bookingEnabled,
+    });
 
     return {
       phase: 12,
       program: "closed-beta-cartagena",
       market: this.access.getMarket(),
       runtime: {
-        closedBetaEnabled: this.access.isEnabled(),
-        bookingEnabled: this.access.isBookingEnabled(),
+        closedBetaEnabled,
+        bookingEnabled,
+      },
+      activation: {
+        state: activationState,
+        machineActivationReady,
+        blockingReasons,
+        externalEvidenceRequired: true,
+        commercialLaunchAuthorized: false,
       },
       cohort: {
         configured: cohortConfigured,
@@ -67,11 +116,15 @@ export class BetaReadinessService {
       support: {
         ownerConfigured: supportOwnerConfigured,
         channelConfigured: supportChannelConfigured,
-        configured: supportOwnerConfigured && supportChannelConfigured,
+        configured: supportConfigured,
         criticalIncidentTargetMinutes: CRITICAL_INCIDENT_TARGET_MINUTES,
       },
-      localActivationReady:
-        cohortConfigured && cohortWithinLimit && vetCoverageSatisfied,
+      localActivationReady: machineActivationReady,
+      promotionBoundary: {
+        machineReadinessIsNotLaunchApproval: true,
+        requiredEvidenceManifest:
+          "docs/production/BETA_CARTAGENA_READINESS.json",
+      },
       privacy: {
         rawClientIdentifiersExposed: false,
         cohortHashesExposed: false,
@@ -79,5 +132,25 @@ export class BetaReadinessService {
       },
       generatedAt: new Date().toISOString(),
     } as const;
+  }
+
+  private resolveActivationState(input: {
+    machineActivationReady: boolean;
+    closedBetaEnabled: boolean;
+    bookingEnabled: boolean;
+  }): ActivationState {
+    if (input.closedBetaEnabled && !input.machineActivationReady) {
+      return "misconfigured";
+    }
+    if (input.closedBetaEnabled && !input.bookingEnabled) {
+      return "paused";
+    }
+    if (input.closedBetaEnabled) {
+      return "active";
+    }
+    if (input.machineActivationReady) {
+      return "ready-to-enable";
+    }
+    return "blocked";
   }
 }
