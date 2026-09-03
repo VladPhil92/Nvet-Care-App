@@ -18,6 +18,7 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
+import { VerifiedVetGuard } from "../auth/guards/verified-vet.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { IdempotencyService } from "../common/security/idempotency.service";
 import { PaymentMethod, UserRole } from "@prisma/client";
@@ -47,16 +48,6 @@ export class PaymentsController {
     }
   }
 
-  /**
-   * POST /payments/process
-   *
-   * La idempotencia persistente reemplaza la dependencia exclusiva del cache
-   * en memoria del service. Funciona a través de reinicios y múltiples
-   * instancias. CTG permanece cerrado mientras no exista un ledger de saldo
-   * del cliente: confirmar una cita sin débito real sería un fallo financiero.
-   * PSE también falla cerrado en producción mientras PaymentsService conserve
-   * el adapter sandbox/mock; un stub nunca puede contarse como rail productivo.
-   */
   @Post("process")
   @UseGuards(RolesGuard)
   @Roles(UserRole.CLIENT)
@@ -102,7 +93,7 @@ export class PaymentsController {
   }
 
   @Post("transactions/:id/verify-transfer")
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor("file"))
@@ -144,12 +135,6 @@ export class PaymentsController {
     );
   }
 
-  /**
-   * PSE initiation is replay-safe in non-production environments, but the
-   * current PaymentsService implementation still returns a sandbox URL.
-   * Production therefore fails closed until a real provider adapter and its
-   * webhook lifecycle have been certified end-to-end.
-   */
   @Post("pse/initiate")
   @UseGuards(RolesGuard)
   @Roles(UserRole.CLIENT)
@@ -201,7 +186,7 @@ export class PaymentsController {
   }
 
   @Get("me/earnings")
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   async getMyEarnings(
     @Request() req,
@@ -224,7 +209,7 @@ export class PaymentsController {
   }
 
   @Post("withdrawals")
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   @HttpCode(HttpStatus.CREATED)
   async requestWithdrawal(@Request() req, @Body() dto: RequestWithdrawalDto) {
