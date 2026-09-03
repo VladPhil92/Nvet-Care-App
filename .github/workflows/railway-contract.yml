@@ -42,6 +42,7 @@ jobs:
       - name: Validate canonical Railway contract
         run: |
           node --check backend/scripts/production-predeploy.mjs
+          node --check backend/scripts/database-migrate.mjs
           node --check backend/scripts/railway-runtime-smoke.mjs
           node --check scripts/railway-staging-bootstrap.mjs
           node - <<'NODE'
@@ -50,6 +51,8 @@ jobs:
           const backend = require('./backend/package.json');
           const railway = require('./railway.json');
           const dockerfile = fs.readFileSync('Dockerfile.railway', 'utf8');
+          const predeploy = fs.readFileSync('backend/scripts/production-predeploy.mjs', 'utf8');
+          const databaseMigrate = fs.readFileSync('backend/scripts/database-migrate.mjs', 'utf8');
           const stagingBootstrap = fs.readFileSync('scripts/railway-staging-bootstrap.mjs', 'utf8');
           const stagingWorkflow = fs.readFileSync('.github/workflows/provision-staging.yml', 'utf8');
           const prismaSchema = fs.readFileSync('backend/prisma/schema.prisma', 'utf8');
@@ -63,6 +66,18 @@ jobs:
           }
           if (backend.scripts?.['deploy:preflight'] !== 'node scripts/production-predeploy.mjs') {
             throw new Error('deploy:preflight must remain fail-closed');
+          }
+          if (!predeploy.includes("scripts/database-migrate.mjs")) {
+            throw new Error('production predeploy must delegate schema changes to database-migrate.mjs');
+          }
+          if (!databaseMigrate.includes("'migrate',") || !databaseMigrate.includes("'deploy',")) {
+            throw new Error('database-migrate.mjs must retain Prisma migrate deploy as canonical path');
+          }
+          if (databaseMigrate.includes('--accept-data-loss')) {
+            throw new Error('database-migrate.mjs must never accept destructive schema loss');
+          }
+          if (!databaseMigrate.includes('_nvet_manual_migrations')) {
+            throw new Error('manual SQL migration ledger contract drifted');
           }
           if (railway.build?.builder !== 'DOCKERFILE') {
             throw new Error('Railway must use the Dockerfile builder');
@@ -96,14 +111,10 @@ jobs:
             throw new Error('Provision workflow must not regress to CLI project mutations for workspace tokens');
           }
 
-          // npm workspaces may place runtime packages in both trees. Keep the
-          // canonical image explicit so hoisted packages can resolve Nest peers.
           if (!/^ENV NODE_PATH=\/app\/backend\/node_modules:\/app\/node_modules$/m.test(dockerfile)) {
             throw new Error('Dockerfile.railway must expose both npm workspace module trees');
           }
 
-          // Prisma String @default(uuid()) maps to PostgreSQL TEXT unless @db.Uuid
-          // is explicitly declared. Keep the manual live-location FK aligned.
           if (!/model\s+Appointment\s*\{[\s\S]*?\bid\s+String\s+@id\s+@default\(uuid\(\)\)/m.test(prismaSchema)) {
             throw new Error('Appointment.id contract changed; review live_location_v1.sql FK type');
           }
@@ -121,7 +132,7 @@ jobs:
             throw new Error('Legacy nvet-backend bridge must not be reintroduced');
           }
 
-          console.log('Railway active mode: canonical production + isolated Public API staging');
+          console.log('Railway active mode: canonical production + versioned DB migrations + isolated Public API staging');
           NODE
 
       - name: Build canonical Railway image from repository root
@@ -133,4 +144,4 @@ jobs:
           docker run --rm --entrypoint node nvet-railway-canonical:ci \
             -e "for (const m of ['@nestjs/common','@nestjs/core','@nestjs/platform-express','@prisma/client','nestjs-pino','pino-http','pino','redis','reflect-metadata','rxjs','socket.io']) { require(m); }"
           docker run --rm --entrypoint node nvet-railway-canonical:ci \
-            -e "const fs=require('fs'); for (const p of ['/app/backend/dist/main.js','/app/backend/scripts/production-predeploy.mjs','/app/backend/scripts/railway-runtime-smoke.mjs']) if(!fs.existsSync(p)) process.exit(1);"
+            -e "const fs=require('fs'); for (const p of ['/app/backend/dist/main.js','/app/backend/scripts/production-predeploy.mjs','/app/backend/scripts/database-migrate.mjs','/app/backend/scripts/railway-runtime-smoke.mjs','/app/backend/prisma/migrations/20260801000000_baseline_current_schema/migration.sql']) if(!fs.existsSync(p)) process.exit(1);"
