@@ -166,8 +166,7 @@ export class BetaEvidenceService {
         (item) => item.status === "APPROVED",
       );
       const stagingApprovedEvidenceCount = items.filter(
-        (item) =>
-          item.environment === "staging" && item.status === "APPROVED",
+        (item) => item.environment === "staging" && item.status === "APPROVED",
       ).length;
       const status: BetaGateStatus =
         conflictCount > 0
@@ -204,8 +203,7 @@ export class BetaEvidenceService {
       requiredEnvironment: "production" as const,
       totalGates: BETA_EVIDENCE_GATES.length,
       verifiedGates,
-      pendingGates:
-        BETA_EVIDENCE_GATES.length - verifiedGates - conflictedGates,
+      pendingGates: BETA_EVIDENCE_GATES.length - verifiedGates - conflictedGates,
       conflictedGates,
       eligibleForOperatorActivation,
       commercialLaunchAuthorized: false,
