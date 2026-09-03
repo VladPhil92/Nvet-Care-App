@@ -5,13 +5,24 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { Prisma, TransactionStatus } from "@prisma/client";
+import {
+  AppointmentStatus,
+  PaymentMethod,
+  Prisma,
+  TransactionStatus,
+} from "@prisma/client";
+import { createHash } from "crypto";
+import * as path from "path";
+import { StorageService } from "../common/storage/storage.service";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   PayoutDestination,
   FinancialDataCryptoService,
 } from "./financial-data-crypto.service";
-import type { RequestWithdrawalDto } from "./dto/payment.dto";
+import type {
+  RequestWithdrawalDto,
+  VerifyTransferDto,
+} from "./dto/payment.dto";
 
 export const WITHDRAWAL_STATUSES = [
   "PENDING",
@@ -44,13 +55,280 @@ export class FinancialOperationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly financialCrypto: FinancialDataCryptoService,
+    private readonly storage: StorageService,
   ) {}
+
+  // ========================================================================
+  // TRANSFER PAYMENT RAIL — canonical production-capable application path
+  // ========================================================================
+
+  async submitTransferProof(
+    userId: string,
+    transactionId: string,
+    file: Express.Multer.File,
+    dto: VerifyTransferDto,
+  ) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException("El comprobante es obligatorio");
+    }
+
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+      include: { appointment: { include: { vet: true } } },
+    });
+    if (!transaction) throw new NotFoundException("Transacción no encontrada");
+    if (transaction.appointment.vet.userId !== userId) {
+      throw new ForbiddenException(
+        "Solo el veterinario de la cita puede verificar la transferencia",
+      );
+    }
+    if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
+      throw new BadRequestException("Solo aplicable a pagos por transferencia");
+    }
+    if (transaction.status !== TransactionStatus.PENDING) {
+      throw new BadRequestException(
+        `Transición de estado inválida: ${transaction.status} → VERIFYING`,
+      );
+    }
+
+    const uploaded = await this.storage.upload(
+      file,
+      `transfers/${transactionId}`,
+      { visibility: "private" },
+    );
+    const proofSha256 = createHash("sha256").update(file.buffer).digest("hex");
+    const oldStorageKey = transaction.transferProofStorageKey;
+
+    const updated = await this.prisma.transaction.update({
+      where: { id: transactionId },
+      data: {
+        status: TransactionStatus.VERIFYING,
+        transferCode: dto.transferCode.trim(),
+        transferDate: dto.transferDate ? new Date(dto.transferDate) : null,
+        transferSubmittedAt: new Date(),
+        transferProofStorageKey: uploaded.storageKey,
+        transferProofFileName: this.sanitizeFileName(file.originalname),
+        transferProofMimeType: file.mimetype,
+        transferProofSha256: proofSha256,
+        transferReviewedById: null,
+        transferRejectedAt: null,
+        transferRejectionReason: null,
+      },
+    });
+
+    if (oldStorageKey && oldStorageKey !== uploaded.storageKey) {
+      await this.storage.delete(oldStorageKey).catch(() => undefined);
+    }
+
+    return updated;
+  }
+
+  async readTransferProof(transactionId: string) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: {
+        paymentMethod: true,
+        transferProofStorageKey: true,
+        transferProofFileName: true,
+        transferProofMimeType: true,
+        transferProofSha256: true,
+      },
+    });
+    if (!transaction) throw new NotFoundException("Transacción no encontrada");
+    if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
+      throw new BadRequestException("La transacción no pertenece al rail TRANSFER");
+    }
+    if (!transaction.transferProofStorageKey) {
+      throw new NotFoundException("La transacción no tiene comprobante cargado");
+    }
+
+    const buffer = await this.storage.read(transaction.transferProofStorageKey);
+    const actualHash = createHash("sha256").update(buffer).digest("hex");
+    if (
+      transaction.transferProofSha256 &&
+      actualHash !== transaction.transferProofSha256
+    ) {
+      throw new ConflictException(
+        "La evidencia almacenada no coincide con su huella de integridad",
+      );
+    }
+
+    return {
+      buffer,
+      fileName: this.sanitizeFileName(
+        transaction.transferProofFileName || "transfer-proof",
+      ),
+      mimeType: transaction.transferProofMimeType || "application/octet-stream",
+      sha256: actualHash,
+    };
+  }
+
+  async confirmTransfer(adminUserId: string, transactionId: string) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+      include: { appointment: true },
+    });
+    if (!transaction) throw new NotFoundException("Transacción no encontrada");
+    if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
+      throw new BadRequestException("Solo aplicable a pagos por transferencia");
+    }
+    if (transaction.status !== TransactionStatus.VERIFYING) {
+      throw new BadRequestException(
+        `Transición de estado inválida: ${transaction.status} → CONFIRMED`,
+      );
+    }
+    if (!transaction.transferProofStorageKey || !transaction.transferCode) {
+      throw new ConflictException(
+        "No se puede confirmar una transferencia sin comprobante y código",
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: TransactionStatus.CONFIRMED,
+          verifiedAt: new Date(),
+          transferReviewedById: adminUserId,
+          transferRejectedAt: null,
+          transferRejectionReason: null,
+        },
+      });
+      await tx.appointment.update({
+        where: { id: transaction.appointmentId },
+        data: { status: AppointmentStatus.CONFIRMED },
+      });
+      return updated;
+    });
+  }
+
+  async rejectTransfer(
+    adminUserId: string,
+    transactionId: string,
+    reason: string,
+  ) {
+    const normalizedReason = reason.trim();
+    if (normalizedReason.length < 10 || normalizedReason.length > 500) {
+      throw new BadRequestException(
+        "La razón de rechazo debe tener entre 10 y 500 caracteres",
+      );
+    }
+
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+    });
+    if (!transaction) throw new NotFoundException("Transacción no encontrada");
+    if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
+      throw new BadRequestException("Solo aplicable a pagos por transferencia");
+    }
+    if (transaction.status !== TransactionStatus.VERIFYING) {
+      throw new BadRequestException(
+        `Transición de estado inválida: ${transaction.status} → FAILED`,
+      );
+    }
+
+    return this.prisma.transaction.update({
+      where: { id: transactionId },
+      data: {
+        status: TransactionStatus.FAILED,
+        transferReviewedById: adminUserId,
+        transferRejectedAt: new Date(),
+        transferRejectionReason: normalizedReason,
+      },
+    });
+  }
+
+  // ========================================================================
+  // SETTLEMENT — durable batch instead of anonymous updateMany
+  // ========================================================================
+
+  async runSettlementBatch(adminUserId: string, holdDays = 7) {
+    if (!Number.isInteger(holdDays) || holdDays < 0 || holdDays > 30) {
+      throw new BadRequestException("holdDays debe ser un entero entre 0 y 30");
+    }
+
+    const cutoff = new Date(Date.now() - holdDays * 24 * 60 * 60 * 1000);
+    return this.withSerializableRetry(async (tx) => {
+      const transactions = await tx.transaction.findMany({
+        where: {
+          status: TransactionStatus.CONFIRMED,
+          paymentMethod: PaymentMethod.TRANSFER,
+          verifiedAt: { lte: cutoff },
+          settlementBatchId: null,
+        },
+        select: {
+          id: true,
+          amountCop: true,
+          commissionAmount: true,
+        },
+        orderBy: { verifiedAt: "asc" },
+      });
+
+      if (transactions.length === 0) {
+        return {
+          settlementBatch: null,
+          liquidatedCount: 0,
+          cutoffAt: cutoff,
+          holdDays,
+        };
+      }
+
+      const totalGrossCop = transactions.reduce(
+        (sum, row) => sum + row.amountCop,
+        0,
+      );
+      const totalCommissionCop = transactions.reduce(
+        (sum, row) => sum + row.commissionAmount,
+        0,
+      );
+      const now = new Date();
+      const batch = await tx.financialSettlementBatch.create({
+        data: {
+          cutoffAt: cutoff,
+          holdDays,
+          transactionCount: transactions.length,
+          totalGrossCop,
+          totalCommissionCop,
+          totalNetCop: totalGrossCop - totalCommissionCop,
+          createdById: adminUserId,
+        },
+      });
+
+      const update = await tx.transaction.updateMany({
+        where: {
+          id: { in: transactions.map((row) => row.id) },
+          status: TransactionStatus.CONFIRMED,
+          settlementBatchId: null,
+        },
+        data: {
+          status: TransactionStatus.LIQUIDATED,
+          liquidatedAt: now,
+          settlementBatchId: batch.id,
+        },
+      });
+
+      if (update.count !== transactions.length) {
+        throw new ConflictException(
+          "El lote cambió durante la liquidación; la operación se revertirá",
+        );
+      }
+
+      return {
+        settlementBatch: batch,
+        liquidatedCount: update.count,
+        cutoffAt: cutoff,
+        holdDays,
+      };
+    });
+  }
+
+  // ========================================================================
+  // WITHDRAWALS — reserved balance + encrypted payout destination
+  // ========================================================================
 
   async requestWithdrawal(userId: string, dto: RequestWithdrawalDto) {
     this.validateDestination(dto.paymentMethod, dto.accountInfo);
 
-    // Encryption happens before opening the serializable transaction so no
-    // plaintext destination is ever handed to Prisma or persisted in logs.
     const destination = dto.accountInfo as PayoutDestination;
     const encryptedDestination = this.financialCrypto.encrypt(destination);
     const destinationFingerprint = this.financialCrypto.fingerprint(destination);
@@ -97,6 +375,15 @@ export class FinancialOperationsService {
         },
       };
     });
+  }
+
+  async getBalanceForUser(userId: string) {
+    const vet = await this.prisma.vetProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!vet) throw new ForbiddenException("Solo veterinarios");
+    return this.calculateWithdrawalBalance(this.prisma, vet.id);
   }
 
   async listMyWithdrawals(userId: string, limit = 20, offset = 0) {
@@ -284,10 +571,6 @@ export class FinancialOperationsService {
     });
   }
 
-  async getBalanceForVet(vetProfileId: string) {
-    return this.calculateWithdrawalBalance(this.prisma, vetProfileId);
-  }
-
   private async transitionWithdrawal(
     withdrawalId: string,
     next: WithdrawalStatus,
@@ -397,6 +680,13 @@ export class FinancialOperationsService {
     return safe;
   }
 
+  private sanitizeFileName(fileName: string): string {
+    return path
+      .basename(fileName || "transfer-proof")
+      .replace(/[^A-Za-z0-9._-]/g, "_")
+      .slice(0, 160);
+  }
+
   private async withSerializableRetry<T>(
     operation: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
@@ -411,6 +701,6 @@ export class FinancialOperationsService {
         throw error;
       }
     }
-    throw new ConflictException("No se pudo reservar el saldo del retiro");
+    throw new ConflictException("No se pudo completar la operación financiera");
   }
 }
