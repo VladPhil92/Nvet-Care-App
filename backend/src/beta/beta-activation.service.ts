@@ -70,13 +70,12 @@ export class BetaActivationService {
     private readonly evidence: BetaEvidenceService,
   ) {}
 
-  async authorize(
-    dto: AuthorizeBetaActivationDto,
-    actor: BetaEvidenceActor,
-  ) {
+  async authorize(dto: AuthorizeBetaActivationDto, actor: BetaEvidenceActor) {
     const current = await this.getStatus();
     if (current.state === "ACTIVE") {
-      throw new ConflictException("A beta activation authorization is already active.");
+      throw new ConflictException(
+        "A beta activation authorization is already active.",
+      );
     }
     if (current.state === "CONFLICTED") {
       throw new ConflictException(
@@ -114,7 +113,9 @@ export class BetaActivationService {
   async revoke(dto: RevokeBetaActivationDto, actor: BetaEvidenceActor) {
     const current = await this.getStatus();
     if (current.state !== "ACTIVE" || !current.authorizationId) {
-      throw new ConflictException("There is no active beta authorization to revoke.");
+      throw new ConflictException(
+        "There is no active beta authorization to revoke.",
+      );
     }
 
     await this.appendEvent(
@@ -173,7 +174,7 @@ export class BetaActivationService {
     const configuredClients = this.getConfiguredClientCount();
     const supportConfigured = Boolean(
       process.env.NVET_BETA_SUPPORT_OWNER?.trim() &&
-        process.env.NVET_BETA_SUPPORT_CHANNEL?.trim(),
+      process.env.NVET_BETA_SUPPORT_CHANNEL?.trim(),
     );
     const marketConfigured = this.isCartagenaMarket(
       process.env.NVET_CLOSED_BETA_MARKET,
