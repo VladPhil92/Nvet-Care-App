@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { VerificationStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { BetaEvidenceService } from "./beta-evidence.service";
 import { BETA_LEGAL_DOCUMENTS } from "./beta-legal.constants";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 
@@ -27,20 +28,24 @@ export class BetaReadinessService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: ClosedBetaAccessService,
+    private readonly evidence: BetaEvidenceService,
   ) {}
 
   async getCartagenaSnapshot() {
-    const verifiedActiveVets = await this.prisma.vetProfile.count({
-      where: {
-        isVerified: true,
-        isActive: true,
-        verificationStatus: VerificationStatus.APPROVED,
-        city: {
-          contains: "cartagena",
-          mode: "insensitive",
+    const [verifiedActiveVets, evidencePromotion] = await Promise.all([
+      this.prisma.vetProfile.count({
+        where: {
+          isVerified: true,
+          isActive: true,
+          verificationStatus: VerificationStatus.APPROVED,
+          city: {
+            contains: "cartagena",
+            mode: "insensitive",
+          },
         },
-      },
-    });
+      }),
+      this.evidence.getPromotionSummary(),
+    ]);
 
     const configuredClients = this.access.getConfiguredClientCount();
     const cohortConfigured = configuredClients > 0;
@@ -75,8 +80,10 @@ export class BetaReadinessService {
     }
 
     const machineActivationReady = blockingReasons.length === 0;
+    const operatorActivationEligible =
+      machineActivationReady && evidencePromotion.eligibleForOperatorActivation;
     const activationState = this.resolveActivationState({
-      machineActivationReady,
+      operatorActivationEligible,
       closedBetaEnabled,
       bookingEnabled,
     });
@@ -92,9 +99,18 @@ export class BetaReadinessService {
       activation: {
         state: activationState,
         machineActivationReady,
+        operatorActivationEligible,
         blockingReasons,
         externalEvidenceRequired: true,
         commercialLaunchAuthorized: false,
+      },
+      promotion: {
+        ...evidencePromotion,
+        localRuntimeReady: machineActivationReady,
+        eligibleForOperatorActivation: operatorActivationEligible,
+        blockingGates: evidencePromotion.gates
+          .filter((gate) => gate.status !== "VERIFIED")
+          .map((gate) => gate.gate),
       },
       cohort: {
         configured: cohortConfigured,
@@ -122,6 +138,8 @@ export class BetaReadinessService {
       localActivationReady: machineActivationReady,
       promotionBoundary: {
         machineReadinessIsNotLaunchApproval: true,
+        evidenceApprovalIsNotCommercialLaunchApproval: true,
+        evidenceLedger: "audit_logs",
         requiredEvidenceManifest:
           "docs/production/BETA_CARTAGENA_READINESS.json",
       },
@@ -129,17 +147,18 @@ export class BetaReadinessService {
         rawClientIdentifiersExposed: false,
         cohortHashesExposed: false,
         supportContactExposed: false,
+        evidenceReferencesAdminOnly: true,
       },
       generatedAt: new Date().toISOString(),
     } as const;
   }
 
   private resolveActivationState(input: {
-    machineActivationReady: boolean;
+    operatorActivationEligible: boolean;
     closedBetaEnabled: boolean;
     bookingEnabled: boolean;
   }): ActivationState {
-    if (input.closedBetaEnabled && !input.machineActivationReady) {
+    if (input.closedBetaEnabled && !input.operatorActivationEligible) {
       return "misconfigured";
     }
     if (input.closedBetaEnabled && !input.bookingEnabled) {
@@ -148,7 +167,7 @@ export class BetaReadinessService {
     if (input.closedBetaEnabled) {
       return "active";
     }
-    if (input.machineActivationReady) {
+    if (input.operatorActivationEligible) {
       return "ready-to-enable";
     }
     return "blocked";
