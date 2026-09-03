@@ -21,6 +21,17 @@ La cohorte se configura mediante `NVET_CLOSED_BETA_CLIENT_HASHES`, una lista de 
 
 Si el gate de beta se habilita sin una cohorte válida, booking falla cerrado con `CLOSED_BETA_COHORT_NOT_CONFIGURED`. Si un usuario no pertenece a la cohorte, responde `CLOSED_BETA_ACCESS_REQUIRED`. Si intenta reservar fuera del mercado, responde `CLOSED_BETA_MARKET_RESTRICTED`.
 
+## Evidencia operacional redacted
+
+La fase dispone de dos superficies autenticadas para verificar configuración sin exponer la cohorte:
+
+- `GET /api/beta/policy` permite a CLIENT, VET y ADMIN conocer modo, mercado, estado de booking y si existe una cohorte válida.
+- `GET /api/beta/readiness` es ADMIN-only y devuelve conteos agregados: tamaño de cohorte, límite de lanzamiento y número de veterinarios verificados/activos cuyo `city` contiene Cartagena.
+
+El endpoint administrativo **nunca devuelve hashes, UUIDs, correos, teléfonos ni identificadores de veterinarios o clientes**. Su función es generar evidencia redacted para `cartagenaVetCoverageVerified` y `clientCohortConfigured`.
+
+`localActivationReady=true` significa únicamente que la cohorte local está configurada dentro del máximo de 50 clientes y existe cobertura mínima de tres veterinarios. No reemplaza los gates externos de RC, privacidad, soporte, pago ni rollback.
+
 ## Cohorte inicial
 
 La política v1 fija un máximo inicial de **50 clientes** y un mínimo operativo de **3 veterinarios verificados y activos** en Cartagena. Estos números son límites de lanzamiento, no metas comerciales permanentes.
@@ -34,6 +45,12 @@ La ampliación de cohorte debe ocurrir por lotes y solo después de revisar:
 - incidentes P0/P1;
 - latencia/readiness del backend;
 - tickets de soporte y problemas de onboarding.
+
+## Herencia de Release Candidate
+
+Los gates `productionBackupConfigured`, `restoreDrillVerified`, `productionAlertingVerified` y `paymentRailVerified` pertenecen al RC y no pueden ser promovidos de manera independiente por Fase 12. El gate `scripts/verify-cartagena-beta-evidence-inheritance.mjs` exige que el manifiesto de beta conserve el mismo estado y, cuando corresponda, la misma referencia de evidencia que `RC_READINESS.json`.
+
+A 3 de septiembre de 2026, `productionAlertingVerified` ya tiene evidencia heredable de Fase 11. Backup del proveedor, restore drill del proveedor y transferencia bancaria real permanecen bloqueados y no deben simularse con tests locales.
 
 ## Gates de lanzamiento
 
