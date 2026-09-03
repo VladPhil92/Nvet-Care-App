@@ -7,6 +7,9 @@ import { ClosedBetaAccessService } from "./closed-beta-access.service";
 
 describe("ClosedBetaAccessService", () => {
   const originalEnv = process.env;
+  const legalConsent = {
+    assertCurrentAcceptance: jest.fn(),
+  } as any;
   let service: ClosedBetaAccessService;
 
   const hash = (value: string) =>
@@ -18,59 +21,87 @@ describe("ClosedBetaAccessService", () => {
     delete process.env.NVET_CLOSED_BETA_ENABLED;
     delete process.env.NVET_CLOSED_BETA_MARKET;
     delete process.env.NVET_CLOSED_BETA_CLIENT_HASHES;
-    service = new ClosedBetaAccessService();
+    jest.clearAllMocks();
+    legalConsent.assertCurrentAcceptance.mockResolvedValue(undefined);
+    service = new ClosedBetaAccessService(legalConsent);
   });
 
   afterAll(() => {
     process.env = originalEnv;
   });
 
-  it("does not change booking behavior while the beta gate is disabled", () => {
-    expect(() => service.assertBookingAllowed("client-1", null)).not.toThrow();
+  it("does not change booking behavior while the beta gate is disabled", async () => {
+    await expect(service.assertBookingAllowed("client-1", null)).resolves.toBeUndefined();
+    expect(legalConsent.assertCurrentAcceptance).not.toHaveBeenCalled();
   });
 
-  it("allows an invited client with a Cartagena veterinarian", () => {
+  it("allows an invited consenting client with a Cartagena veterinarian", async () => {
     process.env.NVET_CLOSED_BETA_ENABLED = "true";
     process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-1");
 
-    expect(() =>
+    await expect(
       service.assertBookingAllowed("client-1", "Cartagena de Indias, Bolívar"),
-    ).not.toThrow();
+    ).resolves.toBeUndefined();
+    expect(legalConsent.assertCurrentAcceptance).toHaveBeenCalledWith("client-1");
   });
 
-  it("rejects a client outside the configured cohort", () => {
+  it("rejects a client outside the configured cohort before legal lookup", async () => {
     process.env.NVET_CLOSED_BETA_ENABLED = "true";
     process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-allowed");
 
-    expect(() =>
+    await expect(
       service.assertBookingAllowed("client-not-invited", "Cartagena"),
-    ).toThrow(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(legalConsent.assertCurrentAcceptance).not.toHaveBeenCalled();
   });
 
-  it("rejects bookings outside the Cartagena launch market", () => {
+  it("rejects bookings outside the Cartagena launch market before legal lookup", async () => {
     process.env.NVET_CLOSED_BETA_ENABLED = "true";
     process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-1");
 
-    expect(() =>
+    await expect(
       service.assertBookingAllowed("client-1", "Barranquilla"),
-    ).toThrow(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(legalConsent.assertCurrentAcceptance).not.toHaveBeenCalled();
   });
 
-  it("fails closed if the gate is enabled without a valid cohort", () => {
+  it("fails closed if the gate is enabled without a valid cohort", async () => {
     process.env.NVET_CLOSED_BETA_ENABLED = "true";
     process.env.NVET_CLOSED_BETA_CLIENT_HASHES = "not-a-hash";
 
-    expect(() =>
+    await expect(
       service.assertBookingAllowed("client-1", "Cartagena"),
-    ).toThrow(ServiceUnavailableException);
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
-  it("blocks new bookings when the operations switch is off", () => {
+  it("blocks new bookings when the operations switch is off", async () => {
     process.env.NVET_BOOKING_ENABLED = "false";
 
-    expect(() =>
+    await expect(
       service.assertBookingAllowed("client-1", "Cartagena"),
-    ).toThrow(ServiceUnavailableException);
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it("fails closed if beta is enabled but the legal service is not wired", async () => {
+    process.env.NVET_CLOSED_BETA_ENABLED = "true";
+    process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-1");
+    const misconfigured = new ClosedBetaAccessService();
+
+    await expect(
+      misconfigured.assertBookingAllowed("client-1", "Cartagena"),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it("propagates a missing legal acceptance and never opens booking", async () => {
+    process.env.NVET_CLOSED_BETA_ENABLED = "true";
+    process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-1");
+    legalConsent.assertCurrentAcceptance.mockRejectedValue(
+      new ForbiddenException("legal-required"),
+    );
+
+    await expect(
+      service.assertBookingAllowed("client-1", "Cartagena"),
+    ).rejects.toThrow("legal-required");
   });
 
   it("counts only valid unique cohort hashes without exposing them", () => {
@@ -98,6 +129,7 @@ describe("ClosedBetaAccessService", () => {
       market: "Cartagena de Indias",
       bookingEnabled: true,
       cohortConfigured: true,
+      legalAcceptanceRequired: true,
     });
     expect(JSON.stringify(service.getPublicPolicy())).not.toContain(
       hash("client-1"),
