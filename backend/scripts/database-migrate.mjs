@@ -90,7 +90,7 @@ async function adoptLegacyDatabaseOnce() {
   }
 
   console.warn(
-    '\n⚠️ Base legacy detectada sin baseline Prisma. Se ejecutará la adopción única, sin --accept-data-loss.',
+    '\n⚠️ Base legacy detectada sin baseline Prisma. Se ejecutará la adopción única en modo no destructivo.',
   );
 
   // One-time bridge only. It preserves the exact fail-closed behavior used by
@@ -221,7 +221,7 @@ try {
 } catch (error) {
   console.error(`\n❌ Database migration convergence falló: ${error.message}`);
   console.error(
-    'No se usa --accept-data-loss. El despliegue se detiene antes de iniciar la aplicación.',
+    'Las operaciones destructivas permanecen deshabilitadas. El despliegue se detiene antes de iniciar la aplicación.',
   );
   process.exitCode = 1;
 } finally {
