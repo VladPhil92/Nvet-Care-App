@@ -6,6 +6,7 @@ import ClientDashboard from './pages/ClientDashboard'
 import TiersPage from './pages/TiersPage'
 import AccountingPage from './pages/AccountingPage'
 import TrackingPage from './pages/TrackingPage'
+import BetaEvidencePage from './pages/BetaEvidencePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import Sidebar from './components/Sidebar'
@@ -15,7 +16,7 @@ import { useVetProfileQuery } from './hooks/queries/useVetQueries'
 import { QueryProvider } from './lib/QueryProvider'
 import { T, F } from './theme/tokens'
 
-type AdminPage = 'admin' | 'vet' | 'tiers' | 'accounting' | 'tracking'
+type AdminPage = 'admin' | 'vet' | 'tiers' | 'accounting' | 'evidence' | 'tracking'
 type PublicAuthPage = 'login' | 'register'
 
 function AdminApp() {
@@ -42,6 +43,7 @@ function AdminApp() {
         {page === 'vet' && <VetPanel mode="tester" />}
         {page === 'tiers' && <TiersPage />}
         {page === 'accounting' && <AccountingPage />}
+        {page === 'evidence' && <BetaEvidencePage />}
         {page === 'tracking' && <TrackingPage />}
       </div>
     </div>
