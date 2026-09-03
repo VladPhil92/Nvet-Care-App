@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'backend/prisma/**'
+      - 'backend/scripts/database-migrate.mjs'
       - 'backend/scripts/production-predeploy.mjs'
       - '.github/workflows/recovery-readiness.yml'
   push:
     branches: [main]
     paths:
       - 'backend/prisma/**'
+      - 'backend/scripts/database-migrate.mjs'
       - 'backend/scripts/production-predeploy.mjs'
       - '.github/workflows/recovery-readiness.yml'
   schedule:
@@ -26,9 +28,9 @@ concurrency:
 
 jobs:
   recovery-drill:
-    name: Logical backup and isolated restore rehearsal
+    name: Migration, logical backup and isolated restore rehearsal
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16-alpine
@@ -46,8 +48,12 @@ jobs:
     env:
       SOURCE_PG_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_source
       RESTORE_PG_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_restore
+      HISTORY_PG_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_history
+      LEGACY_PG_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_legacy
       DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_source?schema=public
       RESTORE_DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_restore?schema=public
+      HISTORY_DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_history?schema=public
+      LEGACY_DATABASE_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_legacy?schema=public
       NVET_ALLOW_E2E_SEED: 'true'
       NVET_SEED_TARGET: test
       E2E_CLIENT_EMAIL: recovery-client@nvetcare.invalid
@@ -65,7 +71,7 @@ jobs:
           cache: npm
 
       - name: Install repository dependencies
-        run: npm ci
+        run: npm ci --include=dev --legacy-peer-deps
 
       - name: Install PostgreSQL client
         shell: bash
@@ -74,6 +80,11 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends postgresql-client
 
+      - name: Generate Prisma client
+        run: npx prisma generate --schema backend/prisma/schema.prisma
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
       - name: Generate ephemeral recovery fixture passwords
         shell: bash
         run: |
@@ -81,6 +92,36 @@ jobs:
           echo "E2E_CLIENT_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
           echo "E2E_VET_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
           echo "E2E_ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+
+      - name: Certify migration history rebuilds canonical schema from empty DB
+        shell: bash
+        env:
+          PGPASSWORD: nvet_recovery_ci_only
+        run: |
+          set -euo pipefail
+          createdb -h localhost -U nvet_recovery nvet_history
+          DATABASE_URL="$HISTORY_DATABASE_URL" npx prisma migrate deploy \
+            --schema backend/prisma/schema.prisma
+          DATABASE_URL="$HISTORY_DATABASE_URL" npx prisma migrate diff \
+            --from-url "$HISTORY_DATABASE_URL" \
+            --to-schema-datamodel backend/prisma/schema.prisma \
+            --exit-code
+          test "$(psql "$HISTORY_PG_URL" -Atc "select count(*) from \"_prisma_migrations\" where finished_at is not null and rolled_back_at is null")" -ge 3
+
+      - name: Certify one-time adoption of a legacy db-push database
+        shell: bash
+        env:
+          PGPASSWORD: nvet_recovery_ci_only
+        run: |
+          set -euo pipefail
+          createdb -h localhost -U nvet_recovery nvet_legacy
+          DATABASE_URL="$LEGACY_DATABASE_URL" npx prisma db push \
+            --schema backend/prisma/schema.prisma \
+            --skip-generate
+          DATABASE_URL="$LEGACY_DATABASE_URL" NODE_ENV=production \
+            npm run deploy:preflight --workspace=backend
+          test "$(psql "$LEGACY_PG_URL" -Atc "select count(*) from \"_prisma_migrations\" where migration_name='20260801000000_baseline_current_schema' and finished_at is not null and rolled_back_at is null")" = '1'
+          test "$(psql "$LEGACY_PG_URL" -Atc 'select count(*) from "_nvet_manual_migrations"')" = '3'
 
       - name: Verify staging deploy is independent from fixture credentials
         shell: bash
@@ -98,18 +139,12 @@ jobs:
             NVET_SEED_TARGET=staging \
             npm run deploy:preflight --workspace=backend
 
-          # The predeploy must apply schema/runtime guards but must not create
-          # any E2E identities when their secret-backed credentials are absent.
           test "$(psql "$SOURCE_PG_URL" -Atc "select count(*) from users where email like '%@nvetcare.invalid'")" = '0'
+          test "$(psql "$SOURCE_PG_URL" -Atc "select count(*) from \"_prisma_migrations\" where migration_name='20260801000000_baseline_current_schema' and finished_at is not null and rolled_back_at is null")" = '1'
+          test "$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from "_nvet_manual_migrations"')" = '3'
 
-      - name: Materialize canonical schema and deterministic fixtures
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx prisma validate --schema backend/prisma/schema.prisma
-          npx prisma generate --schema backend/prisma/schema.prisma
-          npx prisma db push --schema backend/prisma/schema.prisma --skip-generate
-          npm run seed:e2e --workspace=backend
+      - name: Seed deterministic recovery fixtures
+        run: npm run seed:e2e --workspace=backend
 
       - name: Capture source integrity fingerprint
         id: source
@@ -120,15 +155,21 @@ jobs:
           pets="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from pets')"
           appointments="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from appointments')"
           admins="$(psql "$SOURCE_PG_URL" -Atc "select count(*) from users where email='recovery-admin@nvetcare.invalid' and role='ADMIN'")"
+          migrations="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from "_prisma_migrations" where finished_at is not null and rolled_back_at is null')"
+          manual_migrations="$(psql "$SOURCE_PG_URL" -Atc 'select count(*) from "_nvet_manual_migrations"')"
 
           test "$users" -ge 3
           test "$pets" -ge 1
           test "$appointments" -ge 2
           test "$admins" = '1'
+          test "$migrations" -ge 3
+          test "$manual_migrations" = '3'
 
           echo "users=$users" >> "$GITHUB_OUTPUT"
           echo "pets=$pets" >> "$GITHUB_OUTPUT"
           echo "appointments=$appointments" >> "$GITHUB_OUTPUT"
+          echo "migrations=$migrations" >> "$GITHUB_OUTPUT"
+          echo "manual_migrations=$manual_migrations" >> "$GITHUB_OUTPUT"
 
       - name: Produce logical backup
         shell: bash
@@ -156,44 +197,46 @@ jobs:
             --exit-on-error \
             /tmp/nvet-recovery.dump
 
-      - name: Verify restored domain integrity
+      - name: Verify restored domain and migration integrity
         shell: bash
         run: |
           set -euo pipefail
           restored_users="$(psql "$RESTORE_PG_URL" -Atc 'select count(*) from users')"
           restored_pets="$(psql "$RESTORE_PG_URL" -Atc 'select count(*) from pets')"
           restored_appointments="$(psql "$RESTORE_PG_URL" -Atc 'select count(*) from appointments')"
+          restored_migrations="$(psql "$RESTORE_PG_URL" -Atc 'select count(*) from "_prisma_migrations" where finished_at is not null and rolled_back_at is null')"
+          restored_manual="$(psql "$RESTORE_PG_URL" -Atc 'select count(*) from "_nvet_manual_migrations"')"
 
           test "$restored_users" = '${{ steps.source.outputs.users }}'
           test "$restored_pets" = '${{ steps.source.outputs.pets }}'
           test "$restored_appointments" = '${{ steps.source.outputs.appointments }}'
+          test "$restored_migrations" = '${{ steps.source.outputs.migrations }}'
+          test "$restored_manual" = '${{ steps.source.outputs.manual_migrations }}'
 
           test "$(psql "$RESTORE_PG_URL" -Atc "select count(*) from users where email='recovery-admin@nvetcare.invalid' and role='ADMIN'")" = '1'
           test "$(psql "$RESTORE_PG_URL" -Atc "select count(*) from pets where id='00000000-0000-4000-8000-000000000101'")" = '1'
           test "$(psql "$RESTORE_PG_URL" -Atc "select count(*) from appointments where id in ('00000000-0000-4000-8000-000000000201','00000000-0000-4000-8000-000000000202')")" = '2'
 
-          DATABASE_URL="$RESTORE_DATABASE_URL" npx prisma db execute \
-            --schema backend/prisma/schema.prisma \
-            --stdin <<'SQL'
-          SELECT 1;
-          SQL
+          DATABASE_URL="$RESTORE_DATABASE_URL" npx prisma migrate status \
+            --schema backend/prisma/schema.prisma
 
       - name: Publish recovery evidence summary
         if: always()
         shell: bash
         run: |
           {
-            echo '## Nvet Recovery Readiness'
+            echo '## Nvet Database & Recovery Convergence'
             echo ''
             echo "- Candidate SHA: \`${GITHUB_SHA}\`"
-            echo '- PostgreSQL source: ephemeral Postgres 16 service.'
-            echo '- Staging deploy contract: schema/runtime predeploy passes with E2E credentials intentionally absent; fixture certification stays separate.'
+            echo '- Versioned schema: fresh PostgreSQL reconstructed with `prisma migrate deploy` and compared against canonical Prisma schema.'
+            echo '- Legacy adoption: db-push-created database converged once into the baseline and Prisma migration history.'
+            echo '- Manual SQL: immutable SHA-256 ledger preserved through backup/restore.'
             echo '- Backup format: pg_dump custom archive, no owner/ACL coupling.'
             echo '- Restore target: independently created empty database.'
-            echo '- Integrity verification: client, vet, staging-only ADMIN fixture, pets, appointments and deterministic fixture IDs.'
+            echo '- Integrity verification: users, pets, appointments, migration history and manual migration ledger.'
             if [ -f /tmp/nvet-recovery.sha256 ]; then
               echo "- Dump checksum: \`$(cut -d' ' -f1 /tmp/nvet-recovery.sha256)\`"
             fi
             echo ''
-            echo '> This proves the application-level logical recovery procedure. It does not replace provider-level production backup evidence or a provider restore drill.'
+            echo '> This proves application-level migration and logical recovery. Provider-level Railway backup configuration and a provider restore drill remain independent external release gates.'
           } >> "$GITHUB_STEP_SUMMARY"
