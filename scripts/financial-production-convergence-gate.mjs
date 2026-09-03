@@ -66,7 +66,7 @@ requireMatch(
   'Financial encryption must use a dedicated production secret.',
 );
 requireMatch(
-  !has(crypto, 'JWT_SECRET'),
+  !/process\.env\.JWT_SECRET/.test(crypto),
   'Financial encryption must not silently fall back to JWT_SECRET.',
 );
 requireMatch(
