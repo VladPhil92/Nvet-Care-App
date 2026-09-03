@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { VerificationService } from './verification.service';
@@ -32,7 +31,7 @@ describe('VerificationService', () => {
     originalname: 'documento.pdf',
     encoding: '7bit',
     mimetype: 'application/pdf',
-    size: 1024 * 100, // 100 KB
+    size: 1024 * 100,
     buffer: Buffer.from('test'),
     stream: null as any,
     destination: '',
@@ -53,21 +52,21 @@ describe('VerificationService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([]),
     };
 
     mail = { sendVetApproval: jest.fn().mockResolvedValue({ ok: true }) };
     storage = {
-      upload: jest.fn().mockResolvedValue({ url: '/uploads/verification/vet-1/doc.pdf', storageKey: '/path' }),
+      upload: jest.fn().mockResolvedValue({
+        url: '/uploads/verification/vet-1/doc.pdf',
+        storageKey: '/path',
+      }),
       delete: jest.fn().mockResolvedValue(undefined),
     };
 
     service = new VerificationService(prisma, mail, storage);
     jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
   });
-
-  // ─────────────────────────────────────────────────────────────────
-  // uploadDocument
-  // ─────────────────────────────────────────────────────────────────
 
   describe('uploadDocument', () => {
     it('crea un nuevo documento correctamente', async () => {
@@ -77,7 +76,11 @@ describe('VerificationService', () => {
       const created = { id: DOC_ID, type: DocumentType.ID_DOCUMENT };
       prisma.verificationDocument.create.mockResolvedValue(created);
 
-      const result = await service.uploadDocument(USER_ID, DocumentType.ID_DOCUMENT, validFile);
+      const result = await service.uploadDocument(
+        USER_ID,
+        DocumentType.ID_DOCUMENT,
+        validFile,
+      );
 
       expect(storage.upload).toHaveBeenCalled();
       expect(prisma.verificationDocument.create).toHaveBeenCalled();
@@ -117,10 +120,14 @@ describe('VerificationService', () => {
 
     it('lanza BadRequestException si el archivo supera el tamaño máximo', async () => {
       prisma.vetProfile.findUnique.mockResolvedValue(baseVet);
-      const bigFile = { ...validFile, size: 11 * 1024 * 1024 }; // 11 MB
+      const bigFile = { ...validFile, size: 11 * 1024 * 1024 };
 
       await expect(
-        service.uploadDocument(USER_ID, DocumentType.ID_DOCUMENT, bigFile as any),
+        service.uploadDocument(
+          USER_ID,
+          DocumentType.ID_DOCUMENT,
+          bigFile as any,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -129,19 +136,31 @@ describe('VerificationService', () => {
       const badFile = { ...validFile, mimetype: 'video/mp4' };
 
       await expect(
-        service.uploadDocument(USER_ID, DocumentType.ID_DOCUMENT, badFile as any),
+        service.uploadDocument(
+          USER_ID,
+          DocumentType.ID_DOCUMENT,
+          badFile as any,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('reemplaza un documento UPLOADED existente y borra el archivo anterior', async () => {
       prisma.vetProfile.findUnique.mockResolvedValue(baseVet);
-      const existing = { id: DOC_ID, status: DocumentStatus.UPLOADED, fileUrl: '/old/path.pdf' };
+      const existing = {
+        id: DOC_ID,
+        status: DocumentStatus.UPLOADED,
+        fileUrl: '/old/path.pdf',
+      };
       prisma.verificationDocument.findFirst.mockResolvedValue(existing);
       prisma.verificationDocument.findMany.mockResolvedValue([existing]);
       const updated = { id: DOC_ID, status: DocumentStatus.UPLOADED };
       prisma.verificationDocument.update.mockResolvedValue(updated);
 
-      const result = await service.uploadDocument(USER_ID, DocumentType.ID_DOCUMENT, validFile);
+      const result = await service.uploadDocument(
+        USER_ID,
+        DocumentType.ID_DOCUMENT,
+        validFile,
+      );
 
       expect(storage.delete).toHaveBeenCalledWith('/old/path.pdf');
       expect(prisma.verificationDocument.update).toHaveBeenCalled();
@@ -173,10 +192,6 @@ describe('VerificationService', () => {
     });
   });
 
-  // ─────────────────────────────────────────────────────────────────
-  // getVerificationStatus
-  // ─────────────────────────────────────────────────────────────────
-
   describe('getVerificationStatus', () => {
     it('retorna estado NOT_UPLOADED cuando no hay documentos', async () => {
       prisma.vetProfile.findUnique.mockResolvedValue({
@@ -186,17 +201,31 @@ describe('VerificationService', () => {
 
       const result = await service.getVerificationStatus(USER_ID);
 
-      expect(result.documents).toHaveLength(3); // 3 required docs
-      expect(result.documents.every((d) => d.status === 'NOT_UPLOADED')).toBe(true);
+      expect(result.documents).toHaveLength(3);
+      expect(
+        result.documents.every((d) => d.status === 'NOT_UPLOADED'),
+      ).toBe(true);
       expect(result.canSubmit).toBe(false);
       expect(result.progress.approved).toBe(0);
     });
 
     it('calcula progreso correctamente con todos los documentos subidos', async () => {
       const docs = [
-        { type: DocumentType.COMVEZCOL_CARD, status: DocumentStatus.UPLOADED, uploadedAt: new Date() },
-        { type: DocumentType.PROFESSIONAL_DEGREE, status: DocumentStatus.UPLOADED, uploadedAt: new Date() },
-        { type: DocumentType.ID_DOCUMENT, status: DocumentStatus.UPLOADED, uploadedAt: new Date() },
+        {
+          type: DocumentType.COMVEZCOL_CARD,
+          status: DocumentStatus.UPLOADED,
+          uploadedAt: new Date(),
+        },
+        {
+          type: DocumentType.PROFESSIONAL_DEGREE,
+          status: DocumentStatus.UPLOADED,
+          uploadedAt: new Date(),
+        },
+        {
+          type: DocumentType.ID_DOCUMENT,
+          status: DocumentStatus.UPLOADED,
+          uploadedAt: new Date(),
+        },
       ];
       prisma.vetProfile.findUnique.mockResolvedValue({
         ...baseVet,
@@ -212,24 +241,28 @@ describe('VerificationService', () => {
     it('lanza NotFoundException si no existe el perfil', async () => {
       prisma.vetProfile.findUnique.mockResolvedValue(null);
 
-      await expect(service.getVerificationStatus(USER_ID)).rejects.toThrow(NotFoundException);
+      await expect(service.getVerificationStatus(USER_ID)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
-
-  // ─────────────────────────────────────────────────────────────────
-  // approveDocument / rejectDocument
-  // ─────────────────────────────────────────────────────────────────
 
   describe('approveDocument', () => {
     it('aprueba el documento y llama checkAndApproveVet', async () => {
       const doc = { id: DOC_ID, vetProfileId: VET_ID, vetProfile: baseVet };
       prisma.verificationDocument.findUnique.mockResolvedValue(doc);
-      prisma.verificationDocument.update.mockResolvedValue({ ...doc, status: DocumentStatus.APPROVED });
-      // checkAndApproveVet necesita findMany y vetProfile.update
-      prisma.verificationDocument.findMany.mockResolvedValue([]); // sin todos los docs → no auto-aprueba
+      prisma.verificationDocument.update.mockResolvedValue({
+        ...doc,
+        status: DocumentStatus.APPROVED,
+      });
+      prisma.verificationDocument.findMany.mockResolvedValue([]);
       prisma.vetProfile.update.mockResolvedValue({});
 
-      const result = await service.approveDocument(ADMIN_ID, DOC_ID, 'Todo correcto');
+      const result = await service.approveDocument(
+        ADMIN_ID,
+        DOC_ID,
+        'Todo correcto',
+      );
 
       expect(prisma.verificationDocument.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -242,26 +275,66 @@ describe('VerificationService', () => {
     it('lanza NotFoundException si el documento no existe', async () => {
       prisma.verificationDocument.findUnique.mockResolvedValue(null);
 
-      await expect(service.approveDocument(ADMIN_ID, 'no-existe')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.approveDocument(ADMIN_ID, 'no-existe'),
+      ).rejects.toThrow(NotFoundException);
     });
 
-    it('auto-aprueba el vet y envía email cuando todos los docs están aprobados', async () => {
+    it('aprueba documentos pero mantiene al vet inactivo mientras el registro oficial siga pendiente', async () => {
       const doc = { id: DOC_ID, vetProfileId: VET_ID };
       prisma.verificationDocument.findUnique.mockResolvedValue(doc);
-      prisma.verificationDocument.update.mockResolvedValue({ ...doc, status: DocumentStatus.APPROVED });
-
-      // checkAndApproveVet encuentra los 3 docs aprobados
+      prisma.verificationDocument.update.mockResolvedValue({
+        ...doc,
+        status: DocumentStatus.APPROVED,
+      });
       prisma.verificationDocument.findMany.mockResolvedValue([
         { type: DocumentType.COMVEZCOL_CARD },
         { type: DocumentType.PROFESSIONAL_DEGREE },
         { type: DocumentType.ID_DOCUMENT },
       ]);
+      prisma.$queryRawUnsafe.mockResolvedValue([]);
       prisma.vetProfile.update.mockResolvedValue({
         user: { email: 'vet@test.com', firstName: 'Pedro' },
       });
 
       await service.approveDocument(ADMIN_ID, DOC_ID);
 
+      expect(prisma.vetProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            verificationStatus: VerificationStatus.APPROVED,
+            isVerified: true,
+            isActive: false,
+          }),
+        }),
+      );
+      expect(mail.sendVetApproval).not.toHaveBeenCalled();
+    });
+
+    it('completa la habilitación si el registro oficial ya estaba VERIFIED', async () => {
+      const doc = { id: DOC_ID, vetProfileId: VET_ID };
+      prisma.verificationDocument.findUnique.mockResolvedValue(doc);
+      prisma.verificationDocument.update.mockResolvedValue({
+        ...doc,
+        status: DocumentStatus.APPROVED,
+      });
+      prisma.verificationDocument.findMany.mockResolvedValue([
+        { type: DocumentType.COMVEZCOL_CARD },
+        { type: DocumentType.PROFESSIONAL_DEGREE },
+        { type: DocumentType.ID_DOCUMENT },
+      ]);
+      prisma.$queryRawUnsafe.mockResolvedValue([{ status: 'VERIFIED' }]);
+      prisma.vetProfile.update.mockResolvedValue({
+        user: { email: 'vet@test.com', firstName: 'Pedro' },
+      });
+
+      await service.approveDocument(ADMIN_ID, DOC_ID);
+
+      expect(prisma.vetProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ isActive: true }),
+        }),
+      );
       expect(mail.sendVetApproval).toHaveBeenCalledWith(
         expect.objectContaining({ to: 'vet@test.com', firstName: 'Pedro' }),
       );
@@ -272,7 +345,10 @@ describe('VerificationService', () => {
     it('rechaza el documento y actualiza el estado del vet a REJECTED', async () => {
       const doc = { id: DOC_ID, vetProfileId: VET_ID };
       prisma.verificationDocument.findUnique.mockResolvedValue(doc);
-      prisma.verificationDocument.update.mockResolvedValue({ ...doc, status: DocumentStatus.REJECTED });
+      prisma.verificationDocument.update.mockResolvedValue({
+        ...doc,
+        status: DocumentStatus.REJECTED,
+      });
       prisma.vetProfile.update.mockResolvedValue({});
 
       await service.rejectDocument(ADMIN_ID, DOC_ID, 'Imagen borrosa');
@@ -284,7 +360,9 @@ describe('VerificationService', () => {
       );
       expect(prisma.vetProfile.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ verificationStatus: VerificationStatus.REJECTED }),
+          data: expect.objectContaining({
+            verificationStatus: VerificationStatus.REJECTED,
+          }),
         }),
       );
     });
@@ -293,13 +371,17 @@ describe('VerificationService', () => {
       const doc = { id: DOC_ID, vetProfileId: VET_ID };
       prisma.verificationDocument.findUnique.mockResolvedValue(doc);
 
-      await expect(service.rejectDocument(ADMIN_ID, DOC_ID, '   ')).rejects.toThrow(BadRequestException);
+      await expect(
+        service.rejectDocument(ADMIN_ID, DOC_ID, '   '),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('lanza NotFoundException si el documento no existe', async () => {
       prisma.verificationDocument.findUnique.mockResolvedValue(null);
 
-      await expect(service.rejectDocument(ADMIN_ID, 'no-existe', 'razón')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.rejectDocument(ADMIN_ID, 'no-existe', 'razón'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });
