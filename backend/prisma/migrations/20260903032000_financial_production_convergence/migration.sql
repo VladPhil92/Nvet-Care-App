@@ -117,7 +117,13 @@ BEGIN
   END IF;
 END $$;
 
+-- New writes are fail-closed immediately, but an unrecoverable historical row
+-- must not make the first convergent deploy impossible. PostgreSQL enforces a
+-- NOT VALID CHECK for every INSERT/UPDATE while skipping the legacy table scan.
+-- If the backfill above made the historical set clean, validate it now.
 DO $$
+DECLARE
+  invalid_legacy_rows integer;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'transactions_transfer_evidence_required'
@@ -128,7 +134,21 @@ BEGIN
         "payment_method"::text <> 'TRANSFER'
         OR "status"::text NOT IN ('VERIFYING', 'CONFIRMED', 'LIQUIDATED')
         OR ("transfer_proof_storage_key" IS NOT NULL AND "transfer_code" IS NOT NULL)
-      );
+      ) NOT VALID;
+  END IF;
+
+  SELECT COUNT(*)::integer
+    INTO invalid_legacy_rows
+    FROM "transactions"
+   WHERE "payment_method"::text = 'TRANSFER'
+     AND "status"::text IN ('VERIFYING', 'CONFIRMED', 'LIQUIDATED')
+     AND ("transfer_proof_storage_key" IS NULL OR "transfer_code" IS NULL);
+
+  IF invalid_legacy_rows = 0 THEN
+    ALTER TABLE "transactions"
+      VALIDATE CONSTRAINT "transactions_transfer_evidence_required";
+  ELSE
+    RAISE WARNING '% legacy TRANSFER row(s) lack complete evidence. New writes are protected; historical evidence requires operator reconciliation.', invalid_legacy_rows;
   END IF;
 END $$;
 
