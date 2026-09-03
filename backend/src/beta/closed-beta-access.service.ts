@@ -23,6 +23,10 @@ export class ClosedBetaAccessService {
     return configured || DEFAULT_MARKET;
   }
 
+  getConfiguredClientCount(): number {
+    return this.getClientHashes().size;
+  }
+
   /**
    * Booking is the commercial boundary of the closed beta. Existing accounts
    * may still authenticate, recover access and manage their data while the
@@ -76,7 +80,7 @@ export class ClosedBetaAccessService {
       mode: this.isEnabled() ? "closed-beta" : "standard",
       market: this.getMarket(),
       bookingEnabled: this.isBookingEnabled(),
-      cohortConfigured: this.getClientHashes().size > 0,
+      cohortConfigured: this.getConfiguredClientCount() > 0,
     } as const;
   }
 

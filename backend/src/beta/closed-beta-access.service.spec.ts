@@ -73,6 +73,21 @@ describe("ClosedBetaAccessService", () => {
     ).toThrow(ServiceUnavailableException);
   });
 
+  it("counts only valid unique cohort hashes without exposing them", () => {
+    const clientOne = hash("client-1");
+    const clientTwo = hash("client-2");
+    process.env.NVET_CLOSED_BETA_CLIENT_HASHES = [
+      clientOne,
+      clientTwo,
+      clientOne,
+      "not-a-hash",
+    ].join(",");
+
+    expect(service.getConfiguredClientCount()).toBe(2);
+    expect(JSON.stringify(service.getPublicPolicy())).not.toContain(clientOne);
+    expect(JSON.stringify(service.getPublicPolicy())).not.toContain(clientTwo);
+  });
+
   it("does not expose the cohort through the public policy", () => {
     process.env.NVET_CLOSED_BETA_ENABLED = "true";
     process.env.NVET_CLOSED_BETA_CLIENT_HASHES = hash("client-1");
