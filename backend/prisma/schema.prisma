@@ -195,13 +195,14 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  vetProfile    VetProfile?
-  pets          Pet[]
-  appointments  Appointment[] @relation("ClientAppointments")
-  messages      Message[]
-  reviews       Review[]
-  sessions      UserSession[]
-  notifications Notification[]
+  vetProfile                  VetProfile?
+  pets                        Pet[]
+  appointments                Appointment[] @relation("ClientAppointments")
+  messages                    Message[]
+  reviews                     Review[]
+  sessions                    UserSession[]
+  notifications               Notification[]
+  professionalRegistryChecks  VetProfessionalRegistryCheck[] @relation("RegistryCheckedBy")
 
   @@index([emailVerified])
   @@index([lockedUntil])
@@ -287,17 +288,39 @@ model VetProfile {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  appointments          Appointment[]          @relation("VetAppointments")
-  prices                Price[]
-  reviews               Review[]
-  verificationDocuments VerificationDocument[]
-  schedules             VetSchedule[]
-  scheduleExceptions    ScheduleException[]
+  appointments                 Appointment[]          @relation("VetAppointments")
+  prices                       Price[]
+  reviews                      Review[]
+  verificationDocuments        VerificationDocument[]
+  schedules                    VetSchedule[]
+  scheduleExceptions           ScheduleException[]
+  professionalRegistryCheck    VetProfessionalRegistryCheck?
 
   @@index([verificationStatus])
   @@index([city])
   @@index([tier, isAvailableNow])
   @@map("vet_profiles")
+}
+
+model VetProfessionalRegistryCheck {
+  id           String     @id
+  vetProfileId String     @unique @map("vet_profile_id")
+  vetProfile   VetProfile @relation(fields: [vetProfileId], references: [id], onDelete: Cascade)
+
+  status String
+
+  checkedById String? @map("checked_by")
+  checkedBy   User?   @relation("RegistryCheckedBy", fields: [checkedById], references: [id], onDelete: SetNull)
+
+  evidence  String
+  sourceUrl String @map("source_url")
+
+  checkedAt DateTime @default(now()) @map("checked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("vet_professional_registry_checks")
 }
 
 model VerificationDocument {
