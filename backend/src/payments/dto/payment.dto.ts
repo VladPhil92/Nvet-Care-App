@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsString,
   IsOptional,
+  IsInt,
   Min,
   Max,
   Length,
@@ -104,7 +105,7 @@ export class InitiatePsePaymentDto {
 
 export type WithdrawalMethod = "BANK_TRANSFER" | "NEQUI" | "DAVIPLATA";
 
-class AccountInfoDto {
+export class AccountInfoDto {
   @IsOptional()
   @IsString()
   @Length(2, 80)
@@ -117,6 +118,7 @@ class AccountInfoDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(["SAVINGS", "CHECKING"])
   accountType?: "SAVINGS" | "CHECKING";
 
   @IsOptional()
@@ -132,8 +134,9 @@ class AccountInfoDto {
 
 export class RequestWithdrawalDto {
   @Type(() => Number)
-  @IsNumber()
+  @IsInt({ message: "El retiro debe expresarse en pesos colombianos enteros" })
   @Min(50000, { message: "El retiro mínimo es 50.000 COP" })
+  @Max(50_000_000, { message: "El retiro máximo por solicitud es 50.000.000 COP" })
   amountCop: number;
 
   @IsString()
@@ -145,6 +148,47 @@ export class RequestWithdrawalDto {
   @ValidateNested()
   @Type(() => AccountInfoDto)
   accountInfo: AccountInfoDto;
+}
+
+export class WithdrawalListFiltersDto {
+  @IsOptional()
+  @IsString()
+  @IsIn(["PENDING", "APPROVED", "PROCESSING", "PAID", "REJECTED", "CANCELLED"])
+  status?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}
+
+export class RejectWithdrawalDto {
+  @IsString()
+  @Length(10, 500)
+  reason: string;
+}
+
+export class MarkWithdrawalPaidDto {
+  @IsString()
+  @Length(6, 120)
+  paymentReference: string;
+}
+
+export class RunSettlementDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(30)
+  holdDays?: number;
 }
 
 // ============================================================
