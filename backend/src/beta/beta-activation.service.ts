@@ -178,7 +178,7 @@ export class BetaActivationService {
     const configuredClients = cohort.activeMemberships;
     const supportConfigured = Boolean(
       process.env.NVET_BETA_SUPPORT_OWNER?.trim() &&
-        process.env.NVET_BETA_SUPPORT_CHANNEL?.trim(),
+      process.env.NVET_BETA_SUPPORT_CHANNEL?.trim(),
     );
     const marketConfigured = this.isCartagenaMarket(
       process.env.NVET_CLOSED_BETA_MARKET,
