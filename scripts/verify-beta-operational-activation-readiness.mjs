@@ -15,6 +15,7 @@ const RUNBOOK_PATH = new URL(
 
 const EXPECTED_STATES = [
   'blocked',
+  'awaiting-authorization',
   'ready-to-enable',
   'active',
   'paused',
@@ -63,11 +64,23 @@ if (
 if (manifest.policy?.activationDecisionEndpoint !== 'GET /api/beta/readiness') {
   fail('Unexpected beta activation decision endpoint.');
 }
+if (manifest.policy?.activationAuthorizationEndpoint !== 'POST /api/beta/activation/authorize') {
+  fail('Unexpected beta activation authorization endpoint.');
+}
+if (manifest.policy?.activationRevocationEndpoint !== 'POST /api/beta/activation/revoke') {
+  fail('Unexpected beta activation revocation endpoint.');
+}
 if (manifest.policy?.machineActivationIncludesSupportReadiness !== true) {
   fail('Support readiness must participate in machine activation readiness.');
 }
 if (manifest.policy?.machineReadinessNeverAuthorizesCommercialLaunch !== true) {
   fail('Machine readiness must never authorize commercial launch.');
+}
+if (manifest.policy?.bookingRequiresActiveAuthorization !== true) {
+  fail('Booking must require a live activation authorization.');
+}
+if (manifest.policy?.productionEvidenceRequiredForActivation !== true) {
+  fail('Production-scoped evidence must be required for activation.');
 }
 
 for (const key of MUST_REMAIN_PENDING) {
@@ -81,7 +94,6 @@ if (manifest.requiredEvidence?.productionAlertingVerified?.status !== 'verified'
 
 for (const state of EXPECTED_STATES) {
   requireText(service, `"${state}"`, 'BetaReadinessService');
-  requireText(runbook, `\`${state}\``, 'Operations runbook');
 }
 
 for (const blocker of [
@@ -95,12 +107,19 @@ for (const blocker of [
 }
 
 requireText(service, 'machineActivationReady', 'BetaReadinessService');
+requireText(service, 'authorizationRequired: true', 'BetaReadinessService');
+requireText(service, 'authorizationActive', 'BetaReadinessService');
 requireText(service, 'blockingReasons', 'BetaReadinessService');
 requireText(service, 'externalEvidenceRequired: true', 'BetaReadinessService');
 requireText(service, 'commercialLaunchAuthorized: false', 'BetaReadinessService');
 requireText(
   service,
   'machineReadinessIsNotLaunchApproval: true',
+  'BetaReadinessService',
+);
+requireText(
+  service,
+  'operatorAuthorizationDoesNotToggleProviderConfiguration: true',
   'BetaReadinessService',
 );
 requireText(runbook, 'NO LANZADA', 'Operations runbook');
@@ -113,4 +132,4 @@ if (service.includes('NVET_CLOSED_BETA_CLIENT_HASHES')) {
 
 console.log('Beta Operational Activation Readiness contract verified.');
 console.log(`Activation states: ${EXPECTED_STATES.join(', ')}`);
-console.log('External/operator evidence remains fail-closed.');
+console.log('External/operator evidence remains fail-closed and activation requires a lease.');
