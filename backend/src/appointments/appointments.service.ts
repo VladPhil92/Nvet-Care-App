@@ -160,9 +160,9 @@ export class AppointmentsService {
     }
 
     // Phase 12 closed-beta boundary. Disabled by default; when operations
-    // enables it, booking becomes invite-only and restricted to Cartagena.
-    // Existing accounts can still authenticate and manage their data.
-    this.closedBetaAccess.assertBookingAllowed(clientId, vet.city);
+    // enables it, booking becomes invite-only, Cartagena-only and requires
+    // explicit acceptance of the current beta legal contract.
+    await this.closedBetaAccess.assertBookingAllowed(clientId, vet.city);
 
     const pet = await this.prisma.pet.findUnique({
       where: { id: data.petId },
