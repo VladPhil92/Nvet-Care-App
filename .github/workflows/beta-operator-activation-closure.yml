@@ -1,0 +1,48 @@
+name: Beta Operator Activation Closure
+
+on:
+  pull_request:
+    paths:
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/BETA_OPERATOR_ACTIVATION_CLOSURE.json'
+      - 'scripts/verify-beta-operator-activation-closure.mjs'
+      - '.github/workflows/beta-operator-activation-closure.yml'
+  push:
+    branches:
+      - main
+    tags:
+      - '1.0.0-rc.*'
+    paths:
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/BETA_OPERATOR_ACTIVATION_CLOSURE.json'
+      - 'scripts/verify-beta-operator-activation-closure.mjs'
+      - '.github/workflows/beta-operator-activation-closure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify-closure:
+    name: Certify fail-closed launch authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+
+      - name: Verify operator activation closure
+        run: node scripts/verify-beta-operator-activation-closure.mjs
+
+      - name: Publish certification summary
+        if: always()
+        run: |
+          {
+            echo '## Phase 12H — Beta Operator Activation Closure'
+            echo
+            echo 'The gate cross-checks RC and Cartagena Beta evidence manifests.'
+            echo 'Verified gates require substantive evidence references.'
+            echo 'RC tag promotion and commercial activation remain fail-closed while blockers exist.'
+          } >> "$GITHUB_STEP_SUMMARY"
