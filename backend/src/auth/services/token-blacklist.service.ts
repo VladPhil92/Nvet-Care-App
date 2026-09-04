@@ -86,8 +86,15 @@ class InMemoryKvStore implements KvStore {
 // REDIS IMPLEMENTATION (prod / multi-instancia)
 // ============================================================
 
+interface RedisClient {
+  set(key: string, value: string, exArg: string, ttl: number): Promise<unknown>;
+  exists(key: string): Promise<number>;
+  del(key: string): Promise<unknown>;
+  quit(): Promise<unknown>;
+}
+
 class RedisKvStore implements KvStore {
-  private client: import("ioredis").Redis;
+  private client: RedisClient;
 
   constructor(redisUrl: string) {
     // ioredis is a transitive dependency of bull/socket.io — always present
