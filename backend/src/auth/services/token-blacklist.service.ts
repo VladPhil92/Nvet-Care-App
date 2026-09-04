@@ -83,6 +83,42 @@ class InMemoryKvStore implements KvStore {
 }
 
 // ============================================================
+// REDIS IMPLEMENTATION (prod / multi-instancia)
+// ============================================================
+
+class RedisKvStore implements KvStore {
+  private client: import("ioredis").Redis;
+
+  constructor(redisUrl: string) {
+    // ioredis is a transitive dependency of bull/socket.io — always present
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Redis = require("ioredis");
+    this.client = new Redis(redisUrl, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: false,
+    });
+  }
+
+  async set(key: string, value: string, ttlSeconds: number): Promise<void> {
+    await this.client.set(key, value, "EX", ttlSeconds);
+  }
+
+  async has(key: string): Promise<boolean> {
+    const result = await this.client.exists(key);
+    return result === 1;
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.client.del(key);
+  }
+
+  async quit(): Promise<void> {
+    await this.client.quit();
+  }
+}
+
+// ============================================================
 // SERVICE
 // ============================================================
 
@@ -92,22 +128,17 @@ export class TokenBlacklistService implements OnModuleDestroy {
   private readonly store: KvStore;
 
   constructor() {
-    // En producción, condicionalmente inicializar Redis:
-    //
-    //   if (process.env.REDIS_URL) {
-    //     this.store = new RedisKvStore(process.env.REDIS_URL)
-    //   } else {
-    //     this.store = new InMemoryKvStore()
-    //   }
-    //
-    // Por ahora, in-memory con warning si NODE_ENV=production
-    this.store = new InMemoryKvStore();
-
-    if (process.env.NODE_ENV === "production" && !process.env.REDIS_URL) {
-      this.logger.warn(
-        "TokenBlacklistService: usando in-memory en producción. " +
-          "Para deployments multi-instancia, configurar REDIS_URL.",
-      );
+    if (process.env.REDIS_URL) {
+      this.store = new RedisKvStore(process.env.REDIS_URL);
+      this.logger.log("TokenBlacklistService: usando Redis.");
+    } else {
+      this.store = new InMemoryKvStore();
+      if (process.env.NODE_ENV === "production") {
+        this.logger.warn(
+          "TokenBlacklistService: usando in-memory en producción. " +
+            "Configurar REDIS_URL para deployments multi-instancia.",
+        );
+      }
     }
   }
 
@@ -161,9 +192,11 @@ export class TokenBlacklistService implements OnModuleDestroy {
     return `blacklist:${jti}`;
   }
 
-  onModuleDestroy() {
+  async onModuleDestroy() {
     if (this.store instanceof InMemoryKvStore) {
       this.store.destroy();
+    } else if (this.store instanceof RedisKvStore) {
+      await this.store.quit();
     }
   }
 }
