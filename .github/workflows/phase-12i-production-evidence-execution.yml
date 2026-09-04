@@ -1,0 +1,71 @@
+name: Phase 12I Production Evidence Execution
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/phase-12i-production-evidence-execution.yml'
+      - 'scripts/phase-12i-production-evidence-gate.mjs'
+      - 'docs/production/PHASE_12I_PRODUCTION_EVIDENCE_EXECUTION.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/BETA_OPERATOR_ACTIVATION_CLOSURE.json'
+      - 'docs/PHASE_12I_PRODUCTION_EVIDENCE_EXECUTION.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase-12i-production-evidence-execution.yml'
+      - 'scripts/phase-12i-production-evidence-gate.mjs'
+      - 'docs/production/PHASE_12I_PRODUCTION_EVIDENCE_EXECUTION.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/BETA_OPERATOR_ACTIVATION_CLOSURE.json'
+      - 'docs/PHASE_12I_PRODUCTION_EVIDENCE_EXECUTION.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  evidence-execution-boundary:
+    name: Verify Phase 12I production evidence boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Verify evidence execution contract
+        run: node scripts/phase-12i-production-evidence-gate.mjs
+
+      - name: Publish execution status
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Phase 12I — Production Evidence Execution'
+            echo ''
+            node <<'NODE'
+          const fs = require('fs');
+          const phase = JSON.parse(fs.readFileSync('docs/production/PHASE_12I_PRODUCTION_EVIDENCE_EXECUTION.json', 'utf8'));
+          const rc = JSON.parse(fs.readFileSync('docs/production/RC_READINESS.json', 'utf8'));
+          const pending = Object.entries(rc.requiredExternalEvidence)
+            .filter(([, value]) => value.status !== 'verified')
+            .map(([gate]) => gate);
+          console.log(`- Candidate: ${phase.candidate}`);
+          console.log(`- Backup schedules observed: ${phase.observedProviderEvidence.scheduleCount}`);
+          console.log(`- Visible backups observed: ${phase.observedProviderEvidence.backupCount}`);
+          console.log(`- Provider verdict: **${phase.observedProviderEvidence.verdict}**`);
+          console.log(`- RC external blockers: ${pending.join(', ') || 'none'}`);
+          console.log(`- RC promotion authorized: **${phase.promotion.rcPromotionAuthorized}**`);
+          NODE
+            echo ''
+            echo '> A green workflow certifies that the evidence state is internally consistent; it does not fabricate provider, restore or bank evidence.'
+          } >> "$GITHUB_STEP_SUMMARY"
