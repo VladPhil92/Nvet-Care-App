@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "phase": "12H",
+  "program": "closed-beta-cartagena",
+  "candidate": "1.0.0-rc.1",
+  "sourceManifests": [
+    "docs/production/RC_READINESS.json",
+    "docs/production/BETA_CARTAGENA_READINESS.json"
+  ],
+  "policy": {
+    "failClosed": true,
+    "requireAllRcExternalEvidence": true,
+    "requireAllBetaEvidence": true,
+    "verifiedEvidenceMustHaveReference": true,
+    "machineReadinessNeverAuthorizesCommercialLaunch": true,
+    "operatorAuthorizationNeverMutatesProviderConfiguration": true,
+    "rcTagPromotionBlockedWhileRcEvidencePending": true
+  },
+  "authorization": {
+    "rcPromotionAuthorized": false,
+    "providerActivationAuthorized": false,
+    "commercialLaunchAuthorized": false,
+    "operatorStatus": "blocked",
+    "declaredBlockers": [
+      "rcPromoted",
+      "productionBackupConfigured",
+      "restoreDrillVerified",
+      "paymentRailVerified",
+      "cartagenaVetCoverageVerified",
+      "clientCohortConfigured",
+      "supportOwnerConfirmed",
+      "privacyAndTermsReviewed",
+      "rollbackDrillVerified"
+    ]
+  },
+  "externalClosureActions": {
+    "productionBackupConfigured": "Configure provider-level automatic production backups and retain fresh redacted provider evidence.",
+    "restoreDrillVerified": "Run a dated non-destructive provider-level restore drill and retain redacted evidence.",
+    "paymentRailVerified": "Complete a controlled real transfer using the intended beta payment rail and retain redacted funds-movement evidence.",
+    "rcPromoted": "Promote exactly 1.0.0-rc.1 only after every RC external evidence gate is verified.",
+    "cartagenaVetCoverageVerified": "Verify at least three active approved veterinarians whose service city is Cartagena.",
+    "clientCohortConfigured": "Invite real verified CLIENT accounts through the append-only beta cohort control plane and verify eligibility.",
+    "supportOwnerConfirmed": "Record a named support owner, monitored route, approver and confirmation date.",
+    "privacyAndTermsReviewed": "Record the responsible legal/privacy review of the versioned beta terms and privacy notice.",
+    "rollbackDrillVerified": "Execute the provider-level booking kill-switch drill and retain evidence that new bookings stop and recovery succeeds."
+  }
+}
