@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "phase": "12I",
+  "program": "closed-beta-cartagena",
+  "candidate": "1.0.0-rc.1",
+  "observedProviderEvidence": {
+    "sourceWorkflow": "Nvet Production Backup Evidence",
+    "workflowRunId": 33851146392,
+    "artifactId": 9928378148,
+    "artifactSha256": "f25d9406555ffc968376449cddbcc3c21e1f37e425f6f8c3e3d08e433ffa711f",
+    "observedAt": "2026-09-04T07:58:08.916Z",
+    "postgres": {
+      "serviceName": "Postgres",
+      "volumeName": "postgres-volume",
+      "volumeId": "e9befa8c-34d3-4e06-90dc-ae65e71a38d9"
+    },
+    "scheduleCount": 0,
+    "backupCount": 0,
+    "latestBackupAgeHours": null,
+    "policy": {
+      "maxBackupAgeHours": 48,
+      "minRetentionHours": 168
+    },
+    "verdict": "BLOCKED_PROVIDER_CONFIGURATION"
+  },
+  "executionSequence": [
+    {
+      "order": 1,
+      "gate": "productionBackupConfigured",
+      "state": "blocked-provider-configuration",
+      "completionCriteria": "Railway production PostgreSQL has at least one automatic backup schedule, at least one visible backup, freshness <= 48h and retention >= 168h."
+    },
+    {
+      "order": 2,
+      "gate": "restoreDrillVerified",
+      "state": "blocked-by-production-backup",
+      "completionCriteria": "A dated provider-level restore drill uses a real recent production backup and validates database integrity plus /api/health/ready."
+    },
+    {
+      "order": 3,
+      "gate": "paymentRailVerified",
+      "state": "requires-real-funds-movement",
+      "completionCriteria": "A controlled real TRANSFER produces independently verified bank-side funds movement and a redacted evidence reference."
+    },
+    {
+      "order": 4,
+      "gate": "rcPromoted",
+      "state": "blocked-by-rc-evidence",
+      "completionCriteria": "All RC external evidence is verified before immutable tag 1.0.0-rc.1 is created."
+    }
+  ],
+  "promotion": {
+    "rcPromotionAuthorized": false,
+    "commercialLaunchAuthorized": false,
+    "automaticManifestMutationAllowed": false,
+    "reason": "Provider backup configuration, restore evidence and real-payment evidence remain incomplete."
+  }
+}
