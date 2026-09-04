@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "phase": "12G",
+  "program": "canonical-beta-operations-convergence",
+  "canonicalWebRepository": "VladPhil92/ctg_one_website",
+  "canonicalWebRoute": "/nvetcareapp/dashboard/beta",
+  "pairedPullRequest": 387,
+  "backendAuthority": "VladPhil92/Nvet-Care-App",
+  "backendPrefix": "/api/beta",
+  "deprecatedLocalDashboardDeployable": false,
+  "security": {
+    "browserBearerTokenAllowed": false,
+    "privilegedActingRoleHeadersAllowed": false,
+    "clientModeAllowed": false,
+    "vetTesterModeAllowed": false,
+    "backendAuthorizationRemainsAuthoritative": true,
+    "unknownBffPathsFailClosed": true
+  },
+  "readEndpoints": [
+    "GET /api/beta/readiness",
+    "GET /api/beta/cohort",
+    "GET /api/beta/activation",
+    "GET /api/beta/evidence/summary",
+    "GET /api/beta/evidence/history"
+  ],
+  "mutationEndpoints": [
+    "POST /api/beta/cohort/invite",
+    "POST /api/beta/cohort/:userId/revoke",
+    "POST /api/beta/activation/authorize",
+    "POST /api/beta/activation/revoke",
+    "POST /api/beta/evidence",
+    "POST /api/beta/evidence/:evidenceId/approve",
+    "POST /api/beta/evidence/:evidenceId/reject",
+    "POST /api/beta/evidence/:evidenceId/revoke"
+  ],
+  "promotionBoundary": {
+    "productionEvidenceOnly": true,
+    "authorizationMutatesProviderConfiguration": false,
+    "commercialLaunchAuthorized": false,
+    "bookingStillRevalidatesRuntimePrerequisites": true
+  },
+  "externalEvidenceStillRequired": [
+    "productionBackupConfigured",
+    "restoreDrillVerified",
+    "paymentRailVerified",
+    "cartagenaVetCoverageVerified",
+    "clientCohortConfigured",
+    "supportOwnerConfirmed",
+    "privacyAndTermsReviewed",
+    "rollbackDrillVerified",
+    "rcPromoted"
+  ]
+}
