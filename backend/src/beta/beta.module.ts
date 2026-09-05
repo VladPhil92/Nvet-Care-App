@@ -6,6 +6,7 @@ import { BetaController } from "./beta.controller";
 import { BetaEvidenceService } from "./beta-evidence.service";
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import { BetaReadinessService } from "./beta-readiness.service";
+import { BetaSupportService } from "./beta-support.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 
 @Module({
@@ -15,6 +16,7 @@ import { ClosedBetaAccessService } from "./closed-beta-access.service";
     BetaEvidenceService,
     BetaLegalConsentService,
     BetaCohortService,
+    BetaSupportService,
     BetaActivationService,
     ClosedBetaAccessService,
     BetaReadinessService,
@@ -23,6 +25,7 @@ import { ClosedBetaAccessService } from "./closed-beta-access.service";
     BetaEvidenceService,
     BetaLegalConsentService,
     BetaCohortService,
+    BetaSupportService,
     BetaActivationService,
     ClosedBetaAccessService,
     BetaReadinessService,
