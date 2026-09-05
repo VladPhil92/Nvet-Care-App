@@ -19,6 +19,7 @@ import {
 } from "./beta-evidence.service";
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import { BetaReadinessService } from "./beta-readiness.service";
+import { BetaSupportService } from "./beta-support.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 import { AcceptBetaLegalDto } from "./dto/accept-beta-legal.dto";
 import {
@@ -33,6 +34,10 @@ import {
   DecideBetaEvidenceDto,
   SubmitBetaEvidenceDto,
 } from "./dto/beta-evidence.dto";
+import {
+  ConfigureBetaSupportDto,
+  RevokeBetaSupportDto,
+} from "./dto/beta-support.dto";
 
 @Controller("beta")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -44,6 +49,7 @@ export class BetaController {
     private readonly evidence: BetaEvidenceService,
     private readonly activation: BetaActivationService,
     private readonly cohort: BetaCohortService,
+    private readonly support: BetaSupportService,
   ) {}
 
   @Get("policy")
@@ -96,6 +102,24 @@ export class BetaController {
     @Body() dto: RevokeBetaCohortMemberDto,
   ) {
     return this.cohort.revoke(userId, dto, this.getEvidenceActor(req));
+  }
+
+  @Get("support")
+  @Roles(UserRole.ADMIN)
+  getSupport() {
+    return this.support.getAdminSnapshot();
+  }
+
+  @Post("support/configure")
+  @Roles(UserRole.ADMIN)
+  configureSupport(@Request() req, @Body() dto: ConfigureBetaSupportDto) {
+    return this.support.configure(dto, this.getEvidenceActor(req));
+  }
+
+  @Post("support/revoke")
+  @Roles(UserRole.ADMIN)
+  revokeSupport(@Request() req, @Body() dto: RevokeBetaSupportDto) {
+    return this.support.revoke(dto, this.getEvidenceActor(req));
   }
 
   @Get("activation")
