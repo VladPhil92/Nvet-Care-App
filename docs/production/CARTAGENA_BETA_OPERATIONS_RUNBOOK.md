@@ -10,17 +10,18 @@ This runbook defines the operator-controlled actions required before and during 
 
 ## 2. Operational activation state
 
-`GET /api/beta/readiness` is the canonical redacted runtime decision endpoint for the Cartagena beta. It reports one of five states:
+`GET /api/beta/readiness` is the canonical redacted runtime decision endpoint for the Cartagena beta. It reports one of six states:
 
 | State | Meaning | Operator interpretation |
 |---|---|---|
 | `blocked` | Local runtime gates or one or more evidence-ledger gates are incomplete while the beta gate is disabled. | Fix local blockers and/or register valid evidence. Do not enable the beta. |
-| `ready-to-enable` | Local runtime gates pass and all ten evidence gates are approved, non-expired and non-conflicted while the beta gate remains disabled. | The system is eligible for an operator activation decision. This is still **not** commercial launch approval. |
+| `awaiting-authorization` | Local runtime and evidence gates pass but no active operator authorization exists. | Issue a bounded authorization only after evidence review. |
+| `ready-to-enable` | Local runtime gates pass, all evidence gates are verified and an active authorization exists while the beta gate remains disabled. | The system is eligible for an operator enablement decision. This is still **not** commercial launch approval. |
 | `active` | The beta gate and booking are enabled and operator activation eligibility remains satisfied. | Continue observation and incident monitoring. |
 | `paused` | The beta remains eligible and enabled but `NVET_BOOKING_ENABLED=false`. | New bookings are intentionally stopped while account access and existing data remain available. |
 | `misconfigured` | The beta gate is enabled before local runtime and evidence eligibility are both satisfied. | Treat as unsafe configuration. Disable the beta gate or repair the blockers. |
 
-The response includes redacted counts/booleans and blocker codes. It must not expose cohort hashes, raw user identifiers, support contact values or evidence references outside admin-only evidence endpoints.
+The response includes redacted counts/booleans and blocker codes. It must not expose cohort identifiers, support owner/channel contents or evidence references outside their ADMIN-only control planes.
 
 `activation.machineActivationReady` means only that the local runtime contract passes. `activation.operatorActivationEligible` additionally requires the evidence control plane to verify every required gate. `activation.commercialLaunchAuthorized` remains intentionally `false`.
 
@@ -28,17 +29,16 @@ The response includes redacted counts/booleans and blocker codes. It must not ex
 
 The runtime considers local activation ready only when all of the following are true:
 
-1. the client cohort is configured;
-2. the cohort does not exceed the initial cap;
+1. the client cohort is configured through the append-only Cohort Control Plane;
+2. the cohort does not exceed the initial cap and every active member remains eligible;
 3. at least three verified and active Cartagena veterinarians are available;
-4. `NVET_BETA_SUPPORT_OWNER` is configured;
-5. `NVET_BETA_SUPPORT_CHANNEL` is configured.
+4. an ACTIVE, monitored and non-expired support lease exists through the Support Control Plane.
 
-These checks are operational signals. The corresponding real-world assertions still require approved evidence in the Phase 12D evidence control plane.
+These checks are operational signals. The corresponding real-world assertions still require approved evidence in the Phase 12 evidence control plane.
 
 ## 4. Evidence control plane
 
-The canonical live evidence registry is the append-only `audit_logs` ledger exposed through admin-only endpoints:
+The canonical live evidence registry is the append-only `audit_logs` ledger exposed through ADMIN-only endpoints:
 
 ```text
 GET  /api/beta/evidence/summary
@@ -49,28 +49,37 @@ POST /api/beta/evidence/:evidenceId/reject
 POST /api/beta/evidence/:evidenceId/revoke
 ```
 
-Each evidence item moves only through the supported event sequence:
-
-```text
-SUBMITTED -> APPROVED
-          -> REJECTED
-APPROVED  -> REVOKED
-```
-
 Evidence with an explicit expiry ceases to satisfy its gate after expiry. A contradictory event stream becomes `CONFLICTED` and fails closed.
 
-`docs/production/BETA_CARTAGENA_READINESS.json` remains the versioned policy/baseline manifest and is deliberately **not** auto-mutated by runtime approvals. After Phase 12D, operator activation eligibility is calculated from the live append-only evidence ledger, while the manifest continues to protect the required gate set and inherited historical evidence from silent drift.
+`docs/production/BETA_CARTAGENA_READINESS.json` remains the versioned policy/baseline manifest and is deliberately **not** auto-mutated by runtime approvals.
 
-## 5. Required support configuration
+## 5. Auditable support control plane
 
-Production must define both variables before support readiness can pass:
+Phase 12G removes `NVET_BETA_SUPPORT_OWNER` and `NVET_BETA_SUPPORT_CHANNEL` as canonical runtime inputs. Support readiness is now managed through a time-bounded append-only ledger:
 
-- `NVET_BETA_SUPPORT_OWNER`: accountable operator name or stable operational role.
-- `NVET_BETA_SUPPORT_CHANNEL`: official escalation destination used by the beta cohort and incident responders.
+```text
+GET  /api/beta/support
+POST /api/beta/support/configure
+POST /api/beta/support/revoke
+```
 
-`GET /api/beta/readiness` exposes only whether each value is configured. It deliberately does not return the owner or channel contents.
+Only ADMIN/SUPERADMIN can read the owner-role and channel reference or mutate support coverage. `GET /api/beta/readiness` exposes only redacted support state, booleans, expiry and the 30-minute P0/P1 target.
+
+A support lease requires:
+
+1. a stable accountable **owner role** rather than a secret or credential;
+2. an official **channel reference** used for escalation;
+3. explicit confirmation that the route is monitored during the lease;
+4. a lease duration between 1 and 168 hours;
+5. append-only CONFIGURED / REVOKED events in `audit_logs`.
+
+If the lease expires, is revoked or becomes conflicted, `support.configured=false`; activation eligibility drifts and new bookings fail closed even when an older activation authorization still exists.
+
+The support channel reference must never contain credentials, API keys, tokens or passwords.
 
 ### Confirmation evidence
+
+An ACTIVE lease satisfies only the **technical runtime prerequisite**. It does not auto-verify `supportOwnerConfirmed`.
 
 Retain and register a dated, redacted evidence reference containing or pointing to:
 
@@ -90,7 +99,8 @@ Phase 12 targets triage initiation within **30 minutes** for a P0/P1 beta incide
 - systemic duplicate charge or financial inconsistency;
 - inability to complete the core appointment lifecycle;
 - sustained backend readiness degradation;
-- any active P0 incident.
+- any active P0 incident;
+- loss or expiry of the active support lease.
 
 ## 7. Booking rollback / kill switch
 
@@ -100,13 +110,13 @@ The canonical emergency control is:
 NVET_BOOKING_ENABLED=false
 ```
 
-This switch is intentionally separate from authentication and the cohort gate.
+This switch is intentionally separate from authentication, cohort membership, support readiness and the beta gate.
 
 ### Provider-level drill procedure
 
 Run the drill in an operator-approved maintenance window before beta launch:
 
-1. Capture the current production/staging configuration and candidate revision.
+1. Capture the current production configuration and candidate revision.
 2. Set `NVET_BOOKING_ENABLED=false` through the canonical provider configuration.
 3. Wait until the new runtime configuration is active.
 4. Verify `GET /api/beta/readiness` reports `activation.state=paused` when operator activation eligibility remains satisfied.
@@ -125,8 +135,6 @@ A unit test or CI contract alone is not sufficient evidence.
 The current beta contract is exposed by `GET /api/beta/legal`. CLIENT and VET participants accept it through `POST /api/beta/legal/accept` using the exact versions returned by the API.
 
 While `NVET_CLOSED_BETA_ENABLED=true`, new client bookings require a current legal acceptance. A stale version, missing acceptance or missing legal service wiring fails closed.
-
-The append-only acceptance audit entry records only the internal account identifier, role, program, versions and acceptance timestamp. Terms/privacy content is versioned in `docs/legal/`.
 
 The responsible legal/privacy review remains human-controlled and must be registered separately under `privacyAndTermsReviewed`.
 
@@ -150,16 +158,18 @@ Do not mark an evidence item `APPROVED` unless the referenced event actually occ
 Only after `GET /api/beta/readiness` reports `activation.state=ready-to-enable` and `activation.operatorActivationEligible=true`:
 
 1. review `GET /api/beta/evidence/summary` and confirm all ten gates are `VERIFIED` with zero conflicts;
-2. record the exact production revision and operator/approver;
-3. confirm there is no active P0/P1 incident or stop condition;
-4. set `NVET_CLOSED_BETA_ENABLED=true` using the canonical provider configuration;
-5. keep `NVET_BOOKING_ENABLED=true` only if there is no stop condition;
-6. verify readiness reports `active` and the configured cohort can complete the intended booking path;
-7. start the seven-day observation window defined in the readiness policy;
-8. use `NVET_BOOKING_ENABLED=false` immediately if a stop condition is met.
+2. confirm `GET /api/beta/support` reports an ACTIVE lease that spans the intended operational window;
+3. record the exact production revision and operator/approver;
+4. confirm there is no active P0/P1 incident or stop condition;
+5. set `NVET_CLOSED_BETA_ENABLED=true` using the canonical provider configuration;
+6. keep `NVET_BOOKING_ENABLED=true` only if there is no stop condition;
+7. verify readiness reports `active` and the configured cohort can complete the intended booking path;
+8. start the seven-day observation window defined in the readiness policy;
+9. renew support coverage before expiry or stop new bookings;
+10. use `NVET_BOOKING_ENABLED=false` immediately if a stop condition is met.
 
 If enabling the beta produces `misconfigured`, disable the beta gate or correct the blockers before allowing bookings.
 
 ## 11. Launch authority
 
-The beta remains **NO LANZADA** until the live evidence control plane verifies every required gate, local readiness passes, and an authorized operator deliberately activates the provider-side beta configuration. Repository merge, CI success and evidence approval alone never activate commercial access.
+The beta remains **NO LANZADA** until the live evidence control plane verifies every required gate, local readiness passes, support coverage is active, and an authorized operator deliberately activates the provider-side beta configuration. Repository merge, CI success, support configuration and evidence approval alone never activate commercial access.
