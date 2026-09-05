@@ -129,6 +129,28 @@ for (const [pattern, purpose] of [
   if (!pattern.test(recovery)) failures.push(`Recovery workflow missing ${purpose}`);
 }
 
+const recoveryPush = recovery.match(/\n  push:\n([\s\S]*?)\n  schedule:/);
+if (!recoveryPush || !/branches:\s*\[main\]/.test(recoveryPush[1])) {
+  failures.push('Recovery workflow must execute for pushes to main');
+} else if (/\bpaths:/.test(recoveryPush[1])) {
+  failures.push('Recovery workflow push trigger must not be path-filtered; every main candidate needs fresh evidence');
+}
+
+const webConvergence = read('.github/workflows/web-production-convergence.yml');
+if (!/workflows:\s*\['Nvet Recovery Readiness'\]/.test(webConvergence)) {
+  failures.push('Web Production Convergence must be downstream of Nvet Recovery Readiness');
+}
+if (/workflows:\s*\['Nvet Transfer Payment Rail Certification'\]/.test(webConvergence)) {
+  failures.push('Web Production Convergence must not race recovery by triggering directly from payment certification');
+}
+for (const [pattern, purpose] of [
+  [/Verify exact-candidate recovery evidence/, 'explicit exact-candidate recovery step'],
+  [/run\?\.head_sha\s*===\s*sha/, 'candidate SHA binding'],
+  [/run\?\.conclusion\s*===\s*'success'/, 'successful recovery conclusion binding'],
+]) {
+  if (!pattern.test(webConvergence)) failures.push(`Web convergence missing ${purpose}`);
+}
+
 const backupAudit = read('scripts/audit-railway-production-backups.mjs');
 for (const [pattern, purpose] of [
   [/backupCount\s*<\s*1/, 'real visible backup requirement'],
@@ -148,4 +170,5 @@ console.log('✅ Database & Recovery Convergence gate passed.');
 console.log(`   baseline: ${baseline}`);
 console.log(`   versioned migrations: ${versioned.length}`);
 console.log('   production path: migrate deploy + immutable manual SQL ledger');
-console.log('   recovery: fresh + legacy adoption + backup/restore rehearsal');
+console.log('   recovery: every main candidate + fresh/legacy backup/restore rehearsal');
+console.log('   convergence: exact-candidate recovery evidence required before RC machine gate');
