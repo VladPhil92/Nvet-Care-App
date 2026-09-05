@@ -303,16 +303,16 @@ async function auditRuntime(manifest) {
   if (!machineOnly) {
     const alertDrill = latestRun(
       nvetRuns,
-      'Nvet Production Backend Health Canary',
-      (run) => run.event === 'push' && run.conclusion === 'success',
+      'Nvet Synthetic Production Alert Drill',
+      (run) => run.status === 'completed' && run.conclusion === 'success',
     );
     const alertDrillAge = alertDrill ? hoursSince(alertDrill.updated_at || alertDrill.created_at) : Number.POSITIVE_INFINITY;
     checks.push({
       ok: Boolean(alertDrill) && alertDrillAge <= manifest.policy.alertDrillMaxAgeHours,
       label: 'synthetic production alert drill freshness',
       detail: alertDrill
-        ? `${alertDrillAge.toFixed(1)}h old run=${alertDrill.id}`
-        : 'no successful isolated synthetic alert drill',
+        ? `${alertDrillAge.toFixed(1)}h old run=${alertDrill.id}; isolated drill workflow`
+        : 'no successful Nvet Synthetic Production Alert Drill run',
     });
 
     for (const [key, entry] of Object.entries(manifest.requiredExternalEvidence)) {
