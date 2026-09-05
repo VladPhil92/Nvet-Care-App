@@ -27,6 +27,10 @@ describe("BetaReadinessService", () => {
     getOperationalSnapshot: jest.fn(),
   } as any;
 
+  const support = {
+    getOperationalSnapshot: jest.fn(),
+  } as any;
+
   const verifiedEvidenceSummary = () => ({
     program: "closed-beta-cartagena",
     ledger: "audit_logs",
@@ -84,40 +88,37 @@ describe("BetaReadinessService", () => {
     configured: count > 0,
   });
 
-  const originalSupportOwner = process.env.NVET_BETA_SUPPORT_OWNER;
-  const originalSupportChannel = process.env.NVET_BETA_SUPPORT_CHANNEL;
+  const healthySupport = () => ({
+    state: "ACTIVE",
+    configured: true,
+    ownerConfigured: true,
+    channelConfigured: true,
+    monitoringConfirmed: true,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    criticalIncidentTargetMinutes: 30,
+    ledger: "audit_logs",
+    appendOnly: true,
+    configurationSource: "admin-control-plane",
+  });
 
   let service: BetaReadinessService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.NVET_BETA_SUPPORT_OWNER = "beta-ops";
-    process.env.NVET_BETA_SUPPORT_CHANNEL = "configured-route";
     access.isEnabled.mockReturnValue(false);
     access.isBookingEnabled.mockReturnValue(true);
     evidence.getPromotionSummary.mockResolvedValue(verifiedEvidenceSummary());
     authorization.getStatus.mockResolvedValue(missingAuthorization());
     cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort());
+    support.getOperationalSnapshot.mockResolvedValue(healthySupport());
     service = new BetaReadinessService(
       prisma,
       access,
       evidence,
       authorization,
       cohort,
+      support,
     );
-  });
-
-  afterAll(() => {
-    if (originalSupportOwner === undefined) {
-      delete process.env.NVET_BETA_SUPPORT_OWNER;
-    } else {
-      process.env.NVET_BETA_SUPPORT_OWNER = originalSupportOwner;
-    }
-    if (originalSupportChannel === undefined) {
-      delete process.env.NVET_BETA_SUPPORT_CHANNEL;
-    } else {
-      process.env.NVET_BETA_SUPPORT_CHANNEL = originalSupportChannel;
-    }
   });
 
   it("reports awaiting-authorization when local and evidence gates pass but no lease exists", async () => {
@@ -145,6 +146,9 @@ describe("BetaReadinessService", () => {
     expect(snapshot.cohort.configuredClients).toBe(12);
     expect(snapshot.cohort.ledger).toBe("audit_logs");
     expect(snapshot.cohort.membershipSource).toBe("admin-control-plane");
+    expect(snapshot.support.state).toBe("ACTIVE");
+    expect(snapshot.support.configurationSource).toBe("admin-control-plane");
+    expect(snapshot.privacy.supportContactExposed).toBe(false);
   });
 
   it("reports ready-to-enable after an active authorization lease is issued", async () => {
@@ -223,16 +227,21 @@ describe("BetaReadinessService", () => {
     );
   });
 
-  it("requires both support owner and channel for machine activation readiness", async () => {
+  it("requires an active monitored support lease for machine activation readiness", async () => {
     prisma.vetProfile.count.mockResolvedValue(3);
-    delete process.env.NVET_BETA_SUPPORT_CHANNEL;
+    support.getOperationalSnapshot.mockResolvedValue({
+      ...healthySupport(),
+      state: "EXPIRED",
+      configured: false,
+    });
 
     const snapshot = await service.getCartagenaSnapshot();
 
     expect(snapshot.support.configured).toBe(false);
+    expect(snapshot.support.state).toBe("EXPIRED");
     expect(snapshot.localActivationReady).toBe(false);
     expect(snapshot.activation.blockingReasons).toContain(
-      "SUPPORT_CHANNEL_NOT_CONFIGURED",
+      "SUPPORT_CONFIGURATION_NOT_ACTIVE",
     );
   });
 
