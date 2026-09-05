@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "phase": "12J",
+  "name": "Continuous Recovery Evidence Orchestration",
+  "objective": "Guarantee that every canonical main candidate produces fresh application-level recovery evidence before Web Production Convergence evaluates machine-verifiable RC gates.",
+  "canonicalRecoveryWorkflow": "Nvet Recovery Readiness",
+  "policy": {
+    "mainPushRecoveryRequired": true,
+    "pathFilteredMainRecoveryAllowed": false,
+    "webConvergenceTrigger": "Nvet Recovery Readiness",
+    "exactCandidateRecoveryRequired": true,
+    "logicalRecoveryScope": [
+      "fresh migration reconstruction",
+      "legacy adoption rehearsal",
+      "pg_dump logical backup",
+      "isolated pg_restore",
+      "domain row integrity",
+      "Prisma migration history integrity",
+      "manual migration ledger integrity"
+    ]
+  },
+  "externalEvidenceNotSatisfiedByThisPhase": [
+    "productionBackupConfigured",
+    "restoreDrillVerified",
+    "paymentRailVerified"
+  ],
+  "safetyBoundary": "A successful application-level rehearsal never substitutes Railway provider backup configuration, a provider restore drill, or a real-funds payment proof.",
+  "mainProtection": "deferred-until-final-program-close"
+}
