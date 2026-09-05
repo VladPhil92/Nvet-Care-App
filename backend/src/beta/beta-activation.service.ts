@@ -17,6 +17,7 @@ import {
   BetaEvidenceActor,
   BetaEvidenceService,
 } from "./beta-evidence.service";
+import { BetaSupportService } from "./beta-support.service";
 import {
   AuthorizeBetaActivationDto,
   RevokeBetaActivationDto,
@@ -62,6 +63,8 @@ export type BetaActivationPrerequisites = {
   ineligibleCohortMembers: number;
   maxInitialClients: number;
   supportConfigured: boolean;
+  supportState: string;
+  supportExpiresAt: string | null;
   marketConfigured: boolean;
 };
 
@@ -71,6 +74,7 @@ export class BetaActivationService {
     private readonly prisma: PrismaService,
     private readonly evidence: BetaEvidenceService,
     private readonly cohort: BetaCohortService,
+    private readonly support: BetaSupportService,
   ) {}
 
   async authorize(dto: AuthorizeBetaActivationDto, actor: BetaEvidenceActor) {
@@ -159,7 +163,7 @@ export class BetaActivationService {
   }
 
   async getPrerequisites(): Promise<BetaActivationPrerequisites> {
-    const [promotion, verifiedActiveVets, cohort] = await Promise.all([
+    const [promotion, verifiedActiveVets, cohort, support] = await Promise.all([
       this.evidence.getPromotionSummary(),
       this.prisma.vetProfile.count({
         where: {
@@ -173,13 +177,11 @@ export class BetaActivationService {
         },
       }),
       this.cohort.getOperationalSnapshot(),
+      this.support.getOperationalSnapshot(),
     ]);
 
     const configuredClients = cohort.activeMemberships;
-    const supportConfigured = Boolean(
-      process.env.NVET_BETA_SUPPORT_OWNER?.trim() &&
-      process.env.NVET_BETA_SUPPORT_CHANNEL?.trim(),
-    );
+    const supportConfigured = support.configured;
     const marketConfigured = this.isCartagenaMarket(
       process.env.NVET_CLOSED_BETA_MARKET,
     );
@@ -218,6 +220,8 @@ export class BetaActivationService {
       ineligibleCohortMembers: cohort.ineligibleMembers,
       maxInitialClients: MAX_INITIAL_CLIENTS,
       supportConfigured,
+      supportState: support.state,
+      supportExpiresAt: support.expiresAt,
       marketConfigured,
     };
   }

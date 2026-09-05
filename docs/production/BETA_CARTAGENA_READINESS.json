@@ -20,6 +20,15 @@
     "cohortAdminEndpoint": "GET /api/beta/cohort",
     "cohortSelfEndpoint": "GET /api/beta/cohort/me",
     "cohortInviteEndpoint": "POST /api/beta/cohort/invite",
+    "supportLedger": "audit_logs",
+    "supportLedgerAppendOnly": true,
+    "supportConfigurationSource": "admin-control-plane",
+    "legacyEnvSupportConfigurationAccepted": false,
+    "supportLeaseMaxHours": 168,
+    "supportMonitoringConfirmationRequired": true,
+    "supportAdminEndpoint": "GET /api/beta/support",
+    "supportConfigureEndpoint": "POST /api/beta/support/configure",
+    "supportRevokeEndpoint": "POST /api/beta/support/revoke",
     "activationDecisionEndpoint": "GET /api/beta/readiness",
     "activationAuthorizationEndpoint": "POST /api/beta/activation/authorize",
     "activationRevocationEndpoint": "POST /api/beta/activation/revoke",
@@ -86,7 +95,7 @@
     "supportOwnerConfirmed": {
       "status": "pending",
       "evidence": null,
-      "note": "Runtime treats both NVET_BETA_SUPPORT_OWNER and NVET_BETA_SUPPORT_CHANNEL as machine activation gates, but keep this evidence pending until a named owner, monitored route, approver and date are confirmed using CARTAGENA_BETA_OPERATIONS_RUNBOOK.md."
+      "note": "Runtime support readiness is managed through a time-bounded append-only admin control plane (GET/POST /api/beta/support), not provider environment variables. Keep this evidence pending until the configured owner-role, monitored route, approver and date are independently confirmed and reviewed using CARTAGENA_BETA_OPERATIONS_RUNBOOK.md."
     },
     "privacyAndTermsReviewed": {
       "status": "pending",

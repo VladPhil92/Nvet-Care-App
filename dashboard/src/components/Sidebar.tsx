@@ -17,6 +17,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
     { id: 'accounting', label: 'Contabilidad', icon: '₱' },
     { id: 'evidence', label: 'Evidencia', icon: '✓' },
     { id: 'cohort', label: 'Cohorte Beta', icon: '◎' },
+    { id: 'support', label: 'Soporte Beta', icon: '!' },
     { id: 'tracking', label: 'Tracking', icon: '⊙' },
     { id: 'mobile', label: 'Mobile', icon: '📱' },
   ]
@@ -28,16 +29,18 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
         bottom: 0,
         left: 0,
         right: 0,
-        height: 60,
+        minHeight: 64,
         background: T.surface,
         borderTop: `1px solid ${T.line}`,
         display: 'flex',
-        justifyContent: 'space-around',
+        justifyContent: 'flex-start',
         alignItems: 'center',
+        overflowX: 'auto',
         zIndex: 100,
         boxShadow: '0 -2px 8px rgba(0,0,0,.05)',
+        padding: '4px 6px',
       }}>
-        {items.slice(0, 5).map(item => {
+        {items.map(item => {
           const active = activePage === item.id
           return (
             <button
@@ -51,15 +54,17 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
                 flexDirection: 'column',
                 alignItems: 'center',
                 gap: 2,
-                padding: '4px 8px',
+                padding: '4px 10px',
+                minWidth: 66,
                 color: active ? T.sage : T.inkMuted,
                 fontSize: 9,
                 fontWeight: active ? 600 : 400,
                 letterSpacing: '.3px',
                 transition: 'color .15s',
+                flex: '0 0 auto',
               }}
             >
-              <span style={{ fontSize: 20 }}>{item.icon}</span>
+              <span style={{ fontSize: 19 }}>{item.icon}</span>
               <span>{item.label}</span>
             </button>
           )

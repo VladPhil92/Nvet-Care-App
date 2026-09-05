@@ -5,11 +5,11 @@ import { BetaActivationService } from "./beta-activation.service";
 import { BetaCohortService } from "./beta-cohort.service";
 import { BetaEvidenceService } from "./beta-evidence.service";
 import { BETA_LEGAL_DOCUMENTS } from "./beta-legal.constants";
+import { BetaSupportService } from "./beta-support.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 
 const MAX_INITIAL_CLIENTS = 50;
 const MIN_VERIFIED_VETS = 3;
-const CRITICAL_INCIDENT_TARGET_MINUTES = 30;
 
 type ActivationState =
   | "blocked"
@@ -24,8 +24,7 @@ type LocalBlocker =
   | "CLIENT_COHORT_LIMIT_EXCEEDED"
   | "COHORT_MEMBER_INELIGIBLE"
   | "CARTAGENA_VET_COVERAGE_INSUFFICIENT"
-  | "SUPPORT_OWNER_NOT_CONFIGURED"
-  | "SUPPORT_CHANNEL_NOT_CONFIGURED";
+  | "SUPPORT_CONFIGURATION_NOT_ACTIVE";
 
 @Injectable()
 export class BetaReadinessService {
@@ -35,40 +34,40 @@ export class BetaReadinessService {
     private readonly evidence: BetaEvidenceService,
     private readonly authorization: BetaActivationService,
     private readonly cohort: BetaCohortService,
+    private readonly support: BetaSupportService,
   ) {}
 
   async getCartagenaSnapshot() {
-    const [verifiedActiveVets, evidencePromotion, authorization, cohort] =
-      await Promise.all([
-        this.prisma.vetProfile.count({
-          where: {
-            isVerified: true,
-            isActive: true,
-            verificationStatus: VerificationStatus.APPROVED,
-            city: {
-              contains: "cartagena",
-              mode: "insensitive",
-            },
+    const [
+      verifiedActiveVets,
+      evidencePromotion,
+      authorization,
+      cohort,
+      support,
+    ] = await Promise.all([
+      this.prisma.vetProfile.count({
+        where: {
+          isVerified: true,
+          isActive: true,
+          verificationStatus: VerificationStatus.APPROVED,
+          city: {
+            contains: "cartagena",
+            mode: "insensitive",
           },
-        }),
-        this.evidence.getPromotionSummary(),
-        this.authorization.getStatus(),
-        this.cohort.getOperationalSnapshot(),
-      ]);
+        },
+      }),
+      this.evidence.getPromotionSummary(),
+      this.authorization.getStatus(),
+      this.cohort.getOperationalSnapshot(),
+      this.support.getOperationalSnapshot(),
+    ]);
 
     const configuredClients = cohort.activeMemberships;
     const cohortConfigured = cohort.configured;
     const cohortWithinLimit = cohort.withinLimit;
     const cohortMembersEligible = cohort.ineligibleMembers === 0;
     const vetCoverageSatisfied = verifiedActiveVets >= MIN_VERIFIED_VETS;
-    const supportOwnerConfigured = Boolean(
-      process.env.NVET_BETA_SUPPORT_OWNER?.trim(),
-    );
-    const supportChannelConfigured = Boolean(
-      process.env.NVET_BETA_SUPPORT_CHANNEL?.trim(),
-    );
-    const supportConfigured =
-      supportOwnerConfigured && supportChannelConfigured;
+    const supportConfigured = support.configured;
     const closedBetaEnabled = this.access.isEnabled();
     const bookingEnabled = this.access.isBookingEnabled();
 
@@ -85,11 +84,8 @@ export class BetaReadinessService {
     if (!vetCoverageSatisfied) {
       blockingReasons.push("CARTAGENA_VET_COVERAGE_INSUFFICIENT");
     }
-    if (!supportOwnerConfigured) {
-      blockingReasons.push("SUPPORT_OWNER_NOT_CONFIGURED");
-    }
-    if (!supportChannelConfigured) {
-      blockingReasons.push("SUPPORT_CHANNEL_NOT_CONFIGURED");
+    if (!supportConfigured) {
+      blockingReasons.push("SUPPORT_CONFIGURATION_NOT_ACTIVE");
     }
 
     const machineActivationReady = blockingReasons.length === 0;
@@ -156,10 +152,16 @@ export class BetaReadinessService {
         explicitAcceptanceEnforcedForBooking: true,
       },
       support: {
-        ownerConfigured: supportOwnerConfigured,
-        channelConfigured: supportChannelConfigured,
+        state: support.state,
+        ownerConfigured: support.ownerConfigured,
+        channelConfigured: support.channelConfigured,
+        monitoringConfirmed: support.monitoringConfirmed,
         configured: supportConfigured,
-        criticalIncidentTargetMinutes: CRITICAL_INCIDENT_TARGET_MINUTES,
+        expiresAt: support.expiresAt,
+        criticalIncidentTargetMinutes: support.criticalIncidentTargetMinutes,
+        ledger: "audit_logs",
+        appendOnly: true,
+        configurationSource: "admin-control-plane",
       },
       localActivationReady: machineActivationReady,
       promotionBoundary: {
@@ -170,6 +172,7 @@ export class BetaReadinessService {
         evidenceLedger: "audit_logs",
         authorizationLedger: "audit_logs",
         cohortLedger: "audit_logs",
+        supportLedger: "audit_logs",
         requiredEvidenceManifest:
           "docs/production/BETA_CARTAGENA_READINESS.json",
       },
@@ -178,6 +181,7 @@ export class BetaReadinessService {
         cohortHashesExposed: false,
         environmentCohortHashesCanonical: false,
         supportContactExposed: false,
+        supportConfigurationAdminOnly: true,
         evidenceReferencesAdminOnly: true,
         cohortMemberDetailsAdminOnly: true,
       },

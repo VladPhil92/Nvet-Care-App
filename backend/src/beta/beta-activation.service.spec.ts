@@ -36,6 +36,9 @@ describe("BetaActivationService", () => {
   const cohort = {
     getOperationalSnapshot: jest.fn(),
   } as any;
+  const support = {
+    getOperationalSnapshot: jest.fn(),
+  } as any;
   const actor = {
     id: "admin-user-id",
     role: "ADMIN",
@@ -56,10 +59,21 @@ describe("BetaActivationService", () => {
     configured: true,
   });
 
+  const healthySupport = () => ({
+    state: "ACTIVE",
+    configured: true,
+    ownerConfigured: true,
+    channelConfigured: true,
+    monitoringConfirmed: true,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    criticalIncidentTargetMinutes: 30,
+    ledger: "audit_logs",
+    appendOnly: true,
+    configurationSource: "admin-control-plane",
+  });
+
   beforeEach(() => {
     process.env = { ...originalEnv };
-    process.env.NVET_BETA_SUPPORT_OWNER = "beta-ops";
-    process.env.NVET_BETA_SUPPORT_CHANNEL = "ops-channel";
     process.env.NVET_CLOSED_BETA_MARKET = "Cartagena de Indias";
     rows.length = 0;
     sequence = 0;
@@ -69,7 +83,8 @@ describe("BetaActivationService", () => {
       eligibleForOperatorActivation: true,
     });
     cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort());
-    service = new BetaActivationService(prisma, evidence, cohort);
+    support.getOperationalSnapshot.mockResolvedValue(healthySupport());
+    service = new BetaActivationService(prisma, evidence, cohort, support);
   });
 
   afterAll(() => {
@@ -115,6 +130,22 @@ describe("BetaActivationService", () => {
 
     const prerequisites = await service.getPrerequisites();
     expect(prerequisites.blockers).toContain("COHORT_MEMBER_INELIGIBLE");
+    await expect(service.assertActiveForBooking()).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+  });
+
+  it("detects support lease drift and blocks bookings after authorization", async () => {
+    await service.authorize({}, actor);
+    support.getOperationalSnapshot.mockResolvedValue({
+      ...healthySupport(),
+      state: "EXPIRED",
+      configured: false,
+    });
+
+    const prerequisites = await service.getPrerequisites();
+    expect(prerequisites.supportState).toBe("EXPIRED");
+    expect(prerequisites.blockers).toContain("SUPPORT_NOT_CONFIGURED");
     await expect(service.assertActiveForBooking()).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
