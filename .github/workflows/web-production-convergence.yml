@@ -2,7 +2,7 @@ name: Web Production Convergence
 
 on:
   workflow_run:
-    workflows: ['Nvet Transfer Payment Rail Certification']
+    workflows: ['Nvet Recovery Readiness']
     types: [completed]
   schedule:
     - cron: '12 */6 * * *'
@@ -153,5 +153,5 @@ jobs:
             echo "- Machine-verifiable RC gates: $(outcome_label '${{ steps.machine.outcome }}')"
             echo "- Full RC evidence report: $(outcome_label '${{ steps.report.outcome }}')"
             echo ''
-            echo '> Automatic chain: CI → isolated staging → TRANSFER application certification → convergence. External provider backup/restore and real-funds evidence remain separate promotion gates.'
+            echo '> Automatic chain: CI → isolated staging → TRANSFER application certification → recovery rehearsal → convergence. External provider backup/restore and real-funds evidence remain separate promotion gates.'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "phase": "12J",
+  "name": "Recovery Rehearsal Freshness & Evidence Automation",
+  "objective": "Guarantee a fresh application-level recovery rehearsal before Web Production Convergence evaluates the release candidate, without treating logical recovery as provider backup or provider restore evidence.",
+  "automaticChain": [
+    "CI",
+    "Staging E2E Seed & Preflight",
+    "Nvet Transfer Payment Rail Certification",
+    "Nvet Recovery Readiness",
+    "Web Production Convergence"
+  ],
+  "recoveryRehearsal": {
+    "trigger": "successful Nvet Transfer Payment Rail Certification on main",
+    "candidateSource": "github.event.workflow_run.head_sha",
+    "isolatedPostgres": true,
+    "freshMigrationRebuild": true,
+    "legacyAdoptionRehearsal": true,
+    "logicalBackup": "pg_dump custom archive",
+    "isolatedRestore": true,
+    "integrityChecks": [
+      "users",
+      "pets",
+      "appointments",
+      "prisma migration history",
+      "manual migration ledger"
+    ],
+    "providerProductionMutation": false
+  },
+  "convergence": {
+    "trigger": "successful Nvet Recovery Readiness on main",
+    "machineGateRequiresFreshRecovery": true,
+    "productionBackendReadinessProbe": true,
+    "ctgOneFederatedConnectivityProbe": true,
+    "stagingIdentityAndDiscoveryProbe": true
+  },
+  "externalEvidenceBoundary": {
+    "productionBackupConfigured": "pending until Railway provider evidence exists",
+    "restoreDrillVerified": "pending until provider-level restore drill evidence exists",
+    "paymentRailVerified": "pending until controlled real-funds transfer evidence exists"
+  },
+  "promotionPolicy": "fail-closed",
+  "mainProtection": "deferred by operator until final program closure"
+}
