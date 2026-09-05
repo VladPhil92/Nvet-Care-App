@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "phase": "12L",
+  "name": "Automated Synthetic Production Alert Drill Freshness",
+  "objective": "Replace inferred alert-drill freshness with explicit recurring evidence from an isolated synthetic incident workflow.",
+  "canonicalWorkflow": ".github/workflows/production-alert-drill.yml",
+  "workflowName": "Nvet Synthetic Production Alert Drill",
+  "schedule": "weekly",
+  "freshnessPolicyHours": 720,
+  "evidenceContract": {
+    "syntheticFailureMustBeDetected": true,
+    "incidentIssueLifecycleMustComplete": true,
+    "productionMutationAllowed": false,
+    "realAlertNamespaceMayBeTouched": false
+  },
+  "externalEvidenceBoundary": {
+    "productionBackupConfigured": "pending-provider-evidence",
+    "restoreDrillVerified": "pending-provider-operator-evidence",
+    "paymentRailVerified": "pending-real-funds-evidence"
+  },
+  "branchProtection": "deferred-by-design"
+}

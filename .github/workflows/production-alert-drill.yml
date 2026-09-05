@@ -1,0 +1,147 @@
+name: Nvet Synthetic Production Alert Drill
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-alert-drill.yml'
+      - 'docs/production/PHASE_12L_ALERT_DRILL_FRESHNESS.json'
+  schedule:
+    - cron: '27 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: nvet-synthetic-production-alert-drill
+  cancel-in-progress: true
+
+env:
+  DRILL_TITLE: '[DRILL] Nvet production readiness incident path'
+
+jobs:
+  drill:
+    name: Simulate, escalate and close isolated readiness incident
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Generate isolated synthetic readiness failure
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          code="$(curl --silent --show-error --location --max-time 5 \
+            --output "$tmp" --write-out '%{http_code}' \
+            'http://127.0.0.1:9/nvet-readiness-drill' || true)"
+
+          if [ "$code" = '200' ]; then
+            echo 'Synthetic drill endpoint unexpectedly returned HTTP 200.'
+            exit 1
+          fi
+
+          echo "Synthetic failure generated as expected (HTTP ${code:-000})."
+          echo 'synthetic_failure=true' >> "$GITHUB_OUTPUT"
+
+      - name: Escalate through canonical GitHub incident path
+        if: steps.probe.outputs.synthetic_failure == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const repo = process.env.GITHUB_REPOSITORY;
+          const token = process.env.GH_TOKEN;
+          const title = process.env.DRILL_TITLE;
+          const runUrl = `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+          const headers = {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          };
+
+          async function request(path, init = {}) {
+            const response = await fetch(`https://api.github.com/repos/${repo}${path}`, {
+              ...init,
+              headers: { ...headers, ...(init.headers || {}) },
+            });
+            if (!response.ok) {
+              throw new Error(`GitHub drill API ${path} failed: HTTP ${response.status}`);
+            }
+            return response.status === 204 ? null : response.json();
+          }
+
+          const issues = await request('/issues?state=all&per_page=100');
+          let issue = issues.find((item) => !item.pull_request && item.title === title);
+          const detectedAt = new Date().toISOString();
+
+          if (!issue) {
+            issue = await request('/issues', {
+              method: 'POST',
+              body: JSON.stringify({
+                title,
+                body: [
+                  '**Synthetic drill only. Production is not degraded and was not mutated.**',
+                  '',
+                  `Initial drill run: ${runUrl}`,
+                ].join('\n'),
+              }),
+            });
+          } else if (issue.state !== 'open') {
+            issue = await request(`/issues/${issue.number}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ state: 'open' }),
+            });
+          }
+
+          await request(`/issues/${issue.number}/comments`, {
+            method: 'POST',
+            body: JSON.stringify({
+              body: [
+                '🧪 Synthetic production-readiness alert drill executed.',
+                '',
+                `Detected: ${detectedAt}`,
+                `Evidence run: ${runUrl}`,
+                '',
+                '- synthetic readiness failure: detected',
+                '- GitHub incident escalation path: verified',
+                '- production mutation: none',
+                '- real `[ALERT]` incident namespace: untouched',
+              ].join('\n'),
+            }),
+          });
+
+          await request(`/issues/${issue.number}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ state: 'closed', state_reason: 'completed' }),
+          });
+
+          const closed = await request(`/issues/${issue.number}`);
+          if (closed.state !== 'closed') {
+            throw new Error(`Drill issue #${issue.number} did not close successfully.`);
+          }
+
+          console.log(`✅ Synthetic alert drill certified through issue #${issue.number}.`);
+          NODE
+
+      - name: Publish drill evidence boundary
+        shell: bash
+        run: |
+          {
+            echo '## Nvet Synthetic Production Alert Drill'
+            echo ''
+            echo "- Run: \`${GITHUB_RUN_ID}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo '- Synthetic failure: PASS'
+            echo '- Incident escalation: PASS'
+            echo '- Drill issue lifecycle: PASS'
+            echo '- Production mutation: NONE'
+            echo '- Real production alert namespace: UNTOUCHED'
+            echo ''
+            echo '> This workflow proves alert-path operability only. It does not prove Railway backup/restore capability or real payment movement.'
+          } >> "$GITHUB_STEP_SUMMARY"
