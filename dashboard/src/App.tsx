@@ -8,6 +8,7 @@ import AccountingPage from './pages/AccountingPage'
 import TrackingPage from './pages/TrackingPage'
 import BetaEvidencePage from './pages/BetaEvidencePage'
 import BetaCohortPage from './pages/BetaCohortPage'
+import BetaSupportPage from './pages/BetaSupportPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import Sidebar from './components/Sidebar'
@@ -24,6 +25,7 @@ type AdminPage =
   | 'accounting'
   | 'evidence'
   | 'cohort'
+  | 'support'
   | 'tracking'
 type PublicAuthPage = 'login' | 'register'
 
@@ -43,7 +45,7 @@ function AdminApp() {
       <div
         style={{
           flex: 1,
-          paddingBottom: isMobile ? 60 : 0,
+          paddingBottom: isMobile ? 70 : 0,
           overflowY: 'auto',
         }}
       >
@@ -53,6 +55,7 @@ function AdminApp() {
         {page === 'accounting' && <AccountingPage />}
         {page === 'evidence' && <BetaEvidencePage />}
         {page === 'cohort' && <BetaCohortPage />}
+        {page === 'support' && <BetaSupportPage />}
         {page === 'tracking' && <TrackingPage />}
       </div>
     </div>
