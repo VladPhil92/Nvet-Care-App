@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -30,11 +31,14 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: staging
-    timeout-minutes: 12
+    timeout-minutes: 30
     env:
+      GITHUB_TOKEN: ${{ github.token }}
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RC_CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       NVET_PAYMENT_CERTIFICATION_TARGET: staging
+      RECOVERY_WAIT_TIMEOUT_MS: '1200000'
+      RECOVERY_POLL_INTERVAL_MS: '15000'
 
     steps:
       - name: Checkout certified candidate
@@ -46,6 +50,9 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Require exact candidate recovery rehearsal
+        run: node scripts/wait-for-recovery-readiness.mjs
 
       - name: Load current Railway staging certification session
         run: node scripts/railway-staging-session.mjs load
@@ -81,6 +88,7 @@ jobs:
             echo '## Nvet TRANSFER Payment Rail Certification v2'
             echo ''
             echo "- Candidate: \`${RC_CANDIDATE_SHA}\`"
+            echo '- Recovery prerequisite: exact-candidate Nvet Recovery Readiness must complete successfully before transaction certification begins.'
             echo '- Target: isolated Railway staging only.'
             echo '- Credentials: loaded from the runtime-rotated Railway staging session and masked in Actions.'
             echo '- Required identities: CLIENT → verified VET → ADMIN.'
@@ -89,5 +97,5 @@ jobs:
             echo '- Private storage identifiers and legacy TRANSFER hashOnchain values must not appear in VET, ADMIN confirmation or CLIENT responses.'
             echo '- The synthetic appointment is cancelled after certification to release availability.'
             echo ''
-            echo '> A successful run proves the Nvet application rail, professional authorization boundary, evidence integrity and response privacy. It does not prove that real funds moved through a bank. Keep `paymentRailVerified` pending until a controlled real transfer is retained as operator evidence.'
+            echo '> A successful run proves the Nvet application rail after an exact-candidate logical recovery rehearsal. It does not prove that real funds moved through a bank. Keep `paymentRailVerified` pending until a controlled real transfer is retained as operator evidence.'
           } >> "$GITHUB_STEP_SUMMARY"
