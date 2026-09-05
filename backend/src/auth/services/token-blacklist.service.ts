@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import { createHash } from "crypto";
+import { createClient } from "redis";
 
 /**
  * TokenBlacklistService — invalidación de refresh tokens (logout, rotation, theft).
@@ -14,7 +15,7 @@ import { createHash } from "crypto";
  * Implementación:
  *  - Interface `KvStore` permite swap fácil entre in-memory (dev) y Redis (prod).
  *  - In-memory: Map con TTL automático via setTimeout (suficiente para 1 instancia).
- *  - Redis (prod): comentado pero listo para activar con `ioredis`.
+ *  - Redis (prod): usa el paquete `redis` declarado explícitamente por el backend.
  *
  * Tamaño esperado: ~1 KB por token blacklisted. Con TTL=7d y ~1000 logouts/día,
  * el total en memoria es <1 MB → in-memory es viable hasta ~10k usuarios activos.
@@ -41,16 +42,13 @@ class InMemoryKvStore implements KvStore {
     const expiresAt = Date.now() + ttlSeconds * 1000;
     this.store.set(key, { value, expiresAt });
 
-    // Cancelar timer previo si existe
     const prev = this.timers.get(key);
     if (prev) clearTimeout(prev);
 
-    // Programar expiración automática
     const timer = setTimeout(() => {
       this.store.delete(key);
       this.timers.delete(key);
     }, ttlSeconds * 1000);
-    // Permite al proceso terminar aunque haya timers pendientes
     timer.unref?.();
     this.timers.set(key, timer);
   }
@@ -86,42 +84,52 @@ class InMemoryKvStore implements KvStore {
 // REDIS IMPLEMENTATION (prod / multi-instancia)
 // ============================================================
 
-interface RedisClient {
-  set(key: string, value: string, exArg: string, ttl: number): Promise<unknown>;
-  exists(key: string): Promise<number>;
-  del(key: string): Promise<unknown>;
-  quit(): Promise<unknown>;
-}
+type NodeRedisClient = ReturnType<typeof createClient>;
 
 class RedisKvStore implements KvStore {
-  private client: RedisClient;
+  private readonly client: NodeRedisClient;
+  private connectPromise: Promise<void> | null = null;
 
-  constructor(redisUrl: string) {
-    // ioredis is a transitive dependency of bull/socket.io — always present
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Redis = require("ioredis");
-    this.client = new Redis(redisUrl, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 3,
-      enableReadyCheck: false,
-    });
+  constructor(redisUrl: string, onError: (error: unknown) => void) {
+    this.client = createClient({ url: redisUrl });
+    this.client.on("error", onError);
+  }
+
+  private async ensureConnected(): Promise<void> {
+    if (this.client.isReady) return;
+
+    if (!this.connectPromise) {
+      this.connectPromise = this.client
+        .connect()
+        .then(() => undefined)
+        .finally(() => {
+          this.connectPromise = null;
+        });
+    }
+
+    await this.connectPromise;
   }
 
   async set(key: string, value: string, ttlSeconds: number): Promise<void> {
-    await this.client.set(key, value, "EX", ttlSeconds);
+    await this.ensureConnected();
+    await this.client.set(key, value, { EX: ttlSeconds });
   }
 
   async has(key: string): Promise<boolean> {
+    await this.ensureConnected();
     const result = await this.client.exists(key);
     return result === 1;
   }
 
   async delete(key: string): Promise<void> {
+    await this.ensureConnected();
     await this.client.del(key);
   }
 
   async quit(): Promise<void> {
-    await this.client.quit();
+    if (this.client.isOpen) {
+      await this.client.quit();
+    }
   }
 }
 
@@ -136,7 +144,12 @@ export class TokenBlacklistService implements OnModuleDestroy {
 
   constructor() {
     if (process.env.REDIS_URL) {
-      this.store = new RedisKvStore(process.env.REDIS_URL);
+      this.store = new RedisKvStore(process.env.REDIS_URL, (error) => {
+        this.logger.error(
+          "TokenBlacklistService: error de conexión Redis.",
+          error instanceof Error ? error.stack : String(error),
+        );
+      });
       this.logger.log("TokenBlacklistService: usando Redis.");
     } else {
       this.store = new InMemoryKvStore();
@@ -156,7 +169,7 @@ export class TokenBlacklistService implements OnModuleDestroy {
    */
   async revoke(jti: string, ttlSeconds: number): Promise<void> {
     if (!jti) return;
-    if (ttlSeconds <= 0) return; // ya expiró por sí solo
+    if (ttlSeconds <= 0) return;
     const key = this.makeKey(jti);
     await this.store.set(key, "1", ttlSeconds);
   }
@@ -183,14 +196,6 @@ export class TokenBlacklistService implements OnModuleDestroy {
     return this.isRevoked(id);
   }
 
-  // ----------------------------------------------------------
-  // PRIVATE
-  // ----------------------------------------------------------
-
-  /**
-   * Convierte un token (potencialmente largo) en una clave estable y compacta.
-   * Usar SHA-256 evita guardar el token completo en memoria.
-   */
   private tokenToId(token: string): string {
     return createHash("sha256").update(token).digest("hex");
   }
