@@ -125,8 +125,27 @@ for (const [pattern, purpose] of [
   [/_nvet_manual_migrations/, 'manual ledger restore verification'],
   [/pg_dump/, 'logical backup'],
   [/pg_restore/, 'isolated restore'],
+  [/actions\/upload-artifact@v4/, 'candidate-bound recovery evidence artifact'],
+  [/nvet-recovery-readiness-\$\{\{ github\.sha \}\}/, 'candidate SHA artifact naming'],
+  [/providerLevelRailwayRestore:\s*false/, 'strict provider-restore scope separation'],
+  [/scripts\/verify-release-candidate-readiness\.mjs/, 'RC provenance change trigger'],
 ]) {
   if (!pattern.test(recovery)) failures.push(`Recovery workflow missing ${purpose}`);
+}
+
+const rcVerifier = read('scripts/verify-release-candidate-readiness.mjs');
+for (const [pattern, purpose] of [
+  [/const recoveryImpactingPaths = \[/, 'recovery-impacting path policy'],
+  [/async function resolveRecoveryEvidence\(/, 'candidate-aware recovery evidence resolver'],
+  [/isRecoveryImpactingPath/, 'recovery diff invalidation'],
+  [/candidate-compatible Nvet Recovery Readiness/, 'fail-closed recovery evidence message'],
+]) {
+  if (!pattern.test(rcVerifier)) failures.push(`RC verifier missing ${purpose}`);
+}
+
+const convergence = read('.github/workflows/web-production-convergence.yml');
+if (!/workflows:\s*\[[^\]]*Nvet Recovery Readiness[^\]]*\]/.test(convergence)) {
+  failures.push('Web Production Convergence must rerun after Nvet Recovery Readiness');
 }
 
 const backupAudit = read('scripts/audit-railway-production-backups.mjs');
@@ -148,4 +167,4 @@ console.log('✅ Database & Recovery Convergence gate passed.');
 console.log(`   baseline: ${baseline}`);
 console.log(`   versioned migrations: ${versioned.length}`);
 console.log('   production path: migrate deploy + immutable manual SQL ledger');
-console.log('   recovery: fresh + legacy adoption + backup/restore rehearsal');
+console.log('   recovery: candidate-aware fresh + legacy adoption + backup/restore rehearsal');
