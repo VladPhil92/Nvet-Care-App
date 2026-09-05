@@ -31,6 +31,7 @@ const baselinePath = `backend/prisma/migrations/${baseline}/migration.sql`;
 requireFile(baselinePath, 'Canonical Prisma baseline');
 requireFile('backend/prisma/migrations/migration_lock.toml', 'Prisma migration lock');
 requireFile('backend/scripts/database-migrate.mjs', 'Canonical migration runner');
+requireFile('scripts/wait-for-recovery-readiness.mjs', 'Exact-candidate recovery evidence waiter');
 
 for (const manualFile of [
   'auth_hardening_v2.sql',
@@ -118,6 +119,9 @@ if (/--accept-data-loss/.test(runner)) {
 
 const recovery = read('.github/workflows/recovery-readiness.yml');
 for (const [pattern, purpose] of [
+  [/workflows:\s*\['CI'\]/, 'depth-safe main CI trigger'],
+  [/github\.event\.workflow_run\.head_sha/, 'exact candidate SHA propagation'],
+  [/github\.event\.workflow_run\.conclusion\s*==\s*'success'/, 'successful CI prerequisite'],
   [/migrate deploy/, 'fresh migration reconstruction'],
   [/migrate diff/, 'migration/schema equivalence check'],
   [/legacy db-push database/i, 'legacy adoption rehearsal'],
@@ -127,6 +131,38 @@ for (const [pattern, purpose] of [
   [/pg_restore/, 'isolated restore'],
 ]) {
   if (!pattern.test(recovery)) failures.push(`Recovery workflow missing ${purpose}`);
+}
+if (/workflows:\s*\['Nvet Transfer Payment Rail Certification'\]/.test(recovery)) {
+  failures.push('Recovery must not be chained after payment certification; that creates an unsafe workflow_run depth.');
+}
+
+const recoveryWaiter = read('scripts/wait-for-recovery-readiness.mjs');
+for (const [pattern, purpose] of [
+  [/Nvet Recovery Readiness/, 'recovery workflow identity'],
+  [/run\.head_sha\s*===\s*candidate/, 'exact candidate matching'],
+  [/run\.head_branch\s*===\s*'main'/, 'main-only evidence matching'],
+  [/exact\.conclusion\s*!==\s*'success'/, 'fail-closed unsuccessful rehearsal handling'],
+  [/Timed out waiting for successful Nvet Recovery Readiness/, 'bounded wait timeout'],
+]) {
+  if (!pattern.test(recoveryWaiter)) failures.push(`Recovery waiter missing ${purpose}`);
+}
+
+const paymentWorkflow = read('.github/workflows/payment-rail-certification.yml');
+for (const [pattern, purpose] of [
+  [/actions:\s*read/, 'read-only Actions evidence permission'],
+  [/wait-for-recovery-readiness\.mjs/, 'exact candidate recovery prerequisite'],
+  [/RECOVERY_WAIT_TIMEOUT_MS/, 'bounded recovery wait policy'],
+  [/RC_CANDIDATE_SHA/, 'candidate propagation into recovery prerequisite'],
+]) {
+  if (!pattern.test(paymentWorkflow)) failures.push(`Payment certification workflow missing ${purpose}`);
+}
+
+const webConvergence = read('.github/workflows/web-production-convergence.yml');
+if (!/workflows:\s*\['Nvet Transfer Payment Rail Certification'\]/.test(webConvergence)) {
+  failures.push('Web Production Convergence must be the third and final workflow_run level after payment certification.');
+}
+if (/workflows:\s*\['Nvet Recovery Readiness'\]/.test(webConvergence)) {
+  failures.push('Web Production Convergence must not be chained after Recovery Readiness; that exceeds GitHub workflow_run depth.');
 }
 
 const backupAudit = read('scripts/audit-railway-production-backups.mjs');
@@ -148,4 +184,5 @@ console.log('✅ Database & Recovery Convergence gate passed.');
 console.log(`   baseline: ${baseline}`);
 console.log(`   versioned migrations: ${versioned.length}`);
 console.log('   production path: migrate deploy + immutable manual SQL ledger');
-console.log('   recovery: fresh + legacy adoption + backup/restore rehearsal');
+console.log('   orchestration: CI → {staging, recovery} → payment → web convergence (max workflow_run depth 3)');
+console.log('   recovery: exact candidate + bounded wait + isolated backup/restore rehearsal');
