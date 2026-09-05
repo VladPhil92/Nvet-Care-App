@@ -83,6 +83,34 @@ if (manifest.policy?.productionEvidenceRequiredForActivation !== true) {
   fail('Production-scoped evidence must be required for activation.');
 }
 
+if (manifest.policy?.supportLedger !== 'audit_logs') {
+  fail('Support readiness must use the audit_logs ledger.');
+}
+if (manifest.policy?.supportLedgerAppendOnly !== true) {
+  fail('Support readiness ledger must remain append-only.');
+}
+if (manifest.policy?.supportConfigurationSource !== 'admin-control-plane') {
+  fail('Support configuration source must be the admin control plane.');
+}
+if (manifest.policy?.legacyEnvSupportConfigurationAccepted !== false) {
+  fail('Legacy support environment configuration must remain disabled.');
+}
+if (manifest.policy?.supportLeaseMaxHours !== 168) {
+  fail('Support coverage lease must remain capped at 168 hours.');
+}
+if (manifest.policy?.supportMonitoringConfirmationRequired !== true) {
+  fail('Support coverage must require explicit monitoring confirmation.');
+}
+if (manifest.policy?.supportAdminEndpoint !== 'GET /api/beta/support') {
+  fail('Unexpected beta support status endpoint.');
+}
+if (manifest.policy?.supportConfigureEndpoint !== 'POST /api/beta/support/configure') {
+  fail('Unexpected beta support configure endpoint.');
+}
+if (manifest.policy?.supportRevokeEndpoint !== 'POST /api/beta/support/revoke') {
+  fail('Unexpected beta support revoke endpoint.');
+}
+
 for (const key of MUST_REMAIN_PENDING) {
   if (manifest.requiredEvidence?.[key]?.status !== 'pending') {
     fail(`${key} must remain pending until external/operator evidence exists.`);
@@ -99,13 +127,16 @@ for (const state of EXPECTED_STATES) {
 for (const blocker of [
   'CLIENT_COHORT_NOT_CONFIGURED',
   'CLIENT_COHORT_LIMIT_EXCEEDED',
+  'COHORT_MEMBER_INELIGIBLE',
   'CARTAGENA_VET_COVERAGE_INSUFFICIENT',
-  'SUPPORT_OWNER_NOT_CONFIGURED',
-  'SUPPORT_CHANNEL_NOT_CONFIGURED',
+  'SUPPORT_CONFIGURATION_NOT_ACTIVE',
 ]) {
   requireText(service, `"${blocker}"`, 'BetaReadinessService');
 }
 
+requireText(service, 'this.support.getOperationalSnapshot()', 'BetaReadinessService');
+requireText(service, 'supportLedger: "audit_logs"', 'BetaReadinessService');
+requireText(service, 'supportConfigurationAdminOnly: true', 'BetaReadinessService');
 requireText(service, 'machineActivationReady', 'BetaReadinessService');
 requireText(service, 'authorizationRequired: true', 'BetaReadinessService');
 requireText(service, 'authorizationActive', 'BetaReadinessService');
@@ -125,11 +156,19 @@ requireText(
 requireText(runbook, 'NO LANZADA', 'Operations runbook');
 requireText(runbook, 'ready-to-enable', 'Operations runbook');
 requireText(runbook, 'misconfigured', 'Operations runbook');
+requireText(runbook, 'An ACTIVE lease satisfies only the **technical runtime prerequisite**.', 'Operations runbook');
 
 if (service.includes('NVET_CLOSED_BETA_CLIENT_HASHES')) {
   fail('Readiness response implementation must not depend on or expose raw cohort hash material.');
 }
+if (
+  service.includes('NVET_BETA_SUPPORT_OWNER') ||
+  service.includes('NVET_BETA_SUPPORT_CHANNEL')
+) {
+  fail('Readiness must not depend on legacy support environment variables.');
+}
 
 console.log('Beta Operational Activation Readiness contract verified.');
 console.log(`Activation states: ${EXPECTED_STATES.join(', ')}`);
+console.log('Support readiness is append-only, time-bounded and admin-controlled.');
 console.log('External/operator evidence remains fail-closed and activation requires a lease.');
