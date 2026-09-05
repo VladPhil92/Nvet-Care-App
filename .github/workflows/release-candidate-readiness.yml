@@ -6,11 +6,13 @@ on:
     paths:
       - 'docs/production/RC_READINESS.json'
       - 'docs/PHASE_11_RELEASE_CANDIDATE.md'
+      - 'docs/production/PHASE_12L_ALERT_DRILL_FRESHNESS.json'
       - 'scripts/verify-release-candidate-readiness.mjs'
       - '.github/workflows/release-candidate-readiness.yml'
       - '.github/workflows/ci.yml'
       - '.github/workflows/railway-contract.yml'
       - '.github/workflows/production-health-canary.yml'
+      - '.github/workflows/production-alert-drill.yml'
       - '.github/workflows/staging-e2e.yml'
   schedule:
     - cron: '17 12 * * *'
