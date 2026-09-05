@@ -2,7 +2,7 @@ name: Web Production Convergence
 
 on:
   workflow_run:
-    workflows: ['Nvet Transfer Payment Rail Certification']
+    workflows: ['Nvet Recovery Readiness']
     types: [completed]
   schedule:
     - cron: '12 */6 * * *'
@@ -49,6 +49,39 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Verify exact-candidate recovery evidence
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const repo = process.env.GITHUB_REPOSITORY;
+          const sha = process.env.RC_CANDIDATE_SHA;
+          const token = process.env.GITHUB_TOKEN;
+          if (!repo || !sha || !token) throw new Error('Missing GitHub recovery evidence inputs.');
+
+          const response = await fetch(`https://api.github.com/repos/${repo}/actions/runs?branch=main&per_page=100`, {
+            headers: {
+              Accept: 'application/vnd.github+json',
+              Authorization: `Bearer ${token}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+          });
+          if (!response.ok) throw new Error(`GitHub Actions API failed: HTTP ${response.status}`);
+          const payload = await response.json();
+          const exact = (payload.workflow_runs || []).find(
+            (run) =>
+              run?.name === 'Nvet Recovery Readiness' &&
+              run?.head_branch === 'main' &&
+              run?.head_sha === sha &&
+              run?.status === 'completed' &&
+              run?.conclusion === 'success',
+          );
+          if (!exact) throw new Error(`No successful Nvet Recovery Readiness evidence for candidate ${sha}.`);
+          console.log(`Exact-candidate recovery evidence verified: run=${exact.id} sha=${sha.slice(0, 12)}`);
+          NODE
 
       - name: Verify production backend readiness now
         id: production
@@ -146,6 +179,7 @@ jobs:
           {
             echo '## Web Production Convergence'
             echo "- Candidate: $RC_CANDIDATE_SHA"
+            echo '- Recovery rehearsal: exact candidate verified before convergence.'
             echo "- Production backend readiness: $(outcome_label '${{ steps.production.outcome }}')"
             echo "- ctgone.com → Nvet backend connectivity: $(outcome_label '${{ steps.ctg.outcome }}')"
             echo "- Railway staging session: $(outcome_label '${{ steps.staging_inputs.outcome }}')"
@@ -153,5 +187,5 @@ jobs:
             echo "- Machine-verifiable RC gates: $(outcome_label '${{ steps.machine.outcome }}')"
             echo "- Full RC evidence report: $(outcome_label '${{ steps.report.outcome }}')"
             echo ''
-            echo '> Automatic chain: CI → isolated staging → TRANSFER application certification → convergence. External provider backup/restore and real-funds evidence remain separate promotion gates.'
+            echo '> Automatic chain: CI → recovery rehearsal + TRANSFER application certification → convergence. External provider backup/restore and real-funds evidence remain separate promotion gates.'
           } >> "$GITHUB_STEP_SUMMARY"
