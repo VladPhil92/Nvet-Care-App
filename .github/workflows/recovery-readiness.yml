@@ -10,11 +10,6 @@ on:
       - '.github/workflows/recovery-readiness.yml'
   push:
     branches: [main]
-    paths:
-      - 'backend/prisma/**'
-      - 'backend/scripts/database-migrate.mjs'
-      - 'backend/scripts/production-predeploy.mjs'
-      - '.github/workflows/recovery-readiness.yml'
   schedule:
     - cron: '41 6 * * *'
   workflow_dispatch:
