@@ -90,10 +90,7 @@ class RedisKvStore implements KvStore {
   private readonly client: NodeRedisClient;
   private connectPromise: Promise<void> | null = null;
 
-  constructor(
-    redisUrl: string,
-    onError: (error: unknown) => void,
-  ) {
+  constructor(redisUrl: string, onError: (error: unknown) => void) {
     this.client = createClient({ url: redisUrl });
     this.client.on("error", onError);
   }
