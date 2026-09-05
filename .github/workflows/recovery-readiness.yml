@@ -7,6 +7,11 @@ on:
       - 'backend/prisma/**'
       - 'backend/scripts/database-migrate.mjs'
       - 'backend/scripts/production-predeploy.mjs'
+      - 'backend/package.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/verify-release-candidate-readiness.mjs'
+      - 'docs/production/RC_READINESS.json'
       - '.github/workflows/recovery-readiness.yml'
   push:
     branches: [main]
@@ -14,6 +19,11 @@ on:
       - 'backend/prisma/**'
       - 'backend/scripts/database-migrate.mjs'
       - 'backend/scripts/production-predeploy.mjs'
+      - 'backend/package.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/verify-release-candidate-readiness.mjs'
+      - 'docs/production/RC_READINESS.json'
       - '.github/workflows/recovery-readiness.yml'
   schedule:
     - cron: '41 6 * * *'
@@ -220,6 +230,60 @@ jobs:
           DATABASE_URL="$RESTORE_DATABASE_URL" npx prisma migrate status \
             --schema backend/prisma/schema.prisma
 
+      - name: Materialize candidate-bound recovery evidence
+        id: evidence
+        shell: bash
+        env:
+          SOURCE_USERS: ${{ steps.source.outputs.users }}
+          SOURCE_PETS: ${{ steps.source.outputs.pets }}
+          SOURCE_APPOINTMENTS: ${{ steps.source.outputs.appointments }}
+          SOURCE_MIGRATIONS: ${{ steps.source.outputs.migrations }}
+          SOURCE_MANUAL_MIGRATIONS: ${{ steps.source.outputs.manual_migrations }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const checksum = fs.readFileSync('/tmp/nvet-recovery.sha256', 'utf8').trim().split(/\s+/)[0];
+          const evidence = {
+            schemaVersion: 1,
+            kind: 'nvet-application-recovery-rehearsal',
+            candidateSha: process.env.GITHUB_SHA,
+            workflowRunId: process.env.GITHUB_RUN_ID,
+            workflowRunAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            createdAt: new Date().toISOString(),
+            dumpSha256: checksum,
+            sourceFingerprint: {
+              users: Number(process.env.SOURCE_USERS),
+              pets: Number(process.env.SOURCE_PETS),
+              appointments: Number(process.env.SOURCE_APPOINTMENTS),
+              prismaMigrations: Number(process.env.SOURCE_MIGRATIONS),
+              manualMigrations: Number(process.env.SOURCE_MANUAL_MIGRATIONS),
+            },
+            verified: {
+              freshMigrationRebuild: true,
+              legacyAdoption: true,
+              logicalBackupCreated: true,
+              isolatedRestoreCompleted: true,
+              restoredDomainIntegrity: true,
+              restoredMigrationIntegrity: true,
+            },
+            scope: {
+              applicationLevelRecovery: true,
+              providerLevelRailwayRestore: false,
+            },
+          };
+          fs.writeFileSync('/tmp/nvet-recovery-evidence.json', `${JSON.stringify(evidence, null, 2)}\n`);
+          NODE
+          cat /tmp/nvet-recovery-evidence.json
+
+      - name: Upload candidate-bound recovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nvet-recovery-readiness-${{ github.sha }}
+          path: /tmp/nvet-recovery-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Publish recovery evidence summary
         if: always()
         shell: bash
@@ -228,6 +292,7 @@ jobs:
             echo '## Nvet Database & Recovery Convergence'
             echo ''
             echo "- Candidate SHA: \`${GITHUB_SHA}\`"
+            echo "- Workflow run: \`${GITHUB_RUN_ID}\`"
             echo '- Versioned schema: fresh PostgreSQL reconstructed with `prisma migrate deploy` and compared against canonical Prisma schema.'
             echo '- Legacy adoption: db-push-created database converged once into the baseline and Prisma migration history.'
             echo '- Manual SQL: immutable SHA-256 ledger preserved through backup/restore.'
@@ -236,6 +301,9 @@ jobs:
             echo '- Integrity verification: users, pets, appointments, migration history and manual migration ledger.'
             if [ -f /tmp/nvet-recovery.sha256 ]; then
               echo "- Dump checksum: \`$(cut -d' ' -f1 /tmp/nvet-recovery.sha256)\`"
+            fi
+            if [ -f /tmp/nvet-recovery-evidence.json ]; then
+              echo "- Evidence artifact: \`nvet-recovery-readiness-${GITHUB_SHA}\`"
             fi
             echo ''
             echo '> This proves application-level migration and logical recovery. Provider-level Railway backup configuration and a provider restore drill remain independent external release gates.'
