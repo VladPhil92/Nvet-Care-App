@@ -208,7 +208,9 @@ export class BetaSupportService {
     if (conflicted.length > 0 || active.length > 1) {
       const conflictReasons = [
         ...conflicted.flatMap((item) => item.conflictReasons),
-        ...(active.length > 1 ? ["MULTIPLE_ACTIVE_SUPPORT_CONFIGURATIONS"] : []),
+        ...(active.length > 1
+          ? ["MULTIPLE_ACTIVE_SUPPORT_CONFIGURATIONS"]
+          : []),
       ];
       return {
         state: "CONFLICTED" as BetaSupportState,
@@ -322,7 +324,8 @@ export class BetaSupportService {
       monitoringConfirmed,
       eventCount: sorted.length,
       lastEventAt:
-        sorted.at(-1)?.createdAt.toISOString() ?? sorted[0].createdAt.toISOString(),
+        sorted.at(-1)?.createdAt.toISOString() ??
+        sorted[0].createdAt.toISOString(),
       conflictReasons,
     };
   }
