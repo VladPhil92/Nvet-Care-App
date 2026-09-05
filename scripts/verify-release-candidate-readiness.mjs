@@ -35,6 +35,20 @@ const paymentRailImpactingPaths = [
   /^\.github\/workflows\/staging-e2e\.yml$/,
 ];
 
+// Application-level recovery evidence may be reused only when later commits
+// cannot change the database schema, migration/adoption path, dependency graph,
+// or the rehearsal itself. A fresh run remains time-bounded by RC policy, and
+// any recovery-impacting delta invalidates older evidence fail-closed.
+const recoveryImpactingPaths = [
+  /^backend\/prisma\//,
+  /^backend\/scripts\/database-migrate\.mjs$/,
+  /^backend\/scripts\/production-predeploy\.mjs$/,
+  /^backend\/package\.json$/,
+  /^package\.json$/,
+  /^package-lock\.json$/,
+  /^\.github\/workflows\/recovery-readiness\.yml$/,
+];
+
 function fail(message) {
   throw new Error(message);
 }
@@ -129,6 +143,10 @@ function isPaymentRailImpactingPath(path) {
   return paymentRailImpactingPaths.some((pattern) => pattern.test(path));
 }
 
+function isRecoveryImpactingPath(path) {
+  return recoveryImpactingPaths.some((pattern) => pattern.test(path));
+}
+
 async function resolveRailwayEvidence(nvetRuns, repo, sha) {
   const exact = latestRun(
     nvetRuns,
@@ -219,6 +237,51 @@ async function resolvePaymentRailEvidence(nvetRuns, repo, sha, maxAgeHours) {
   };
 }
 
+async function resolveRecoveryEvidence(nvetRuns, repo, sha, maxAgeHours) {
+  const candidates = nvetRuns.filter(
+    (run) =>
+      run?.name === 'Nvet Recovery Readiness' &&
+      run.head_branch === 'main' &&
+      run.status === 'completed' &&
+      run.conclusion === 'success' &&
+      /^[0-9a-f]{40}$/i.test(run.head_sha || ''),
+  );
+
+  for (const run of candidates) {
+    const age = hoursSince(run.updated_at || run.created_at);
+    if (age > maxAgeHours) continue;
+
+    if (run.head_sha === sha) {
+      return {
+        ok: true,
+        detail: `${age.toFixed(1)}h old exact candidate run=${run.id}`,
+      };
+    }
+
+    const comparison = await githubCompare(repo, run.head_sha, sha);
+    if (!['ahead', 'identical'].includes(comparison.status)) continue;
+
+    const changedFiles = comparison.files.map((file) => file?.filename).filter(Boolean);
+    const impacting = changedFiles.filter(isRecoveryImpactingPath);
+    if (impacting.length > 0) {
+      return {
+        ok: false,
+        detail: `latest fresh run=${run.id} invalidated by recovery-impacting changes: ${impacting.slice(0, 5).join(', ')}`,
+      };
+    }
+
+    return {
+      ok: true,
+      detail: `${age.toFixed(1)}h old run=${run.id} safely reused across ${changedFiles.length} non-recovery change(s)`,
+    };
+  }
+
+  return {
+    ok: false,
+    detail: 'no fresh successful candidate-compatible Nvet Recovery Readiness run',
+  };
+}
+
 async function auditRuntime(manifest) {
   const repo = process.env.GITHUB_REPOSITORY || 'VladPhil92/Nvet-Care-App';
   const sha = process.env.RC_CANDIDATE_SHA || process.env.GITHUB_SHA;
@@ -257,14 +320,16 @@ async function auditRuntime(manifest) {
       : 'no successful real production backend canary',
   });
 
-  const recovery = latestRun(nvetRuns, 'Nvet Recovery Readiness', (run) => run.conclusion === 'success');
-  const recoveryAge = recovery ? hoursSince(recovery.updated_at || recovery.created_at) : Number.POSITIVE_INFINITY;
+  const recovery = await resolveRecoveryEvidence(
+    nvetRuns,
+    repo,
+    sha,
+    manifest.policy.recoveryDrillMaxAgeHours,
+  );
   checks.push({
-    ok: Boolean(recovery) && recoveryAge <= manifest.policy.recoveryDrillMaxAgeHours,
+    ok: recovery.ok,
     label: 'application recovery rehearsal freshness',
-    detail: recovery
-      ? `${recoveryAge.toFixed(1)}h old run=${recovery.id}`
-      : 'no successful Nvet Recovery Readiness run',
+    detail: recovery.detail,
   });
 
   const currentStagingPreflight = process.env.RC_STAGING_PREFLIGHT_CURRENT === 'true';
