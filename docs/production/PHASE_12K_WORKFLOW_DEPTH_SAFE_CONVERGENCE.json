@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "phase": "12K",
+  "name": "Workflow-Depth-Safe Recovery Convergence",
+  "objective": "Preserve exact-candidate recovery evidence while keeping the automatic GitHub Actions chain within the supported workflow_run depth and leaving provider/operator evidence fail-closed.",
+  "workflowRunPolicy": {
+    "maxChainedLevels": 3,
+    "topology": [
+      "CI",
+      "Staging E2E Seed & Preflight + Nvet Recovery Readiness (siblings)",
+      "Nvet Transfer Payment Rail Certification",
+      "Web Production Convergence"
+    ],
+    "recoveryTriggeredBy": "successful CI on main",
+    "stagingTriggeredBy": "successful CI on main",
+    "paymentTriggeredBy": "successful Staging E2E Seed & Preflight on main",
+    "webConvergenceTriggeredBy": "successful Nvet Transfer Payment Rail Certification on main"
+  },
+  "exactCandidateRecovery": {
+    "required": true,
+    "candidateSource": "RC_CANDIDATE_SHA",
+    "acceptedWorkflow": "Nvet Recovery Readiness",
+    "acceptedBranch": "main",
+    "shaMustMatchExactly": true,
+    "completedConclusion": "success",
+    "boundedWait": true,
+    "failureMode": "fail-closed"
+  },
+  "recoveryEvidence": {
+    "isolatedPostgres": true,
+    "freshMigrationRebuild": true,
+    "legacyAdoptionRehearsal": true,
+    "logicalBackup": "pg_dump custom archive",
+    "isolatedRestore": true,
+    "providerProductionMutation": false
+  },
+  "externalEvidenceBoundary": {
+    "productionBackupConfigured": "unchanged; requires Railway provider evidence",
+    "restoreDrillVerified": "unchanged; requires provider-level restore drill evidence",
+    "paymentRailVerified": "unchanged; requires controlled real-funds transfer evidence"
+  },
+  "promotionPolicy": "fail-closed",
+  "mainProtection": "deferred by operator until final program closure"
+}
