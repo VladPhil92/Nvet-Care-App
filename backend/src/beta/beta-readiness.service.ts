@@ -158,8 +158,7 @@ export class BetaReadinessService {
         monitoringConfirmed: support.monitoringConfirmed,
         configured: supportConfigured,
         expiresAt: support.expiresAt,
-        criticalIncidentTargetMinutes:
-          support.criticalIncidentTargetMinutes,
+        criticalIncidentTargetMinutes: support.criticalIncidentTargetMinutes,
         ledger: "audit_logs",
         appendOnly: true,
         configurationSource: "admin-control-plane",
