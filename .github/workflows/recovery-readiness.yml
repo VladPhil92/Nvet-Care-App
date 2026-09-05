@@ -1,20 +1,19 @@
 name: Nvet Recovery Readiness
 
 on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
   pull_request:
     branches: [main]
     paths:
       - 'backend/prisma/**'
       - 'backend/scripts/database-migrate.mjs'
       - 'backend/scripts/production-predeploy.mjs'
+      - 'scripts/wait-for-recovery-readiness.mjs'
+      - 'scripts/database-recovery-convergence-gate.mjs'
       - '.github/workflows/recovery-readiness.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'backend/prisma/**'
-      - 'backend/scripts/database-migrate.mjs'
-      - 'backend/scripts/production-predeploy.mjs'
-      - '.github/workflows/recovery-readiness.yml'
+      - '.github/workflows/payment-rail-certification.yml'
   schedule:
     - cron: '41 6 * * *'
   workflow_dispatch:
@@ -23,12 +22,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: nvet-recovery-readiness-${{ github.ref }}
+  group: nvet-recovery-readiness-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
   recovery-drill:
     name: Migration, logical backup and isolated restore rehearsal
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -46,6 +52,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      RECOVERY_CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       SOURCE_PG_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_source
       RESTORE_PG_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_restore
       HISTORY_PG_URL: postgresql://nvet_recovery:nvet_recovery_ci_only@localhost:5432/nvet_history
@@ -61,8 +68,10 @@ jobs:
       E2E_ADMIN_EMAIL: recovery-admin@nvetcare.invalid
 
     steps:
-      - name: Checkout
+      - name: Checkout certified candidate
         uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RECOVERY_CANDIDATE_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -227,7 +236,8 @@ jobs:
           {
             echo '## Nvet Database & Recovery Convergence'
             echo ''
-            echo "- Candidate SHA: \`${GITHUB_SHA}\`"
+            echo "- Candidate SHA: \`${RECOVERY_CANDIDATE_SHA}\`"
+            echo '- Trigger: main CI completion, targeted PR change, schedule or manual dispatch.'
             echo '- Versioned schema: fresh PostgreSQL reconstructed with `prisma migrate deploy` and compared against canonical Prisma schema.'
             echo '- Legacy adoption: db-push-created database converged once into the baseline and Prisma migration history.'
             echo '- Manual SQL: immutable SHA-256 ledger preserved through backup/restore.'
