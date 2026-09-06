@@ -9,8 +9,28 @@ Machine evidence and external evidence are deliberately separate.
 - A successful `Nvet Recovery Readiness` run proves the repository can perform a logical `pg_dump` / `pg_restore` recovery rehearsal. It does **not** prove Railway production backups are configured or restorable.
 - A successful `Nvet Transfer Payment Rail Certification` run proves CLIENT → VET → ADMIN authorization and the Nvet payment state machine in isolated staging. It does **not** prove money moved through a bank.
 - Synthetic alert drills can prove the incident path without mutating production, but cannot replace provider or financial evidence.
+- A successful `Nvet Production Deployment Attestation` run proves Railway's latest successful production deployment metadata identifies the same commit revision currently served by the public backend. It does **not** imply that an unrelated current `main` commit had to trigger a new backend deployment when watched-file rules legitimately skipped it.
 
 Do not set an RC external evidence gate to `verified` from a staging, synthetic or repository-only proof.
+
+## Machine control — Railway production deployment attestation
+
+Workflow: `Nvet Production Deployment Attestation`
+
+This is a read-only machine control, not one of the external-evidence gates. It protects against a subtle but important failure mode: a healthy public endpoint serving a different revision from the deployment Railway declares active.
+
+The workflow:
+
+1. validates the canonical Railway project, production environment and backend service IDs/names;
+2. reads the production service instance and its `latestDeployment` from Railway's Public GraphQL API;
+3. requires that deployment to be `SUCCESS` and extracts the provider commit hash from deployment metadata;
+4. probes `/api/health/ready` and requires application + PostgreSQL readiness;
+5. requires the public `revision` to equal the first 12 characters of the provider deployment commit SHA;
+6. uploads a redacted `railway-production-deployment-attestation` artifact.
+
+A candidate SHA differing from the provider deployment SHA is informational rather than automatically fatal because Railway can correctly skip backend deployment when a commit changes only unwatched files. The fail-closed invariant is **provider latest successful deployment SHA == live public readiness revision**.
+
+`Web Production Convergence` executes the same attestation before accepting production backend readiness, so a stale or misrouted runtime cannot pass merely because `/api/health/ready` returns HTTP 200.
 
 ## Gate 1 — Railway production backups configured
 
@@ -25,10 +45,16 @@ Acceptance criteria:
 1. The workflow completes successfully on `main`.
 2. Exactly one production PostgreSQL volume instance is discovered.
 3. `scheduleCount >= 1`.
-4. The uploaded `railway-production-backup-evidence` artifact identifies the provider observation time, project/environment, PostgreSQL service, volume instance and schedule count.
-5. No credentials, database URLs or user data are present in the artifact.
+4. At least one visible provider backup exists and satisfies the freshness policy.
+5. At least one configured schedule satisfies the minimum retention policy.
+6. The uploaded `railway-production-backup-evidence` artifact identifies the provider observation time, project/environment, PostgreSQL service, volume instance and backup/schedule metadata.
+7. No credentials, database URLs or user data are present in the artifact.
 
 If the workflow reports zero schedules, enable at least a Daily schedule in Railway's PostgreSQL service → **Backups**. Weekly and Monthly schedules are recommended in addition to Daily for production defense in depth.
+
+Railway may restrict native volume Backups/PITR to specific paid workspace plans. When the dashboard explicitly reports that the current plan does not expose Backups/PITR, treat that as a **provider capability/configuration blocker**, not as a PostgreSQL runtime incident. Do not weaken the RC gate to compensate: activate the required provider capability, configure the schedules, wait until a real backup becomes visible, and rerun the read-only audit.
+
+The audit uses the shared Railway GraphQL retry transport so transient provider/API failures are retried; a stable zero-schedule/zero-backup result remains fail-closed and is not converted into a warning.
 
 Only after a successful provider audit may `productionBackupConfigured` be changed from `pending` to `verified`, with the successful Actions run URL retained as evidence.
 
@@ -45,8 +71,9 @@ Acceptance criteria:
 3. A Railway restore is initiated only during an approved maintenance window with an explicit rollback owner.
 4. The restored volume is validated for expected PostgreSQL structure/data before declaring the drill successful.
 5. The service is returned to the intended canonical volume and `/api/health/ready` is healthy after the exercise.
-6. A dated, redacted operator record is retained outside the repository; it must identify the backup timestamp, restore timestamp, result and rollback outcome without exposing secrets or customer data.
-7. The evidence reference is then recorded in `restoreDrillVerified` and the status changed to `verified`.
+6. The production deployment attestation is rerun after the drill so provider metadata and the live backend revision reconverge.
+7. A dated, redacted operator record is retained outside the repository; it must identify the backup timestamp, restore timestamp, result and rollback outcome without exposing secrets or customer data.
+8. The evidence reference is then recorded in `restoreDrillVerified` and the status changed to `verified`.
 
 The existing application-level `pg_dump` / `pg_restore` rehearsal remains useful defense in depth and should continue running independently.
 
@@ -71,7 +98,8 @@ If the production integration is still sandbox/mock or the banking rail does not
 
 `1.0.0-rc.1` may be promoted only when:
 
-- all machine gates required by `scripts/verify-release-candidate-readiness.mjs --runtime` are green and fresh; and
+- all machine gates required by `scripts/verify-release-candidate-readiness.mjs --runtime` are green and fresh;
+- production deployment attestation is healthy and provider/live revision identity is intact; and
 - every entry under `requiredExternalEvidence` in `docs/production/RC_READINESS.json` is `verified` with an auditable evidence reference.
 
 The promotion must remain fail-closed. Missing evidence is a release blocker, not a warning.
