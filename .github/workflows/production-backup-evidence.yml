@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/production-backup-evidence.yml'
+      - 'scripts/lib/railway-graphql-client.mjs'
       - 'scripts/audit-railway-production-backups.mjs'
       - 'scripts/phase-12i-production-evidence-gate.mjs'
       - 'backend/src/beta/beta-activation.service.ts'
@@ -104,6 +105,7 @@ jobs:
             fi
             echo ''
             echo '> This workflow is read-only. Verification requires a configured Railway backup schedule, at least one visible recent backup and minimum retention.'
-            echo '> Phase 12I provider-evidence changes force a fresh provider audit before relying on backup evidence.'
+            echo '> If the workspace plan does not expose native Backups/PITR, zero schedules are a provider capability/configuration blocker; the RC gate remains blocked until that capability is enabled and real provider evidence exists.'
+            echo '> Railway API transport failures are retried through the shared client; a stable zero-schedule/zero-backup result is not masked as transient.'
             echo '> A provider-level restore drill and real-bank-transfer evidence remain independent RC gates.'
           } >> "$GITHUB_STEP_SUMMARY"
