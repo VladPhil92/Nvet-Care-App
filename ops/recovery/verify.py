@@ -189,18 +189,20 @@ source_counts = {
     )
     for table in tables
 }
-backup_counts = metadata.get("source_aggregate_counts", {})
+backup_counts = metadata.get("source_aggregate_counts")
+if not isinstance(backup_counts, dict):
+    raise RuntimeError("backup metadata is missing source_aggregate_counts")
 
+# Restore certification is anchored to the immutable aggregates captured when
+# the dump was created. Production may legitimately receive writes between the
+# backup and the isolated restore drill; current-source drift is therefore
+# evidence to report, not a reason to reject an otherwise exact restoration.
 if restored_counts != backup_counts:
     raise RuntimeError(
         f"restored aggregates differ from backup-time aggregates: "
         f"restored={restored_counts} backup={backup_counts}"
     )
-if source_counts != restored_counts:
-    raise RuntimeError(
-        f"current source aggregates differ from restored aggregates: "
-        f"source={source_counts} restored={restored_counts}"
-    )
+source_drift_detected = source_counts != backup_counts
 
 print("[VERIFY] RECOVERY CERTIFIED — LOGICAL/OFFSITE")
 print(f"[VERIFY] object={object_key}")
@@ -210,7 +212,9 @@ print(
     f"plaintext_size_bytes={len(plaintext)}"
 )
 print(f"[VERIFY] plaintext_sha256_prefix={plaintext_sha256[:16]}")
-print(f"[VERIFY] aggregate_equality={json.dumps(restored_counts, sort_keys=True)}")
+print(f"[VERIFY] backup_restore_aggregate_equality={json.dumps(restored_counts, sort_keys=True)}")
+print(f"[VERIFY] current_source_counts={json.dumps(source_counts, sort_keys=True)}")
+print(f"[VERIFY] source_drift_since_backup={str(source_drift_detected).lower()}")
 print(f"[VERIFY] pg_restore_version={pg_restore_version}")
 print(f"[VERIFY] source_server_version={source_server_version}")
 print(f"[VERIFY] restore_server_version={restore_server_version}")
