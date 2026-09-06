@@ -9,7 +9,7 @@ Machine evidence and external evidence are deliberately separate.
 - A successful `Nvet Recovery Readiness` run proves the repository can perform a logical `pg_dump` / `pg_restore` recovery rehearsal. It does **not** prove Railway production backups are configured or restorable.
 - A successful `Nvet Transfer Payment Rail Certification` run proves CLIENT → VET → ADMIN authorization and the Nvet payment state machine in isolated staging. It does **not** prove money moved through a bank.
 - Synthetic alert drills can prove the incident path without mutating production, but cannot replace provider or financial evidence.
-- A successful `Nvet Production Deployment Attestation` run proves Railway's latest successful production deployment metadata identifies the same commit revision currently served by the public backend. It does **not** imply that an unrelated current `main` commit had to trigger a new backend deployment when watched-file rules legitimately skipped it.
+- A successful `Nvet Production Deployment Attestation` run proves Railway's latest active successful production deployment metadata identifies the same commit revision currently served by the public backend. It does **not** imply that an unrelated current `main` commit had to trigger a new backend deployment when watched-file rules legitimately skipped it.
 
 Do not set an RC external evidence gate to `verified` from a staging, synthetic or repository-only proof.
 
@@ -22,13 +22,13 @@ This is a read-only machine control, not one of the external-evidence gates. It 
 The workflow:
 
 1. validates the canonical Railway project, production environment and backend service IDs/names;
-2. reads the production service instance and its `latestDeployment` from Railway's Public GraphQL API;
+2. queries Railway's official deployment list with `successfulOnly: true` and selects the latest active successful production deployment;
 3. requires that deployment to be `SUCCESS` and extracts the provider commit hash from deployment metadata;
 4. probes `/api/health/ready` and requires application + PostgreSQL readiness;
 5. requires the public `revision` to equal the first 12 characters of the provider deployment commit SHA;
 6. uploads a redacted `railway-production-deployment-attestation` artifact.
 
-A candidate SHA differing from the provider deployment SHA is informational rather than automatically fatal because Railway can correctly skip backend deployment when a commit changes only unwatched files. The fail-closed invariant is **provider latest successful deployment SHA == live public readiness revision**.
+A candidate SHA differing from the provider deployment SHA is informational rather than automatically fatal because Railway can correctly skip backend deployment when a commit changes only unwatched files. The fail-closed invariant is **provider latest active successful deployment SHA == live public readiness revision**.
 
 `Web Production Convergence` executes the same attestation before accepting production backend readiness, so a stale or misrouted runtime cannot pass merely because `/api/health/ready` returns HTTP 200.
 
@@ -60,7 +60,7 @@ Only after a successful provider audit may `productionBackupConfigured` be chang
 
 ## Gate 2 — Provider-level restore drill
 
-This gate intentionally requires an operator-controlled change. Do not automate a Railway restore from an unattended GitHub Actions workflow.
+This gate intentionally requires an operator-controlled change. Do not automate a Railway restore from an unattended GitHub Actions workflow. Use `docs/production/RAILWAY_RESTORE_DRILL.md` as the canonical operator checklist and redacted evidence template.
 
 Railway volume restore changes the mounted volume and is therefore an operational action, even though Railway stages the change for review before deployment. Treat the exercise as a maintenance procedure.
 
