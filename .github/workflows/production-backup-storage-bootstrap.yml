@@ -28,42 +28,66 @@ jobs:
     timeout-minutes: 8
     container: ghcr.io/railwayapp/cli:latest
     env:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_CREDENTIAL: ${{ secrets.RAILWAY_API_TOKEN }}
 
     steps:
       - name: Validate Railway credential
         shell: sh
         run: |
           set -eu
-          if [ -z "${RAILWAY_API_TOKEN:-}" ]; then
-            echo '::error::RAILWAY_API_TOKEN is required.'
+          if [ -z "${RAILWAY_CREDENTIAL:-}" ]; then
+            echo '::error::Railway credential is required.'
             exit 1
           fi
 
-      - name: Link canonical production environment
+      - name: Resolve Railway credential mode and link canonical production
         shell: sh
         run: |
           set -eu
-          railway link \
+
+          if RAILWAY_API_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_TOKEN='' railway link \
             --project "$RAILWAY_PROJECT_ID" \
             --environment "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" \
-            --json >/tmp/railway-link.json
+            --json >/tmp/railway-link.json 2>/tmp/railway-api-token.err; then
+            echo 'RAILWAY_AUTH_MODE=api' >> "$GITHUB_ENV"
+            echo 'Railway credential accepted as account/API token.'
+          elif RAILWAY_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_API_TOKEN='' railway link \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" \
+            --json >/tmp/railway-link.json 2>/tmp/railway-project-token.err; then
+            echo 'RAILWAY_AUTH_MODE=project' >> "$GITHUB_ENV"
+            echo 'Railway credential accepted as project token.'
+          else
+            echo '::error::Railway credential was rejected in both account-token and project-token modes.'
+            sed -n '1,3p' /tmp/railway-api-token.err || true
+            sed -n '1,3p' /tmp/railway-project-token.err || true
+            exit 1
+          fi
 
       - name: Ensure backup bucket
         id: bucket
         shell: sh
         run: |
           set -eu
-          railway bucket list > /tmp/railway-buckets-before.txt
+
+          railway_cmd() {
+            if [ "$RAILWAY_AUTH_MODE" = 'api' ]; then
+              RAILWAY_API_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_TOKEN='' railway "$@"
+            else
+              RAILWAY_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_API_TOKEN='' railway "$@"
+            fi
+          }
+
+          railway_cmd bucket list > /tmp/railway-buckets-before.txt
           if grep -Fq "$BACKUP_BUCKET_NAME" /tmp/railway-buckets-before.txt; then
-            echo "created=false" >> "$GITHUB_OUTPUT"
-            echo "Backup bucket already exists."
+            echo 'created=false' >> "$GITHUB_OUTPUT"
+            echo 'Backup bucket already exists.'
           else
-            railway bucket create "$BACKUP_BUCKET_NAME" --region "$BACKUP_BUCKET_REGION"
-            echo "created=true" >> "$GITHUB_OUTPUT"
+            railway_cmd bucket create "$BACKUP_BUCKET_NAME" --region "$BACKUP_BUCKET_REGION"
+            echo 'created=true' >> "$GITHUB_OUTPUT"
           fi
 
-          railway bucket list > /tmp/railway-buckets-after.txt
+          railway_cmd bucket list > /tmp/railway-buckets-after.txt
           if ! grep -Fq "$BACKUP_BUCKET_NAME" /tmp/railway-buckets-after.txt; then
             echo '::error::Backup bucket is not visible after bootstrap.'
             exit 1
@@ -76,10 +100,11 @@ jobs:
           {
             echo '## Nvet Production Backup Storage Bootstrap'
             echo ''
-            echo "- Project: Nvet Care App"
-            echo "- Environment: production"
+            echo '- Project: Nvet Care App'
+            echo '- Environment: production'
             echo "- Bucket: $BACKUP_BUCKET_NAME"
             echo "- Region: $BACKUP_BUCKET_REGION"
+            echo "- Auth mode resolved: ${RAILWAY_AUTH_MODE:-unresolved}"
             echo "- Created in this run: ${{ steps.bucket.outputs.created || 'unknown' }}"
             echo ''
             echo '> This workflow only ensures the isolated S3-compatible backup bucket exists. It does not read or restore production data and does not print bucket credentials.'
