@@ -1,24 +1,11 @@
 name: Railway Contract
 
 on:
+  # The RC readiness auditor intentionally inspects a bounded recent-run window.
+  # Run the canonical Railway contract for every main candidate so a valid
+  # baseline cannot fall out of that window after mobile/docs-only activity.
   push:
-    branches: ['**']
-    paths:
-      - 'backend/**'
-      - 'scripts/lib/railway-graphql-client.mjs'
-      - 'scripts/railway-staging-bootstrap.mjs'
-      - 'scripts/audit-railway-production-backups.mjs'
-      - 'scripts/audit-railway-production-deployment.mjs'
-      - 'Dockerfile.railway'
-      - 'railway.json'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/railway-contract.yml'
-      - '.github/workflows/deploy-backend.yml'
-      - '.github/workflows/provision-staging.yml'
-      - '.github/workflows/production-backup-evidence.yml'
-      - '.github/workflows/production-deployment-attestation.yml'
-      - '.github/workflows/web-production-convergence.yml'
+    branches: [main]
   pull_request:
     branches: [main]
     paths:
@@ -37,6 +24,7 @@ on:
       - '.github/workflows/production-backup-evidence.yml'
       - '.github/workflows/production-deployment-attestation.yml'
       - '.github/workflows/web-production-convergence.yml'
+  workflow_dispatch:
 
 jobs:
   contract:
