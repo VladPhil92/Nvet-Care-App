@@ -115,6 +115,9 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("androidx.appcompat:appcompat:1.7.0")
 
+    // Detox's native Android runner must be compiled into the instrumentation APK.
+    // Keep this aligned with the exact npm Detox version in mobile/package.json.
+    androidTestImplementation("com.wix:detox:20.27.6")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
