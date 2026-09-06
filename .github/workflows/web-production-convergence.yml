@@ -21,7 +21,12 @@ env:
   RAILWAY_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
   RAILWAY_STAGING_ENVIRONMENT_ID: 9267d965-e5e4-4c6f-af93-001c73cf62b4
   RAILWAY_STAGING_SERVICE_ID: dc5c2eee-3f8d-4416-8854-a921ea694735
+  RAILWAY_PRODUCTION_ENVIRONMENT_ID: 7f93c67e-5a63-4aae-80b6-90979a9b60b1
   RAILWAY_PRODUCTION_SERVICE_ID: 42e734a0-931b-45c8-a091-4334b54e9d1c
+  RAILWAY_EXPECTED_PROJECT_NAME: Nvet Care App
+  RAILWAY_EXPECTED_ENVIRONMENT_NAME: production
+  RAILWAY_EXPECTED_SERVICE_NAME: backend
+  RAILWAY_PRODUCTION_HEALTH_URL: https://backend-production-a476.up.railway.app/api/health/ready
 
 jobs:
   converge:
@@ -49,6 +54,10 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Attest Railway production deployment matches live revision
+        id: production_attestation
+        run: node scripts/audit-railway-production-deployment.mjs
 
       - name: Verify production backend readiness now
         id: production
@@ -146,6 +155,7 @@ jobs:
           {
             echo '## Web Production Convergence'
             echo "- Candidate: $RC_CANDIDATE_SHA"
+            echo "- Railway production deployment ↔ live revision: $(outcome_label '${{ steps.production_attestation.outcome }}')"
             echo "- Production backend readiness: $(outcome_label '${{ steps.production.outcome }}')"
             echo "- ctgone.com → Nvet backend connectivity: $(outcome_label '${{ steps.ctg.outcome }}')"
             echo "- Railway staging session: $(outcome_label '${{ steps.staging_inputs.outcome }}')"
@@ -153,5 +163,5 @@ jobs:
             echo "- Machine-verifiable RC gates: $(outcome_label '${{ steps.machine.outcome }}')"
             echo "- Full RC evidence report: $(outcome_label '${{ steps.report.outcome }}')"
             echo ''
-            echo '> Automatic chain: CI → {isolated staging, exact-candidate recovery rehearsal} → TRANSFER application certification → convergence. External provider backup/restore and real-funds evidence remain separate promotion gates.'
+            echo '> Automatic chain: CI → {isolated staging, exact-candidate recovery rehearsal} → TRANSFER application certification → convergence. Production convergence now also requires Railway provider metadata to match the revision actually served by the public backend. External provider backup/restore and real-funds evidence remain separate promotion gates.'
           } >> "$GITHUB_STEP_SUMMARY"
