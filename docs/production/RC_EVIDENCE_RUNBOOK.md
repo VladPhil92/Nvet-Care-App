@@ -38,19 +38,33 @@ A candidate SHA differing from the provider deployment SHA is informational rath
 
 Workflow: `Nvet Production Backup Evidence`
 
-The workflow performs a read-only Railway GraphQL audit against the canonical Nvet project and production environment. It discovers the production PostgreSQL volume instance and verifies that at least one automatic volume-backup schedule exists. It does not create or mutate backups.
+The workflow performs a read-only Railway GraphQL audit against the canonical Nvet project and production environment. It discovers the production PostgreSQL volume instance and verifies configured automatic volume-backup schedules, a recent visible backup and the repository retention policy. It does not create or mutate backups.
 
 Acceptance criteria:
 
 1. The workflow completes successfully on `main`.
 2. Exactly one production PostgreSQL volume instance is discovered.
 3. `scheduleCount >= 1`.
+4. At least one visible backup is no more than 48 hours old.
+5. At least one configured schedule has retention of at least 168 hours.
+6. The uploaded `railway-production-backup-evidence` artifact identifies the provider observation time, project/environment, PostgreSQL service, volume instance, schedule count, backup count, freshness and retention checks.
 4. At least one visible provider backup exists and satisfies the freshness policy.
 5. At least one configured schedule satisfies the minimum retention policy.
 6. The uploaded `railway-production-backup-evidence` artifact identifies the provider observation time, project/environment, PostgreSQL service, volume instance and backup/schedule metadata.
 7. No credentials, database URLs or user data are present in the artifact.
 
-If the workflow reports zero schedules, enable at least a Daily schedule in Railway's PostgreSQL service → **Backups**. Weekly and Monthly schedules are recommended in addition to Daily for production defense in depth.
+### Required Railway schedule profile for this RC
+
+Railway currently retains Daily volume backups for 6 days, which is 144 hours. That is shorter than Nvet's `RAILWAY_MIN_BACKUP_RETENTION_HOURS=168` policy, so **Daily by itself cannot satisfy this RC gate**.
+
+For `1.0.0-rc.1`, configure both of these schedules on the production PostgreSQL volume:
+
+- **Daily** — provides a backup every 24 hours and keeps the latest provider evidence inside the 48-hour freshness window.
+- **Weekly** — provides retention comfortably above the 168-hour minimum.
+
+Monthly may be enabled as additional defense in depth, but it is not required by the current machine gate once Daily + Weekly are active.
+
+When the provider currently reports zero schedules, enable **Daily + Weekly** in Railway's PostgreSQL service → **Backups**. After the schedules are saved, create one manual volume backup so the first provider evidence does not need to wait for the next scheduled Daily execution. Wait until that backup is visible in Railway, then rerun `Nvet Production Backup Evidence`.
 
 Railway may restrict native volume Backups/PITR to specific paid workspace plans. When the dashboard explicitly reports that the current plan does not expose Backups/PITR, treat that as a **provider capability/configuration blocker**, not as a PostgreSQL runtime incident. Do not weaken the RC gate to compensate: activate the required provider capability, configure the schedules, wait until a real backup becomes visible, and rerun the read-only audit.
 
