@@ -155,6 +155,36 @@ requireText(
   'Cloud storage private delivery must use authenticated assets',
 )
 
+// ---------------------------------------------------------------------------
+// 5. Dashboard edge perimeter blocks hostile framing and passive data leakage.
+// ---------------------------------------------------------------------------
+requireText(
+  'dashboard/vercel.json',
+  /Content-Security-Policy/,
+  'Dashboard must emit a Content Security Policy',
+)
+for (const directive of ["base-uri 'self'", "frame-ancestors 'none'", "object-src 'none'"]) {
+  requireText(
+    'dashboard/vercel.json',
+    new RegExp(directive.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    `Dashboard CSP must include ${directive}`,
+  )
+}
+for (const header of [
+  'Strict-Transport-Security',
+  'X-Content-Type-Options',
+  'X-Frame-Options',
+  'Referrer-Policy',
+  'X-Permitted-Cross-Domain-Policies',
+  'X-DNS-Prefetch-Control',
+]) {
+  requireText(
+    'dashboard/vercel.json',
+    new RegExp(header),
+    `Dashboard HTTP perimeter must include ${header}`,
+  )
+}
+
 if (failures.length > 0) {
   console.error('❌ Production Security, Privacy & Canonical Runtime Convergence gate failed:')
   for (const failure of failures) console.error(` - ${failure}`)
@@ -167,3 +197,4 @@ console.log('   - mobile WebSocket authentication: protected token vault')
 console.log('   - dashboard refresh token: HttpOnly cookie')
 console.log('   - public veterinarian responses: allowlisted')
 console.log('   - sensitive uploads: magic-bytes + private storage contract')
+console.log('   - dashboard HTTP perimeter: CSP + transport + anti-framing headers')
