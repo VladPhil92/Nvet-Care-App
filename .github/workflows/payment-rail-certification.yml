@@ -10,8 +10,10 @@ permissions:
   actions: read
   contents: read
 
+# Keep retries/reruns for the same candidate mutually exclusive without letting
+# skipped workflow_run events from unrelated PR candidates cancel main evidence.
 concurrency:
-  group: nvet-transfer-payment-rail-certification
+  group: nvet-transfer-payment-rail-certification-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: true
 
 env:
