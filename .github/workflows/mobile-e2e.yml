@@ -1,11 +1,15 @@
 # Detox E2E workflow para mobile.
 #
-# Android es la plataforma nativa activa. iOS solo se habilita manualmente
-# cuando exista el proyecto `mobile/ios`. Los nightly quedan gateados por la
-# variable de repositorio DETOX_NIGHTLY=true y requieren un backend E2E real.
+# Android es la plataforma nativa activa. El gate Android se encadena
+# automáticamente después de una certificación staging verde para ejecutar
+# exactamente el mismo candidate SHA y las credenciales rotadas de Railway.
+# iOS permanece manual hasta que exista mobile/ios.
 name: Mobile E2E
 
 on:
+  workflow_run:
+    workflows: ['Staging E2E Seed & Preflight']
+    types: [completed]
   workflow_dispatch:
     inputs:
       platform:
@@ -26,8 +30,19 @@ on:
     # 08:00 UTC = 03:00 Bogotá. Solo Android y solo si DETOX_NIGHTLY=true.
     - cron: '0 8 * * *'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-mobile-e2e-certification
+  cancel-in-progress: true
+
 env:
   NODE_VERSION: '22.x'
+  RAILWAY_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
+  RAILWAY_STAGING_ENVIRONMENT_ID: 9267d965-e5e4-4c6f-af93-001c73cf62b4
+  RAILWAY_STAGING_SERVICE_ID: dc5c2eee-3f8d-4416-8854-a921ea694735
+  RAILWAY_PRODUCTION_SERVICE_ID: 42e734a0-931b-45c8-a091-4334b54e9d1c
 
 jobs:
   e2e-ios:
@@ -40,7 +55,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Require committed iOS native project
         run: |
@@ -50,7 +65,7 @@ jobs:
           }
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -124,27 +139,37 @@ jobs:
 
       - name: Upload Detox artifacts on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: detox-artifacts-ios
           path: mobile/.detox-artifacts
           retention-days: 14
 
   e2e-android:
-    name: E2E Android (Pixel 6 emulator)
+    name: E2E Android full circuit (Pixel 6 emulator)
     if: |
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
       (github.event_name == 'schedule' && vars.DETOX_NIGHTLY == 'true') ||
       (github.event_name == 'workflow_dispatch' &&
-        (github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both'))
+       (github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both'))
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 90
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RC_CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout exact staging candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RC_CANDIDATE_SHA }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -153,36 +178,72 @@ jobs:
       - name: Install canonical workspace dependencies
         run: npm ci --include=dev --legacy-peer-deps
 
-      - name: Validate E2E configuration
+      - name: Validate provider configuration
+        shell: bash
         run: |
-          missing=""
-          [ -z "${{ secrets.E2E_API_URL }}" ] && missing="$missing E2E_API_URL"
-          [ -z "${{ secrets.E2E_CLIENT_EMAIL }}" ] && missing="$missing E2E_CLIENT_EMAIL"
-          [ -z "${{ secrets.E2E_CLIENT_PASSWORD }}" ] && missing="$missing E2E_CLIENT_PASSWORD"
-          [ -z "${{ secrets.E2E_VET_EMAIL }}" ] && missing="$missing E2E_VET_EMAIL"
-          [ -z "${{ secrets.E2E_VET_PASSWORD }}" ] && missing="$missing E2E_VET_PASSWORD"
-          [ -z "${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}" ] && missing="$missing GOOGLE_MAPS_ANDROID_API_KEY"
-          if [ -n "$missing" ]; then
-            echo "::error::Falta configuración E2E:$missing"
+          set -euo pipefail
+          [ -n "${RAILWAY_API_TOKEN:-}" ] || {
+            echo '::error::RAILWAY_API_TOKEN is required to load the certified staging session.'
             exit 1
-          fi
-          if ! printf '%s' "${{ secrets.E2E_API_URL }}" | grep -Eq '^https://[^[:space:]]+/api/?$'; then
-            echo "::error::E2E_API_URL debe ser un endpoint HTTPS absoluto que termine en /api"
+          }
+          [ -n "${GOOGLE_MAPS_ANDROID_API_KEY:-}" ] || {
+            echo '::error::GOOGLE_MAPS_ANDROID_API_KEY is required for the Android E2E build.'
             exit 1
-          fi
+          }
+          [[ "${RC_CANDIDATE_SHA}" =~ ^[0-9a-fA-F]{40}$ ]] || {
+            echo '::error::RC_CANDIDATE_SHA must be a full commit SHA.'
+            exit 1
+          }
 
-      - name: Verify staging readiness and fixture logins
+      - name: Verify Railway staging transport resilience contract
+        run: |
+          node --check scripts/railway-staging-session.mjs
+          node --test scripts/railway-graphql-client.test.mjs
+
+      - name: Load current Railway staging identities
+        run: node scripts/railway-staging-session.mjs load
+
+      - name: Bind mobile build to loaded staging URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${E2E_API_URL:-}" ] || {
+            echo '::error::Railway staging session did not export E2E_API_URL.'
+            exit 1
+          }
+          echo "NVET_API_URL=${E2E_API_URL}" >> "$GITHUB_ENV"
+
+      - name: Verify exact staging revision and fixture logins
         working-directory: mobile
-        env:
-          E2E_API_URL: ${{ secrets.E2E_API_URL }}
-          E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
-          E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
-          E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
-          E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
-        run: node e2e/preflight.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node e2e/preflight.mjs
+          node - <<'NODE'
+          const apiUrl = process.env.E2E_API_URL.replace(/\/$/, '')
+          const expected = process.env.RC_CANDIDATE_SHA.slice(0, 12).toLowerCase()
+          const response = await fetch(`${apiUrl}/health/ready`, {
+            headers: { accept: 'application/json' },
+            signal: AbortSignal.timeout(15_000),
+          })
+          if (!response.ok) throw new Error(`readiness returned HTTP ${response.status}`)
+          const body = await response.json()
+          const revision = String(body?.revision || '').toLowerCase()
+          if (body?.status !== 'ok' || body?.checks?.database?.status !== 'up') {
+            throw new Error(`staging readiness is not healthy: ${JSON.stringify(body)}`)
+          }
+          if (!revision.startsWith(expected)) {
+            throw new Error(`staging revision ${revision || 'missing'} does not match ${expected}`)
+          }
+          console.log(`Exact staging revision certified for Android E2E: ${body.revision}`)
+          NODE
+
+      - name: Typecheck Detox E2E contract
+        working-directory: mobile
+        run: npx tsc --noEmit -p e2e/tsconfig.json
 
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -203,17 +264,10 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run E2E with emulator
+      - name: Run ordered Android Detox circuit 01 → 02 → 03
         uses: reactivecircus/android-emulator-runner@v2
         env:
           DETOX_RECORD_VIDEOS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.record_videos == 'true' && '1' || '0' }}
-          NVET_API_URL: ${{ secrets.E2E_API_URL }}
-          E2E_API_URL: ${{ secrets.E2E_API_URL }}
-          E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
-          E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
-          E2E_VET_EMAIL: ${{ secrets.E2E_VET_EMAIL }}
-          E2E_VET_PASSWORD: ${{ secrets.E2E_VET_PASSWORD }}
-          GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
         with:
           api-level: 33
           target: google_apis
@@ -241,10 +295,25 @@ jobs:
             npm run e2e:build:android
             npm run e2e:test:android -- --headless --record-logs all
 
-      - name: Upload Detox artifacts on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
+      - name: Upload Detox artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: detox-artifacts-android
+          name: detox-artifacts-android-${{ env.RC_CANDIDATE_SHA }}
           path: mobile/.detox-artifacts
+          if-no-files-found: ignore
           retention-days: 14
+
+      - name: Android full-circuit summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Nvet Android full E2E certification'
+            echo ''
+            echo "- Candidate: \`${RC_CANDIDATE_SHA}\`"
+            echo '- Source: exact Railway staging session certified by Staging E2E.'
+            echo '- Credentials: runtime-rotated staging CLIENT/VET identities; no static E2E passwords.'
+            echo '- Ordered Detox flows: 01 client booking/TRANSFER → 02 vet lifecycle → 03 chat reconnect.'
+            echo '- Production service ID remains explicitly forbidden.'
+          } >> "$GITHUB_STEP_SUMMARY"
