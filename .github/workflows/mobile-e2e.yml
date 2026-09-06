@@ -279,25 +279,10 @@ jobs:
           profile: pixel_6
           avd-name: Pixel_6_API_33
           working-directory: mobile
-          script: |
-            npm start -- --reset-cache > /tmp/nvet-metro.log 2>&1 &
-            METRO_PID=$!
-            trap 'kill "$METRO_PID" 2>/dev/null || true' EXIT
-            ready=0
-            for _ in $(seq 1 60); do
-              if curl -fsS http://127.0.0.1:8081/status 2>/dev/null | grep -q 'packager-status:running'; then
-                ready=1
-                break
-              fi
-              sleep 1
-            done
-            if [ "$ready" -ne 1 ]; then
-              cat /tmp/nvet-metro.log
-              echo '::error::Metro no quedó disponible en el puerto 8081'
-              exit 1
-            fi
-            npm run e2e:build:android
-            npm run e2e:test:android -- --headless --record-logs all
+          # android-emulator-runner invokes each `script` line independently
+          # through `sh -c`. Keep this as one atomic command; compound shell
+          # control flow lives in the versioned Bash script instead.
+          script: bash e2e/run-android-ci.sh
 
       - name: Upload Detox artifacts
         if: always()
@@ -320,5 +305,6 @@ jobs:
             echo '- Credentials: runtime-rotated staging CLIENT/VET identities; no static E2E passwords.'
             echo '- Ordered Detox flows: 01 client booking/TRANSFER → 02 vet lifecycle → 03 chat reconnect.'
             echo '- Google Maps tiles are outside this lifecycle gate; a synthetic non-secret key is used when staging has no provider key.'
+            echo '- Emulator execution is delegated to versioned e2e/run-android-ci.sh to preserve Bash control flow atomically.'
             echo '- Production service ID remains explicitly forbidden.'
           } >> "$GITHUB_STEP_SUMMARY"
