@@ -1,10 +1,6 @@
 name: Nvet Production Backup Storage Bootstrap
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/production-backup-storage-bootstrap.yml'
   workflow_dispatch:
 
 permissions:
@@ -24,19 +20,20 @@ jobs:
   bootstrap-storage:
     name: Ensure production backup storage bucket exists
     runs-on: ubuntu-latest
-    environment: staging
     timeout-minutes: 8
     container: ghcr.io/railwayapp/cli:latest
     env:
-      RAILWAY_CREDENTIAL: ${{ secrets.RAILWAY_API_TOKEN }}
+      # This workflow mutates production provider state. It must use an explicit
+      # production-scoped credential, never the staging Railway secret.
+      RAILWAY_CREDENTIAL: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
 
     steps:
-      - name: Validate Railway credential
+      - name: Validate production Railway credential
         shell: sh
         run: |
           set -eu
           if [ -z "${RAILWAY_CREDENTIAL:-}" ]; then
-            echo '::error::Railway credential is required.'
+            echo '::error::RAILWAY_PRODUCTION_TOKEN is required for manual production storage bootstrap.'
             exit 1
           fi
 
@@ -55,9 +52,9 @@ jobs:
             --environment "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" list --json \
             >/tmp/railway-project-buckets.json 2>/tmp/railway-project-token.err; then
             echo 'RAILWAY_AUTH_MODE=project' >> "$GITHUB_ENV"
-            echo 'Railway credential accepted as project token.'
+            echo 'Railway credential accepted as production project token.'
           else
-            echo '::error::Railway credential was rejected in both account-token and project-token modes.'
+            echo '::error::Production Railway credential was rejected in both account-token and project-token modes.'
             sed -n '1,3p' /tmp/railway-api-token.err || true
             sed -n '1,3p' /tmp/railway-project-token.err || true
             exit 1
@@ -108,6 +105,6 @@ jobs:
             echo "- Auth mode resolved: ${RAILWAY_AUTH_MODE:-unresolved}"
             echo "- Created in this run: ${{ steps.bucket.outputs.created || 'unknown' }}"
             echo ''
-            echo '> Account tokens link explicitly to the canonical project/environment. Project tokens already identify their project and target production directly through the bucket command.'
+            echo '> Manual-only provider mutation. The workflow requires the dedicated `RAILWAY_PRODUCTION_TOKEN` secret and never reuses staging credentials.'
             echo '> This workflow only ensures the isolated S3-compatible backup bucket exists. It does not read or restore production data and does not print bucket credentials.'
           } >> "$GITHUB_STEP_SUMMARY"
