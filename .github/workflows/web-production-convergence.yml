@@ -12,8 +12,11 @@ permissions:
   actions: read
   contents: read
 
+# workflow-level concurrency resolves before the job `if`. Only a successful
+# main TRANSFER certification may share the candidate group; skipped/failed
+# upstream runs are isolated by run id and cannot cancel valid convergence.
 concurrency:
-  group: nvet-web-production-convergence
+  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && format('nvet-web-production-convergence-{0}', github.event.workflow_run.head_sha) || format('nvet-web-production-convergence-noncert-{0}', github.run_id) }}
   cancel-in-progress: true
 
 env:
@@ -97,6 +100,9 @@ jobs:
 
       - name: Load autonomous staging evidence session
         id: staging_inputs
+        env:
+          RAILWAY_EXPECTED_ENVIRONMENT_NAME: staging
+          RAILWAY_EXPECTED_SERVICE_NAME: nvet-staging-backend
         run: node scripts/railway-staging-session.mjs load
 
       - name: Verify isolated staging candidate, identity and discovery
