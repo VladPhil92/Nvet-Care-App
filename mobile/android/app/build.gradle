@@ -24,6 +24,7 @@ def releaseStorePassword = System.getenv("NVET_ANDROID_KEYSTORE_PASSWORD")
 def releaseKeyAlias = System.getenv("NVET_ANDROID_KEY_ALIAS")
 def releaseKeyPassword = System.getenv("NVET_ANDROID_KEY_PASSWORD")
 def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+def requireReleaseSigning = (System.getenv("NVET_ANDROID_REQUIRE_SIGNING") ?: "false").toBoolean()
 
 def mapsApiKey = System.getenv("GOOGLE_MAPS_ANDROID_API_KEY") ?: ""
 def nvetApiUrl = System.getenv("NVET_API_URL") ?: ""
@@ -43,6 +44,14 @@ if (releaseTaskRequested) {
         }
     } catch (Exception ignored) {
         throw new GradleException("NVET_API_URL must be an absolute HTTPS non-local URL for Android release builds")
+    }
+
+    if (requireReleaseSigning && !hasReleaseSigning) {
+        throw new GradleException("Publishable Android release builds require NVET_ANDROID_KEYSTORE_FILE, NVET_ANDROID_KEYSTORE_PASSWORD, NVET_ANDROID_KEY_ALIAS and NVET_ANDROID_KEY_PASSWORD")
+    }
+
+    if (hasReleaseSigning && !file(releaseStoreFile).isFile()) {
+        throw new GradleException("NVET_ANDROID_KEYSTORE_FILE does not point to a readable keystore file")
     }
 }
 

@@ -5,6 +5,7 @@ const ANDROID_BUILD_PATH = new URL('../mobile/android/build.gradle', import.meta
 const APP_BUILD_PATH = new URL('../mobile/android/app/build.gradle', import.meta.url);
 const WRAPPER_PATH = new URL('../mobile/android/gradle/wrapper/gradle-wrapper.properties', import.meta.url);
 const RELEASE_WORKFLOW_PATH = new URL('../.github/workflows/release-android.yml', import.meta.url);
+const GITIGNORE_PATH = new URL('../.gitignore', import.meta.url);
 const allowedEvidenceStates = new Set(['pending', 'verified']);
 const REQUIRED_EVIDENCE_KEYS = [
   'rcPromoted',
@@ -81,11 +82,12 @@ async function readManifest() {
 }
 
 async function validateRepositoryContract() {
-  const [androidBuild, appBuild, wrapper, releaseWorkflow] = await Promise.all([
+  const [androidBuild, appBuild, wrapper, releaseWorkflow, gitignore] = await Promise.all([
     readText(ANDROID_BUILD_PATH),
     readText(APP_BUILD_PATH),
     readText(WRAPPER_PATH),
     readText(RELEASE_WORKFLOW_PATH),
+    readText(GITIGNORE_PATH),
   ]);
 
   requireMatch(androidBuild, /compileSdkVersion\s*=\s*36\b/, 'compileSdkVersion=36');
@@ -93,16 +95,28 @@ async function validateRepositoryContract() {
   requireMatch(androidBuild, /com\.android\.tools\.build:gradle:8\.10\.1/, 'AGP 8.10.1');
   requireMatch(wrapper, /gradle-8\.11\.1-all\.zip/, 'Gradle 8.11.1 wrapper');
   requireMatch(appBuild, /applicationId\s+["']com\.nvetcare["']/, 'applicationId com.nvetcare');
+  requireMatch(appBuild, /NVET_ANDROID_REQUIRE_SIGNING/, 'publishable signing enforcement switch');
+  requireMatch(appBuild, /requireReleaseSigning\s*&&\s*!hasReleaseSigning/, 'fail-closed release signing guard');
+  requireMatch(appBuild, /NVET_ANDROID_KEYSTORE_FILE does not point to a readable keystore file/, 'release keystore file validation');
 
   for (const contract of [
     ['production environment', /environment:\s*production/],
     ['immutable release_ref input', /release_ref:/],
     ['release tag checkout', /ref:\s*\$\{\{\s*github\.event\.inputs\.release_ref\s*\}\}/],
+    ['publishable signing mode', /NVET_ANDROID_REQUIRE_SIGNING:\s*['"]true['"]/],
+    ['ephemeral runner keystore', /RUNNER_TEMP\/nvet-upload-key\.jks/],
     ['certificate fingerprint pin', /ANDROID_UPLOAD_CERT_SHA256/],
     ['AAB signature verification', /jarsigner -verify\s+["']?\$AAB/],
     ['AAB SHA-256 evidence', /app-release\.aab\.sha256/],
     ['release metadata evidence', /release-metadata\.json/],
     ['tagged artifact SHA traceability', /execFileSync\('git', \['rev-parse', 'HEAD'\]/],
+    ['ephemeral keystore cleanup', /rm -f ["']?\$NVET_ANDROID_KEYSTORE_FILE/],
+    ['optional internal publish input', /publish_internal:/],
+    ['Google Play credential boundary', /GOOGLE_PLAY_SERVICE_ACCOUNT_JSON/],
+    ['pinned Google Play upload action', /r0adkll\/upload-google-play@[0-9a-f]{40}/],
+    ['Google Play package identity', /packageName:\s*com\.nvetcare/],
+    ['Google Play internal track', /track:\s*internal/],
+    ['Google Play draft status', /status:\s*draft/],
     ['Node 24-compatible checkout action', /actions\/checkout@v7/],
     ['Node 24-compatible setup-node action', /actions\/setup-node@v7/],
     ['Node 24-compatible setup-java action', /actions\/setup-java@v5/],
@@ -110,6 +124,22 @@ async function validateRepositoryContract() {
   ]) {
     requireMatch(releaseWorkflow, contract[1], contract[0]);
   }
+
+  if (/mobile\/android\/app\/release\.keystore/.test(releaseWorkflow)) {
+    fail('Android production contract mismatch: decoded signing material must never be written into the repository workspace.');
+  }
+  if (/^\s*tracks:\s*/m.test(releaseWorkflow)) {
+    fail('Android production contract mismatch: upload-google-play uses singular track; plural tracks risks falling back to an unsafe default.');
+  }
+  if (/^\s*track:\s*production\s*$/m.test(releaseWorkflow)) {
+    fail('Android production contract mismatch: Phase 13 automation must never target the production Play track.');
+  }
+  if (/^\s*status:\s*(?:completed|inProgress|halted)\s*$/m.test(releaseWorkflow)) {
+    fail('Android production contract mismatch: automated Play handoff must remain draft-only.');
+  }
+
+  requireMatch(gitignore, /^\*\.jks$/m, 'Git ignore for Android .jks signing material');
+  requireMatch(gitignore, /^\*\.keystore$/m, 'Git ignore for Android .keystore signing material');
 }
 
 function githubHeaders() {

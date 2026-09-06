@@ -40,6 +40,7 @@ permissions:
 env:
   NODE_VERSION: '22.x'
   NVET_API_URL: ${{ github.event.inputs.api_url }}
+  NVET_ANDROID_REQUIRE_SIGNING: 'true'
 
 jobs:
   build-signed-aab:
@@ -53,6 +54,7 @@ jobs:
           VERSION_NAME: ${{ github.event.inputs.version_name }}
           RELEASE_REF: ${{ github.event.inputs.release_ref }}
         run: |
+          set -euo pipefail
           if ! printf '%s' "$VERSION_NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
             echo "::error::version_name debe seguir SemVer (por ejemplo 1.0.0 o 1.0.0-rc.1)"
             exit 1
@@ -73,6 +75,7 @@ jobs:
         env:
           RELEASE_REF: ${{ github.event.inputs.release_ref }}
         run: |
+          set -euo pipefail
           git fetch --force --tags --depth=1 origin "refs/tags/${RELEASE_REF}:refs/tags/${RELEASE_REF}"
           test "$(git rev-list -n 1 "$RELEASE_REF")" = "$(git rev-parse HEAD)"
           echo "Release commit: $(git rev-parse HEAD)"
@@ -97,6 +100,7 @@ jobs:
       - name: Verify Gradle wrapper integrity
         working-directory: mobile
         run: |
+          set -euo pipefail
           test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
           ./android/gradlew --version
 
@@ -104,6 +108,7 @@ jobs:
         env:
           EXPECTED_CERT_SHA256: ${{ secrets.ANDROID_UPLOAD_CERT_SHA256 }}
         run: |
+          set -euo pipefail
           missing=""
           [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] && missing="$missing ANDROID_KEYSTORE_BASE64"
           [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] && missing="$missing ANDROID_KEYSTORE_PASSWORD"
@@ -126,11 +131,21 @@ jobs:
               ;;
           esac
 
+      - name: Materialize ephemeral release keystore
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="$RUNNER_TEMP/nvet-upload-key.jks"
+          printf '%s' "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "NVET_ANDROID_KEYSTORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
       - name: Validate Google Play credential boundary
         if: ${{ inputs.publish_internal }}
         env:
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
+          set -euo pipefail
           if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
             echo "::error::publish_internal=true requiere GOOGLE_PLAY_SERVICE_ACCOUNT_JSON en el environment production"
             exit 1
@@ -141,11 +156,8 @@ jobs:
           if (json?.type !== 'service_account' || !json?.client_email || !json?.private_key) {
             throw new Error('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON no es una credencial service-account válida');
           }
-          console.log(`Google Play service-account credential shape verified for ${json.client_email}`);
+          console.log('Google Play service-account credential shape verified.');
           NODE
-
-      - name: Decode release keystore
-        run: printf '%s' "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > mobile/android/app/release.keystore
 
       - name: Verify upload certificate fingerprint
         env:
@@ -153,9 +165,10 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          set -euo pipefail
           export LC_ALL=C
           ACTUAL="$(keytool -list -v \
-            -keystore mobile/android/app/release.keystore \
+            -keystore "$NVET_ANDROID_KEYSTORE_FILE" \
             -alias "$KEY_ALIAS" \
             -storepass "$KEYSTORE_PASSWORD" \
             2>/dev/null | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
@@ -169,7 +182,6 @@ jobs:
       - name: Build signed AAB
         working-directory: mobile/android
         env:
-          NVET_ANDROID_KEYSTORE_FILE: release.keystore
           NVET_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           NVET_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           NVET_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -180,13 +192,14 @@ jobs:
 
       - name: Verify signed bundle
         run: |
+          set -euo pipefail
           AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
           test -s "$AAB"
           unzip -Z1 "$AAB" | grep -Eq '^META-INF/[^/]+\.(RSA|DSA|EC)$'
-          # Upload keys are commonly self-signed; plain verification checks the
-          # JAR/AAB cryptographic signature without treating certificate-chain
-          # warnings as a false release failure. Fingerprint pinning above
-          # separately proves that the intended upload certificate signed it.
+          # Upload keys are commonly self-signed. Plain jarsigner verification
+          # proves the AAB signature without rejecting the expected self-signed
+          # certificate chain; the pinned SHA-256 fingerprint above proves that
+          # the approved Nvet upload certificate is the signer.
           jarsigner -verify "$AAB"
 
       - name: Generate release evidence
@@ -195,6 +208,7 @@ jobs:
           RELEASE_REF: ${{ github.event.inputs.release_ref }}
           VERSION_CODE: ${{ github.run_number }}
         run: |
+          set -euo pipefail
           AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
           sha256sum "$AAB" > mobile/android/app/build/outputs/bundle/release/app-release.aab.sha256
           node - <<'NODE'
@@ -218,21 +232,12 @@ jobs:
           );
           NODE
 
-      - name: Upload signed AAB as Google Play Internal draft
-        id: play_upload
-        if: ${{ inputs.publish_internal }}
-        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.nvetcare
-          releaseFiles: mobile/android/app/build/outputs/bundle/release/app-release.aab
-          tracks: internal
-          status: draft
-          releaseName: v${{ github.event.inputs.version_name }}
-
       - name: Remove decoded keystore
         if: always()
-        run: rm -f mobile/android/app/release.keystore
+        run: |
+          if [ -n "${NVET_ANDROID_KEYSTORE_FILE:-}" ]; then
+            rm -f "$NVET_ANDROID_KEYSTORE_FILE"
+          fi
 
       - name: Upload signed AAB and evidence
         uses: actions/upload-artifact@v7
@@ -244,6 +249,18 @@ jobs:
             mobile/android/app/build/outputs/bundle/release/release-metadata.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload signed AAB as Google Play Internal draft
+        id: play_upload
+        if: ${{ inputs.publish_internal }}
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.nvetcare
+          releaseFiles: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: draft
+          releaseName: v${{ github.event.inputs.version_name }}
 
       - name: Release summary
         if: always()

@@ -1,6 +1,6 @@
 # Fase 13 — Android Production
 
-**Estado:** infraestructura de release en desarrollo; compatibilidad Android 16 revisada; publicación en Google Play bloqueada hasta completar evidencia externa.
+**Estado:** infraestructura de release en desarrollo; compatibilidad Android 16 revisada; publicación pública en Google Play bloqueada hasta completar evidencia externa.
 
 ## Objetivo
 
@@ -40,18 +40,22 @@ Esta evidencia cierra el gate documental/técnico `android16BehaviorReviewComple
 2. versión SemVer y tag inmutable `v<version>` coincidentes;
 3. checkout del tag, no de una rama mutable;
 4. dependencias instaladas desde el lockfile canónico;
-5. keystore de upload cargado únicamente desde GitHub Secrets;
-6. fingerprint SHA-256 comparado contra `ANDROID_UPLOAD_CERT_SHA256`;
-7. AAB firmado con la upload key aprobada;
-8. `jarsigner -verify -strict` obligatorio;
-9. generación de checksum SHA-256 y metadata de trazabilidad;
-10. publicación exclusiva como artifact de GitHub Actions.
+5. keystore de upload materializado únicamente dentro del runner efímero desde GitHub Secrets;
+6. `NVET_ANDROID_REQUIRE_SIGNING=true`, por lo que un build publicable falla si falta cualquiera de los cuatro parámetros de firma o si el archivo de keystore no existe;
+7. fingerprint SHA-256 comparado contra `ANDROID_UPLOAD_CERT_SHA256` antes del build;
+8. AAB firmado con la upload key aprobada;
+9. verificación criptográfica con `jarsigner -verify`; el certificado puede ser self-signed, por lo que la identidad del signer se demuestra separadamente mediante el fingerprint SHA-256 fijado;
+10. generación de checksum SHA-256 y metadata de trazabilidad;
+11. borrado explícito del keystore efímero antes de distribuir el artefacto;
+12. conservación del AAB firmado y su evidencia como artifact de GitHub Actions;
+13. opcionalmente, con `publish_internal=true`, subida del mismo AAB al track `internal` de Google Play con estado `draft` y una service account dedicada;
+14. ninguna promoción automática al track de producción.
 
-**El workflow no publica automáticamente en Google Play.** La promoción al Play Console queda separada hasta verificar Google Play App Signing, la ficha de privacidad/Data safety, el track interno y las pruebas físicas.
+El handoff a Google Play Internal Testing es deliberadamente opcional y manual. Un PR, un push o un CI normal no puede realizarlo. Requiere un `workflow_dispatch`, tag inmutable, secretos de firma válidos y la credencial de Play configurada en el environment `production`. El procedimiento operativo está documentado en `docs/production/ANDROID_PLAY_INTERNAL_RUNBOOK.md`.
 
 ## Contrato de readiness
 
-`docs/production/ANDROID_PRODUCTION_READINESS.json` es la fuente de verdad de activación. El verificador `scripts/verify-android-production-readiness.mjs` comprueba tanto el contrato versionado como evidencia viva de GitHub Actions.
+`docs/production/ANDROID_PRODUCTION_READINESS.json` es la fuente de verdad de activación. El verificador `scripts/verify-android-production-readiness.mjs` comprueba tanto el contrato versionado como evidencia viva de GitHub Actions. También protege el modo fail-closed de firma, el uso de keystore efímero, la exclusión de material `.jks`/`.keystore` del repositorio y que la automatización de Play permanezca limitada a `track: internal` + `status: draft`.
 
 La Fase 13 no puede declararse READY si falta cualquiera de estas evidencias:
 
@@ -70,7 +74,7 @@ La Fase 13 no puede declararse READY si falta cualquiera de estas evidencias:
 
 La secuencia segura es:
 
-`RC aprobado → tag inmutable → AAB firmado → track interno → observación mínima 24h → smoke físico → rollout controlado → observabilidad post-release`.
+`RC aprobado → tag inmutable → AAB firmado → draft en track interno → revisión/aprobación interna → observación mínima 24h → smoke físico → rollout controlado → observabilidad post-release`.
 
 No se debe crear un tag de producción mientras Fase 11/12 mantenga blockers P0/P1 que afecten autenticación, reservas, datos, pagos o capacidad de rollback.
 
