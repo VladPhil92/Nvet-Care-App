@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { createRailwayGraphqlClient } from './lib/railway-graphql-client.mjs';
 
 const API_URL = 'https://backboard.railway.com/graphql/v2';
 const token = process.env.RAILWAY_API_TOKEN;
@@ -35,32 +36,14 @@ function parsePositiveNumber(raw, fallback, name) {
   return value;
 }
 
-async function graphql(query, variables = {}) {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const text = await response.text();
-  let payload;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    throw new Error(`Railway returned non-JSON HTTP ${response.status}: ${text.slice(0, 300)}`);
-  }
-
-  if (!response.ok || payload.errors?.length) {
-    const errors =
-      payload.errors?.map((error) => error.message).filter(Boolean).join('; ') || text.slice(0, 300);
-    throw new Error(`Railway GraphQL failed (HTTP ${response.status}): ${errors}`);
-  }
-
-  return payload.data;
-}
+const graphql = createRailwayGraphqlClient({
+  apiUrl: API_URL,
+  token,
+  maxAttempts: 5,
+  baseDelayMs: 1_000,
+  maxDelayMs: 8_000,
+  requestTimeoutMs: 20_000,
+});
 
 const projectData = await graphql(
   `query ProductionStorage($id: String!) {
@@ -181,7 +164,7 @@ const verdict =
     : 'blocked';
 
 const evidence = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   evidenceType: 'railway-production-volume-backup-audit',
   observedAt: new Date().toISOString(),
   project: { id: project.id, name: project.name },
@@ -197,6 +180,7 @@ const evidence = {
   railwaySchema: {
     scheduleQuery: 'volumeInstanceBackupScheduleList',
     backupListQuery: 'volumeInstanceBackupList',
+    transport: 'shared-retry-client',
   },
   policy: {
     maxBackupAgeHours,
@@ -225,7 +209,7 @@ const evidence = {
   backups,
   verdict,
   boundary:
-    'Read-only provider metadata audit. It proves configured Railway volume-backup schedules and a recent retained backup; it does not prove a restore drill.',
+    'Read-only provider metadata audit. It proves configured Railway volume-backup schedules and a recent retained backup; it does not prove a restore drill. A zero-schedule result can reflect an unconfigured provider capability or a plan that does not expose native backups, but remains a release blocker until provider backup evidence exists.',
 };
 
 mkdirSync(evidencePath.split('/').slice(0, -1).join('/') || '.', { recursive: true });
@@ -241,7 +225,9 @@ console.log(`Retention >= ${minRetentionHours}h: ${retentionSatisfied}`);
 console.log(`Evidence written to ${evidencePath}`);
 
 if (scheduleCount < 1) {
-  throw new Error('No Railway automatic backup schedule is configured for the production PostgreSQL volume');
+  throw new Error(
+    'No Railway automatic backup schedule is configured for the production PostgreSQL volume. Enable native provider backups when the workspace plan exposes them; this external RC gate remains blocked until then.',
+  );
 }
 if (backupCount < 1) {
   throw new Error('Railway backup schedule exists, but no provider backup is visible yet');
