@@ -1,0 +1,86 @@
+name: Nvet Production Backup Storage Bootstrap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-backup-storage-bootstrap.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-production-backup-storage-bootstrap
+  cancel-in-progress: false
+
+env:
+  RAILWAY_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
+  RAILWAY_PRODUCTION_ENVIRONMENT_ID: 7f93c67e-5a63-4aae-80b6-90979a9b60b1
+  BACKUP_BUCKET_NAME: nvet-production-backups
+  BACKUP_BUCKET_REGION: ams
+
+jobs:
+  bootstrap-storage:
+    name: Ensure production backup storage bucket exists
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 8
+    container: ghcr.io/railwayapp/cli:latest
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+    steps:
+      - name: Validate Railway credential
+        shell: sh
+        run: |
+          set -eu
+          if [ -z "${RAILWAY_API_TOKEN:-}" ]; then
+            echo '::error::RAILWAY_API_TOKEN is required.'
+            exit 1
+          fi
+
+      - name: Link canonical production environment
+        shell: sh
+        run: |
+          set -eu
+          railway link \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" \
+            --json >/tmp/railway-link.json
+
+      - name: Ensure backup bucket
+        id: bucket
+        shell: sh
+        run: |
+          set -eu
+          railway bucket list > /tmp/railway-buckets-before.txt
+          if grep -Fq "$BACKUP_BUCKET_NAME" /tmp/railway-buckets-before.txt; then
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            echo "Backup bucket already exists."
+          else
+            railway bucket create "$BACKUP_BUCKET_NAME" --region "$BACKUP_BUCKET_REGION"
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          railway bucket list > /tmp/railway-buckets-after.txt
+          if ! grep -Fq "$BACKUP_BUCKET_NAME" /tmp/railway-buckets-after.txt; then
+            echo '::error::Backup bucket is not visible after bootstrap.'
+            exit 1
+          fi
+
+      - name: Publish bootstrap evidence
+        if: always()
+        shell: sh
+        run: |
+          {
+            echo '## Nvet Production Backup Storage Bootstrap'
+            echo ''
+            echo "- Project: Nvet Care App"
+            echo "- Environment: production"
+            echo "- Bucket: $BACKUP_BUCKET_NAME"
+            echo "- Region: $BACKUP_BUCKET_REGION"
+            echo "- Created in this run: ${{ steps.bucket.outputs.created || 'unknown' }}"
+            echo ''
+            echo '> This workflow only ensures the isolated S3-compatible backup bucket exists. It does not read or restore production data and does not print bucket credentials.'
+          } >> "$GITHUB_STEP_SUMMARY"
