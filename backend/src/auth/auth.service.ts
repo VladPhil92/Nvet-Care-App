@@ -1041,7 +1041,7 @@ export class AuthService {
 
   private async signRefreshToken(user: any): Promise<string> {
     return this.jwtService.signAsync(
-      { sub: user.id, type: "refresh" },
+      { sub: user.id, type: "refresh", jti: crypto.randomUUID() },
       {
         secret: process.env.JWT_REFRESH_SECRET,
         expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || "7d") as StringValue,
