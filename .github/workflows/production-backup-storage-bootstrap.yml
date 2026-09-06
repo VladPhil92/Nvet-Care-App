@@ -40,7 +40,7 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve Railway credential mode and link canonical production
+      - name: Resolve Railway credential mode and target canonical production
         shell: sh
         run: |
           set -eu
@@ -51,10 +51,9 @@ jobs:
             --json >/tmp/railway-link.json 2>/tmp/railway-api-token.err; then
             echo 'RAILWAY_AUTH_MODE=api' >> "$GITHUB_ENV"
             echo 'Railway credential accepted as account/API token.'
-          elif RAILWAY_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_API_TOKEN='' railway link \
-            --project "$RAILWAY_PROJECT_ID" \
-            --environment "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" \
-            --json >/tmp/railway-link.json 2>/tmp/railway-project-token.err; then
+          elif RAILWAY_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_API_TOKEN='' railway bucket \
+            --environment "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" list --json \
+            >/tmp/railway-project-buckets.json 2>/tmp/railway-project-token.err; then
             echo 'RAILWAY_AUTH_MODE=project' >> "$GITHUB_ENV"
             echo 'Railway credential accepted as project token.'
           else
@@ -70,24 +69,26 @@ jobs:
         run: |
           set -eu
 
-          railway_cmd() {
+          railway_bucket() {
             if [ "$RAILWAY_AUTH_MODE" = 'api' ]; then
-              RAILWAY_API_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_TOKEN='' railway "$@"
+              RAILWAY_API_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_TOKEN='' railway bucket \
+                --environment "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" "$@"
             else
-              RAILWAY_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_API_TOKEN='' railway "$@"
+              RAILWAY_TOKEN="$RAILWAY_CREDENTIAL" RAILWAY_API_TOKEN='' railway bucket \
+                --environment "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" "$@"
             fi
           }
 
-          railway_cmd bucket list > /tmp/railway-buckets-before.txt
+          railway_bucket list > /tmp/railway-buckets-before.txt
           if grep -Fq "$BACKUP_BUCKET_NAME" /tmp/railway-buckets-before.txt; then
             echo 'created=false' >> "$GITHUB_OUTPUT"
             echo 'Backup bucket already exists.'
           else
-            railway_cmd bucket create "$BACKUP_BUCKET_NAME" --region "$BACKUP_BUCKET_REGION"
+            railway_bucket create "$BACKUP_BUCKET_NAME" --region "$BACKUP_BUCKET_REGION"
             echo 'created=true' >> "$GITHUB_OUTPUT"
           fi
 
-          railway_cmd bucket list > /tmp/railway-buckets-after.txt
+          railway_bucket list > /tmp/railway-buckets-after.txt
           if ! grep -Fq "$BACKUP_BUCKET_NAME" /tmp/railway-buckets-after.txt; then
             echo '::error::Backup bucket is not visible after bootstrap.'
             exit 1
@@ -107,5 +108,6 @@ jobs:
             echo "- Auth mode resolved: ${RAILWAY_AUTH_MODE:-unresolved}"
             echo "- Created in this run: ${{ steps.bucket.outputs.created || 'unknown' }}"
             echo ''
+            echo '> Account tokens link explicitly to the canonical project/environment. Project tokens already identify their project and target production directly through the bucket command.'
             echo '> This workflow only ensures the isolated S3-compatible backup bucket exists. It does not read or restore production data and does not print bucket credentials.'
           } >> "$GITHUB_STEP_SUMMARY"
