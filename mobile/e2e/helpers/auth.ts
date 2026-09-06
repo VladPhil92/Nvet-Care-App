@@ -5,21 +5,29 @@
  * testIDs que no existen en las pantallas productivas. Esto mantiene Detox
  * alineado con la misma superficie que usan lectores de pantalla.
  *
- * Las credenciales se leen de env vars o de defaults para entorno staging.
- * NO uses estos helpers en producción — los emails/passwords son fixtures
- * que solo existen en el seed del entorno de test.
+ * Las credenciales son obligatorias y proceden de la sesión staging certificada.
+ * No existen defaults locales: un gate de certificación nunca debe continuar con
+ * identidades implícitas o potencialmente desincronizadas.
  */
 
 import { waitForElement } from '../setup'
 
+function requiredFixture(name: string): string {
+  const value = process.env[name]
+  if (!value?.trim()) {
+    throw new Error(`Missing required Detox fixture variable: ${name}`)
+  }
+  return value
+}
+
 const FIXTURES = {
   client: {
-    email: process.env.E2E_CLIENT_EMAIL ?? 'cliente@nvetcare.test',
-    password: process.env.E2E_CLIENT_PASSWORD ?? 'TestClient123!',
+    email: requiredFixture('E2E_CLIENT_EMAIL'),
+    password: requiredFixture('E2E_CLIENT_PASSWORD'),
   },
   vet: {
-    email: process.env.E2E_VET_EMAIL ?? 'vet@nvetcare.test',
-    password: process.env.E2E_VET_PASSWORD ?? 'TestVet123!',
+    email: requiredFixture('E2E_VET_EMAIL'),
+    password: requiredFixture('E2E_VET_PASSWORD'),
   },
 }
 
