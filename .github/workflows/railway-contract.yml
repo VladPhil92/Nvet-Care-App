@@ -135,14 +135,21 @@ jobs:
 
           for (const [pattern, purpose] of [
             [/createRailwayGraphqlClient/, 'shared Railway retry transport'],
-            [/serviceInstance\(serviceId:\s*\$serviceId,\s*environmentId:\s*\$environmentId\)/, 'production service-instance lookup'],
-            [/deployments\(input:\s*\$deploymentInput,\s*first:\s*1\)/, 'latest active deployment query'],
-            [/successfulOnly:\s*true/, 'successful active deployment filter'],
+            [/project\(id:\s*\$id\)/, 'production project guard query'],
+            [/environments\s*\{/, 'production environment guard relation'],
+            [/deployments\(input:\s*\$input,\s*first:\s*20\)/, 'deployment history query'],
+            [/entry\?\.status\s*===\s*'SUCCESS'/, 'client-side successful deployment selection'],
             [/commitHash/, 'provider commit metadata'],
             [/health\/ready/, 'public live revision probe'],
             [/liveRevisionMatchesProviderDeployment/, 'provider/live fail-closed invariant'],
           ]) {
             if (!pattern.test(deploymentAudit)) throw new Error(`Production deployment audit missing ${purpose}`);
+          }
+          if (/successfulOnly\s*:/.test(deploymentAudit)) {
+            throw new Error('Production deployment audit must not use unsupported successfulOnly deployment input');
+          }
+          if (/serviceInstance\(serviceId:/.test(deploymentAudit)) {
+            throw new Error('Production deployment audit must not depend on an undocumented root serviceInstance query');
           }
           if (!deploymentWorkflow.includes('node scripts/audit-railway-production-deployment.mjs')) {
             throw new Error('Production deployment attestation workflow must execute the canonical audit');
