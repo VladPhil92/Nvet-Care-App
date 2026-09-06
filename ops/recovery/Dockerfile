@@ -1,0 +1,14 @@
+FROM postgres:18-bookworm
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       ca-certificates \
+       python3 \
+       python3-pip \
+  && python3 -m pip install --break-system-packages --no-cache-dir boto3 cryptography \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/nvet-recovery
+COPY backup.py verify.py ./
+
+CMD ["python3", "backup.py"]
