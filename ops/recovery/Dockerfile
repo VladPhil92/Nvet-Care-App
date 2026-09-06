@@ -11,4 +11,8 @@ RUN apt-get update \
 WORKDIR /opt/nvet-recovery
 COPY backup.py verify.py ./
 
+# The upstream postgres image carries docker-entrypoint.sh. This service is a
+# one-shot recovery worker, not a database server, so remove the inherited
+# entrypoint explicitly and execute only the requested recovery command.
+ENTRYPOINT []
 CMD ["python3", "backup.py"]
