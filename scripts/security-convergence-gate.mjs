@@ -193,6 +193,7 @@ const certificationWorkflows = [
   '.github/workflows/staging-e2e.yml',
   '.github/workflows/payment-rail-certification.yml',
   '.github/workflows/mobile-e2e.yml',
+  '.github/workflows/web-production-convergence.yml',
 ]
 for (const rel of certificationWorkflows) {
   requireText(
@@ -217,6 +218,15 @@ for (const rel of certificationWorkflows) {
   )
 }
 
+// Web convergence performs both production attestation and a staging evidence
+// load. The staging loader must override the production defaults locally so its
+// target guard cannot confuse the staging environment/service with production.
+requireText(
+  '.github/workflows/web-production-convergence.yml',
+  /Load autonomous staging evidence session[\s\S]{0,260}RAILWAY_EXPECTED_ENVIRONMENT_NAME:\s*staging[\s\S]{0,160}RAILWAY_EXPECTED_SERVICE_NAME:\s*nvet-staging-backend/,
+  'Web convergence staging loader must use explicit staging target names',
+)
+
 if (failures.length > 0) {
   console.error('❌ Production Security, Privacy & Canonical Runtime Convergence gate failed:')
   for (const failure of failures) console.error(` - ${failure}`)
@@ -231,3 +241,4 @@ console.log('   - public veterinarian responses: allowlisted')
 console.log('   - sensitive uploads: magic-bytes + private storage contract')
 console.log('   - dashboard HTTP perimeter: CSP + transport + anti-framing headers')
 console.log('   - workflow_run certification concurrency: valid-trigger scoped + skipped-run isolated')
+console.log('   - web convergence staging context: explicit environment/service isolation')
