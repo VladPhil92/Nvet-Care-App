@@ -33,8 +33,11 @@ on:
 permissions:
   contents: read
 
+# Candidate-scoped concurrency is critical here: GitHub creates workflow_run
+# executions even when the Android job will later be skipped. A global group
+# allowed a skipped PR-triggered run to cancel an active main Detox circuit.
 concurrency:
-  group: nvet-mobile-e2e-certification
+  group: nvet-mobile-e2e-certification-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: true
 
 env:

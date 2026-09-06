@@ -185,6 +185,27 @@ for (const header of [
   )
 }
 
+// ---------------------------------------------------------------------------
+// 6. workflow_run certification chains are isolated by candidate SHA.
+// ---------------------------------------------------------------------------
+const candidateScopedWorkflows = [
+  '.github/workflows/staging-e2e.yml',
+  '.github/workflows/payment-rail-certification.yml',
+  '.github/workflows/mobile-e2e.yml',
+]
+for (const rel of candidateScopedWorkflows) {
+  requireText(
+    rel,
+    /group:\s*nvet-[^\n]*-\$\{\{\s*github\.event_name\s*==\s*'workflow_run'\s*&&\s*github\.event\.workflow_run\.head_sha\s*\|\|\s*github\.sha\s*\}\}/,
+    'Certification workflow concurrency must be scoped to the triggering candidate SHA',
+  )
+  requireText(
+    rel,
+    /cancel-in-progress:\s*true/,
+    'Candidate-scoped certification should cancel duplicate executions of the same candidate',
+  )
+}
+
 if (failures.length > 0) {
   console.error('❌ Production Security, Privacy & Canonical Runtime Convergence gate failed:')
   for (const failure of failures) console.error(` - ${failure}`)
@@ -198,3 +219,4 @@ console.log('   - dashboard refresh token: HttpOnly cookie')
 console.log('   - public veterinarian responses: allowlisted')
 console.log('   - sensitive uploads: magic-bytes + private storage contract')
 console.log('   - dashboard HTTP perimeter: CSP + transport + anti-framing headers')
+console.log('   - workflow_run certification concurrency: candidate-SHA scoped')
