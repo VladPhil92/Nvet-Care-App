@@ -186,23 +186,34 @@ for (const header of [
 }
 
 // ---------------------------------------------------------------------------
-// 6. workflow_run certification chains are isolated by candidate SHA.
+// 6. workflow_run certification concurrency distinguishes valid from skipped
+//    triggers before job-level `if` is evaluated by GitHub Actions.
 // ---------------------------------------------------------------------------
-const candidateScopedWorkflows = [
+const certificationWorkflows = [
   '.github/workflows/staging-e2e.yml',
   '.github/workflows/payment-rail-certification.yml',
   '.github/workflows/mobile-e2e.yml',
 ]
-for (const rel of candidateScopedWorkflows) {
+for (const rel of certificationWorkflows) {
   requireText(
     rel,
-    /group:\s*nvet-[^\n]*-\$\{\{\s*github\.event_name\s*==\s*'workflow_run'\s*&&\s*github\.event\.workflow_run\.head_sha\s*\|\|\s*github\.sha\s*\}\}/,
-    'Certification workflow concurrency must be scoped to the triggering candidate SHA',
+    /group:\s*\$\{\{[^\n]*github\.event\.workflow_run\.conclusion\s*==\s*'success'[^\n]*github\.event\.workflow_run\.head_branch\s*==\s*'main'/,
+    'Certification concurrency must admit only successful main workflow_run events into the shared candidate group',
+  )
+  requireText(
+    rel,
+    /format\('nvet-[^']*-\{0\}',\s*github\.event\.workflow_run\.head_sha\)/,
+    'Valid certification workflow runs must deduplicate by candidate SHA',
+  )
+  requireText(
+    rel,
+    /format\('nvet-[^']*-noncert-\{0\}',\s*github\.run_id\)/,
+    'Non-certifiable workflow_run events must use a unique run-scoped concurrency group',
   )
   requireText(
     rel,
     /cancel-in-progress:\s*true/,
-    'Candidate-scoped certification should cancel duplicate executions of the same candidate',
+    'Valid duplicate certification should remain cancellable for the same candidate',
   )
 }
 
@@ -219,4 +230,4 @@ console.log('   - dashboard refresh token: HttpOnly cookie')
 console.log('   - public veterinarian responses: allowlisted')
 console.log('   - sensitive uploads: magic-bytes + private storage contract')
 console.log('   - dashboard HTTP perimeter: CSP + transport + anti-framing headers')
-console.log('   - workflow_run certification concurrency: candidate-SHA scoped')
+console.log('   - workflow_run certification concurrency: valid-trigger scoped + skipped-run isolated')

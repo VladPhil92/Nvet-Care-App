@@ -10,10 +10,11 @@ permissions:
   actions: read
   contents: read
 
-# Keep retries/reruns for the same candidate mutually exclusive without letting
-# skipped workflow_run events from unrelated PR candidates cancel main evidence.
+# Workflow-level concurrency is evaluated before the job `if`. Only a successful
+# main staging certification may join the candidate-scoped group; skipped or
+# failed workflow_run events are isolated by this workflow run id.
 concurrency:
-  group: nvet-transfer-payment-rail-certification-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && format('nvet-transfer-payment-rail-certification-{0}', github.event.workflow_run.head_sha) || format('nvet-transfer-payment-rail-noncert-{0}', github.run_id) }}
   cancel-in-progress: true
 
 env:
