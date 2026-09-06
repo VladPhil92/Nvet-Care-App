@@ -56,7 +56,9 @@ function readCommitHash(meta) {
     .find((value) => typeof value === 'string' && value.trim())
     ?.trim();
   if (!candidate || !/^[0-9a-f]{40}$/i.test(candidate)) {
-    throw new Error('Railway latest deployment metadata does not expose a valid 40-character commit hash');
+    throw new Error(
+      'Railway active deployment metadata does not expose a valid 40-character commit hash',
+    );
   }
   return candidate.toLowerCase();
 }
@@ -84,7 +86,9 @@ async function readHealthyRevision(maxAttempts = 5) {
         } else {
           const revision = String(body?.revision || '').trim().toLowerCase();
           if (!/^[0-9a-f]{7,12}$/i.test(revision)) {
-            throw new Error(`Production readiness returned an invalid revision: ${body?.revision ?? 'missing'}`);
+            throw new Error(
+              `Production readiness returned an invalid revision: ${body?.revision ?? 'missing'}`,
+            );
           }
           return {
             revision,
@@ -103,35 +107,51 @@ async function readHealthyRevision(maxAttempts = 5) {
       await new Promise((resolve) => setTimeout(resolve, attempt * 2_000));
     }
   }
-  throw new Error(`Production readiness could not be attested after ${maxAttempts} attempts: ${lastError}`);
+  throw new Error(
+    `Production readiness could not be attested after ${maxAttempts} attempts: ${lastError}`,
+  );
 }
 
+const deploymentInput = {
+  projectId,
+  serviceId,
+  environmentId,
+  status: { successfulOnly: true },
+};
+
 const data = await graphql(
-  `query ProductionDeploymentAttestation($projectId: String!, $environmentId: String!, $serviceId: String!) {
+  `query ProductionDeploymentAttestation(
+    $projectId: String!
+    $environmentId: String!
+    $serviceId: String!
+    $deploymentInput: DeploymentListInput!
+  ) {
     project(id: $projectId) {
       id
       name
       services { edges { node { id name } } }
     }
-    environment(id: $environmentId) {
-      id
-      name
-      projectId
+    environments(projectId: $projectId, first: 100) {
+      edges { node { id name } }
     }
     serviceInstance(serviceId: $serviceId, environmentId: $environmentId) {
       id
       serviceId
       serviceName
       environmentId
-      latestDeployment {
-        id
-        status
-        createdAt
-        meta
+    }
+    deployments(input: $deploymentInput, first: 1) {
+      edges {
+        node {
+          id
+          status
+          createdAt
+          meta
+        }
       }
     }
   }`,
-  { projectId, environmentId, serviceId },
+  { projectId, environmentId, serviceId, deploymentInput },
 );
 
 if (data.project?.id !== projectId || data.project?.name !== expectedProjectName) {
@@ -139,13 +159,13 @@ if (data.project?.id !== projectId || data.project?.name !== expectedProjectName
     `Railway project guard failed: expected ${expectedProjectName} (${projectId}), received ${data.project?.name ?? 'missing'}`,
   );
 }
-if (
-  data.environment?.id !== environmentId ||
-  data.environment?.projectId !== projectId ||
-  data.environment?.name !== expectedEnvironmentName
-) {
+
+const environment = data.environments?.edges
+  ?.map((edge) => edge.node)
+  .find((entry) => entry.id === environmentId);
+if (!environment || environment.name !== expectedEnvironmentName) {
   throw new Error(
-    `Railway environment guard failed: expected ${expectedEnvironmentName} (${environmentId})`,
+    `Railway environment guard failed: expected ${expectedEnvironmentName} (${environmentId}), received ${environment?.name ?? 'missing'}`,
   );
 }
 
@@ -168,11 +188,17 @@ if (
   throw new Error('Railway production service-instance guard failed');
 }
 
-const deployment = instance.latestDeployment;
-if (!deployment?.id) throw new Error('Railway production service has no latest deployment');
+const successfulDeployments = data.deployments?.edges?.map((edge) => edge.node) || [];
+if (successfulDeployments.length !== 1) {
+  throw new Error(
+    `Expected exactly one latest active successful Railway deployment, found ${successfulDeployments.length}`,
+  );
+}
+const deployment = successfulDeployments[0];
+if (!deployment?.id) throw new Error('Railway production service has no active successful deployment');
 if (deployment.status !== 'SUCCESS') {
   throw new Error(
-    `Railway latest production deployment ${deployment.id} is ${deployment.status ?? 'UNKNOWN'}, expected SUCCESS`,
+    `Railway active production deployment ${deployment.id} is ${deployment.status ?? 'UNKNOWN'}, expected SUCCESS`,
   );
 }
 
@@ -188,7 +214,7 @@ const health = await readHealthyRevision();
 const liveMatchesProvider = health.revision === providerRevision;
 if (!liveMatchesProvider) {
   throw new Error(
-    `Production revision mismatch: Railway latest deployment=${providerRevision}, public readiness=${health.revision}`,
+    `Production revision mismatch: Railway active deployment=${providerRevision}, public readiness=${health.revision}`,
   );
 }
 
@@ -197,11 +223,11 @@ const normalizedCandidate =
 const candidateMatchesProvider = normalizedCandidate === providerCommitSha;
 
 const evidence = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   evidenceType: 'railway-production-deployment-attestation',
   observedAt: new Date().toISOString(),
   project: { id: data.project.id, name: data.project.name },
-  environment: { id: data.environment.id, name: data.environment.name },
+  environment: { id: environment.id, name: environment.name },
   service: {
     id: serviceId,
     name: projectService.name,
@@ -214,6 +240,7 @@ const evidence = {
     commitSha: providerCommitSha,
     revision: providerRevision,
     branch: providerBranch,
+    selectionPolicy: 'deployments.successfulOnly.first=1',
   },
   liveReadiness: {
     url: healthUrl,
@@ -233,13 +260,13 @@ const evidence = {
       }
     : null,
   checks: {
-    latestDeploymentSuccessful: true,
+    activeSuccessfulDeploymentExists: true,
     liveReadinessHealthy: true,
     liveRevisionMatchesProviderDeployment: liveMatchesProvider,
   },
   verdict: 'verified',
   boundary:
-    'Read-only provider/live attestation. It proves that Railway latest successful production deployment metadata and the public readiness revision identify the same commit. It does not prove every current main/RC commit was deployed when watched-file rules correctly skip unrelated changes.',
+    'Read-only provider/live attestation. It selects Railway latest active successful production deployment and proves that its provider commit metadata matches the public readiness revision. It does not prove every current main/RC commit was deployed when watched-file rules correctly skip unrelated changes.',
 };
 
 mkdirSync(evidencePath.split('/').slice(0, -1).join('/') || '.', { recursive: true });
@@ -249,9 +276,9 @@ writeGithubEnv('RC_PRODUCTION_DEPLOYMENT_ATTESTED', 'true');
 writeGithubEnv('RC_PRODUCTION_DEPLOYMENT_SHA', providerCommitSha);
 writeGithubEnv('RC_PRODUCTION_DEPLOYMENT_ID', deployment.id);
 
-console.log(`Railway production deployment: ${deployment.id} (${deployment.status})`);
+console.log(`Railway active production deployment: ${deployment.id} (${deployment.status})`);
 console.log(`Provider commit revision: ${providerRevision}`);
 console.log(`Public readiness revision: ${health.revision}`);
 console.log(`Current candidate matches provider deployment: ${candidateMatchesProvider}`);
 console.log(`Evidence written to ${evidencePath}`);
-console.log('✅ Railway production deployment ↔ live revision attestation verified.');
+console.log('✅ Railway active production deployment ↔ live revision attestation verified.');
