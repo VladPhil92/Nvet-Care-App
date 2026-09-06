@@ -35,6 +35,20 @@ const paymentRailImpactingPaths = [
   /^\.github\/workflows\/staging-e2e\.yml$/,
 ];
 
+const nvetEvidenceWorkflows = Object.freeze({
+  ci: 'ci.yml',
+  railway: 'railway-contract.yml',
+  backendCanary: 'production-health-canary.yml',
+  recovery: 'recovery-readiness.yml',
+  staging: 'staging-e2e.yml',
+  paymentRail: 'payment-rail-certification.yml',
+  alertDrill: 'production-alert-drill.yml',
+});
+
+const ctgOneEvidenceWorkflows = Object.freeze({
+  accessCanary: 'nvet-production-access-canary.yml',
+});
+
 function fail(message) {
   throw new Error(message);
 }
@@ -91,15 +105,18 @@ async function readManifest() {
   return manifest;
 }
 
-async function githubRuns(repo, { allowPublicFallback = false } = {}) {
-  const url = `https://api.github.com/repos/${repo}/actions/runs?branch=main&per_page=100`;
+async function githubWorkflowRuns(repo, workflowFile, { allowPublicFallback = false } = {}) {
+  const encodedWorkflow = encodeURIComponent(workflowFile);
+  const url = `https://api.github.com/repos/${repo}/actions/workflows/${encodedWorkflow}/runs?branch=main&per_page=100`;
   let response = await fetch(url, { headers: githubHeaders(true) });
 
   if (!response.ok && allowPublicFallback) {
     response = await fetch(url, { headers: githubHeaders(false) });
   }
 
-  if (!response.ok) fail(`GitHub Actions API failed for ${repo}: HTTP ${response.status}`);
+  if (!response.ok) {
+    fail(`GitHub Actions API failed for ${repo}/${workflowFile}: HTTP ${response.status}`);
+  }
   const payload = await response.json();
   return Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
 }
@@ -226,29 +243,56 @@ async function auditRuntime(manifest) {
     fail('RC_CANDIDATE_SHA or GITHUB_SHA is required for runtime RC audit.');
   }
 
-  const [nvetRuns, ctgRuns] = await Promise.all([
-    githubRuns(repo),
-    githubRuns('VladPhil92/ctg_one_website', { allowPublicFallback: true }),
+  // Query each evidence workflow directly instead of scanning the repository's
+  // first 100 generic Actions runs. Nvet has a high workflow volume, so the
+  // generic endpoint can represent only a few hours and hide still-fresh
+  // Railway, recovery, payment, or alert evidence permitted by RC policy.
+  const [
+    ciRuns,
+    railwayRuns,
+    backendCanaryRuns,
+    recoveryRuns,
+    stagingRuns,
+    paymentRailRuns,
+    alertDrillRuns,
+    ctgAccessRuns,
+  ] = await Promise.all([
+    githubWorkflowRuns(repo, nvetEvidenceWorkflows.ci),
+    githubWorkflowRuns(repo, nvetEvidenceWorkflows.railway),
+    githubWorkflowRuns(repo, nvetEvidenceWorkflows.backendCanary),
+    githubWorkflowRuns(repo, nvetEvidenceWorkflows.recovery),
+    githubWorkflowRuns(repo, nvetEvidenceWorkflows.staging),
+    githubWorkflowRuns(repo, nvetEvidenceWorkflows.paymentRail),
+    githubWorkflowRuns(repo, nvetEvidenceWorkflows.alertDrill),
+    githubWorkflowRuns('VladPhil92/ctg_one_website', ctgOneEvidenceWorkflows.accessCanary, {
+      allowPublicFallback: true,
+    }),
   ]);
 
   const checks = [];
 
-  const ci = latestRun(nvetRuns, 'CI', (run) => run.head_sha === sha);
+  const ci = latestRun(ciRuns, 'CI', (run) => run.head_sha === sha);
   checks.push({
     ok: ci?.status === 'completed' && ci?.conclusion === 'success',
     label: 'main CI on candidate SHA',
     detail: ci ? `${ci.status}/${ci.conclusion ?? 'none'} run=${ci.id}` : 'no run for candidate SHA',
   });
 
-  const railway = await resolveRailwayEvidence(nvetRuns, repo, sha);
+  const railway = await resolveRailwayEvidence(railwayRuns, repo, sha);
   checks.push({
     ok: railway.ok,
     label: 'Railway deployment contract evidence',
     detail: railway.detail,
   });
 
-  const backendCanary = latestRun(nvetRuns, 'Nvet Production Backend Health Canary', (run) => run.conclusion === 'success' && run.event !== 'push');
-  const backendCanaryAge = backendCanary ? hoursSince(backendCanary.updated_at || backendCanary.created_at) : Number.POSITIVE_INFINITY;
+  const backendCanary = latestRun(
+    backendCanaryRuns,
+    'Nvet Production Backend Health Canary',
+    (run) => run.conclusion === 'success' && run.event !== 'push',
+  );
+  const backendCanaryAge = backendCanary
+    ? hoursSince(backendCanary.updated_at || backendCanary.created_at)
+    : Number.POSITIVE_INFINITY;
   checks.push({
     ok: Boolean(backendCanary) && backendCanaryAge <= manifest.policy.productionCanaryMaxAgeHours,
     label: 'production backend canary freshness',
@@ -257,7 +301,7 @@ async function auditRuntime(manifest) {
       : 'no successful real production backend canary',
   });
 
-  const recovery = latestRun(nvetRuns, 'Nvet Recovery Readiness', (run) => run.conclusion === 'success');
+  const recovery = latestRun(recoveryRuns, 'Nvet Recovery Readiness', (run) => run.conclusion === 'success');
   const recoveryAge = recovery ? hoursSince(recovery.updated_at || recovery.created_at) : Number.POSITIVE_INFINITY;
   checks.push({
     ok: Boolean(recovery) && recoveryAge <= manifest.policy.recoveryDrillMaxAgeHours,
@@ -268,7 +312,7 @@ async function auditRuntime(manifest) {
   });
 
   const currentStagingPreflight = process.env.RC_STAGING_PREFLIGHT_CURRENT === 'true';
-  const staging = latestRun(nvetRuns, 'Staging E2E Seed & Preflight', (run) => run.conclusion === 'success');
+  const staging = latestRun(stagingRuns, 'Staging E2E Seed & Preflight', (run) => run.conclusion === 'success');
   const stagingAge = staging ? hoursSince(staging.updated_at || staging.created_at) : Number.POSITIVE_INFINITY;
   checks.push({
     ok: currentStagingPreflight || (Boolean(staging) && stagingAge <= manifest.policy.stagingE2eMaxAgeHours),
@@ -281,7 +325,7 @@ async function auditRuntime(manifest) {
   });
 
   const transferRail = await resolvePaymentRailEvidence(
-    nvetRuns,
+    paymentRailRuns,
     repo,
     sha,
     manifest.policy.paymentRailApplicationMaxAgeHours,
@@ -292,8 +336,14 @@ async function auditRuntime(manifest) {
     detail: transferRail.detail,
   });
 
-  const ctgCanary = latestRun(ctgRuns, 'Nvet Production Access Canary', (run) => run.conclusion === 'success');
-  const ctgCanaryAge = ctgCanary ? hoursSince(ctgCanary.updated_at || ctgCanary.created_at) : Number.POSITIVE_INFINITY;
+  const ctgCanary = latestRun(
+    ctgAccessRuns,
+    'Nvet Production Access Canary',
+    (run) => run.conclusion === 'success',
+  );
+  const ctgCanaryAge = ctgCanary
+    ? hoursSince(ctgCanary.updated_at || ctgCanary.created_at)
+    : Number.POSITIVE_INFINITY;
   checks.push({
     ok: Boolean(ctgCanary) && ctgCanaryAge <= manifest.policy.ctgOneAccessCanaryMaxAgeHours,
     label: 'ctgone.com -> Nvet access canary freshness',
@@ -302,7 +352,7 @@ async function auditRuntime(manifest) {
 
   if (!machineOnly) {
     const alertDrill = latestRun(
-      nvetRuns,
+      alertDrillRuns,
       'Nvet Synthetic Production Alert Drill',
       (run) => run.status === 'completed' && run.conclusion === 'success',
     );
