@@ -15,10 +15,12 @@ on:
 permissions:
   contents: read
 
-# Scope cancellation to the candidate that triggered this certification. A
-# skipped workflow_run from a PR must never cancel an active main candidate.
+# GitHub resolves workflow-level concurrency before evaluating the job `if`.
+# Therefore an ineligible workflow_run must get a unique group; otherwise a
+# skipped duplicate for the same SHA can cancel an active main certification.
+# Only successful CI runs from main deduplicate by candidate SHA.
 concurrency:
-  group: nvet-staging-e2e-certification-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && format('nvet-staging-e2e-certification-{0}', github.event.workflow_run.head_sha) || format('nvet-staging-e2e-noncert-{0}', github.run_id) }}
   cancel-in-progress: true
 
 env:
