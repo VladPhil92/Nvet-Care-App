@@ -136,7 +136,8 @@ jobs:
           for (const [pattern, purpose] of [
             [/createRailwayGraphqlClient/, 'shared Railway retry transport'],
             [/serviceInstance\(serviceId:\s*\$serviceId,\s*environmentId:\s*\$environmentId\)/, 'production service-instance lookup'],
-            [/latestDeployment/, 'latest provider deployment'],
+            [/deployments\(input:\s*\$deploymentInput,\s*first:\s*1\)/, 'latest active deployment query'],
+            [/successfulOnly:\s*true/, 'successful active deployment filter'],
             [/commitHash/, 'provider commit metadata'],
             [/health\/ready/, 'public live revision probe'],
             [/liveRevisionMatchesProviderDeployment/, 'provider/live fail-closed invariant'],
