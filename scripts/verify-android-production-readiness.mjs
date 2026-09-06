@@ -111,12 +111,31 @@ async function validateRepositoryContract() {
     ['release metadata evidence', /release-metadata\.json/],
     ['tagged artifact SHA traceability', /execFileSync\('git', \['rev-parse', 'HEAD'\]/],
     ['ephemeral keystore cleanup', /rm -f ["']?\$NVET_ANDROID_KEYSTORE_FILE/],
+    ['optional internal publish input', /publish_internal:/],
+    ['Google Play credential boundary', /GOOGLE_PLAY_SERVICE_ACCOUNT_JSON/],
+    ['pinned Google Play upload action', /r0adkll\/upload-google-play@[0-9a-f]{40}/],
+    ['Google Play package identity', /packageName:\s*com\.nvetcare/],
+    ['Google Play internal track', /track:\s*internal/],
+    ['Google Play draft status', /status:\s*draft/],
     ['Node 24-compatible checkout action', /actions\/checkout@v7/],
     ['Node 24-compatible setup-node action', /actions\/setup-node@v7/],
     ['Node 24-compatible setup-java action', /actions\/setup-java@v5/],
     ['Node 24-compatible artifact action', /actions\/upload-artifact@v7/],
   ]) {
     requireMatch(releaseWorkflow, contract[1], contract[0]);
+  }
+
+  if (/mobile\/android\/app\/release\.keystore/.test(releaseWorkflow)) {
+    fail('Android production contract mismatch: decoded signing material must never be written into the repository workspace.');
+  }
+  if (/^\s*tracks:\s*/m.test(releaseWorkflow)) {
+    fail('Android production contract mismatch: upload-google-play uses singular track; plural tracks risks falling back to an unsafe default.');
+  }
+  if (/^\s*track:\s*production\s*$/m.test(releaseWorkflow)) {
+    fail('Android production contract mismatch: Phase 13 automation must never target the production Play track.');
+  }
+  if (/^\s*status:\s*(?:completed|inProgress|halted)\s*$/m.test(releaseWorkflow)) {
+    fail('Android production contract mismatch: automated Play handoff must remain draft-only.');
   }
 
   requireMatch(gitignore, /^\*\.jks$/m, 'Git ignore for Android .jks signing material');
