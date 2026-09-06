@@ -2,7 +2,7 @@
  * Jest config para Detox E2E.
  * - Runs solo archivos *.test.ts dentro de e2e/
  * - Ejecuta los flujos numerados en orden lexical (01 -> 02 -> 03)
- * - Setup global de Detox lifecycle en setup.ts
+ * - Registra helpers/hooks después de inicializar el entorno Detox
  * - Reporter detox/runners/jest/reporter para output legible
  * - Verbose para CI (cada step visible)
  */
@@ -18,7 +18,7 @@ module.exports = {
   globalTeardown: 'detox/runners/jest/globalTeardown',
   reporters: ['detox/runners/jest/reporter'],
   testEnvironment: 'detox/runners/jest/testEnvironment',
-  setupFilesAfterEach: ['<rootDir>/e2e/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/e2e/setup.ts'],
   verbose: true,
   preset: 'ts-jest',
   transform: {
