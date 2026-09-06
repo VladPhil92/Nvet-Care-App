@@ -160,7 +160,12 @@ jobs:
     env:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RC_CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-      GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+      # Detox does not certify Google Maps tile delivery. A real staging key is
+      # used when configured; otherwise a non-secret synthetic key keeps the
+      # debug MapView mountable without coupling lifecycle certification to an
+      # unrelated provider credential. Production release configuration remains
+      # outside this E2E-only boundary.
+      GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY || 'nvet-e2e-no-tiles' }}
 
     steps:
       - name: Checkout exact staging candidate
@@ -186,14 +191,13 @@ jobs:
             echo '::error::RAILWAY_API_TOKEN is required to load the certified staging session.'
             exit 1
           }
-          [ -n "${GOOGLE_MAPS_ANDROID_API_KEY:-}" ] || {
-            echo '::error::GOOGLE_MAPS_ANDROID_API_KEY is required for the Android E2E build.'
-            exit 1
-          }
           [[ "${RC_CANDIDATE_SHA}" =~ ^[0-9a-fA-F]{40}$ ]] || {
             echo '::error::RC_CANDIDATE_SHA must be a full commit SHA.'
             exit 1
           }
+          if [ "${GOOGLE_MAPS_ANDROID_API_KEY}" = 'nvet-e2e-no-tiles' ]; then
+            echo '::notice::No staging Google Maps key configured. Detox will certify appointment/location UI lifecycle without map tile delivery.'
+          fi
 
       - name: Verify Railway staging transport resilience contract
         run: |
@@ -315,5 +319,6 @@ jobs:
             echo '- Source: exact Railway staging session certified by Staging E2E.'
             echo '- Credentials: runtime-rotated staging CLIENT/VET identities; no static E2E passwords.'
             echo '- Ordered Detox flows: 01 client booking/TRANSFER → 02 vet lifecycle → 03 chat reconnect.'
+            echo '- Google Maps tiles are outside this lifecycle gate; a synthetic non-secret key is used when staging has no provider key.'
             echo '- Production service ID remains explicitly forbidden.'
           } >> "$GITHUB_STEP_SUMMARY"
