@@ -33,11 +33,12 @@ on:
 permissions:
   contents: read
 
-# Candidate-scoped concurrency is critical here: GitHub creates workflow_run
-# executions even when the Android job will later be skipped. A global group
-# allowed a skipped PR-triggered run to cancel an active main Detox circuit.
+# GitHub resolves workflow-level concurrency before the Android job `if`.
+# Only successful main staging runs share a candidate-SHA group. A failed or
+# skipped staging workflow gets a unique non-certification group so it cannot
+# cancel an active Pixel 6 circuit for the same commit.
 concurrency:
-  group: nvet-mobile-e2e-certification-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && format('nvet-mobile-e2e-certification-{0}', github.event.workflow_run.head_sha) || format('nvet-mobile-e2e-noncert-{0}', github.run_id) }}
   cancel-in-progress: true
 
 env:
