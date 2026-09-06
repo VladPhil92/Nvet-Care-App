@@ -9,6 +9,7 @@ on:
       - 'scripts/railway-staging-bootstrap.mjs'
       - 'scripts/audit-railway-production-backups.mjs'
       - 'scripts/audit-railway-production-deployment.mjs'
+      - 'scripts/verify-release-candidate-readiness.mjs'
       - 'Dockerfile.railway'
       - 'railway.json'
       - 'package.json'
@@ -27,6 +28,7 @@ on:
       - 'scripts/railway-staging-bootstrap.mjs'
       - 'scripts/audit-railway-production-backups.mjs'
       - 'scripts/audit-railway-production-deployment.mjs'
+      - 'scripts/verify-release-candidate-readiness.mjs'
       - 'Dockerfile.railway'
       - 'railway.json'
       - 'package.json'
@@ -60,6 +62,7 @@ jobs:
           node --check scripts/railway-staging-bootstrap.mjs
           node --check scripts/audit-railway-production-backups.mjs
           node --check scripts/audit-railway-production-deployment.mjs
+          node --check scripts/verify-release-candidate-readiness.mjs
           node - <<'NODE'
           const fs = require('fs');
           const root = require('./package.json');
@@ -74,6 +77,7 @@ jobs:
           const deploymentWorkflow = fs.readFileSync('.github/workflows/production-deployment-attestation.yml', 'utf8');
           const webConvergence = fs.readFileSync('.github/workflows/web-production-convergence.yml', 'utf8');
           const backupAudit = fs.readFileSync('scripts/audit-railway-production-backups.mjs', 'utf8');
+          const rcVerifier = fs.readFileSync('scripts/verify-release-candidate-readiness.mjs', 'utf8');
           const prismaSchema = fs.readFileSync('backend/prisma/schema.prisma', 'utf8');
           const liveLocationSql = fs.readFileSync('backend/prisma/manual-migrations/live_location_v1.sql', 'utf8');
 
@@ -159,6 +163,12 @@ jobs:
           }
           if (!backupAudit.includes('createRailwayGraphqlClient')) {
             throw new Error('Production backup audit must use the shared Railway retry transport');
+          }
+          if (!rcVerifier.includes('/actions/workflows/${encodedWorkflow}/runs?branch=main&per_page=100')) {
+            throw new Error('RC verifier must query workflow-specific Actions history');
+          }
+          if (/\/actions\/runs\?branch=main&per_page=100/.test(rcVerifier)) {
+            throw new Error('RC verifier must not regress to the shallow repository-wide 100-run window');
           }
 
           if (!/^ENV NODE_PATH=\/app\/backend\/node_modules:\/app\/node_modules$/m.test(dockerfile)) {
