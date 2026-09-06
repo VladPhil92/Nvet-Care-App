@@ -1,5 +1,6 @@
 import { appendFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { createRailwayGraphqlClient } from './lib/railway-graphql-client.mjs';
 
 const API_URL = 'https://backboard.railway.com/graphql/v2';
 const mode = process.argv[2] || 'load';
@@ -42,30 +43,14 @@ if (mode === 'prepare' && !/^[0-9a-f]{40}$/i.test(candidateSha || '')) {
   throw new Error('prepare mode requires RC_CANDIDATE_SHA/GITHUB_SHA as a full commit SHA.');
 }
 
-async function graphql(query, variables = {}) {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const text = await response.text();
-  let payload;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    throw new Error(`Railway returned non-JSON HTTP ${response.status}: ${text.slice(0, 500)}`);
-  }
-
-  if (!response.ok || payload.errors?.length) {
-    const errors = payload.errors?.map((error) => error.message).join('; ') || text.slice(0, 500);
-    throw new Error(`Railway GraphQL failed (HTTP ${response.status}): ${errors}`);
-  }
-  return payload.data;
-}
+const graphql = createRailwayGraphqlClient({
+  apiUrl: API_URL,
+  token,
+  maxAttempts: 5,
+  baseDelayMs: 1_000,
+  maxDelayMs: 8_000,
+  requestTimeoutMs: 20_000,
+});
 
 function randomPassword() {
   return `${randomBytes(28).toString('base64url')}Aa1!`;

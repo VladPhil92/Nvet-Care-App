@@ -52,6 +52,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Verify Railway staging transport resilience contract
+        run: |
+          node --check scripts/railway-staging-session.mjs
+          node --test scripts/railway-graphql-client.test.mjs
+
       - name: Prepare autonomous staging certification session
         run: node scripts/railway-staging-session.mjs prepare
 
@@ -69,6 +74,7 @@ jobs:
             echo '- Target guard: Nvet Care App / staging / nvet-staging-backend.'
             echo '- Credentials: runtime-generated synthetic CLIENT/VET/ADMIN passwords, stored only as Railway staging variables and masked in Actions.'
             echo '- Deployment: exact candidate SHA through Railway API.'
+            echo '- Railway transport: bounded retries for transient 408/425/429/5xx or network failures; permanent/semantic failures remain fail-closed.'
             echo '- Seed: staging predeploy only; production service ID is explicitly refused.'
             echo '- Checks: /api/health/ready revision + CLIENT/VET authentication + Emergencias/Disponible ahora discovery.'
             echo ''
