@@ -139,11 +139,13 @@ jobs:
           test -s "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
           echo "NVET_ANDROID_KEYSTORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
       - name: Validate Google Play credential boundary
         if: ${{ inputs.publish_internal }}
         env:
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
+          set -euo pipefail
           if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
             echo "::error::publish_internal=true requiere GOOGLE_PLAY_SERVICE_ACCOUNT_JSON en el environment production"
             exit 1
@@ -154,11 +156,8 @@ jobs:
           if (json?.type !== 'service_account' || !json?.client_email || !json?.private_key) {
             throw new Error('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON no es una credencial service-account válida');
           }
-          console.log(`Google Play service-account credential shape verified for ${json.client_email}`);
+          console.log('Google Play service-account credential shape verified.');
           NODE
-
-      - name: Decode release keystore
-        run: printf '%s' "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > mobile/android/app/release.keystore
 
       - name: Verify upload certificate fingerprint
         env:
@@ -233,18 +232,6 @@ jobs:
           );
           NODE
 
-      - name: Upload signed AAB as Google Play Internal draft
-        id: play_upload
-        if: ${{ inputs.publish_internal }}
-        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.nvetcare
-          releaseFiles: mobile/android/app/build/outputs/bundle/release/app-release.aab
-          tracks: internal
-          status: draft
-          releaseName: v${{ github.event.inputs.version_name }}
-
       - name: Remove decoded keystore
         if: always()
         run: |
@@ -262,6 +249,18 @@ jobs:
             mobile/android/app/build/outputs/bundle/release/release-metadata.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload signed AAB as Google Play Internal draft
+        id: play_upload
+        if: ${{ inputs.publish_internal }}
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.nvetcare
+          releaseFiles: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: draft
+          releaseName: v${{ github.event.inputs.version_name }}
 
       - name: Release summary
         if: always()
