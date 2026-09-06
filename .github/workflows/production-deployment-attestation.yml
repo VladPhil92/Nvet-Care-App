@@ -1,0 +1,102 @@
+name: Nvet Production Deployment Attestation
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-production-deployment-attestation
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.x'
+  RAILWAY_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
+  RAILWAY_PRODUCTION_ENVIRONMENT_ID: 7f93c67e-5a63-4aae-80b6-90979a9b60b1
+  RAILWAY_PRODUCTION_SERVICE_ID: 42e734a0-931b-45c8-a091-4334b54e9d1c
+  RAILWAY_EXPECTED_PROJECT_NAME: Nvet Care App
+  RAILWAY_EXPECTED_ENVIRONMENT_NAME: production
+  RAILWAY_EXPECTED_SERVICE_NAME: backend
+  RAILWAY_PRODUCTION_HEALTH_URL: https://backend-production-a476.up.railway.app/api/health/ready
+
+jobs:
+  attest-production-deployment:
+    name: Verify Railway provider deployment matches live revision
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 5
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RC_CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RC_CANDIDATE_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate read-only audit credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$RAILWAY_API_TOKEN" ]; then
+            echo '::error::RAILWAY_API_TOKEN is required to attest Railway deployment metadata.'
+            exit 1
+          fi
+
+      - name: Attest provider deployment and public readiness revision
+        run: node scripts/audit-railway-production-deployment.mjs
+
+      - name: Upload redacted deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: railway-production-deployment-attestation
+          path: .artifacts/production-deployment-attestation.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Publish attestation summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Railway Production Deployment Attestation'
+            echo ''
+            if [ -f .artifacts/production-deployment-attestation.json ]; then
+              node <<'NODE'
+          const fs = require('fs');
+          const evidence = JSON.parse(fs.readFileSync('.artifacts/production-deployment-attestation.json', 'utf8'));
+          console.log(`- Observed: ${evidence.observedAt}`);
+          console.log(`- Service: ${evidence.service.name}`);
+          console.log(`- Railway deployment: ${evidence.providerDeployment.id}`);
+          console.log(`- Railway deployment status: ${evidence.providerDeployment.status}`);
+          console.log(`- Provider revision: ${evidence.providerDeployment.revision}`);
+          console.log(`- Public readiness revision: ${evidence.liveReadiness.revision}`);
+          console.log(`- Candidate == provider deployment: ${evidence.candidate?.matchesProviderDeployment ?? 'n/a'}`);
+          console.log(`- Verdict: **${evidence.verdict}**`);
+          NODE
+            else
+              echo '- No attestation artifact was produced; inspect the failed audit step.'
+            fi
+            echo ''
+            echo '> Read-only evidence: Railway latest successful deployment metadata must identify the same revision served by `/api/health/ready`.'
+            echo '> Candidate mismatch is informational when Railway watch patterns legitimately skip unrelated source changes.'
+          } >> "$GITHUB_STEP_SUMMARY"
