@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nvet-web-production-convergence
+  group: nvet-web-production-convergence-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -97,6 +97,9 @@ jobs:
 
       - name: Load autonomous staging evidence session
         id: staging_inputs
+        env:
+          RAILWAY_EXPECTED_ENVIRONMENT_NAME: staging
+          RAILWAY_EXPECTED_SERVICE_NAME: nvet-staging-backend
         run: node scripts/railway-staging-session.mjs load
 
       - name: Verify isolated staging candidate, identity and discovery
