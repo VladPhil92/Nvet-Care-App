@@ -25,7 +25,21 @@ buildscript {
 
 allprojects {
     repositories {
-        maven { url("$rootDir/../../node_modules/detox/Detox-android") }
+        // Detox's npm package ships the full Android instrumentation AAR in a
+        // local Maven repository. Keep com.wix exclusive to that repository so
+        // Gradle cannot satisfy the coordinate from Maven Central with the
+        // coreNative artifact, which intentionally omits the Detox test harness.
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "DetoxNpm"
+                    url = uri("$rootDir/../../node_modules/detox/Detox-android")
+                }
+            }
+            filter {
+                includeGroup("com.wix")
+            }
+        }
     }
 }
 
