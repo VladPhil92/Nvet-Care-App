@@ -15,8 +15,10 @@ on:
 permissions:
   contents: read
 
+# Scope cancellation to the candidate that triggered this certification. A
+# skipped workflow_run from a PR must never cancel an active main candidate.
 concurrency:
-  group: nvet-staging-e2e-certification
+  group: nvet-staging-e2e-certification-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: true
 
 env:
