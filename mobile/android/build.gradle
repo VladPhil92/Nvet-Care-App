@@ -23,6 +23,18 @@ buildscript {
     }
 }
 
+// npm workspaces may place Detox either in mobile/node_modules or hoist it to
+// the repository root. Resolve the actual npm-shipped Maven repo instead of
+// assuming one layout; fail closed if npm installation did not provide it.
+def detoxMavenCandidates = [
+    file("$rootDir/../node_modules/detox/Detox-android"),
+    file("$rootDir/../../node_modules/detox/Detox-android")
+]
+def detoxNpmMavenRepo = detoxMavenCandidates.find { it.isDirectory() }
+if (detoxNpmMavenRepo == null) {
+    throw new GradleException("Detox Android Maven repository not found. Run npm ci before Gradle.")
+}
+
 allprojects {
     repositories {
         // Detox's npm package ships the full Android instrumentation AAR in a
@@ -33,7 +45,7 @@ allprojects {
             forRepository {
                 maven {
                     name = "DetoxNpm"
-                    url = uri("$rootDir/../../node_modules/detox/Detox-android")
+                    url = uri(detoxNpmMavenRepo)
                 }
             }
             filter {
