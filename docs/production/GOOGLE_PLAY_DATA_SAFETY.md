@@ -1,6 +1,6 @@
 # Nvet Care — Google Play Data Safety source matrix
 
-**Phase:** 13C  
+**Phase:** 13D  
 **Package:** `com.nvetcare`  
 **Status:** repository inventory prepared; Play Console declaration remains external evidence and is intentionally `pending`.
 
@@ -10,7 +10,7 @@ This document is the canonical engineering input for the Google Play **Data safe
 
 The Android client currently declares only `INTERNET`, `ACCESS_COARSE_LOCATION`, and `ACCESS_FINE_LOCATION`. It does not declare background location, camera, microphone, contacts, broad-storage, or Android notification runtime permissions in the app manifest. Location is requested in-app for nearby veterinarian discovery and active-appointment tracking.
 
-The mobile package includes geolocation, maps, user-selected media, local session storage, HTTP transport, and realtime socket transport. No dedicated advertising SDK or mobile analytics SDK is present in the Phase 13C dependency inventory.
+The mobile package includes geolocation, maps, user-selected media, local session storage, HTTP transport, and realtime socket transport. No dedicated advertising SDK or mobile analytics SDK is present in the Phase 13D dependency inventory.
 
 ## Engineering inventory for the Play form
 
@@ -34,23 +34,36 @@ The repository proves that the Android app transmits service data to the Nvet ba
 
 Before submitting the Data safety form, the operator must review the production configuration and contracts for every active processor and record whether each transfer is treated as collection, service-provider processing, or sharing under the then-current Play definition.
 
-## Security statements that may be used only after verification
+## Account deletion lifecycle
 
-The release form must not claim a property merely because code intends it. The following claims require production evidence before they are selected in Play Console:
+Phase 13D implements the repository-side account deletion chain:
 
-- data encrypted in transit end-to-end across every production endpoint;
-- account deletion available to all account-creating users;
-- deletion request URL publicly accessible;
+- authenticated readiness check before deletion;
+- self-service mobile flow under **Profile → Privacy and account → Delete account**;
+- exact destructive confirmation phrase `ELIMINAR MI CUENTA`;
+- current-password reauthentication for local-password accounts and TOTP confirmation whenever 2FA is enabled;
+- fail-closed blockers for active/disputed appointments, unresolved transactions, non-zero wallet balance, open veterinarian withdrawals and administrative accounts;
+- `DELETE /api/auth/account` as the destructive backend operation;
+- `/api/privacy/account-deletion` as the public deletion-information route contract;
+- revocation/removal of sessions and removal of operational account identifiers;
+- deletion of non-historical pet records and pseudonimización of records that must remain linked to historical veterinary care;
+- retention, under a pseudonymous inactive account anchor, of clinical, financial, professional-verification and audit records only when continuity, security or legal obligations require it.
+
+The repository implementation does **not** prove that every external processor has independently purged a previously uploaded object. For example, an application record may hold a provider URL while the provider has its own lifecycle. `accountDeletionProviderPurgeReview` therefore remains external evidence and `pending` until production storage/provider behavior is verified.
+
+Likewise, the public deletion route must be checked on the deployed production backend before `accountDeletionProductionRoute` is promoted from `pending` to `verified`.
+
+## Security statements and evidence boundaries
+
+Repository code now supports self-service account deletion, but Play Console declarations must still match deployed behavior. The following claims remain external until verified for the release candidate:
+
+- data encrypted in transit across every production endpoint;
+- deletion request URL publicly reachable in production;
+- provider-side deletion/retention behavior for storage, payments, AI and other processors;
 - data not shared with third parties;
 - no provider retention of AI input/output;
 - payment information handled exclusively by a processor;
 - independent security review or certification.
-
-## Account deletion blocker
-
-The Phase 13C audit does not find a verified self-service account deletion endpoint plus matching mobile flow. Because Nvet Care allows users to create accounts, this remains a **public-production blocker** and is recorded as `accountDeletion.status = pending` in `ANDROID_PLAY_COMPLIANCE.json`.
-
-Do not represent account deletion as available in Play Console until the backend behavior, mobile UX, retention exceptions, and public deletion-request route have been implemented and tested.
 
 ## Evidence required to mark `dataSafetyReviewed` verified
 
@@ -59,6 +72,6 @@ The repository gate may move from `pending` to `verified` only after there is da
 1. the Play Console Data safety form was reviewed against the commit/tag being released;
 2. all active production processors were reconciled;
 3. permission declarations match the signed bundle;
-4. account deletion requirements are satisfied or an applicable documented exception exists;
-5. the public privacy policy uses the same data categories/purposes;
+4. the deployed account-deletion endpoint and public route were exercised without bypassing financial/clinical blockers;
+5. the public privacy policy uses the same data categories, retention exceptions and purposes;
 6. a reviewer recorded the Play Console evidence reference in `ANDROID_PRODUCTION_READINESS.json`.
