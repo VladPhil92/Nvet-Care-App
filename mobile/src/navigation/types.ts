@@ -64,6 +64,7 @@ export type VetProfileStackParamList = {
   UploadVerificationDocs: undefined
   TopUpWallet: undefined
   EditProfile: undefined
+  DeleteAccount: undefined
   PriceManagement: undefined
   RequestWithdrawal: undefined
   TwoFactorEnrollment: undefined
@@ -102,6 +103,7 @@ export type VetEarningsStackParamList = {
 export type SharedStackParamList = {
   ProfileMain: undefined
   EditProfile: undefined
+  DeleteAccount: undefined
   Wallet: undefined
   Notifications: undefined
   Settings: undefined
