@@ -87,10 +87,10 @@ async function readManifest() {
   }
 
   if (evidence.playComplianceContractVerified.status !== 'verified') {
-    fail('Phase 13C repository compliance contract must remain verified once deployed.');
+    fail('Phase 13D repository compliance contract must remain verified once deployed.');
   }
-  if (evidence.accountDeletionAvailable.status === 'verified' && evidence.dataSafetyReviewed.status !== 'verified') {
-    fail('Account deletion must not be promoted as release evidence without a reconciled Data Safety review.');
+  if (evidence.accountDeletionAvailable.status !== 'verified') {
+    fail('Phase 13D requires the repository account-deletion lifecycle to remain verified.');
   }
 
   return manifest;
@@ -122,11 +122,14 @@ async function validateRepositoryContract() {
   ]);
 
   const complianceManifest = JSON.parse(complianceManifestRaw);
-  if (complianceManifest.schemaVersion !== 1 || complianceManifest.phase !== '13C') {
-    fail('Android production contract mismatch: Google Play compliance manifest must be Phase 13C schema v1.');
+  if (complianceManifest.schemaVersion !== 1 || complianceManifest.phase !== '13D') {
+    fail('Android production contract mismatch: Google Play compliance manifest must be Phase 13D schema v1.');
   }
   if (complianceManifest.applicationId !== 'com.nvetcare') {
     fail('Android production contract mismatch: Play compliance package identity drifted.');
+  }
+  if (complianceManifest.accountLifecycle?.accountDeletion?.status !== 'implemented') {
+    fail('Android production contract mismatch: Phase 13D account deletion must remain implemented.');
   }
   if (complianceManifest.releasePolicy?.automaticProductionPromotion !== false) {
     fail('Android production contract mismatch: Play compliance must prohibit automatic production promotion.');
@@ -185,13 +188,14 @@ async function validateRepositoryContract() {
     fail('Android production contract mismatch: automated Play handoff must remain draft-only.');
   }
 
-  requireMatch(dataSafety, /Play Console declaration remains external evidence.*pending/i, 'Data Safety source must keep external evidence pending');
-  requireMatch(dataSafety, /Account deletion blocker/i, 'Data Safety source must preserve the account deletion blocker');
+  requireMatch(dataSafety, /Play Console declaration remains external evidence.*pending/is, 'Data Safety source must keep external evidence pending');
+  requireMatch(dataSafety, /Account deletion lifecycle/i, 'Data Safety source must describe Phase 13D deletion lifecycle');
   requireMatch(privacyPolicy, /Publication status:\*\* `PENDING`/i, 'privacy policy source must not masquerade as a published policy');
+  requireMatch(privacyPolicy, /eliminación de cuenta de autoservicio está implementada/i, 'privacy source must describe implemented self-service deletion');
   requireMatch(reviewerRunbook, /actual reviewer credentials remain external/i, 'Play reviewer credentials must remain external');
   requireMatch(playComplianceAudit, /Android Play compliance contract mismatch/, 'machine Play compliance audit must remain fail-closed');
   requireMatch(playComplianceAudit, /ACCESS_BACKGROUND_LOCATION/, 'machine audit must guard background-location drift');
-  requireMatch(playComplianceAudit, /account deletion code is present/, 'machine audit must reconcile account-deletion implementation status');
+  requireMatch(playComplianceAudit, /Phase 13D requires the complete self-service account-deletion chain/, 'machine audit must reconcile the full account-deletion chain');
 
   requireMatch(gitignore, /^\*\.jks$/m, 'Git ignore for Android .jks signing material');
   requireMatch(gitignore, /^\*\.keystore$/m, 'Git ignore for Android .keystore signing material');
