@@ -64,11 +64,10 @@ export class AccountLifecycleController {
     @Res({ passthrough: true }) res: any,
   ) {
     try {
-      const result =
-        await this.accountLifecycleService.confirmExternalDeletion(
-          dto.email,
-          dto.verificationCode,
-        );
+      const result = await this.accountLifecycleService.confirmExternalDeletion(
+        dto.email,
+        dto.verificationCode,
+      );
       return renderDeletionPage(
         `<div class="success"><strong>Cuenta eliminada.</strong> ${escapeHtml(
           result.message,
