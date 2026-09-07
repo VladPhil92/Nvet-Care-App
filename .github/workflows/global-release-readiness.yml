@@ -1,0 +1,96 @@
+name: Nvet Global Release Readiness
+
+on:
+  pull_request:
+    paths:
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'scripts/verify-global-readiness.mjs'
+      - '.github/workflows/global-release-readiness.yml'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/railway-contract.yml'
+      - '.github/workflows/staging-e2e.yml'
+      - '.github/workflows/recovery-readiness.yml'
+      - '.github/workflows/payment-rail-certification.yml'
+      - '.github/workflows/production-deployment-attestation.yml'
+      - '.github/workflows/web-production-convergence.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'scripts/verify-global-readiness.mjs'
+      - '.github/workflows/**'
+      - 'backend/**'
+      - 'mobile/**'
+      - 'scripts/**'
+  schedule:
+    - cron: '23 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: 'Optional exact main SHA to audit. Defaults to current main checkout.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nvet-global-release-readiness-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  contract:
+    name: Global readiness contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Verify canonical readiness contract
+        run: node scripts/verify-global-readiness.mjs --contract-only
+
+  runtime:
+    name: Global runtime evidence
+    if: github.event_name != 'pull_request'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GLOBAL_READINESS_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_sha || github.sha }}
+    steps:
+      - name: Checkout exact audited SHA
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.GLOBAL_READINESS_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Generate global readiness evidence
+        run: node scripts/verify-global-readiness.mjs --runtime
+
+      - name: Upload global readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nvet-global-readiness
+          path: .artifacts/global-readiness.json
+          if-no-files-found: warn
+          retention-days: 30
