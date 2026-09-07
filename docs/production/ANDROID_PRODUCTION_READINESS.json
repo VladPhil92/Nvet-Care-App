@@ -32,20 +32,35 @@
       "evidence": null,
       "note": "ANDROID_UPLOAD_CERT_SHA256 must be provisioned from the approved upload certificate and verified by the release workflow."
     },
+    "playComplianceContractVerified": {
+      "status": "verified",
+      "evidence": "docs/production/ANDROID_PLAY_COMPLIANCE.json + scripts/audit-android-play-compliance.mjs",
+      "note": "Phase 13C inventories Android permissions, mobile SDK boundaries and product data flows and fails CI on undeclared drift; external Play Console declarations remain separate evidence."
+    },
     "privacyPolicyPublished": {
       "status": "pending",
       "evidence": null,
-      "note": "A public production privacy-policy URL suitable for the Play listing must be verified."
+      "note": "The publication source exists in docs/production/NVET_PRIVACY_POLICY_SOURCE.md, but a verified public production HTTPS URL and monitored privacy contact are still required."
     },
     "dataSafetyReviewed": {
       "status": "pending",
       "evidence": null,
-      "note": "Google Play Data safety declarations must be reviewed against actual app permissions and data flows."
+      "note": "The engineering matrix exists in docs/production/GOOGLE_PLAY_DATA_SAFETY.md; the actual Play Console Data safety declaration still requires production-provider and operator review."
+    },
+    "accountDeletionAvailable": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Account creation is available, but Phase 13C does not prove both a self-service mobile account-deletion flow and a corresponding backend endpoint/public deletion route."
+    },
+    "playReviewerAccessConfigured": {
+      "status": "pending",
+      "evidence": null,
+      "note": "The reviewer runbook exists, but dedicated CLIENT/VET reviewer accounts and non-secret Play Console access instructions must be configured and tested externally."
     },
     "signedAabVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "A successful Release Android run must produce a signed AAB, SHA-256 checksum and release metadata from an immutable tag."
+      "note": "A successful Release Android run must produce a signed AAB, SHA-256 checksum, compliance manifest checksum and release metadata from an immutable tag."
     },
     "internalTrackUploaded": {
       "status": "pending",
