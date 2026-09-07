@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -9,6 +8,7 @@ import {
   AppointmentStatus,
   AuditAction,
   AuditSeverity,
+  Prisma,
   TransactionStatus,
   UserRole,
 } from "@prisma/client";
@@ -34,6 +34,10 @@ const UNRESOLVED_TRANSACTION_STATUSES: TransactionStatus[] = [
 
 const OPEN_WITHDRAWAL_STATUSES = ["PENDING", "APPROVED", "PROCESSING"];
 const BALANCE_EPSILON = 0.000001;
+
+type DeletionUser = Prisma.UserGetPayload<{
+  include: { vetProfile: true };
+}>;
 
 export interface AccountDeletionBlocker {
   code:
@@ -68,6 +72,7 @@ export class AccountLifecycleService {
       retainedCategories: [
         "registros de citas y datos clínicos necesarios para continuidad, seguridad o exigencias legales",
         "registros transaccionales, conciliación y auditoría que deban conservarse por obligaciones financieras o de seguridad",
+        "registros de verificación profesional cuando deban conservarse para trazabilidad de servicios veterinarios",
       ],
       erasedCategories: [
         "credenciales de acceso y sesiones",
@@ -135,7 +140,8 @@ export class AccountLifecycleService {
 
       if (user.vetProfile) {
         // Stop every operational surface immediately while retaining only the
-        // minimum professional record needed to preserve historical services.
+        // minimum professional record needed to preserve historical services
+        // and verification traceability where retention is required.
         await tx.price.updateMany({
           where: { vetId: user.vetProfile.id },
           data: { isActive: false },
@@ -206,7 +212,12 @@ export class AccountLifecycleService {
       reason: "self_service_account_deletion",
       metadata: {
         deletionMode: "pseudonymize_with_regulated_record_retention",
-        retainedCategories: ["clinical_history", "financial_records", "audit"],
+        retainedCategories: [
+          "clinical_history",
+          "financial_records",
+          "professional_verification",
+          "audit",
+        ],
       },
     });
 
@@ -214,11 +225,11 @@ export class AccountLifecycleService {
       deleted: true,
       deletedAt: deletedAt.toISOString(),
       message:
-        "Tu cuenta fue eliminada. Los registros clínicos, financieros o de auditoría que deban conservarse permanecen pseudonimizados y ya no permiten iniciar sesión.",
+        "Tu cuenta fue eliminada. Los registros clínicos, financieros, profesionales o de auditoría que deban conservarse permanecen pseudonimizados y ya no permiten iniciar sesión.",
     };
   }
 
-  private async loadUser(userId: string) {
+  private async loadUser(userId: string): Promise<DeletionUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { vetProfile: true },
@@ -230,7 +241,7 @@ export class AccountLifecycleService {
   }
 
   private async assertReauthentication(
-    user: Awaited<ReturnType<AccountLifecycleService["loadUser"]>>,
+    user: DeletionUser,
     dto: DeleteAccountDto,
   ) {
     if (user.passwordHash) {
@@ -263,7 +274,7 @@ export class AccountLifecycleService {
   }
 
   private async collectBlockers(
-    user: Awaited<ReturnType<AccountLifecycleService["loadUser"]>>,
+    user: DeletionUser,
   ): Promise<AccountDeletionBlocker[]> {
     if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN) {
       return [
