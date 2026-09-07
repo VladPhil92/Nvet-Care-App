@@ -8,6 +8,7 @@ import VetVerificationScreen from '../../screens/shared/VetVerificationScreen'
 import UploadVerificationDocsScreen from '../../screens/shared/UploadVerificationDocsScreen'
 import TopUpWalletScreen from '../../screens/shared/TopUpWalletScreen'
 import EditProfileScreen from '../../screens/shared/EditProfileScreen'
+import DeleteAccountScreen from '../../screens/shared/DeleteAccountScreen'
 import TwoFactorEnrollmentScreen from '../../screens/auth/TwoFactorEnrollmentScreen'
 import ChangePasswordScreen from '../../screens/auth/ChangePasswordScreen'
 import ActiveSessionsScreen from '../../screens/shared/ActiveSessionsScreen'
@@ -19,7 +20,7 @@ const Stack = createNativeStackNavigator()
  * Stack del tab Perfil para usuarios CLIENT.
  *
  * Pantallas accesibles desde el menú del perfil:
- *   ProfileMain → Wallet / Notifications / VetVerification
+ *   ProfileMain → Wallet / Notifications / VetVerification / DeleteAccount
  *
  * El cliente NO tiene acceso a PriceManagement (es solo del vet).
  */
@@ -41,6 +42,7 @@ export default function ClientProfileStack() {
       />
       <Stack.Screen name="TopUpWallet" component={TopUpWalletScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       {/* Seguridad: enrollment 2FA + lista de sesiones */}
       <Stack.Screen
         name="TwoFactorEnrollment"
