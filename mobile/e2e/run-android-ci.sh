@@ -28,6 +28,13 @@ if [[ "$ready" -ne 1 ]]; then
   exit 1
 fi
 
+# The client search intentionally applies a 20 km radius when device location
+# is available. Android emulators otherwise inherit a non-Cartagena/default
+# coordinate, which can filter the certified Cartagena fixture out of results.
+# `adb emu geo fix` expects longitude first, then latitude.
+echo 'Pinning Android emulator location to Cartagena for geospatial discovery.'
+adb emu geo fix -75.5594 10.4003
+
 echo 'Metro ready; building Android Detox artifacts.'
 npm run e2e:build:android
 
