@@ -26,6 +26,17 @@ on:
       - 'backend/**'
       - 'mobile/**'
       - 'scripts/**'
+  workflow_run:
+    workflows:
+      - 'CI'
+      - 'Railway Contract'
+      - 'Staging E2E Seed & Preflight'
+      - 'Nvet Recovery Readiness'
+      - 'Nvet Transfer Payment Rail Certification'
+      - 'Nvet Production Deployment Attestation'
+      - 'Web Production Convergence'
+    types: [completed]
+    branches: [main]
   schedule:
     - cron: '23 */2 * * *'
   workflow_dispatch:
@@ -65,13 +76,13 @@ jobs:
 
   runtime:
     name: Global runtime evidence
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event_name != 'push'
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GLOBAL_READINESS_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_sha || github.sha }}
+      GLOBAL_READINESS_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event_name == 'workflow_dispatch' && inputs.candidate_sha || github.sha }}
     steps:
       - name: Checkout exact audited SHA
         uses: actions/checkout@v7
