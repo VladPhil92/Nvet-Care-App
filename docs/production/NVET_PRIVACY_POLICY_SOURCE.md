@@ -1,6 +1,6 @@
 # Nvet Care — Privacy Policy publication source
 
-**Phase:** 13C  
+**Phase:** 13D  
 **Publication status:** `PENDING`  
 **Play evidence status:** this file is source material only and MUST NOT be cited as a public privacy-policy URL.
 
@@ -10,7 +10,7 @@ Before publication, the release owner must attach a verified public HTTPS URL, a
 
 ## Política de Privacidad de Nvet Care — texto canónico para publicación
 
-Nvet Care es una plataforma para coordinar servicios veterinarios, gestionar mascotas, comunicarse con profesionales veterinarios y utilizar funciones relacionadas con citas, ubicación, pagos y asistencia tecnológica. Esta política describe las categorías de información que el producto puede tratar y los fines asociados.
+Nvet Care es una plataforma para coordinar servicios veterinarios, gestionar mascotas, comunicarse con profesionales veterinarios y utilizar funciones relacionadas con citas, ubicación, pagos y asistencia tecnológica. Esta política describe las categorías de información que el producto puede tratar, los fines asociados y el ciclo de vida de la cuenta.
 
 ### 1. Información de cuenta y perfil
 
@@ -40,7 +40,7 @@ Estos datos se utilizan para coordinar el servicio, mantener la comunicación, r
 
 Cuando un usuario utiliza funciones financieras, Nvet Care puede tratar método de pago, importes, estados de transacción, comprobantes de transferencia y datos necesarios para retiros o conciliación. Dependiendo del método elegido, determinada información también puede ser procesada por proveedores financieros o de pagos.
 
-Nvet Care no debe afirmar que ningún dato financiero es tratado por terceros hasta que la configuración y los contratos de producción hayan sido revisados para la versión publicada.
+La clasificación exacta de los proveedores activos y sus políticas de conservación debe verificarse contra la configuración real de producción antes de publicar la declaración final de Google Play.
 
 ### 6. Archivos e imágenes seleccionados por el usuario
 
@@ -56,7 +56,7 @@ Antes de publicar esta política, el operador debe verificar y describir de form
 
 El servicio puede tratar tokens de sesión, información necesaria para autenticación multifactor, etiquetas de dispositivo y metadatos de sesión con fines de autenticación, prevención de abuso, protección de cuentas y trazabilidad operativa.
 
-La aplicación puede conservar localmente información de sesión y perfil necesaria para mantener una experiencia autenticada. Los mecanismos de almacenamiento y transmisión deben permanecer sujetos a los controles de seguridad de la versión publicada.
+La aplicación puede conservar localmente información de sesión y perfil necesaria para mantener una experiencia autenticada. Al eliminar una cuenta, las sesiones Nvet se eliminan y el perfil operativo deja de ser utilizable para autenticación.
 
 ### 9. Notificaciones y actividad del servicio
 
@@ -66,17 +66,21 @@ Nvet Care puede mantener un buzón de notificaciones relacionado con citas, pago
 
 El servicio puede utilizar proveedores de infraestructura, almacenamiento, mapas, comunicaciones, pagos, monitoreo o inteligencia artificial. La lista y función de los proveedores activos debe corresponder con la configuración real de producción y con la declaración vigente de Google Play.
 
-La transferencia de información a un proveedor no debe describirse automáticamente como “compartición” ni como “no compartición”; la clasificación debe ajustarse al papel contractual del proveedor y a la normativa y políticas aplicables.
+La eliminación del perfil Nvet no debe describirse como prueba de borrado inmediato en todos los proveedores externos mientras no se haya verificado el ciclo de vida de los objetos y datos procesados por cada proveedor. Esa revisión permanece como evidencia externa de producción.
 
-### 11. Conservación
+### 11. Conservación y pseudonimización
 
-La información se conserva durante el tiempo necesario para prestar el servicio, mantener seguridad e integridad de registros, cumplir obligaciones legales o resolver disputas. Las reglas específicas de conservación y excepciones legales deben quedar documentadas para la configuración de producción antes del lanzamiento público.
+La información operativa se conserva únicamente durante el tiempo necesario para prestar el servicio, mantener seguridad e integridad, cumplir obligaciones aplicables o resolver disputas. Cuando una cuenta se elimina, Nvet Care borra credenciales, sesiones, datos de contacto del perfil, tokens de verificación/recuperación, notificaciones y otros datos operativos que ya no deban conservarse.
+
+Determinados **registros clínicos, financieros, profesionales o de auditoría** pueden necesitar conservación por continuidad veterinaria, trazabilidad profesional, prevención de fraude, conciliación, seguridad u obligaciones legales. En esos casos, el sistema mantiene un identificador interno pseudónimo e inactivo para preservar integridad referencial sin permitir un nuevo inicio de sesión con la cuenta eliminada. Los datos de mascotas sin historial de citas pueden eliminarse; los vinculados a historias clínicas se reducen y pseudonimizan para conservar únicamente la continuidad necesaria del registro.
 
 ### 12. Derechos, acceso, corrección y eliminación
 
-Los usuarios deben disponer de mecanismos para solicitar acceso, corrección o eliminación de información cuando corresponda. Debido a que Nvet Care permite crear cuentas, el lanzamiento público de Android queda bloqueado hasta que exista un mecanismo de eliminación de cuenta y datos compatible con los requisitos aplicables de Google Play, incluyendo el canal externo requerido cuando corresponda.
+La **eliminación de cuenta de autoservicio está implementada** en Nvet Care. Un usuario autenticado puede acceder a **Perfil → Privacidad y cuenta → Eliminar cuenta**. El flujo informa qué categorías se eliminan y cuáles pueden conservarse, exige la frase de confirmación `ELIMINAR MI CUENTA`, solicita la contraseña actual en cuentas con contraseña local y exige TOTP cuando la autenticación de dos factores está habilitada.
 
-Esta fuente no afirma que dicho mecanismo ya esté disponible.
+Para evitar pérdida de registros o fondos durante una operación abierta, el sistema bloquea temporalmente la eliminación si existen citas activas o en disputa, transacciones pendientes/en verificación/en disputa, saldo de wallet sin regularizar o retiros veterinarios abiertos. Una vez resueltas esas obligaciones, el usuario puede repetir el proceso.
+
+El backend incorpora además la ruta pública de información `/api/privacy/account-deletion`. La presencia de esa ruta en el código no equivale por sí sola a evidencia de que la URL de producción esté publicada y disponible: su verificación en el dominio productivo y su registro en Google Play permanecen como evidencia externa antes del lanzamiento público.
 
 ### 13. Menores de edad
 
