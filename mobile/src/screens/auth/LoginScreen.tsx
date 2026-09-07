@@ -194,6 +194,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
             {/* Submit */}
             <Pressable
+              testID="login-submit"
               onPress={handleSubmit}
               disabled={isSubmitting}
               style={({ pressed }) => [
