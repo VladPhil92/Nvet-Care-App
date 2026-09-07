@@ -1,5 +1,6 @@
 import {
   Equals,
+  IsEmail,
   IsOptional,
   IsString,
   Length,
@@ -32,4 +33,22 @@ export class DeleteAccountDto {
   @Length(6, 8, { message: "Código TOTP inválido" })
   @Matches(/^\d+$/, { message: "El código solo puede contener dígitos" })
   twoFactorCode?: string;
+}
+
+export class ExternalAccountDeletionRequestDto {
+  @IsEmail({}, { message: "Correo electrónico inválido" })
+  @MaxLength(254)
+  email: string;
+}
+
+export class ExternalAccountDeletionConfirmDto {
+  @IsEmail({}, { message: "Correo electrónico inválido" })
+  @MaxLength(254)
+  email: string;
+
+  @IsString()
+  @Matches(/^\d{10}\.[a-f0-9]{32}$/i, {
+    message: "Código de verificación inválido",
+  })
+  verificationCode: string;
 }
