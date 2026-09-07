@@ -35,15 +35,17 @@ describe('Flow: Vet recibe y procesa una cita', () => {
     await waitFor(seededAppointment).toBeVisible().withTimeout(10_000)
     await seededAppointment.tap()
 
-    // 3. Detalle en estado PENDING
+    // 3. Detalle en estado PENDING. El Badge expone el mismo label en su
+    // contenedor accesible y en el Text interno; by.text selecciona únicamente
+    // el nodo visual y evita el matcher ambiguo de by.label en Android.
     await waitForElement(by.text('Cita en domicilio'))
-    await dexpect(element(by.label('Por confirmar'))).toBeVisible()
+    await dexpect(element(by.text('Por confirmar'))).toBeVisible()
 
     // 4. Confirmar
     await element(by.text('Confirmar cita')).tap()
     await waitForElement(by.text('Confirmar cita'), 5_000)
     await element(by.text('Confirmar')).tap()
-    await waitFor(element(by.label('Confirmada')))
+    await waitFor(element(by.text('Confirmada')))
       .toBeVisible()
       .withTimeout(15_000)
 
@@ -51,7 +53,7 @@ describe('Flow: Vet recibe y procesa una cita', () => {
     await element(by.text('Iniciar visita')).tap()
     await waitForElement(by.text('Iniciar visita'), 5_000)
     await element(by.text('Confirmar')).tap()
-    await waitFor(element(by.label('En curso')))
+    await waitFor(element(by.text('En curso')))
       .toBeVisible()
       .withTimeout(15_000)
     await dexpect(element(by.text('Ubicación en vivo'))).toBeVisible()
@@ -77,13 +79,13 @@ describe('Flow: Vet recibe y procesa una cita', () => {
     await treatmentInput.replaceText('Seguimiento general y control en 7 días')
     await element(by.text('Guardar y completar cita')).tap()
 
-    await waitFor(element(by.label('Completada')))
+    await waitFor(element(by.text('Completada')))
       .toBeVisible()
       .withTimeout(15_000)
 
     // 7. Regresar al dashboard y verificar que el estado persistió
     await device.pressBack()
     await waitForElement(by.text('Agenda de hoy'), 10_000)
-    await dexpect(element(by.label('Completada'))).toBeVisible()
+    await dexpect(element(by.text('Completada'))).toBeVisible()
   })
 })
