@@ -2,9 +2,9 @@
 #
 # Construye un Android App Bundle (.aab) de producción desde un tag inmutable,
 # valida la upload key esperada, verifica criptográficamente la firma y publica
-# un artifact trazable con checksum + metadata. Opcionalmente puede subir el
-# bundle como draft al track Internal de Google Play cuando la cuenta ya esté
-# conectada; nunca promueve automáticamente a producción.
+# un artifact trazable con checksum + metadata + evidencia de compliance. Opcionalmente
+# puede subir el bundle como draft al track Internal de Google Play cuando la cuenta
+# ya esté conectada; nunca promueve automáticamente a producción.
 name: Release Android
 
 on:
@@ -103,6 +103,9 @@ jobs:
           set -euo pipefail
           test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
           ./android/gradlew --version
+
+      - name: Audit Google Play compliance source
+        run: node scripts/audit-android-play-compliance.mjs --write-evidence
 
       - name: Validate release inputs and secrets
         env:
@@ -209,14 +212,21 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
         run: |
           set -euo pipefail
-          AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
-          sha256sum "$AAB" > mobile/android/app/build/outputs/bundle/release/app-release.aab.sha256
+          OUT=mobile/android/app/build/outputs/bundle/release
+          AAB="$OUT/app-release.aab"
+          test -s .artifacts/android-play-compliance.json
+          cp .artifacts/android-play-compliance.json "$OUT/android-play-compliance.json"
+          sha256sum "$AAB" > "$OUT/app-release.aab.sha256"
+          sha256sum "$OUT/android-play-compliance.json" > "$OUT/android-play-compliance.json.sha256"
           node - <<'NODE'
+          const crypto = require('crypto');
           const fs = require('fs');
           const { execFileSync } = require('child_process');
           const releaseGitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          const compliancePath = 'mobile/android/app/build/outputs/bundle/release/android-play-compliance.json';
+          const complianceBytes = fs.readFileSync(compliancePath);
           const metadata = {
-            schemaVersion: 1,
+            schemaVersion: 2,
             applicationId: 'com.nvetcare',
             versionName: process.env.VERSION_NAME,
             versionCode: Number(process.env.VERSION_CODE),
@@ -224,6 +234,9 @@ jobs:
             releaseRef: process.env.RELEASE_REF,
             targetSdk: 36,
             apiUrl: process.env.NVET_API_URL,
+            playComplianceEvidenceSha256: crypto.createHash('sha256').update(complianceBytes).digest('hex'),
+            privacyPolicySource: 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md',
+            dataSafetySource: 'docs/production/GOOGLE_PLAY_DATA_SAFETY.md',
             generatedAt: new Date().toISOString(),
           };
           fs.writeFileSync(
@@ -247,6 +260,8 @@ jobs:
             mobile/android/app/build/outputs/bundle/release/app-release.aab
             mobile/android/app/build/outputs/bundle/release/app-release.aab.sha256
             mobile/android/app/build/outputs/bundle/release/release-metadata.json
+            mobile/android/app/build/outputs/bundle/release/android-play-compliance.json
+            mobile/android/app/build/outputs/bundle/release/android-play-compliance.json.sha256
           if-no-files-found: error
           retention-days: 30
 
@@ -271,6 +286,7 @@ jobs:
             echo "- Release ref: ${{ github.event.inputs.release_ref }}"
             echo "- Version: ${{ github.event.inputs.version_name }}"
             echo "- Signed AAB build requested: yes"
+            echo '- Phase 13C Play compliance evidence: attached to release artifact'
             if [ '${{ inputs.publish_internal }}' = 'true' ]; then
               echo "- Google Play Internal draft: ${{ steps.play_upload.outcome }}"
               echo '- Promotion remains manual; this workflow does not release to production.'
