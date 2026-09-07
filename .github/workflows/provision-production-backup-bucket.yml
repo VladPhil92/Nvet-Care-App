@@ -16,6 +16,7 @@ concurrency:
 
 env:
   RAILWAY_PROJECT_ID: 61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd
+  RAILWAY_WORKSPACE_ID: 50f238be-0cc2-470c-8c7b-42e55656b503
   RAILWAY_PRODUCTION_ENVIRONMENT_ID: 7f93c67e-5a63-4aae-80b6-90979a9b60b1
   RAILWAY_BACKUP_BUCKET_NAME: nvet-production-backups
   RAILWAY_BACKUP_BUCKET_REGION: ams
@@ -56,6 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           railway link \
+            --workspace "$RAILWAY_WORKSPACE_ID" \
             --project "$RAILWAY_PROJECT_ID" \
             --environment "$RAILWAY_PRODUCTION_ENVIRONMENT_ID"
 
