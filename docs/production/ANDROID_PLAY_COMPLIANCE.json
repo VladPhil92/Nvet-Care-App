@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "phase": "13C",
+  "program": "google-play-compliance",
+  "applicationId": "com.nvetcare",
+  "scope": "android-mobile-client",
+  "permissions": {
+    "declared": [
+      "android.permission.INTERNET",
+      "android.permission.ACCESS_COARSE_LOCATION",
+      "android.permission.ACCESS_FINE_LOCATION"
+    ],
+    "locationPurpose": [
+      "show nearby veterinarians",
+      "support live location during an active appointment"
+    ],
+    "backgroundLocation": false,
+    "camera": false,
+    "microphone": false,
+    "contacts": false,
+    "broadStorage": false,
+    "notificationRuntimePermission": false
+  },
+  "sdkInventory": {
+    "advertisingSdkObserved": false,
+    "mobileAnalyticsSdkObserved": false,
+    "geolocation": "@react-native-community/geolocation",
+    "maps": "react-native-maps",
+    "userSelectedMedia": "react-native-image-picker",
+    "localSessionStorage": "@react-native-async-storage/async-storage",
+    "transport": [
+      "axios",
+      "socket.io-client"
+    ]
+  },
+  "dataInventory": [
+    {
+      "id": "account-profile",
+      "category": "personal-info",
+      "examples": ["email", "first name", "last name", "phone", "avatar", "role"],
+      "purpose": ["account management", "authentication", "service delivery"],
+      "source": "mobile/src/services/auth.service.ts"
+    },
+    {
+      "id": "security-session",
+      "category": "security-and-session-data",
+      "examples": ["access token", "refresh token", "2FA state", "device label", "session metadata"],
+      "purpose": ["authentication", "fraud and account security"],
+      "source": "mobile/src/services/auth.service.ts"
+    },
+    {
+      "id": "vet-professional-profile",
+      "category": "professional-info",
+      "examples": ["license number", "specialties", "verification status", "rating"],
+      "purpose": ["veterinarian verification", "marketplace trust", "service delivery"],
+      "source": "mobile/src/services/auth.service.ts"
+    },
+    {
+      "id": "pet-records",
+      "category": "user-provided-pet-and-veterinary-data",
+      "examples": ["pet name", "species", "breed", "weight", "birth date", "photo", "notes"],
+      "purpose": ["veterinary care", "appointment context"],
+      "source": "mobile/src/services/pet.service.ts"
+    },
+    {
+      "id": "appointment-clinical",
+      "category": "appointments-and-veterinary-records",
+      "examples": ["appointment date and time", "service address", "notes", "diagnosis", "treatment", "clinical notes"],
+      "purpose": ["booking", "service delivery", "veterinary record continuity"],
+      "source": "mobile/src/services/appointment.service.ts"
+    },
+    {
+      "id": "precise-location",
+      "category": "location",
+      "examples": ["latitude", "longitude", "accuracy", "heading", "speed"],
+      "purpose": ["nearby veterinarian discovery", "active appointment tracking"],
+      "source": "mobile/src/services/live-location.service.ts",
+      "userPermissionRequired": true
+    },
+    {
+      "id": "chat-content",
+      "category": "messages-and-user-generated-content",
+      "examples": ["appointment chat messages", "shared service prices", "message reports"],
+      "purpose": ["client-veterinarian communication", "support and trust"],
+      "source": "mobile/src/services/chat.service.ts"
+    },
+    {
+      "id": "payments",
+      "category": "financial-and-transaction-data",
+      "examples": ["payment method", "amount", "transaction status", "transfer proof", "withdrawal account information", "document ID"],
+      "purpose": ["payments", "transfer verification", "withdrawals", "financial records"],
+      "source": "mobile/src/services/payment.service.ts"
+    },
+    {
+      "id": "ai-inputs",
+      "category": "ai-prompts-and-veterinary-context",
+      "examples": ["user question", "pet ID", "appointment ID", "case context"],
+      "purpose": ["care guidance", "pre-visit support", "veterinary case support", "documentation assistance"],
+      "source": "mobile/src/services/ai.service.ts",
+      "providerProcessingReviewRequired": true
+    },
+    {
+      "id": "notification-inbox",
+      "category": "app-activity-and-service-notifications",
+      "examples": ["notification type", "message", "action path", "read state"],
+      "purpose": ["appointment updates", "payment updates", "preventive reminders"],
+      "source": "mobile/src/services/notification.service.ts"
+    }
+  ],
+  "accountLifecycle": {
+    "accountCreationAvailable": true,
+    "accountDeletion": {
+      "status": "pending",
+      "requiredBeforePublicProduction": true,
+      "reason": "No verified self-service account deletion endpoint and mobile flow are present in the audited Phase 13C baseline."
+    }
+  },
+  "externalEvidence": {
+    "privacyPolicyPublicUrl": "pending",
+    "playConsoleDataSafetyReview": "pending",
+    "playReviewerAccess": "pending",
+    "googlePlayAppSigning": "pending",
+    "physicalDeviceValidation": "pending",
+    "aiProviderDataHandlingReview": "pending",
+    "paymentProviderDataHandlingReview": "pending"
+  },
+  "releasePolicy": {
+    "automaticProductionPromotion": false,
+    "internalTrackAutomationMaximumStatus": "draft",
+    "publicProductionRequiresExternalEvidence": true
+  },
+  "sources": [
+    "mobile/android/app/src/main/AndroidManifest.xml",
+    "mobile/package.json",
+    "mobile/src/services/auth.service.ts",
+    "mobile/src/services/pet.service.ts",
+    "mobile/src/services/appointment.service.ts",
+    "mobile/src/services/live-location.service.ts",
+    "mobile/src/services/chat.service.ts",
+    "mobile/src/services/payment.service.ts",
+    "mobile/src/services/ai.service.ts",
+    "mobile/src/services/notification.service.ts"
+  ]
+}
