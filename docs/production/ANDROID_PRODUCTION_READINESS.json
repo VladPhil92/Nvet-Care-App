@@ -35,12 +35,12 @@
     "playComplianceContractVerified": {
       "status": "verified",
       "evidence": "docs/production/ANDROID_PLAY_COMPLIANCE.json + scripts/audit-android-play-compliance.mjs",
-      "note": "Phase 13C inventories Android permissions, mobile SDK boundaries and product data flows and fails CI on undeclared drift; external Play Console declarations remain separate evidence."
+      "note": "Phase 13D inventories Android permissions, mobile SDK/data boundaries and the account-deletion lifecycle and fails CI on undeclared drift; external Play Console declarations remain separate evidence."
     },
     "privacyPolicyPublished": {
       "status": "pending",
       "evidence": null,
-      "note": "The publication source exists in docs/production/NVET_PRIVACY_POLICY_SOURCE.md, but a verified public production HTTPS URL and monitored privacy contact are still required."
+      "note": "The publication source exists in docs/production/NVET_PRIVACY_POLICY_SOURCE.md, but a verified public production HTTPS policy URL, monitored privacy contact, effective date and controller identity are still required."
     },
     "dataSafetyReviewed": {
       "status": "pending",
@@ -48,9 +48,9 @@
       "note": "The engineering matrix exists in docs/production/GOOGLE_PLAY_DATA_SAFETY.md; the actual Play Console Data safety declaration still requires production-provider and operator review."
     },
     "accountDeletionAvailable": {
-      "status": "pending",
-      "evidence": null,
-      "note": "Account creation is available, but Phase 13C does not prove both a self-service mobile account-deletion flow and a corresponding backend endpoint/public deletion route."
+      "status": "verified",
+      "evidence": "backend/src/auth/account-lifecycle.controller.ts + backend/src/auth/account-lifecycle.service.ts + backend/src/auth/dto/delete-account.dto.ts + mobile/src/services/auth.service.ts + mobile/src/screens/shared/DeleteAccountScreen.tsx + scripts/audit-android-play-compliance.mjs",
+      "note": "Phase 13D implements the self-service mobile and backend deletion lifecycle, server-side blockers, re-authentication, session revocation, pseudonymized retention and a public deletion-information route contract. Production reachability/provider-side purge remain separately tracked external evidence."
     },
     "playReviewerAccessConfigured": {
       "status": "pending",
@@ -70,7 +70,7 @@
     "physicalDeviceSmokeVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "At least two physical Android devices must complete login, pet, booking, appointment and recovery smoke tests."
+      "note": "At least two physical Android devices must complete login, pet, booking, appointment, account-deletion readiness and recovery smoke tests."
     },
     "android16BehaviorReviewCompleted": {
       "status": "verified",
