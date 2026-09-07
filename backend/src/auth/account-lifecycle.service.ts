@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  InternalServerErrorException,
   UnauthorizedException,
 } from "@nestjs/common";
 import {
@@ -12,9 +13,11 @@ import {
   TransactionStatus,
   UserRole,
 } from "@prisma/client";
+import * as crypto from "crypto";
 
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../common/audit/audit.service";
+import { MailService } from "../common/mail/mail.service";
 import { PasswordService } from "./services/password.service";
 import { TwoFactorService } from "./services/two-factor.service";
 import { DeleteAccountDto } from "./dto/delete-account.dto";
@@ -34,6 +37,9 @@ const UNRESOLVED_TRANSACTION_STATUSES: TransactionStatus[] = [
 
 const OPEN_WITHDRAWAL_STATUSES = ["PENDING", "APPROVED", "PROCESSING"];
 const BALANCE_EPSILON = 0.000001;
+const EXTERNAL_DELETION_TTL_SECONDS = 30 * 60;
+const GENERIC_EXTERNAL_REQUEST_MESSAGE =
+  "Si el correo corresponde a una cuenta activa elegible, enviaremos un código de verificación para continuar la solicitud de eliminación.";
 
 type DeletionUser = Prisma.UserGetPayload<{
   include: { vetProfile: true };
@@ -57,6 +63,7 @@ export class AccountLifecycleService {
     private readonly passwordService: PasswordService,
     private readonly twoFactorService: TwoFactorService,
     private readonly auditService: AuditService,
+    private readonly mailService: MailService,
   ) {}
 
   async getDeletionReadiness(userId: string) {
@@ -86,9 +93,85 @@ export class AccountLifecycleService {
 
   async deleteAccount(userId: string, dto: DeleteAccountDto) {
     const user = await this.loadUser(userId);
-
     await this.assertReauthentication(user, dto);
+    return this.performDeletion(user);
+  }
 
+  /**
+   * Google Play requires an outside-the-app web resource from which users can
+   * request deletion without being sent back to the installed app. This method
+   * starts that flow without disclosing whether an email is registered.
+   *
+   * The verification code is stateless and HMAC-authenticated. No raw deletion
+   * token is persisted; successful deletion makes the code unusable because the
+   * account becomes inactive and its email is pseudonymized.
+   */
+  async requestExternalDeletion(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    if (
+      user?.isActive &&
+      user.role !== UserRole.ADMIN &&
+      user.role !== UserRole.SUPERADMIN
+    ) {
+      const verificationCode = this.createExternalDeletionCode(user.id);
+      await this.mailService.send({
+        to: user.email,
+        subject: "Confirma tu solicitud de eliminación de Nvet Care",
+        category: "account_deletion_request",
+        text: [
+          `Hola ${user.firstName ?? "usuario"},`,
+          "",
+          "Recibimos una solicitud para eliminar tu cuenta de Nvet Care desde el recurso web público.",
+          `Código de eliminación: ${verificationCode}`,
+          `Este código vence en ${EXTERNAL_DELETION_TTL_SECONDS / 60} minutos.`,
+          "",
+          "Vuelve al recurso web de eliminación de Nvet Care, escribe tu correo y este código para confirmar la solicitud.",
+          "Si no solicitaste esta eliminación, ignora este mensaje.",
+        ].join("\n"),
+        html: `<p>Hola ${escapeHtml(user.firstName ?? "usuario")},</p>
+<p>Recibimos una solicitud para eliminar tu cuenta de <strong>Nvet Care</strong> desde el recurso web público.</p>
+<p>Código de eliminación:</p>
+<p style="font-family:monospace;font-size:18px;font-weight:700">${verificationCode}</p>
+<p>Este código vence en ${EXTERNAL_DELETION_TTL_SECONDS / 60} minutos. Vuelve al recurso web de eliminación de Nvet Care, escribe tu correo y este código para confirmar la solicitud.</p>
+<p>Si no solicitaste esta eliminación, ignora este mensaje.</p>`,
+      });
+    }
+
+    return { message: GENERIC_EXTERNAL_REQUEST_MESSAGE };
+  }
+
+  async confirmExternalDeletion(email: string, verificationCode: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      include: { vetProfile: true },
+    });
+
+    if (
+      !user ||
+      !user.isActive ||
+      user.role === UserRole.ADMIN ||
+      user.role === UserRole.SUPERADMIN
+    ) {
+      throw new UnauthorizedException("Código inválido o expirado");
+    }
+
+    this.verifyExternalDeletionCode(user.id, verificationCode);
+    return this.performDeletion(user);
+  }
+
+  private async performDeletion(user: DeletionUser) {
     const blockers = await this.collectBlockers(user);
     if (blockers.length > 0) {
       throw new ConflictException({
@@ -373,4 +456,62 @@ export class AccountLifecycleService {
 
     return blockers;
   }
+
+  private createExternalDeletionCode(userId: string): string {
+    const expiresAt = Math.floor(Date.now() / 1000) + EXTERNAL_DELETION_TTL_SECONDS;
+    const signature = this.signExternalDeletionCode(userId, expiresAt);
+    return `${expiresAt}.${signature}`;
+  }
+
+  private verifyExternalDeletionCode(userId: string, code: string): void {
+    const [rawExpiresAt, signature] = code.split(".");
+    const expiresAt = Number(rawExpiresAt);
+    const now = Math.floor(Date.now() / 1000);
+
+    if (
+      !Number.isInteger(expiresAt) ||
+      expiresAt <= now ||
+      expiresAt > now + EXTERNAL_DELETION_TTL_SECONDS + 60 ||
+      !/^[a-f0-9]{32}$/i.test(signature ?? "")
+    ) {
+      throw new UnauthorizedException("Código inválido o expirado");
+    }
+
+    const expected = this.signExternalDeletionCode(userId, expiresAt);
+    const actualBuffer = Buffer.from(signature.toLowerCase(), "utf8");
+    const expectedBuffer = Buffer.from(expected, "utf8");
+    if (
+      actualBuffer.length !== expectedBuffer.length ||
+      !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+    ) {
+      throw new UnauthorizedException("Código inválido o expirado");
+    }
+  }
+
+  private signExternalDeletionCode(userId: string, expiresAt: number): string {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new InternalServerErrorException(
+        "Account deletion signing boundary is not configured",
+      );
+    }
+    const scopedKey = crypto
+      .createHash("sha256")
+      .update(`${jwtSecret}:nvet-account-deletion-v1`)
+      .digest();
+    return crypto
+      .createHmac("sha256", scopedKey)
+      .update(`${userId}.${expiresAt}`)
+      .digest("hex")
+      .slice(0, 32);
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
