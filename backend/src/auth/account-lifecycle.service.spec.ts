@@ -68,16 +68,19 @@ describe("AccountLifecycleService", () => {
     verifyDuringLogin: jest.fn(),
   };
   const auditService = { log: jest.fn() };
+  const mailService = { send: jest.fn() };
 
   const service = new AccountLifecycleService(
     prisma,
     passwordService as any,
     twoFactorService as any,
     auditService as any,
+    mailService as any,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.JWT_SECRET = "test-jwt-secret-at-least-thirty-two-bytes-long";
     prisma.appointment.count.mockResolvedValue(0);
     prisma.transaction.count.mockResolvedValue(0);
     prisma.vetWithdrawal.count.mockResolvedValue(0);
@@ -85,6 +88,7 @@ describe("AccountLifecycleService", () => {
     prisma.userSession.deleteMany.mockResolvedValue({ count: 1 });
     prisma.notification.deleteMany.mockResolvedValue({ count: 0 });
     passwordService.verify.mockResolvedValue({ valid: true, needsRehash: false });
+    mailService.send.mockResolvedValue({ ok: true, driver: "test" });
   });
 
   it("reports password re-authentication and no blockers for an eligible client", async () => {
@@ -132,6 +136,36 @@ describe("AccountLifecycleService", () => {
         currentPassword: "wrong",
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it("starts a web deletion request without disclosing account existence", async () => {
+    prisma.user.findUnique.mockResolvedValue(makeUser());
+
+    const result = await service.requestExternalDeletion("ANA@example.com");
+
+    expect(result.message).toContain("Si el correo corresponde");
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { email: "ana@example.com" },
+      select: expect.any(Object),
+    });
+    expect(mailService.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "ana@example.com",
+        category: "account_deletion_request",
+        text: expect.stringMatching(
+          /Código de eliminación: \d{10}\.[a-f0-9]{32}/,
+        ),
+      }),
+    );
+  });
+
+  it("returns the same web-request response for an unknown account", async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const result = await service.requestExternalDeletion("missing@example.com");
+
+    expect(result.message).toContain("Si el correo corresponde");
+    expect(mailService.send).not.toHaveBeenCalled();
   });
 
   it("pseudonymizes the account, removes sessions and preserves historical anchors", async () => {
