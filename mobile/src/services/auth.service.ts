@@ -82,6 +82,39 @@ export interface ActiveSession {
   expiresAt: string
 }
 
+export interface AccountDeletionBlocker {
+  code:
+    | 'ACTIVE_APPOINTMENTS'
+    | 'UNRESOLVED_TRANSACTIONS'
+    | 'WALLET_BALANCE'
+    | 'OPEN_WITHDRAWALS'
+    | 'ADMIN_ACCOUNT'
+  message: string
+  count?: number
+}
+
+export interface AccountDeletionReadiness {
+  canDelete: boolean
+  reauthMethod: 'PASSWORD' | 'SESSION'
+  twoFactorRequired: boolean
+  blockers: AccountDeletionBlocker[]
+  confirmationPhrase: 'ELIMINAR MI CUENTA'
+  retainedCategories: string[]
+  erasedCategories: string[]
+}
+
+export interface DeleteAccountPayload {
+  confirmation: 'ELIMINAR MI CUENTA'
+  currentPassword?: string
+  twoFactorCode?: string
+}
+
+export interface DeleteAccountResponse {
+  deleted: true
+  deletedAt: string
+  message: string
+}
+
 export class TwoFactorRequiredError extends Error {
   readonly email: string
   readonly password: string
@@ -174,6 +207,21 @@ class AuthService {
 
   async logoutAllDevices(): Promise<{ revoked: number }> {
     const response = await apiClient.post<{ revoked: number }>('/auth/logout-all')
+    await this.clearSession()
+    return response.data
+  }
+
+  async getAccountDeletionReadiness(): Promise<AccountDeletionReadiness> {
+    const response = await apiClient.get<AccountDeletionReadiness>(
+      '/auth/account/deletion-readiness',
+    )
+    return response.data
+  }
+
+  async deleteAccount(payload: DeleteAccountPayload): Promise<DeleteAccountResponse> {
+    const response = await apiClient.delete<DeleteAccountResponse>('/auth/account', {
+      data: payload,
+    })
     await this.clearSession()
     return response.data
   }

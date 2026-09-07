@@ -1,6 +1,6 @@
 # Fase 13 — Android Production
 
-**Estado:** infraestructura de release, Internal Testing y compliance técnico desplegadas; publicación pública en Google Play bloqueada hasta completar evidencia externa y el mecanismo de eliminación de cuenta.
+**Estado:** infraestructura de release, Internal Testing, compliance técnico y ciclo de eliminación de cuenta desplegados a nivel de repositorio; publicación pública en Google Play continúa bloqueada hasta completar evidencia externa.
 
 ## Objetivo
 
@@ -44,7 +44,7 @@ El procedimiento operativo está documentado en `docs/production/ANDROID_PLAY_IN
 
 ## Fase 13C — Google Play Compliance & Release Evidence
 
-Phase 13C introduce una fuente de verdad de compliance independiente de las declaraciones manuales de Play Console:
+Phase 13C introdujo una fuente de verdad de compliance independiente de las declaraciones manuales de Play Console:
 
 - `docs/production/ANDROID_PLAY_COMPLIANCE.json`: inventario machine-readable de permisos, SDKs y flujos de datos;
 - `scripts/audit-android-play-compliance.mjs`: auditor fail-closed que compara el inventario con el manifest Android, dependencias y servicios móviles reales;
@@ -53,9 +53,22 @@ Phase 13C introduce una fuente de verdad de compliance independiente de las decl
 - `docs/production/ANDROID_PLAY_REVIEWER_ACCESS.md`: procedimiento de acceso CLIENT/VET para revisión sin credenciales privilegiadas ni secretos en Git;
 - cada ejecución firmada genera `android-play-compliance.json` y su SHA-256 junto al AAB y a `release-metadata.json`.
 
-El auditor protege específicamente contra drift de permisos sensibles. Si aparecen background location, cámara, micrófono, contactos, almacenamiento amplio, notificaciones runtime u otra capacidad no declarada, el contrato deja de pasar hasta que la nueva superficie sea revisada y documentada.
+El auditor protege contra drift de permisos sensibles. Si aparecen background location, cámara, micrófono, contactos, almacenamiento amplio, notificaciones runtime u otra capacidad no declarada, el contrato falla hasta que la nueva superficie sea revisada y documentada.
 
-La Fase 13C también identifica de forma explícita un blocker que antes no estaba modelado: Nvet Care permite crear cuentas, pero el baseline auditado no demuestra todavía un flujo móvil de eliminación de cuenta junto con un endpoint backend correspondiente y la ruta pública requerida. Por tanto `accountDeletionAvailable` permanece `pending` y no puede presentarse en Play Console como una capacidad existente.
+## Fase 13D — Account Deletion & Privacy Lifecycle
+
+Phase 13D cierra el blocker técnico de eliminación de cuenta identificado en 13C. El flujo completo queda conectado entre app móvil y backend:
+
+- **Perfil → Privacidad y cuenta → Eliminar cuenta** muestra primero una consulta de readiness calculada por el servidor;
+- las cuentas locales deben confirmar contraseña actual; cualquier cuenta con 2FA debe confirmar además su TOTP;
+- la operación exige escribir exactamente `ELIMINAR MI CUENTA` y una segunda confirmación destructiva en la UI;
+- `DELETE /api/auth/account` realiza la eliminación y `GET /api/privacy/account-deletion` define la ruta pública informativa requerida para el handoff a Google Play;
+- citas activas/en disputa, pagos pendientes/en verificación/en disputa, saldo de wallet, retiros abiertos y cuentas administrativas bloquean fail-closed la operación;
+- las sesiones se eliminan y el usuario queda `isActive=false`, por lo que los access tokens existentes también dejan de autorizar peticiones al ser revalidada la cuenta por `JwtStrategy`;
+- los identificadores operativos y credenciales se borran; las mascotas sin historia se eliminan y las vinculadas a historia clínica se pseudonimizan;
+- registros clínicos, financieros, de verificación profesional y auditoría pueden conservarse mediante un ancla pseudónima inactiva cuando continuidad, seguridad o exigencias legales lo requieran.
+
+La eliminación del perfil interno no se presenta como prueba de purge de objetos en proveedores externos. `accountDeletionProviderPurgeReview` y la comprobación real de la ruta pública en producción permanecen como evidencia externa separada.
 
 ## Cadena de release
 
@@ -64,13 +77,13 @@ La cadena canónica queda:
 1. ejecución manual confirmada;
 2. versión SemVer y tag inmutable `v<version>` coincidentes;
 3. checkout del tag;
-4. auditoría de compliance Phase 13C sobre ese mismo tag;
+4. auditoría de compliance Phase 13D sobre ese mismo tag;
 5. dependencias instaladas desde lockfile;
 6. keystore efímero y firma fail-closed;
 7. validación de fingerprint SHA-256;
 8. build y verificación criptográfica del AAB;
 9. checksum del AAB;
-10. evidencia Phase 13C y checksum de compliance;
+10. evidencia Phase 13D y checksum de compliance;
 11. metadata que enlaza versión, git SHA, API, target SDK y hash de compliance;
 12. borrado del keystore;
 13. artifact de GitHub Actions;
@@ -79,11 +92,11 @@ La cadena canónica queda:
 
 ## Contrato de readiness
 
-`docs/production/ANDROID_PRODUCTION_READINESS.json` continúa siendo la fuente de verdad de activación. `scripts/verify-android-production-readiness.mjs` y `scripts/audit-android-play-compliance.mjs` separan dos clases de evidencia:
+`docs/production/ANDROID_PRODUCTION_READINESS.json` continúa siendo la fuente de verdad de activación. `scripts/verify-android-production-readiness.mjs` y `scripts/audit-android-play-compliance.mjs` separan dos clases de evidencia.
 
-**Evidencia interna verificable por CI:** baseline Android 16, firma/release boundary, inventario de permisos/datos y contrato Phase 13C.
+**Evidencia interna verificable por CI:** baseline Android 16, firma/release boundary, inventario de permisos/datos, contrato Phase 13D y ciclo de eliminación de cuenta.
 
-**Evidencia externa que CI no puede fabricar:** Play Console, Play App Signing, upload certificate real, URL pública de privacidad, Data Safety efectivamente revisado, eliminación de cuenta operativa, acceso real de revisores, AAB firmado real, Internal Testing y smoke físico.
+**Evidencia externa que CI no puede fabricar:** Play Console, Play App Signing, upload certificate real, URL pública de política de privacidad, Data Safety efectivamente revisado, alcance real de purge/retención en proveedores, acceso real de revisores, AAB firmado real, Internal Testing y smoke físico.
 
 La Fase 13 no puede declararse READY si falta cualquiera de los gates externos requeridos. Un documento preparado no equivale a una declaración publicada, y un pipeline capaz de firmar no equivale a un AAB firmado real.
 
@@ -91,7 +104,7 @@ La Fase 13 no puede declararse READY si falta cualquiera de los gates externos r
 
 La secuencia segura es:
 
-`compliance técnico → eliminación de cuenta → privacidad/Data Safety → RC aprobado → tag inmutable → AAB firmado → draft Internal → revisión/aprobación interna → observación mínima 24h → smoke físico → rollout controlado → observabilidad post-release`.
+`compliance técnico → eliminación de cuenta → validación de privacidad/Data Safety → RC aprobado → tag inmutable → AAB firmado → draft Internal → revisión/aprobación interna → observación mínima 24h → smoke físico → rollout controlado → observabilidad post-release`.
 
 No se debe crear un tag de producción mientras existan blockers P0/P1 que afecten autenticación, reservas, datos, pagos, eliminación de cuenta o rollback.
 
@@ -106,4 +119,4 @@ Una publicación móvil nunca debe modificar por sí sola el esquema de producci
 
 ## Criterio de salida
 
-La fase termina únicamente cuando `Android Production Readiness` puede ejecutarse con `enforce=true` y concluir `success`, existe evidencia de un AAB firmado en un track no productivo, la política/Data Safety y eliminación de cuenta están verificadas, y el candidato fue probado en dispositivos físicos. La existencia de un AAB técnico generado por CI no satisface este criterio.
+La fase termina únicamente cuando `Android Production Readiness` puede ejecutarse con `enforce=true` y concluir `success`, existe evidencia de un AAB firmado en un track no productivo, la política/Data Safety y la ruta productiva de eliminación están verificadas, y el candidato fue probado en dispositivos físicos. La existencia de un AAB técnico generado por CI no satisface este criterio.

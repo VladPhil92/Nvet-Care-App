@@ -1,6 +1,6 @@
 # Nvet Care — Google Play reviewer access runbook
 
-**Phase:** 13C  
+**Phase:** 13D  
 **Package:** `com.nvetcare`  
 **Status:** operational procedure prepared; actual reviewer credentials remain external and must never be committed.
 
@@ -29,9 +29,11 @@ The reviewer instructions should identify the shortest deterministic path to:
 7. open appointment chat;
 8. inspect appointment tracking where available;
 9. inspect the in-app notification inbox;
-10. reach profile/account settings and the account-deletion mechanism once implemented.
+10. open **Perfil → Privacidad y cuenta → Eliminar cuenta** and verify that the server-side readiness result is visible.
 
 Do not require a real payment to pass basic Play review navigation. If a payment-dependent screen must be reviewed, provide a deterministic sandbox/test route or clear instructions that stop before moving real funds.
+
+The dedicated reviewer account should normally stop before destructive confirmation unless the review procedure explicitly provisions a disposable account for the deletion test. When a destructive test is required, use synthetic data only and verify that the account becomes unauthenticated after deletion.
 
 ## VET reviewer path
 
@@ -46,13 +48,14 @@ The reviewer instructions should identify the shortest deterministic path to:
 7. exercise status/tracking controls on a controlled test appointment;
 8. inspect clinical-note entry without exposing real customer records;
 9. inspect earnings/payment UI without initiating a real withdrawal;
-10. log out.
+10. open the account-deletion readiness screen and verify that open financial/appointment obligations block destructive deletion when applicable;
+11. log out.
 
 ## Test-data boundary
 
 Reviewer accounts must use synthetic pets, synthetic appointments, synthetic chat content, and non-sensitive addresses appropriate for testing. Do not expose real customer records or real veterinary histories merely to satisfy store review.
 
-If Maps/location evidence is required, the reviewer may grant runtime location permission on the review device. The account instructions must not ask the reviewer to enable background location because the Phase 13C Android manifest does not declare it.
+If Maps/location evidence is required, the reviewer may grant runtime location permission on the review device. The account instructions must not ask the reviewer to enable background location because the Phase 13D Android manifest does not declare it.
 
 ## Two-factor authentication
 
@@ -60,7 +63,11 @@ If production policy requires 2FA for a reviewer role, provide a deterministic r
 
 ## Account deletion requirement
 
-Because the app supports account creation, reviewer instructions must eventually include how to reach in-app account deletion and the corresponding public web deletion route required by Play policy. Phase 13C records this capability as pending; therefore reviewer access is not yet sufficient evidence for public production.
+Phase 13D implements the in-app self-service flow and backend deletion contract. Reviewer instructions should identify **Perfil → Privacidad y cuenta → Eliminar cuenta** and the public information route `/api/privacy/account-deletion` without embedding any privileged credentials.
+
+The destructive flow requires the exact confirmation phrase `ELIMINAR MI CUENTA`, local-password reauthentication when applicable, and TOTP when 2FA is enabled. The backend blocks deletion while active/disputed appointments, unresolved transactions, wallet balance or open withdrawals remain. Retained clinical, financial, professional-verification or audit records are pseudonymized when retention is required.
+
+The actual production reachability of the public route, provider-side purge/retention review, and Play Console reviewer instructions remain external evidence. Repository implementation alone does not make `playReviewerAccessConfigured` verified.
 
 ## Evidence to retain
 
@@ -72,6 +79,6 @@ For the release record, capture only non-secret evidence:
 - commit/tag used for the review build;
 - Internal Testing release reference;
 - reviewer-access verification result;
-- account-deletion path verification result when implemented.
+- account-deletion path and public-route verification result.
 
 Mark `playReviewerAccess` or related release evidence verified only after the actual Play Console instructions have been populated and tested with the release candidate.

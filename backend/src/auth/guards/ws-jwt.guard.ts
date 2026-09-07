@@ -15,18 +15,18 @@ export interface AuthenticatedSocket extends Socket {
 }
 
 /**
- * WsJwtGuard — autenticación de WebSocket connections.
+ * WsJwtGuard — autenticación y revalidación de WebSocket.
  *
  * Diferencias vs JwtAuthGuard:
- *  - Lee el token desde `handshake.auth.token` (socket.io) en vez de Authorization header.
- *  - Re-consulta la DB para `emailVerified` + `isActive` (igual que jwt.strategy.ts en HTTP).
- *    Esto asegura que un usuario que verifica email en una pestaña no se vea bloqueado
- *    en su WebSocket de otra pestaña por payload viejo.
- *  - Cachea el lookup en `client.user` para que los handlers no re-consulten.
+ *  - Lee el token desde `handshake.auth.token` (socket.io).
+ *  - Verifica la firma y re-consulta `isActive`, `passwordChangedAt`, rol y
+ *    estado de seguridad en cada evento protegido por el guard.
+ *  - Refresca `client.user` con el estado actual en lugar de confiar en un
+ *    snapshot cacheado durante el handshake.
  *
- * El guard se ejecuta UNA SOLA VEZ por conexión (en el handshake). Para
- * rate-limit por evento o checks adicionales (email-verified en sendMessage),
- * los handlers deben usar `WsEmailVerifiedGuard` además.
+ * La revalidación por evento es deliberada: una eliminación de cuenta, cambio
+ * de contraseña o desactivación debe invalidar también sockets que ya estaban
+ * conectados. Cuando detectamos ese estado, cerramos el socket inmediatamente.
  */
 @Injectable()
 export class WsJwtGuard implements CanActivate {
@@ -36,14 +36,9 @@ export class WsJwtGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const client: AuthenticatedSocket = context.switchToWs().getClient();
+
     try {
-      const client: AuthenticatedSocket = context.switchToWs().getClient();
-
-      // Si el guard ya se ejecutó antes en esta conexión, reusar el cache.
-      if (client.user && client.user.id) {
-        return true;
-      }
-
       const token = client.handshake?.auth?.token;
       if (!token) {
         throw new WsException("No token provided");
@@ -53,7 +48,6 @@ export class WsJwtGuard implements CanActivate {
         secret: process.env.JWT_SECRET,
       });
 
-      // Re-consultar DB para tener emailVerified + isActive frescos
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
         select: {
@@ -68,17 +62,19 @@ export class WsJwtGuard implements CanActivate {
       });
 
       if (!user) {
+        this.disconnect(client);
         throw new WsException("User not found");
       }
       if (!user.isActive) {
+        this.disconnect(client);
         throw new WsException("Account deactivated");
       }
-      // Si la contraseña cambió tras emitir el token, invalidar
       if (
         user.passwordChangedAt &&
         payload.iat &&
         user.passwordChangedAt.getTime() / 1000 > payload.iat
       ) {
+        this.disconnect(client);
         throw new WsException("Token invalidated by password change");
       }
 
@@ -93,7 +89,17 @@ export class WsJwtGuard implements CanActivate {
       return true;
     } catch (error) {
       if (error instanceof WsException) throw error;
+      this.disconnect(client);
       throw new WsException("Invalid token");
+    }
+  }
+
+  private disconnect(client: Socket): void {
+    try {
+      client.disconnect(true);
+    } catch {
+      // The authorization decision still fails closed even if the transport is
+      // already tearing down and Socket.IO cannot perform another disconnect.
     }
   }
 }
@@ -103,7 +109,7 @@ export class WsJwtGuard implements CanActivate {
  * tiene email verificado. Usado en handlers que producen contenido visible
  * a otros (mensajes, share-price) para anti-abuso de cuentas recién creadas.
  *
- * Asume que `WsJwtGuard` ya pobló `client.user.emailVerified`.
+ * Asume que `WsJwtGuard` acaba de revalidar `client.user.emailVerified`.
  * ADMIN se considera implícitamente verificado.
  */
 @Injectable()

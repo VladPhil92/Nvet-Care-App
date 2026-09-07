@@ -15,7 +15,10 @@ const CHAT_SERVICE_PATH = new URL('../mobile/src/services/chat.service.ts', impo
 const PAYMENT_SERVICE_PATH = new URL('../mobile/src/services/payment.service.ts', import.meta.url);
 const AI_SERVICE_PATH = new URL('../mobile/src/services/ai.service.ts', import.meta.url);
 const NOTIFICATION_SERVICE_PATH = new URL('../mobile/src/services/notification.service.ts', import.meta.url);
-const PROFILE_CONTROLLER_PATH = new URL('../backend/src/profile/profile.controller.ts', import.meta.url);
+const DELETE_ACCOUNT_SCREEN_PATH = new URL('../mobile/src/screens/shared/DeleteAccountScreen.tsx', import.meta.url);
+const ACCOUNT_LIFECYCLE_CONTROLLER_PATH = new URL('../backend/src/auth/account-lifecycle.controller.ts', import.meta.url);
+const ACCOUNT_LIFECYCLE_SERVICE_PATH = new URL('../backend/src/auth/account-lifecycle.service.ts', import.meta.url);
+const DELETE_ACCOUNT_DTO_PATH = new URL('../backend/src/auth/dto/delete-account.dto.ts', import.meta.url);
 
 const args = new Set(process.argv.slice(2));
 const writeEvidence = args.has('--write-evidence');
@@ -63,7 +66,10 @@ const [
   paymentService,
   aiService,
   notificationService,
-  profileController,
+  deleteAccountScreen,
+  accountLifecycleController,
+  accountLifecycleService,
+  deleteAccountDto,
 ] = await Promise.all([
   read(COMPLIANCE_PATH),
   read(DATA_SAFETY_PATH),
@@ -79,14 +85,17 @@ const [
   read(PAYMENT_SERVICE_PATH),
   read(AI_SERVICE_PATH),
   read(NOTIFICATION_SERVICE_PATH),
-  read(PROFILE_CONTROLLER_PATH),
+  read(DELETE_ACCOUNT_SCREEN_PATH),
+  read(ACCOUNT_LIFECYCLE_CONTROLLER_PATH),
+  read(ACCOUNT_LIFECYCLE_SERVICE_PATH),
+  read(DELETE_ACCOUNT_DTO_PATH),
 ]);
 
 const compliance = JSON.parse(complianceRaw);
 const mobilePackage = JSON.parse(mobilePackageRaw);
 
 if (compliance.schemaVersion !== 1) fail('schemaVersion must be 1');
-if (compliance.phase !== '13C') fail('phase must be 13C');
+if (compliance.phase !== '13D') fail('phase must be 13D');
 if (compliance.program !== 'google-play-compliance') fail('unexpected compliance program');
 if (compliance.applicationId !== 'com.nvetcare') fail('applicationId must remain com.nvetcare');
 if (compliance.scope !== 'android-mobile-client') fail('scope must remain android-mobile-client');
@@ -101,7 +110,7 @@ const permittedBaseline = [
   'android.permission.ACCESS_COARSE_LOCATION',
   'android.permission.ACCESS_FINE_LOCATION',
 ];
-assertSameSet(actualPermissions, permittedBaseline, 'Phase 13C permission baseline changed');
+assertSameSet(actualPermissions, permittedBaseline, 'Phase 13D permission baseline changed');
 
 for (const deniedPermission of [
   'android.permission.ACCESS_BACKGROUND_LOCATION',
@@ -117,7 +126,7 @@ for (const deniedPermission of [
   'android.permission.POST_NOTIFICATIONS',
 ]) {
   if (actualPermissions.includes(deniedPermission)) {
-    fail(`sensitive permission ${deniedPermission} requires an explicit Phase 13C compliance update`);
+    fail(`sensitive permission ${deniedPermission} requires an explicit Phase 13D compliance update`);
   }
 }
 
@@ -178,24 +187,39 @@ for (const requiredId of [
   if (!inventoryIds.has(requiredId)) fail(`dataInventory is missing ${requiredId}`);
 }
 
-const mobileDeletionFlowObserved = /deleteAccount|deleteMyAccount|\/account\/delete|\/users\/me[^\n]*delete/i.test(authService);
-const backendDeletionEndpointObserved = /@Delete\s*\(/.test(profileController);
-const deletionImplemented = mobileDeletionFlowObserved && backendDeletionEndpointObserved;
+// Phase 13D requires the complete self-service account-deletion chain, not a
+// documentation-only flag. Any missing edge returns the contract to fail-closed.
+requireMatch(authService, /async\s+deleteAccount\s*\(/, 'mobile auth service must expose deleteAccount');
+requireMatch(authService, /['"]\/auth\/account['"]/, 'mobile deletion must call the canonical backend endpoint');
+requireMatch(deleteAccountScreen, /ELIMINAR MI CUENTA/, 'mobile deletion UI must require the explicit confirmation phrase');
+requireMatch(deleteAccountScreen, /getAccountDeletionReadiness|useAccountDeletionReadinessQuery/, 'mobile deletion UI must fetch server-side blockers');
+requireMatch(accountLifecycleController, /@Delete\(["']auth\/account["']\)/, 'backend must expose authenticated DELETE /auth/account');
+requireMatch(accountLifecycleController, /@Get\(["']privacy\/account-deletion["']\)/, 'backend must expose a public deletion-information route');
+requireMatch(accountLifecycleService, /self_service_account_deletion/, 'backend deletion must produce an auditable lifecycle event');
+requireMatch(accountLifecycleService, /isActive:\s*false/, 'account deletion must deactivate the authentication anchor');
+requireMatch(accountLifecycleService, /passwordHash:\s*null/, 'account deletion must erase the local credential hash');
+requireMatch(accountLifecycleService, /ctgUserId:\s*null/, 'account deletion must unlink the federated identity');
+requireMatch(accountLifecycleService, /userSession\.deleteMany/, 'account deletion must revoke and erase sessions');
+requireMatch(accountLifecycleService, /ACCOUNT_DELETION_BLOCKED/, 'account deletion must fail closed on operational or financial blockers');
+requireMatch(deleteAccountDto, /@Equals\(["']ELIMINAR MI CUENTA["']/, 'backend DTO must enforce the exact destructive confirmation phrase');
+
 const deletionStatus = compliance.accountLifecycle?.accountDeletion?.status;
-if (deletionImplemented && deletionStatus !== 'implemented') {
-  fail('account deletion code is present but compliance status has not been promoted to implemented');
-}
-if (!deletionImplemented && deletionStatus !== 'pending') {
-  fail('account deletion is not proven by both mobile and backend contracts; status must remain pending');
+if (deletionStatus !== 'implemented') {
+  fail('Phase 13D repository implementation is present; account deletion status must be implemented');
 }
 if (compliance.accountLifecycle?.accountDeletion?.requiredBeforePublicProduction !== true) {
   fail('account deletion must remain a public-production gate while account creation is available');
 }
+if (compliance.accountLifecycle?.accountDeletion?.publicRoute !== '/api/privacy/account-deletion') {
+  fail('public deletion route contract must remain /api/privacy/account-deletion');
+}
 
-requireMatch(dataSafety, /Play Console declaration remains external evidence.*pending/i, 'Data Safety document must remain explicit that console evidence is pending');
-requireMatch(dataSafety, /Account deletion blocker/i, 'Data Safety document must include the account deletion blocker');
+requireMatch(dataSafety, /Play Console declaration remains external evidence.*pending/is, 'Data Safety document must remain explicit that console evidence is pending');
+requireMatch(dataSafety, /Account deletion lifecycle/i, 'Data Safety document must document the Phase 13D account deletion lifecycle');
+requireMatch(dataSafety, /pseudonimiz/i, 'Data Safety document must disclose pseudonymized retention');
 requireMatch(privacy, /Publication status:\*\* `PENDING`/i, 'privacy source must not be represented as already published');
-requireMatch(privacy, /Esta fuente no afirma que dicho mecanismo ya esté disponible/i, 'privacy source must not claim account deletion is already available');
+requireMatch(privacy, /eliminación de cuenta de autoservicio está implementada/i, 'privacy source must truthfully describe the implemented deletion mechanism');
+requireMatch(privacy, /registros clínicos, financieros, profesionales o de auditoría/i, 'privacy source must disclose retained record categories');
 requireMatch(reviewer, /actual reviewer credentials remain external/i, 'reviewer runbook must keep credentials external');
 requireMatch(reviewer, /Never use ADMIN, SUPERADMIN/i, 'reviewer runbook must prohibit privileged reviewer identities');
 
@@ -224,7 +248,7 @@ const externalBlockers = Object.entries(compliance.externalEvidence ?? {})
 const evidence = {
   schemaVersion: 1,
   program: 'android-play-compliance',
-  phase: '13C',
+  phase: '13D',
   applicationId: compliance.applicationId,
   contractStatus: 'verified',
   permissionInventory: sortedUnique(actualPermissions),
@@ -238,14 +262,17 @@ const evidence = {
     dataSafetySourceSha256: sha256(dataSafety),
     privacyPolicySourceSha256: sha256(privacy),
     reviewerRunbookSha256: sha256(reviewer),
+    accountLifecycleControllerSha256: sha256(accountLifecycleController),
+    accountLifecycleServiceSha256: sha256(accountLifecycleService),
+    deleteAccountScreenSha256: sha256(deleteAccountScreen),
   },
   generatedAt: new Date().toISOString(),
 };
 
-console.log('PASS | Android Play compliance contract | Phase 13C repository inventory is internally consistent');
+console.log('PASS | Android Play compliance contract | Phase 13D repository inventory is internally consistent');
 console.log(`PASS | Permissions | ${evidence.permissionInventory.join(', ')}`);
 console.log(`PASS | SDK boundary | advertising/analytics observed=${advertisingOrAnalyticsSdk}`);
-console.log(`PASS | Account deletion truthfulness | status=${deletionStatus}`);
+console.log(`PASS | Account deletion lifecycle | status=${deletionStatus}`);
 console.log(`INFO | External evidence still required | ${externalBlockers.join(', ') || 'none'}`);
 
 if (writeEvidence) {
