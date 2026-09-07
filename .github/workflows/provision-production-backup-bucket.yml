@@ -26,36 +26,27 @@ jobs:
   provision-production-backup-bucket:
     name: Provision production object storage and trigger backup worker
     runs-on: ubuntu-latest
+    container: ghcr.io/railwayapp/cli:latest
     environment: staging
     timeout-minutes: 10
     env:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
     steps:
-      - name: Checkout canonical repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
-
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli@latest
-
       - name: Validate Railway credential
-        shell: bash
+        shell: sh
         run: |
-          set -euo pipefail
+          set -eu
           if [ -z "${RAILWAY_API_TOKEN:-}" ]; then
             echo '::error::RAILWAY_API_TOKEN is required to provision the production backup bucket.'
             exit 1
           fi
+          railway --version
 
       - name: Link production project and environment
-        shell: bash
+        shell: sh
         run: |
-          set -euo pipefail
+          set -eu
           railway link \
             --workspace "$RAILWAY_WORKSPACE_ID" \
             --project "$RAILWAY_PROJECT_ID" \
@@ -63,65 +54,35 @@ jobs:
 
       - name: Ensure production backup bucket exists
         id: bucket
-        shell: bash
+        shell: sh
         run: |
-          set -euo pipefail
-          railway bucket -e "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" list --json > /tmp/railway-buckets.json
-
-          if node - <<'NODE'
-          const fs = require('fs');
-          const buckets = JSON.parse(fs.readFileSync('/tmp/railway-buckets.json', 'utf8'));
-          const name = process.env.RAILWAY_BACKUP_BUCKET_NAME;
-          process.exit(Array.isArray(buckets) && buckets.some((bucket) => bucket?.name === name) ? 0 : 1);
-          NODE
-          then
+          set -eu
+          if railway bucket -e "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" list | grep -Fxq "$RAILWAY_BACKUP_BUCKET_NAME"; then
             echo "Bucket $RAILWAY_BACKUP_BUCKET_NAME already exists; preserving it."
             echo 'created=false' >> "$GITHUB_OUTPUT"
           else
             railway bucket -e "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" create \
               "$RAILWAY_BACKUP_BUCKET_NAME" \
-              --region "$RAILWAY_BACKUP_BUCKET_REGION" \
-              --json > /tmp/railway-bucket-create.json
-
-            node - <<'NODE'
-            const fs = require('fs');
-            const result = JSON.parse(fs.readFileSync('/tmp/railway-bucket-create.json', 'utf8'));
-            if (result?.staged === true && result?.committed !== true) {
-              console.error('Bucket creation was staged instead of committed. Commit Railway staged changes before backup certification.');
-              process.exit(2);
-            }
-            if (!result?.id || !result?.name) {
-              console.error('Railway did not return a valid bucket creation result.');
-              process.exit(3);
-            }
-            console.log(`Created Railway bucket ${result.name} in ${result.region ?? 'requested region'}.`);
-            NODE
+              --region "$RAILWAY_BACKUP_BUCKET_REGION"
             echo 'created=true' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Verify bucket metadata
-        shell: bash
+        shell: sh
         run: |
-          set -euo pipefail
+          set -eu
           railway bucket \
             -e "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" \
             -b "$RAILWAY_BACKUP_BUCKET_NAME" \
-            info --json > /tmp/railway-bucket-info.json
-
-          node - <<'NODE'
-          const fs = require('fs');
-          const info = JSON.parse(fs.readFileSync('/tmp/railway-bucket-info.json', 'utf8'));
-          const expectedName = process.env.RAILWAY_BACKUP_BUCKET_NAME;
-          const expectedRegion = process.env.RAILWAY_BACKUP_BUCKET_REGION;
-          if (info?.name !== expectedName) throw new Error(`Unexpected bucket name: ${info?.name}`);
-          if (info?.region !== expectedRegion) throw new Error(`Unexpected bucket region: ${info?.region}`);
-          console.log(`Bucket certified: ${info.name} (${info.region}); objects=${info.objects ?? 0}.`);
-          NODE
+            info > /tmp/railway-bucket-info.txt
+          cat /tmp/railway-bucket-info.txt
+          grep -Fq "Name:          $RAILWAY_BACKUP_BUCKET_NAME" /tmp/railway-bucket-info.txt
+          grep -Fq "Region:        $RAILWAY_BACKUP_BUCKET_REGION" /tmp/railway-bucket-info.txt
 
       - name: Trigger canonical backup worker
-        shell: bash
+        shell: sh
         run: |
-          set -euo pipefail
+          set -eu
           railway redeploy \
             -s "$RAILWAY_BACKUP_SERVICE_ID" \
             -e "$RAILWAY_PRODUCTION_ENVIRONMENT_ID" \
@@ -129,7 +90,7 @@ jobs:
 
       - name: Publish provisioning summary
         if: always()
-        shell: bash
+        shell: sh
         run: |
           {
             echo '## Production backup bucket bootstrap'
