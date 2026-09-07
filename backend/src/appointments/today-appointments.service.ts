@@ -64,12 +64,19 @@ export class TodayAppointmentsService {
 
     const values = Object.fromEntries(
       parts
-        .filter((part) => part.type === "year" || part.type === "month" || part.type === "day")
+        .filter(
+          (part) =>
+            part.type === "year" ||
+            part.type === "month" ||
+            part.type === "day",
+        )
         .map((part) => [part.type, part.value]),
     ) as Record<"year" | "month" | "day", string>;
 
     if (!values.year || !values.month || !values.day) {
-      throw new BadRequestException("Unable to resolve veterinarian local date");
+      throw new BadRequestException(
+        "Unable to resolve veterinarian local date",
+      );
     }
 
     return `${values.year}-${values.month}-${values.day}`;
