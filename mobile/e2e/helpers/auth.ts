@@ -1,9 +1,10 @@
 /**
  * Helpers de autenticación para flujos E2E.
  *
- * Los flujos usan el contrato de accesibilidad real de la app en lugar de
- * testIDs que no existen en las pantallas productivas. Esto mantiene Detox
- * alineado con la misma superficie que usan lectores de pantalla.
+ * Los flujos usan el contrato de accesibilidad real de la app. Los campos de
+ * credenciales tienen labels canónicos; el CTA de login está localizado por el
+ * runtime, por lo que el matcher acepta explícitamente los dos locales soportados
+ * por Nvet Care (es-CO / en-US) en vez de asumir el idioma del runner Android.
  *
  * Las credenciales son obligatorias y proceden de la sesión staging certificada.
  * No existen defaults locales: un gate de certificación nunca debe continuar con
@@ -31,6 +32,10 @@ const FIXTURES = {
   },
 }
 
+const LOGIN_SUBMIT_MATCHER = by
+  .label('Iniciar sesión')
+  .or(by.label('Sign in'))
+
 export async function loginAs(role: 'client' | 'vet') {
   const creds = FIXTURES[role]
 
@@ -40,7 +45,8 @@ export async function loginAs(role: 'client' | 'vet') {
   await waitForElement(by.label('Correo electrónico'), 30_000)
   await emailInput.replaceText(creds.email)
   await passwordInput.replaceText(creds.password)
-  await element(by.label('Iniciar sesión')).tap()
+  await waitForElement(LOGIN_SUBMIT_MATCHER)
+  await element(LOGIN_SUBMIT_MATCHER).tap()
 
   // RootNavigator cambia de stack cuando /auth/me refleja la sesión.
   const targetLabel = role === 'client' ? 'Pantalla de inicio' : 'Panel veterinario'
