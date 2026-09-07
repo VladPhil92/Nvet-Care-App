@@ -5,7 +5,9 @@ import { PassportModule } from "@nestjs/passport";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 
 import { AuthController } from "./auth.controller";
+import { AccountLifecycleController } from "./account-lifecycle.controller";
 import { AuthService } from "./auth.service";
+import { AccountLifecycleService } from "./account-lifecycle.service";
 import { PasswordService } from "./services/password.service";
 import { PasswordResetService } from "./services/password-reset.service";
 import { EmailVerificationService } from "./services/email-verification.service";
@@ -40,9 +42,10 @@ import { WsJwtGuard, WsEmailVerifiedGuard } from "./guards/ws-jwt.guard";
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, AccountLifecycleController],
   providers: [
     AuthService,
+    AccountLifecycleService,
     PasswordService,
     PasswordResetService,
     EmailVerificationService,
