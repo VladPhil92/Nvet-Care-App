@@ -117,18 +117,21 @@
       "federatedReauthentication": "active authenticated Nvet session; TOTP additionally required when 2FA is enabled",
       "blockingConditions": [
         "active or disputed appointments",
-        "pending, verifying or disputed transactions",
-        "non-zero wallet balance",
+        "pending, verifying, confirmed-awaiting-settlement or disputed transactions",
+        "non-zero CTG balance or withdrawable veterinarian COP balance",
         "open veterinarian withdrawals",
         "administrative account"
       ],
       "deletionMode": "erase operational identifiers and sessions; pseudonymize retained clinical, financial, professional-verification and audit records",
+      "concurrencyBoundary": "final blocker validation and deactivation execute in one serializable database transaction with serialization-conflict retry",
+      "realtimeBoundary": "protected WebSocket events revalidate active account state and disconnect deleted/deactivated identities",
       "publicRoute": "/api/privacy/account-deletion",
       "mobileRoute": "Profile > Privacy and account > Delete account",
       "source": [
         "backend/src/auth/account-lifecycle.controller.ts",
         "backend/src/auth/account-lifecycle.service.ts",
         "backend/src/auth/dto/delete-account.dto.ts",
+        "backend/src/auth/guards/ws-jwt.guard.ts",
         "mobile/src/services/auth.service.ts",
         "mobile/src/screens/shared/DeleteAccountScreen.tsx"
       ]
@@ -164,6 +167,7 @@
     "mobile/src/screens/shared/DeleteAccountScreen.tsx",
     "backend/src/auth/account-lifecycle.controller.ts",
     "backend/src/auth/account-lifecycle.service.ts",
-    "backend/src/auth/dto/delete-account.dto.ts"
+    "backend/src/auth/dto/delete-account.dto.ts",
+    "backend/src/auth/guards/ws-jwt.guard.ts"
   ]
 }
