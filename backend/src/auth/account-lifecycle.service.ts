@@ -32,10 +32,17 @@ const ACTIVE_APPOINTMENT_STATUSES: AppointmentStatus[] = [
 const UNRESOLVED_TRANSACTION_STATUSES: TransactionStatus[] = [
   TransactionStatus.PENDING,
   TransactionStatus.VERIFYING,
+  TransactionStatus.CONFIRMED,
   TransactionStatus.DISPUTED,
 ];
 
 const OPEN_WITHDRAWAL_STATUSES = ["PENDING", "APPROVED", "PROCESSING"];
+const COMMITTED_WITHDRAWAL_STATUSES = [
+  "PENDING",
+  "APPROVED",
+  "PROCESSING",
+  "PAID",
+];
 const BALANCE_EPSILON = 0.000001;
 const EXTERNAL_DELETION_TTL_SECONDS = 30 * 60;
 const GENERIC_EXTERNAL_REQUEST_MESSAGE =
@@ -44,6 +51,11 @@ const GENERIC_EXTERNAL_REQUEST_MESSAGE =
 type DeletionUser = Prisma.UserGetPayload<{
   include: { vetProfile: true };
 }>;
+
+type DeletionReadClient = Pick<
+  Prisma.TransactionClient,
+  "appointment" | "transaction" | "vetWithdrawal"
+>;
 
 export interface AccountDeletionBlocker {
   code:
@@ -68,7 +80,7 @@ export class AccountLifecycleService {
 
   async getDeletionReadiness(userId: string) {
     const user = await this.loadUser(userId);
-    const blockers = await this.collectBlockers(user);
+    const blockers = await this.collectBlockers(this.prisma, user);
 
     return {
       canDelete: blockers.length === 0,
@@ -172,30 +184,42 @@ export class AccountLifecycleService {
   }
 
   private async performDeletion(user: DeletionUser) {
-    const blockers = await this.collectBlockers(user);
-    if (blockers.length > 0) {
-      throw new ConflictException({
-        message:
-          "La cuenta todavía tiene obligaciones operativas o financieras abiertas y no puede eliminarse aún.",
-        error: "ACCOUNT_DELETION_BLOCKED",
-        blockers,
+    const outcome = await this.withSerializableRetry(async (tx) => {
+      // Re-read the account inside the same serializable transaction that
+      // performs the destructive mutation. Predicate reads below therefore
+      // participate in PostgreSQL SSI and race with concurrent bookings,
+      // payments and withdrawals instead of leaving a check-then-delete gap.
+      const currentUser = await tx.user.findUnique({
+        where: { id: user.id },
+        include: { vetProfile: true },
       });
-    }
+      if (!currentUser || !currentUser.isActive) {
+        throw new UnauthorizedException("Cuenta no disponible");
+      }
 
-    const deletedAt = new Date();
-    const anonymizedEmail = `deleted+${user.id}@privacy.invalid`;
+      const blockers = await this.collectBlockers(tx, currentUser);
+      if (blockers.length > 0) {
+        throw new ConflictException({
+          message:
+            "La cuenta todavía tiene obligaciones operativas o financieras abiertas y no puede eliminarse aún.",
+          error: "ACCOUNT_DELETION_BLOCKED",
+          blockers,
+        });
+      }
 
-    await this.prisma.$transaction(async (tx) => {
+      const deletedAt = new Date();
+      const anonymizedEmail = `deleted+${currentUser.id}@privacy.invalid`;
+
       // Device/IP metadata is not required after account deletion. Removing the
       // session rows also guarantees refresh tokens cannot be reused.
-      await tx.userSession.deleteMany({ where: { userId: user.id } });
-      await tx.notification.deleteMany({ where: { userId: user.id } });
+      await tx.userSession.deleteMany({ where: { userId: currentUser.id } });
+      await tx.notification.deleteMany({ where: { userId: currentUser.id } });
 
       // Pets without any historical appointment can be removed entirely. Pets
       // referenced by historical clinical records are pseudonymized instead so
       // referential integrity and veterinary record continuity remain intact.
       const pets = await tx.pet.findMany({
-        where: { ownerId: user.id },
+        where: { ownerId: currentUser.id },
         select: {
           id: true,
           appointments: { select: { id: true }, take: 1 },
@@ -221,22 +245,22 @@ export class AccountLifecycleService {
         }
       }
 
-      if (user.vetProfile) {
+      if (currentUser.vetProfile) {
         // Stop every operational surface immediately while retaining only the
         // minimum professional record needed to preserve historical services
         // and verification traceability where retention is required.
         await tx.price.updateMany({
-          where: { vetId: user.vetProfile.id },
+          where: { vetId: currentUser.vetProfile.id },
           data: { isActive: false },
         });
         await tx.vetSchedule.deleteMany({
-          where: { vetProfileId: user.vetProfile.id },
+          where: { vetProfileId: currentUser.vetProfile.id },
         });
         await tx.scheduleException.deleteMany({
-          where: { vetProfileId: user.vetProfile.id },
+          where: { vetProfileId: currentUser.vetProfile.id },
         });
         await tx.vetProfile.update({
-          where: { id: user.vetProfile.id },
+          where: { id: currentUser.vetProfile.id },
           data: {
             isActive: false,
             isAvailableNow: false,
@@ -253,7 +277,7 @@ export class AccountLifecycleService {
       // appointments/messages/reviews/financial records. Authentication and
       // direct identifiers are removed and the account becomes unusable.
       await tx.user.update({
-        where: { id: user.id },
+        where: { id: currentUser.id },
         data: {
           email: anonymizedEmail,
           passwordHash: null,
@@ -282,12 +306,17 @@ export class AccountLifecycleService {
           deactivatedAt: deletedAt,
         },
       });
+
+      return {
+        deletedAt,
+        actorRole: currentUser.role,
+      };
     });
 
     // Keep the audit event pseudonymous: no email, name, IP or user-agent is
     // duplicated into the immutable audit trail by this deletion action.
     await this.auditService.log({
-      actor: { id: user.id, role: user.role },
+      actor: { id: user.id, role: outcome.actorRole },
       action: AuditAction.USER_DELETED,
       severity: AuditSeverity.WARN,
       targetType: "User",
@@ -306,7 +335,7 @@ export class AccountLifecycleService {
 
     return {
       deleted: true,
-      deletedAt: deletedAt.toISOString(),
+      deletedAt: outcome.deletedAt.toISOString(),
       message:
         "Tu cuenta fue eliminada. Los registros clínicos, financieros, profesionales o de auditoría que deban conservarse permanecen pseudonimizados y ya no permiten iniciar sesión.",
     };
@@ -360,6 +389,7 @@ export class AccountLifecycleService {
   }
 
   private async collectBlockers(
+    db: DeletionReadClient,
     user: DeletionUser,
   ): Promise<AccountDeletionBlocker[]> {
     if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN) {
@@ -373,13 +403,13 @@ export class AccountLifecycleService {
     }
 
     const [clientAppointments, clientTransactions] = await Promise.all([
-      this.prisma.appointment.count({
+      db.appointment.count({
         where: {
           clientId: user.id,
           status: { in: ACTIVE_APPOINTMENT_STATUSES },
         },
       }),
-      this.prisma.transaction.count({
+      db.transaction.count({
         where: {
           status: { in: UNRESOLVED_TRANSACTION_STATUSES },
           appointment: { clientId: user.id },
@@ -390,27 +420,62 @@ export class AccountLifecycleService {
     let vetAppointments = 0;
     let vetTransactions = 0;
     let openWithdrawals = 0;
+    let availableVetCop = 0;
+
     if (user.vetProfile) {
-      [vetAppointments, vetTransactions, openWithdrawals] = await Promise.all([
-        this.prisma.appointment.count({
+      const [
+        vetAppointmentCount,
+        vetTransactionCount,
+        openWithdrawalCount,
+        liquidated,
+        committedWithdrawals,
+      ] = await Promise.all([
+        db.appointment.count({
           where: {
             vetId: user.vetProfile.id,
             status: { in: ACTIVE_APPOINTMENT_STATUSES },
           },
         }),
-        this.prisma.transaction.count({
+        db.transaction.count({
           where: {
             status: { in: UNRESOLVED_TRANSACTION_STATUSES },
             appointment: { vetId: user.vetProfile.id },
           },
         }),
-        this.prisma.vetWithdrawal.count({
+        db.vetWithdrawal.count({
           where: {
             vetProfileId: user.vetProfile.id,
             status: { in: OPEN_WITHDRAWAL_STATUSES },
           },
         }),
+        db.transaction.aggregate({
+          where: {
+            appointment: { vetId: user.vetProfile.id },
+            status: TransactionStatus.LIQUIDATED,
+          },
+          _sum: { amountCop: true, commissionAmount: true },
+        }),
+        db.vetWithdrawal.aggregate({
+          where: {
+            vetProfileId: user.vetProfile.id,
+            status: { in: COMMITTED_WITHDRAWAL_STATUSES },
+          },
+          _sum: { amountCop: true },
+        }),
       ]);
+
+      vetAppointments = vetAppointmentCount;
+      vetTransactions = vetTransactionCount;
+      openWithdrawals = openWithdrawalCount;
+
+      // Keep this equivalent to the canonical financial withdrawal balance:
+      // liquidated net earnings minus committed/paid withdrawals. Positive
+      // available COP remains withdrawable and therefore blocks deletion.
+      const earnedCop =
+        (liquidated._sum.amountCop ?? 0) -
+        (liquidated._sum.commissionAmount ?? 0);
+      const committedCop = committedWithdrawals._sum.amountCop ?? 0;
+      availableVetCop = Math.max(0, earnedCop - committedCop);
     }
 
     const blockers: AccountDeletionBlocker[] = [];
@@ -430,18 +495,19 @@ export class AccountLifecycleService {
         code: "UNRESOLVED_TRANSACTIONS",
         count: unresolvedTransactions,
         message:
-          "Existen pagos pendientes, en verificación o en disputa que deben resolverse antes de eliminar la cuenta.",
+          "Existen pagos pendientes, en verificación, confirmados pendientes de liquidación o en disputa que deben resolverse antes de eliminar la cuenta.",
       });
     }
 
     if (
       Math.abs(user.ctgBalance) > BALANCE_EPSILON ||
-      Math.abs(user.vetProfile?.ctgBalance ?? 0) > BALANCE_EPSILON
+      Math.abs(user.vetProfile?.ctgBalance ?? 0) > BALANCE_EPSILON ||
+      availableVetCop > BALANCE_EPSILON
     ) {
       blockers.push({
         code: "WALLET_BALANCE",
         message:
-          "Retira o regulariza el saldo de tu wallet antes de eliminar la cuenta.",
+          "Retira o regulariza los saldos CTG y COP disponibles antes de eliminar la cuenta.",
       });
     }
 
@@ -457,8 +523,28 @@ export class AccountLifecycleService {
     return blockers;
   }
 
+  private async withSerializableRetry<T>(
+    operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(operation, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
+      } catch (error) {
+        const code = (error as { code?: string })?.code;
+        if (code === "P2034" && attempt < 2) continue;
+        throw error;
+      }
+    }
+    throw new ConflictException(
+      "La cuenta cambió durante la eliminación. Intenta nuevamente.",
+    );
+  }
+
   private createExternalDeletionCode(userId: string): string {
-    const expiresAt = Math.floor(Date.now() / 1000) + EXTERNAL_DELETION_TTL_SECONDS;
+    const expiresAt =
+      Math.floor(Date.now() / 1000) + EXTERNAL_DELETION_TTL_SECONDS;
     const signature = this.signExternalDeletionCode(userId, expiresAt);
     return `${expiresAt}.${signature}`;
   }
