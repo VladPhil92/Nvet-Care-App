@@ -29,9 +29,10 @@ describe('Flow: Cliente reserva cita con transferencia', () => {
     // 1. Login
     await loginAsClient()
 
-    // 2. Ir a Servicios y esperar búsqueda real
-    await element(by.label('Servicios y veterinarios')).tap()
-    await waitForElement(by.label('Buscar veterinarios'))
+    // 2. Ir a Servicios y esperar la pantalla real. La tab tiene un testID
+    // estable; el título visible confirma que el stack de búsqueda ya montó.
+    await element(by.id('client-search-tab')).tap()
+    await waitForElement(by.text('Veterinarios'))
 
     // 3. Abrir el veterinario fixture
     await waitForElement(by.text('Dr. Veterinario E2E'), 15_000)
@@ -74,8 +75,8 @@ describe('Flow: Cliente reserva cita con transferencia', () => {
     await element(by.text('Volver al inicio')).tap()
 
     // 10. La cita queda registrada en el módulo de citas
-    await waitForElement(by.label('Mis citas'), 10_000)
-    await element(by.label('Mis citas')).tap()
+    await waitForElement(by.id('client-appointments-tab'), 10_000)
+    await element(by.id('client-appointments-tab')).tap()
     await waitForElement(by.text('Mis citas'), 10_000)
     await dexpect(element(by.text('Consulta general E2E')).atIndex(0)).toBeVisible()
   })

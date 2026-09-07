@@ -51,10 +51,13 @@ describe('Flow: Chat WebSocket connectivity', () => {
         .toBeVisible()
         .withTimeout(60_000)
     } else {
-      // Android no ofrece URL blacklist equivalente en Detox. Certificamos que
-      // la sesión persiste y el socket vuelve a conectar tras reiniciar proceso.
+      // Android no ofrece URL blacklist equivalente en Detox. Reiniciamos el
+      // proceso, esperamos explícitamente que la sesión persistida reconstruya
+      // el stack CLIENT y solo entonces entregamos el deep link. Esto evita una
+      // carrera entre hidratación de auth y resolución de rutas del NavigationContainer.
       await device.terminateApp()
       await device.launchApp({ newInstance: true })
+      await waitForElement(by.id('client-home-tab'), 30_000)
       await device.launchApp({ newInstance: false, url: CHAT_URL })
       await waitForElement(by.text('Chat'), 15_000)
       await waitFor(element(by.label('En vivo')))

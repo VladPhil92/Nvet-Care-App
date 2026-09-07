@@ -3,7 +3,9 @@
  *
  * Los campos de credenciales usan el contrato de accesibilidad real. El CTA de
  * login conserva su accessibilityLabel localizado para usuarios, pero expone un
- * testID estable para que Detox no dependa del locale del emulador.
+ * testID estable para que Detox no dependa del locale del emulador. El éxito de
+ * autenticación se certifica con los IDs de las tabs raíz, no con textos que
+ * pueden repetirse dentro de la pantalla.
  *
  * Las credenciales son obligatorias y proceden de la sesión staging certificada.
  * No existen defaults locales: un gate de certificación nunca debe continuar con
@@ -45,9 +47,10 @@ export async function loginAs(role: 'client' | 'vet') {
   await waitForElement(LOGIN_SUBMIT_MATCHER)
   await element(LOGIN_SUBMIT_MATCHER).tap()
 
-  // RootNavigator cambia de stack cuando /auth/me refleja la sesión.
-  const targetLabel = role === 'client' ? 'Pantalla de inicio' : 'Panel veterinario'
-  await waitForElement(by.label(targetLabel), 20_000)
+  // RootNavigator cambia de stack cuando /auth/me refleja la sesión. Las tabs
+  // raíz son señales únicas y estables de que el stack autorizado ya está montado.
+  const targetTabId = role === 'client' ? 'client-home-tab' : 'vet-dashboard-tab'
+  await waitForElement(by.id(targetTabId), 20_000)
 }
 
 export async function loginAsClient() {
