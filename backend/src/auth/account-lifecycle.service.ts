@@ -266,7 +266,10 @@ export class AccountLifecycleService {
         );
       }
       try {
-        await this.twoFactorService.verifyDuringLogin(user.id, dto.twoFactorCode);
+        await this.twoFactorService.verifyDuringLogin(
+          user.id,
+          dto.twoFactorCode,
+        );
       } catch {
         throw new UnauthorizedException("Código del autenticador inválido");
       }
