@@ -191,6 +191,17 @@ export default function ProfileScreen({ navigation }: Props) {
           </Card>
         </Section>
 
+        <Section title="PRIVACIDAD Y CUENTA">
+          <Card>
+            <MenuRow
+              glyph="🛡️"
+              label="Eliminar cuenta"
+              value="Privacidad"
+              onPress={() => navigation.navigate('DeleteAccount')}
+            />
+          </Card>
+        </Section>
+
         <Section title={t('profile.sections.support').toUpperCase()}>
           <Card>
             <MenuRow glyph="❓" label={t('profile.menu.help')} />
