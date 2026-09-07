@@ -6,14 +6,30 @@ on:
     paths:
       - 'mobile/android/**'
       - 'mobile/App.tsx'
+      - 'mobile/package.json'
+      - 'mobile/src/services/auth.service.ts'
+      - 'mobile/src/services/pet.service.ts'
+      - 'mobile/src/services/appointment.service.ts'
+      - 'mobile/src/services/live-location.service.ts'
+      - 'mobile/src/services/chat.service.ts'
+      - 'mobile/src/services/payment.service.ts'
+      - 'mobile/src/services/ai.service.ts'
+      - 'mobile/src/services/notification.service.ts'
+      - 'backend/src/profile/profile.controller.ts'
       - '.github/workflows/release-android.yml'
       - '.github/workflows/android-production-readiness.yml'
       - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/ANDROID_PLAY_COMPLIANCE.json'
+      - 'docs/production/GOOGLE_PLAY_DATA_SAFETY.md'
+      - 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md'
+      - 'docs/production/ANDROID_PLAY_REVIEWER_ACCESS.md'
       - 'docs/production/ANDROID_16_BEHAVIOR_REVIEW.md'
       - 'docs/PHASE_13_ANDROID_PRODUCTION.md'
       - 'scripts/verify-android-production-readiness.mjs'
+      - 'scripts/audit-android-play-compliance.mjs'
       - 'scripts/verify-android16-compatibility.mjs'
       - '.github/workflows/ci.yml'
+      - '.gitignore'
   schedule:
     - cron: '41 12 * * *'
   workflow_dispatch:
@@ -47,6 +63,8 @@ jobs:
           node-version: '22.x'
       - name: Validate Phase 13 contract
         run: node scripts/verify-android-production-readiness.mjs --contract-only
+      - name: Audit Google Play compliance contract
+        run: node scripts/audit-android-play-compliance.mjs --write-evidence
       - name: Validate Android 16 compatibility contract
         run: node scripts/verify-android16-compatibility.mjs
 
@@ -65,6 +83,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22.x'
+      - name: Audit Google Play compliance contract
+        run: node scripts/audit-android-play-compliance.mjs --write-evidence
       - name: Validate Android 16 compatibility contract
         run: node scripts/verify-android16-compatibility.mjs
       - name: Audit current main Android evidence
