@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: UI_COLORS.line,
+    borderBottomColor: UI_COLORS.border,
   },
   backButton: { width: 44, height: 40, justifyContent: 'center' },
   backText: { fontSize: 32, color: UI_COLORS.text, lineHeight: 34 },
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   fieldLabel: { color: UI_COLORS.text, fontSize: 13, fontWeight: '700', marginBottom: 7, marginTop: 4 },
   input: {
     borderWidth: 1,
-    borderColor: UI_COLORS.line,
+    borderColor: UI_COLORS.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 11,
