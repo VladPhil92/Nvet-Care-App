@@ -3,7 +3,7 @@ import {
   ConflictException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
+import { Prisma, TransactionStatus, UserRole } from "@prisma/client";
 import { AccountLifecycleService } from "./account-lifecycle.service";
 
 function makeUser(overrides: Record<string, unknown> = {}) {
@@ -42,12 +42,24 @@ function makeUser(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeVetUser(overrides: Record<string, unknown> = {}) {
+  return makeUser({
+    role: UserRole.VET,
+    vetProfile: {
+      id: "vet-1",
+      userId: "user-1",
+      ctgBalance: 0,
+    },
+    ...overrides,
+  });
+}
+
 describe("AccountLifecycleService", () => {
   const prisma: any = {
     user: { findUnique: jest.fn(), update: jest.fn() },
     appointment: { count: jest.fn() },
-    transaction: { count: jest.fn() },
-    vetWithdrawal: { count: jest.fn() },
+    transaction: { count: jest.fn(), aggregate: jest.fn() },
+    vetWithdrawal: { count: jest.fn(), aggregate: jest.fn() },
     userSession: { deleteMany: jest.fn() },
     notification: { deleteMany: jest.fn() },
     pet: {
@@ -81,9 +93,18 @@ describe("AccountLifecycleService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.JWT_SECRET = "test-jwt-secret-at-least-thirty-two-bytes-long";
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(prisma),
+    );
     prisma.appointment.count.mockResolvedValue(0);
     prisma.transaction.count.mockResolvedValue(0);
+    prisma.transaction.aggregate.mockResolvedValue({
+      _sum: { amountCop: null, commissionAmount: null },
+    });
     prisma.vetWithdrawal.count.mockResolvedValue(0);
+    prisma.vetWithdrawal.aggregate.mockResolvedValue({
+      _sum: { amountCop: null },
+    });
     prisma.pet.findMany.mockResolvedValue([]);
     prisma.userSession.deleteMany.mockResolvedValue({ count: 1 });
     prisma.notification.deleteMany.mockResolvedValue({ count: 0 });
@@ -101,10 +122,51 @@ describe("AccountLifecycleService", () => {
     expect(result.confirmationPhrase).toBe("ELIMINAR MI CUENTA");
   });
 
-  it("fails closed when operational or financial obligations remain", async () => {
+  it("checks CONFIRMED transactions as unresolved settlement obligations", async () => {
     prisma.user.findUnique.mockResolvedValue(makeUser());
-    prisma.appointment.count.mockResolvedValueOnce(1);
-    prisma.transaction.count.mockResolvedValueOnce(1);
+    prisma.transaction.count.mockResolvedValue(1);
+
+    const result = await service.getDeletionReadiness("user-1");
+
+    expect(result.canDelete).toBe(false);
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "UNRESOLVED_TRANSACTIONS" }),
+      ]),
+    );
+    expect(prisma.transaction.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: {
+            in: expect.arrayContaining([TransactionStatus.CONFIRMED]),
+          },
+        }),
+      }),
+    );
+  });
+
+  it("blocks a veterinarian while canonical liquidated COP remains withdrawable", async () => {
+    prisma.user.findUnique.mockResolvedValue(makeVetUser());
+    prisma.transaction.aggregate.mockResolvedValue({
+      _sum: { amountCop: 150000, commissionAmount: 15000 },
+    });
+    prisma.vetWithdrawal.aggregate.mockResolvedValue({
+      _sum: { amountCop: 35000 },
+    });
+
+    const result = await service.getDeletionReadiness("user-1");
+
+    expect(result.canDelete).toBe(false);
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "WALLET_BALANCE" }),
+      ]),
+    );
+  });
+
+  it("runs final blocker validation inside the serializable deletion transaction", async () => {
+    prisma.user.findUnique.mockResolvedValue(makeUser());
+    prisma.appointment.count.mockResolvedValue(1);
 
     await expect(
       service.deleteAccount("user-1", {
@@ -113,7 +175,28 @@ describe("AccountLifecycleService", () => {
       }),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("retries a serialization conflict before committing deletion", async () => {
+    prisma.user.findUnique.mockResolvedValue(makeUser());
+    const serializationError = Object.assign(new Error("serialization"), {
+      code: "P2034",
+    });
+    prisma.$transaction
+      .mockRejectedValueOnce(serializationError)
+      .mockImplementationOnce(async (callback: any) => callback(prisma));
+
+    const result = await service.deleteAccount("user-1", {
+      confirmation: "ELIMINAR MI CUENTA",
+      currentPassword: "correct-password",
+    });
+
+    expect(result.deleted).toBe(true);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
   });
 
   it("requires the current password for local-password accounts", async () => {
