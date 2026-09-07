@@ -1,10 +1,9 @@
 /**
  * Helpers de autenticación para flujos E2E.
  *
- * Los flujos usan el contrato de accesibilidad real de la app. Los campos de
- * credenciales tienen labels canónicos; el CTA de login está localizado por el
- * runtime, por lo que el matcher acepta explícitamente los dos locales soportados
- * por Nvet Care (es-CO / en-US) en vez de asumir el idioma del runner Android.
+ * Los campos de credenciales usan el contrato de accesibilidad real. El CTA de
+ * login conserva su accessibilityLabel localizado para usuarios, pero expone un
+ * testID estable para que Detox no dependa del locale del emulador.
  *
  * Las credenciales son obligatorias y proceden de la sesión staging certificada.
  * No existen defaults locales: un gate de certificación nunca debe continuar con
@@ -32,9 +31,7 @@ const FIXTURES = {
   },
 }
 
-const LOGIN_SUBMIT_MATCHER = by
-  .label('Iniciar sesión')
-  .or(by.label('Sign in'))
+const LOGIN_SUBMIT_MATCHER = by.id('login-submit')
 
 export async function loginAs(role: 'client' | 'vet') {
   const creds = FIXTURES[role]
