@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "program": "global-release-closure",
+  "candidate": "1.0.0-rc.1",
+  "auditBaselineSha": "33e7c52f46ee73ff38bb0f6f07a819d1abddd97e",
+  "scorePolicy": {
+    "engineeringWeight": 0.7,
+    "machineRuntimeWeight": 0.15,
+    "externalEvidenceWeight": 0.15,
+    "note": "Engineering completion and release evidence are intentionally separated. A pending operator/provider gate must never be represented as missing software development."
+  },
+  "sourceManifests": {
+    "rc": "docs/production/RC_READINESS.json",
+    "android": "docs/production/ANDROID_PRODUCTION_READINESS.json"
+  },
+  "engineeringGates": [
+    {
+      "id": "repository-ci",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "evidencePaths": [".github/workflows/ci.yml"]
+    },
+    {
+      "id": "backend-production-contract",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "evidencePaths": ["backend/package.json", "backend/src/main.ts"]
+    },
+    {
+      "id": "android-native-and-e2e-contract",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "evidencePaths": ["mobile/android/app/build.gradle", "mobile/e2e/run-android-ci.sh"]
+    },
+    {
+      "id": "security-convergence",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "evidencePaths": ["scripts/security-convergence-gate.mjs"]
+    },
+    {
+      "id": "recovery-automation",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "evidencePaths": ["scripts/database-recovery-convergence-gate.mjs", ".github/workflows/recovery-readiness.yml"]
+    },
+    {
+      "id": "financial-certification-automation",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "evidencePaths": ["scripts/financial-production-convergence-gate.mjs", ".github/workflows/payment-rail-certification.yml"]
+    },
+    {
+      "id": "railway-deployment-contract",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "evidencePaths": [".github/workflows/railway-contract.yml", "scripts/audit-railway-production-deployment.mjs"]
+    },
+    {
+      "id": "web-production-convergence",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "evidencePaths": [".github/workflows/web-production-convergence.yml"]
+    },
+    {
+      "id": "android-play-compliance-contract",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "sourceGate": "android.requiredEvidence.playComplianceContractVerified",
+      "evidencePaths": ["scripts/audit-android-play-compliance.mjs"]
+    },
+    {
+      "id": "account-deletion-lifecycle",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "sourceGate": "android.requiredEvidence.accountDeletionAvailable",
+      "evidencePaths": ["backend/src/auth/account-lifecycle.controller.ts", "mobile/src/screens/shared/DeleteAccountScreen.tsx"]
+    },
+    {
+      "id": "android-16-compatibility-contract",
+      "status": "verified",
+      "owner": "engineering",
+      "blocking": true,
+      "sourceGate": "android.requiredEvidence.android16BehaviorReviewCompleted",
+      "evidencePaths": ["scripts/verify-android16-compatibility.mjs"]
+    }
+  ],
+  "runtimeWorkflows": [
+    "ci.yml",
+    "railway-contract.yml",
+    "staging-e2e.yml",
+    "recovery-readiness.yml",
+    "payment-rail-certification.yml",
+    "production-deployment-attestation.yml",
+    "web-production-convergence.yml"
+  ],
+  "externalEvidence": [
+    {"id": "production-backup-configured", "sourceGate": "rc.requiredExternalEvidence.productionBackupConfigured", "owner": "railway-operator", "manual": true, "blocking": true},
+    {"id": "provider-restore-drill", "sourceGate": "rc.requiredExternalEvidence.restoreDrillVerified", "owner": "railway-operator", "manual": true, "blocking": true},
+    {"id": "production-alerting", "sourceGate": "rc.requiredExternalEvidence.productionAlertingVerified", "owner": "engineering-operator", "manual": false, "blocking": true},
+    {"id": "real-transfer-rail", "sourceGate": "rc.requiredExternalEvidence.paymentRailVerified", "owner": "finance-operator", "manual": true, "blocking": true},
+    {"id": "rc-promoted", "sourceGate": "android.requiredEvidence.rcPromoted", "owner": "release-operator", "manual": true, "blocking": true},
+    {"id": "play-console-app", "sourceGate": "android.requiredEvidence.playConsoleAppCreated", "owner": "play-operator", "manual": true, "blocking": true},
+    {"id": "play-app-signing", "sourceGate": "android.requiredEvidence.playAppSigningEnabled", "owner": "play-operator", "manual": true, "blocking": true},
+    {"id": "upload-certificate", "sourceGate": "android.requiredEvidence.uploadCertificatePinned", "owner": "release-operator", "manual": true, "blocking": true},
+    {"id": "play-compliance-contract", "sourceGate": "android.requiredEvidence.playComplianceContractVerified", "owner": "engineering", "manual": false, "blocking": true},
+    {"id": "privacy-policy-published", "sourceGate": "android.requiredEvidence.privacyPolicyPublished", "owner": "legal-product-operator", "manual": true, "blocking": true},
+    {"id": "data-safety-reviewed", "sourceGate": "android.requiredEvidence.dataSafetyReviewed", "owner": "play-product-operator", "manual": true, "blocking": true},
+    {"id": "account-deletion-available", "sourceGate": "android.requiredEvidence.accountDeletionAvailable", "owner": "engineering", "manual": false, "blocking": true},
+    {"id": "play-reviewer-access", "sourceGate": "android.requiredEvidence.playReviewerAccessConfigured", "owner": "play-operator", "manual": true, "blocking": true},
+    {"id": "signed-aab", "sourceGate": "android.requiredEvidence.signedAabVerified", "owner": "release-operator", "manual": true, "blocking": true},
+    {"id": "internal-track-uploaded", "sourceGate": "android.requiredEvidence.internalTrackUploaded", "owner": "play-operator", "manual": true, "blocking": true},
+    {"id": "physical-device-smoke", "sourceGate": "android.requiredEvidence.physicalDeviceSmokeVerified", "owner": "qa-operator", "manual": true, "blocking": true},
+    {"id": "android-16-review", "sourceGate": "android.requiredEvidence.android16BehaviorReviewCompleted", "owner": "engineering", "manual": false, "blocking": true}
+  ],
+  "operatorGates": [
+    {
+      "id": "main-branch-protection",
+      "status": "pending",
+      "evidence": "GitHub issue #77",
+      "owner": "repository-admin",
+      "manual": true,
+      "blocking": true,
+      "note": "Require pull requests and CI Success on main, and block direct pushes. This needs repository administration permission."
+    }
+  ]
+}
