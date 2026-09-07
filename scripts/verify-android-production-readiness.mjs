@@ -1,6 +1,11 @@
 import fs from 'node:fs/promises';
 
 const MANIFEST_PATH = new URL('../docs/production/ANDROID_PRODUCTION_READINESS.json', import.meta.url);
+const COMPLIANCE_MANIFEST_PATH = new URL('../docs/production/ANDROID_PLAY_COMPLIANCE.json', import.meta.url);
+const DATA_SAFETY_PATH = new URL('../docs/production/GOOGLE_PLAY_DATA_SAFETY.md', import.meta.url);
+const PRIVACY_POLICY_PATH = new URL('../docs/production/NVET_PRIVACY_POLICY_SOURCE.md', import.meta.url);
+const REVIEWER_RUNBOOK_PATH = new URL('../docs/production/ANDROID_PLAY_REVIEWER_ACCESS.md', import.meta.url);
+const PLAY_COMPLIANCE_AUDIT_PATH = new URL('./audit-android-play-compliance.mjs', import.meta.url);
 const ANDROID_BUILD_PATH = new URL('../mobile/android/build.gradle', import.meta.url);
 const APP_BUILD_PATH = new URL('../mobile/android/app/build.gradle', import.meta.url);
 const WRAPPER_PATH = new URL('../mobile/android/gradle/wrapper/gradle-wrapper.properties', import.meta.url);
@@ -12,8 +17,11 @@ const REQUIRED_EVIDENCE_KEYS = [
   'playConsoleAppCreated',
   'playAppSigningEnabled',
   'uploadCertificatePinned',
+  'playComplianceContractVerified',
   'privacyPolicyPublished',
   'dataSafetyReviewed',
+  'accountDeletionAvailable',
+  'playReviewerAccessConfigured',
   'signedAabVerified',
   'internalTrackUploaded',
   'physicalDeviceSmokeVerified',
@@ -78,17 +86,54 @@ async function readManifest() {
     }
   }
 
+  if (evidence.playComplianceContractVerified.status !== 'verified') {
+    fail('Phase 13C repository compliance contract must remain verified once deployed.');
+  }
+  if (evidence.accountDeletionAvailable.status === 'verified' && evidence.dataSafetyReviewed.status !== 'verified') {
+    fail('Account deletion must not be promoted as release evidence without a reconciled Data Safety review.');
+  }
+
   return manifest;
 }
 
 async function validateRepositoryContract() {
-  const [androidBuild, appBuild, wrapper, releaseWorkflow, gitignore] = await Promise.all([
+  const [
+    androidBuild,
+    appBuild,
+    wrapper,
+    releaseWorkflow,
+    gitignore,
+    complianceManifestRaw,
+    dataSafety,
+    privacyPolicy,
+    reviewerRunbook,
+    playComplianceAudit,
+  ] = await Promise.all([
     readText(ANDROID_BUILD_PATH),
     readText(APP_BUILD_PATH),
     readText(WRAPPER_PATH),
     readText(RELEASE_WORKFLOW_PATH),
     readText(GITIGNORE_PATH),
+    readText(COMPLIANCE_MANIFEST_PATH),
+    readText(DATA_SAFETY_PATH),
+    readText(PRIVACY_POLICY_PATH),
+    readText(REVIEWER_RUNBOOK_PATH),
+    readText(PLAY_COMPLIANCE_AUDIT_PATH),
   ]);
+
+  const complianceManifest = JSON.parse(complianceManifestRaw);
+  if (complianceManifest.schemaVersion !== 1 || complianceManifest.phase !== '13C') {
+    fail('Android production contract mismatch: Google Play compliance manifest must be Phase 13C schema v1.');
+  }
+  if (complianceManifest.applicationId !== 'com.nvetcare') {
+    fail('Android production contract mismatch: Play compliance package identity drifted.');
+  }
+  if (complianceManifest.releasePolicy?.automaticProductionPromotion !== false) {
+    fail('Android production contract mismatch: Play compliance must prohibit automatic production promotion.');
+  }
+  if (complianceManifest.releasePolicy?.internalTrackAutomationMaximumStatus !== 'draft') {
+    fail('Android production contract mismatch: automated Play handoff must remain draft-only.');
+  }
 
   requireMatch(androidBuild, /compileSdkVersion\s*=\s*36\b/, 'compileSdkVersion=36');
   requireMatch(androidBuild, /targetSdkVersion\s*=\s*36\b/, 'targetSdkVersion=36');
@@ -109,6 +154,8 @@ async function validateRepositoryContract() {
     ['AAB signature verification', /jarsigner -verify\s+["']?\$AAB/],
     ['AAB SHA-256 evidence', /app-release\.aab\.sha256/],
     ['release metadata evidence', /release-metadata\.json/],
+    ['Play compliance evidence', /android-play-compliance\.json/],
+    ['Play compliance SHA-256 evidence', /android-play-compliance\.json\.sha256/],
     ['tagged artifact SHA traceability', /execFileSync\('git', \['rev-parse', 'HEAD'\]/],
     ['ephemeral keystore cleanup', /rm -f ["']?\$NVET_ANDROID_KEYSTORE_FILE/],
     ['optional internal publish input', /publish_internal:/],
@@ -138,8 +185,17 @@ async function validateRepositoryContract() {
     fail('Android production contract mismatch: automated Play handoff must remain draft-only.');
   }
 
+  requireMatch(dataSafety, /Play Console declaration remains external evidence.*pending/i, 'Data Safety source must keep external evidence pending');
+  requireMatch(dataSafety, /Account deletion blocker/i, 'Data Safety source must preserve the account deletion blocker');
+  requireMatch(privacyPolicy, /Publication status:\*\* `PENDING`/i, 'privacy policy source must not masquerade as a published policy');
+  requireMatch(reviewerRunbook, /actual reviewer credentials remain external/i, 'Play reviewer credentials must remain external');
+  requireMatch(playComplianceAudit, /Android Play compliance contract mismatch/, 'machine Play compliance audit must remain fail-closed');
+  requireMatch(playComplianceAudit, /ACCESS_BACKGROUND_LOCATION/, 'machine audit must guard background-location drift');
+  requireMatch(playComplianceAudit, /account deletion code is present/, 'machine audit must reconcile account-deletion implementation status');
+
   requireMatch(gitignore, /^\*\.jks$/m, 'Git ignore for Android .jks signing material');
   requireMatch(gitignore, /^\*\.keystore$/m, 'Git ignore for Android .keystore signing material');
+  requireMatch(gitignore, /^\.artifacts\/$/m, 'Git ignore for generated release/compliance evidence');
 }
 
 function githubHeaders() {

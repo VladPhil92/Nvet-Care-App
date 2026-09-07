@@ -71,6 +71,7 @@ coverage/
 junit.xml
 *.lcov
 .jest-cache/
+.artifacts/
 
 # React Native (extra)
 mobile/.expo/

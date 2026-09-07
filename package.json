@@ -21,7 +21,8 @@
     "backend:test": "cd backend && npm run test",
     "backend:migrate": "cd backend && npx prisma migrate dev",
     "security:convergence": "node scripts/security-convergence-gate.mjs",
-    "release:android:contract": "node scripts/verify-android-production-readiness.mjs --contract-only",
+    "release:android:compliance": "node scripts/audit-android-play-compliance.mjs --write-evidence",
+    "release:android:contract": "node scripts/verify-android-production-readiness.mjs --contract-only && node scripts/audit-android-play-compliance.mjs",
     "install:all": "npm install && cd mobile && npm install && cd ../backend && npm install && cd ../dashboard && npm install"
   },
   "engines": {
