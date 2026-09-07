@@ -57,6 +57,7 @@ export default function ClientNavigator() {
         options={{
           tabBarLabel: 'Inicio',
           tabBarAccessibilityLabel: 'Pantalla de inicio',
+          tabBarTestID: 'client-home-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="home" focused={focused} accent="sage" />
           ),
@@ -68,6 +69,7 @@ export default function ClientNavigator() {
         options={{
           tabBarLabel: 'Servicios',
           tabBarAccessibilityLabel: 'Servicios y veterinarios',
+          tabBarTestID: 'client-search-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="services" focused={focused} accent="sage" />
           ),
@@ -79,6 +81,7 @@ export default function ClientNavigator() {
         options={{
           tabBarLabel: 'Citas',
           tabBarAccessibilityLabel: 'Mis citas',
+          tabBarTestID: 'client-appointments-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="calendar" focused={focused} accent="sage" showAccentDot />
           ),
@@ -90,6 +93,7 @@ export default function ClientNavigator() {
         options={{
           tabBarLabel: 'IA',
           tabBarAccessibilityLabel: 'Asistente Nvet Care AI',
+          tabBarTestID: 'client-ai-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="chat" focused={focused} accent="sage" showAccentDot />
           ),
@@ -101,6 +105,7 @@ export default function ClientNavigator() {
         options={{
           tabBarLabel: 'Perfil',
           tabBarAccessibilityLabel: 'Mi perfil',
+          tabBarTestID: 'client-profile-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="profile" focused={focused} accent="sage" />
           ),
