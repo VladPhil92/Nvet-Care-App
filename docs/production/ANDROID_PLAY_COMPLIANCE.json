@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "phase": "13C",
+  "phase": "13D",
   "program": "google-play-compliance",
   "applicationId": "com.nvetcare",
   "scope": "android-mobile-client",
@@ -110,9 +110,28 @@
   "accountLifecycle": {
     "accountCreationAvailable": true,
     "accountDeletion": {
-      "status": "pending",
+      "status": "implemented",
       "requiredBeforePublicProduction": true,
-      "reason": "No verified self-service account deletion endpoint and mobile flow are present in the audited Phase 13C baseline."
+      "confirmationPhrase": "ELIMINAR MI CUENTA",
+      "localReauthentication": "current password; TOTP additionally required when 2FA is enabled",
+      "federatedReauthentication": "active authenticated Nvet session; TOTP additionally required when 2FA is enabled",
+      "blockingConditions": [
+        "active or disputed appointments",
+        "pending, verifying or disputed transactions",
+        "non-zero wallet balance",
+        "open veterinarian withdrawals",
+        "administrative account"
+      ],
+      "deletionMode": "erase operational identifiers and sessions; pseudonymize retained clinical, financial, professional-verification and audit records",
+      "publicRoute": "/api/privacy/account-deletion",
+      "mobileRoute": "Profile > Privacy and account > Delete account",
+      "source": [
+        "backend/src/auth/account-lifecycle.controller.ts",
+        "backend/src/auth/account-lifecycle.service.ts",
+        "backend/src/auth/dto/delete-account.dto.ts",
+        "mobile/src/services/auth.service.ts",
+        "mobile/src/screens/shared/DeleteAccountScreen.tsx"
+      ]
     }
   },
   "externalEvidence": {
@@ -122,7 +141,9 @@
     "googlePlayAppSigning": "pending",
     "physicalDeviceValidation": "pending",
     "aiProviderDataHandlingReview": "pending",
-    "paymentProviderDataHandlingReview": "pending"
+    "paymentProviderDataHandlingReview": "pending",
+    "accountDeletionProductionRoute": "pending",
+    "accountDeletionProviderPurgeReview": "pending"
   },
   "releasePolicy": {
     "automaticProductionPromotion": false,
@@ -139,6 +160,10 @@
     "mobile/src/services/chat.service.ts",
     "mobile/src/services/payment.service.ts",
     "mobile/src/services/ai.service.ts",
-    "mobile/src/services/notification.service.ts"
+    "mobile/src/services/notification.service.ts",
+    "mobile/src/screens/shared/DeleteAccountScreen.tsx",
+    "backend/src/auth/account-lifecycle.controller.ts",
+    "backend/src/auth/account-lifecycle.service.ts",
+    "backend/src/auth/dto/delete-account.dto.ts"
   ]
 }
