@@ -29,13 +29,12 @@ describe('Flow: Cliente reserva cita con transferencia', () => {
     // 1. Login
     await loginAsClient()
 
-    // 2. Ir a Servicios y esperar la pantalla real. La tab tiene un testID
-    // estable; el título visible confirma que el stack de búsqueda ya montó.
+    // 2. Ir a Servicios. La tarjeta del fixture es una señal más fuerte de que
+    // el stack y la búsqueda remota están listos que un heading puramente visual.
     await element(by.id('client-search-tab')).tap()
-    await waitForElement(by.text('Veterinarios'))
+    await waitForElement(by.text('Dr. Veterinario E2E'), 15_000)
 
     // 3. Abrir el veterinario fixture
-    await waitForElement(by.text('Dr. Veterinario E2E'), 15_000)
     await element(by.text('Dr. Veterinario E2E')).tap()
     await waitForElement(by.text('Perfil del veterinario'), 10_000)
 

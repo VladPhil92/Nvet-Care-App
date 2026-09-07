@@ -15,6 +15,7 @@ import {
   ForbiddenException,
 } from "@nestjs/common";
 import { AppointmentsService } from "./appointments.service";
+import { TodayAppointmentsService } from "./today-appointments.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { EmailVerifiedGuard } from "../auth/guards/email-verified.guard";
@@ -32,6 +33,7 @@ import { AddClinicalNotesDto } from "./dto/add-clinical-notes.dto";
 export class AppointmentsController {
   constructor(
     private readonly appointmentsService: AppointmentsService,
+    private readonly todayAppointmentsService: TodayAppointmentsService,
     private readonly idempotencyService: IdempotencyService,
   ) {}
 
@@ -56,7 +58,7 @@ export class AppointmentsController {
   @UseGuards(RolesGuard, VerifiedVetGuard)
   @Roles(UserRole.VET)
   async getTodayAppointments(@Request() req) {
-    return this.appointmentsService.getTodayAppointments(req.user.vetProfileId);
+    return this.todayAppointmentsService.getForVet(req.user.vetProfileId);
   }
 
   @Get(":id")
