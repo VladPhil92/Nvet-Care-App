@@ -11,7 +11,11 @@ import { VetsModule } from "../vets/vets.module";
 @Module({
   imports: [AuthModule, BetaModule, VetsModule],
   controllers: [AppointmentsController, LiveLocationController],
-  providers: [AppointmentsService, TodayAppointmentsService, LiveLocationService],
+  providers: [
+    AppointmentsService,
+    TodayAppointmentsService,
+    LiveLocationService,
+  ],
   exports: [AppointmentsService, LiveLocationService],
 })
 export class AppointmentsModule {}
