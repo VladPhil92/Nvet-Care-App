@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "type": "submission",
+  "id": "provider-restore-drill:34365753387",
+  "gateId": "provider-restore-drill",
+  "candidate": "1.0.0-rc.1",
+  "candidateSha": "f7330d99c2ed2fa4726209f3eff3417f25a8d79c",
+  "observedAt": "2026-09-09T14:28:29Z",
+  "submittedAt": "2026-09-09T14:46:01.648Z",
+  "submitter": "VladPhil92",
+  "evidence": {
+    "kind": "provider-console",
+    "reference": "Railway deployment 198017b0-4318-4a4c-aebd-3154e667a543; restored volume 8de02249-7588-4cc5-8230-f13a90ed500e",
+    "note": "Provider restore completed; Postgres SUCCESS; production health canary HTTP 200/database up; post-restore backup audit PASS.",
+    "redacted": true
+  }
+}
