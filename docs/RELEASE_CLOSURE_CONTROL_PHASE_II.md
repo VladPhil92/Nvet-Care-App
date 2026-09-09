@@ -48,11 +48,12 @@ No requiere las evidencias posteriores de Google Play. Esto evita una dependenci
 ## Comandos
 
 ```bash
-npm run release:closure:contract
-npm run release:closure:report
-npm run release:closure:rc
-npm run release:closure:beta
-npm run release:closure:android
+node scripts/verify-release-closure-control.mjs --contract-only
+node scripts/verify-release-closure-control.mjs
+node scripts/verify-release-closure-control.mjs --enforce=rc
+node scripts/verify-release-closure-control.mjs --enforce=beta
+node scripts/verify-release-closure-control.mjs --enforce=android
+node scripts/verify-release-closure-control.mjs --enforce=global
 ```
 
 Los comandos de enforce fallan cuando la etapa solicitada todavía tiene bloqueadores. El modo report genera evidencia sin falsear un error de ingeniería por la existencia esperada de pendientes externos.
