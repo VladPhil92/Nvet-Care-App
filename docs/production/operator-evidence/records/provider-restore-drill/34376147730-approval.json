@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "type": "approval",
+  "id": "provider-restore-drill:approval-34376147730",
+  "gateId": "provider-restore-drill",
+  "candidate": "1.0.0-rc.1",
+  "candidateSha": "f7330d99c2ed2fa4726209f3eff3417f25a8d79c",
+  "submissionId": "provider-restore-drill:34371384506",
+  "decision": "approved",
+  "approvedAt": "2026-09-09T16:21:13.077Z",
+  "approver": "CerveceriaCTG",
+  "note": "provider-restore-drill:34371384506"
+}
