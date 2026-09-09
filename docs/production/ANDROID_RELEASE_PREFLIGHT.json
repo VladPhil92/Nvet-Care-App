@@ -26,61 +26,61 @@
   "operatorHandoff": [
     {
       "id": "legal-controller-identity",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "legal-product-operator",
       "reason": "The final privacy controller identity must match the actually constituted production entity."
     },
     {
       "id": "play-console-app",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "play-operator",
       "reason": "Google Play Console must contain the com.nvetcare application in the intended developer account."
     },
     {
       "id": "play-app-signing",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "play-operator",
       "reason": "Play App Signing is external provider configuration."
     },
     {
       "id": "release-secrets",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "release-operator",
       "reason": "Keystore, upload certificate fingerprint, Maps key and Play service-account credential must be provisioned through protected GitHub environment secrets."
     },
     {
       "id": "privacy-policy-publication",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "legal-product-operator",
       "reason": "A public HTTPS policy URL, effective date, monitored contact and final controller identity remain external evidence."
     },
     {
       "id": "data-safety-play-review",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "play-product-operator",
       "reason": "The final Play Console declaration must be reconciled with active production processors."
     },
     {
       "id": "reviewer-access",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "play-operator",
       "reason": "Dedicated CLIENT and VET reviewer credentials must be configured outside Git."
     },
     {
       "id": "signed-aab",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "release-operator",
       "reason": "A signed bundle can only be certified after the immutable RC tag and protected signing secrets exist."
     },
     {
       "id": "internal-track-upload",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "play-operator",
       "reason": "The actual Play Internal Testing upload remains external evidence."
     },
     {
       "id": "physical-device-smoke",
-      "status": "pending",
+      "status": "operator-required",
       "owner": "qa-operator",
       "reason": "At least two real devices remain required for final smoke evidence."
     }
