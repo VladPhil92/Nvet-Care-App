@@ -90,7 +90,7 @@ async function main() {
     fail('operator handoff must enumerate the external release boundary');
   }
   for (const gate of preflight.operatorHandoff) {
-    if (gate.status !== 'pending') fail(`external handoff gate ${gate.id} must remain pending until real evidence exists`);
+    if (gate.status !== 'operator-required') fail(`external handoff gate ${gate.id} must remain classified as operator-required`);
     if (!gate.id || !gate.owner || !gate.reason) fail('operator handoff entries require id, owner and reason');
   }
   if (preflight.policy?.externalEvidenceNeverAutoVerified !== true) fail('external evidence must never auto-verify');
@@ -101,7 +101,7 @@ async function main() {
   if (androidReadiness.applicationId !== 'com.nvetcare' || androidReadiness.requiredTargetApi !== 36) {
     fail('Android production readiness identity/API drift');
   }
-  const expectedPendingExternal = [
+  const externalEvidenceKeys = [
     'playConsoleAppCreated',
     'playAppSigningEnabled',
     'uploadCertificatePinned',
@@ -112,9 +112,13 @@ async function main() {
     'internalTrackUploaded',
     'physicalDeviceSmokeVerified',
   ];
-  for (const key of expectedPendingExternal) {
-    if (androidReadiness.requiredEvidence?.[key]?.status !== 'pending') {
-      fail(`${key} must remain pending until external/operator evidence is approved`);
+  for (const key of externalEvidenceKeys) {
+    const entry = androidReadiness.requiredEvidence?.[key];
+    if (!entry || !['pending', 'verified'].includes(entry.status)) {
+      fail(`${key} must use a supported external evidence state`);
+    }
+    if (entry.status === 'verified' && (typeof entry.evidence !== 'string' || entry.evidence.trim().length < 3)) {
+      fail(`${key} verified state requires concrete external evidence`);
     }
   }
   for (const key of ['playComplianceContractVerified', 'accountDeletionAvailable', 'android16BehaviorReviewCompleted']) {
@@ -200,7 +204,7 @@ async function main() {
     applicationId: preflight.applicationId,
     targetSdk: preflight.targetSdk,
     technicalPreflight: 'READY',
-    externalReleaseEvidence: 'PENDING',
+    externalReleaseEvidence: 'OPERATOR_REQUIRED',
     checkedAt: new Date().toISOString(),
     technicalGates: preflight.technicalGates,
     operatorHandoff: preflight.operatorHandoff,
@@ -216,7 +220,7 @@ async function main() {
   console.log(`Package: ${report.applicationId}`);
   console.log(`Target SDK: ${report.targetSdk}`);
   console.log(`Technical gates: ${Object.keys(report.technicalGates).length}/${Object.keys(report.technicalGates).length} verified`);
-  console.log(`External/operator handoff: ${report.operatorHandoff.length} item(s) intentionally pending`);
+  console.log(`External/operator handoff: ${report.operatorHandoff.length} item(s) classified as operator-required`);
 }
 
 main().catch((error) => {
