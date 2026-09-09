@@ -24,7 +24,8 @@
     "release:global:contract": "node scripts/verify-global-readiness.mjs --contract-only",
     "release:global:runtime": "node scripts/verify-global-readiness.mjs --runtime",
     "release:android:compliance": "node scripts/audit-android-play-compliance.mjs --write-evidence",
-    "release:android:contract": "node scripts/verify-android-production-readiness.mjs --contract-only && node scripts/audit-android-play-compliance.mjs",
+    "release:android:preflight": "node scripts/verify-android-release-preflight.mjs --write-evidence",
+    "release:android:contract": "node scripts/verify-android-production-readiness.mjs --contract-only && node scripts/audit-android-play-compliance.mjs && node scripts/verify-android-release-preflight.mjs",
     "install:all": "npm install && cd mobile && npm install && cd ../backend && npm install && cd ../dashboard && npm install"
   },
   "engines": {
