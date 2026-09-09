@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "type": "submission",
+  "id": "production-backup-configured:34367228182",
+  "gateId": "production-backup-configured",
+  "candidate": "1.0.0-rc.1",
+  "candidateSha": "f7330d99c2ed2fa4726209f3eff3417f25a8d79c",
+  "observedAt": "2026-09-09T12:50:00Z",
+  "submittedAt": "2026-09-09T14:59:36.400Z",
+  "submitter": "VladPhil92",
+  "evidence": {
+    "kind": "provider-console",
+    "reference": "Railway Postgres production volume backup created 2026-09-09 12:50 UTC; 175 MB; daily and weekly backup schedules configured",
+    "note": "Provider-level Railway volume backups configured for production Postgres; manual backup completed successfully; daily and weekly schedules enabled.",
+    "redacted": true
+  }
+}
