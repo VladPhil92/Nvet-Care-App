@@ -75,9 +75,20 @@ if (project.name !== expectedProjectName) {
   throw new Error(`Railway project-name guard failed: expected ${expectedProjectName}, received ${project.name}`);
 }
 
-const serviceNames = new Map(
-  (project.services?.edges || []).map(({ node }) => [node.id, node.name]),
+const services = (project.services?.edges || []).map(({ node }) => node);
+const serviceNames = new Map(services.map((service) => [service.id, service.name]));
+const canonicalPostgresServices = services.filter(
+  (service) => String(service.name || '').toLowerCase() === expectedPostgresService.toLowerCase(),
 );
+if (canonicalPostgresServices.length !== 1) {
+  throw new Error(
+    `Expected exactly one canonical Railway service named ${expectedPostgresService}, found ${canonicalPostgresServices.length}: ${canonicalPostgresServices
+      .map((service) => `${service.name}:${service.id}`)
+      .join(', ') || 'none'}`,
+  );
+}
+const canonicalPostgresService = canonicalPostgresServices[0];
+
 const productionInstances = [];
 for (const { node: volume } of project.volumes?.edges || []) {
   for (const { node: instance } of volume.volumeInstances?.edges || []) {
@@ -91,21 +102,15 @@ for (const { node: volume } of project.volumes?.edges || []) {
   }
 }
 
-const postgresCandidates = productionInstances.filter((instance) => {
-  const serviceName = String(instance.serviceName || '').toLowerCase();
-  const mountPath = String(instance.mountPath || '').toLowerCase();
-  return (
-    serviceName === expectedPostgresService.toLowerCase() ||
-    serviceName.includes('postgres') ||
-    mountPath.includes('/postgresql/data')
-  );
-});
+const postgresCandidates = productionInstances.filter(
+  (instance) => instance.serviceId === canonicalPostgresService.id,
+);
 
 if (postgresCandidates.length !== 1) {
   throw new Error(
-    `Expected exactly one production PostgreSQL volume instance, found ${postgresCandidates.length}: ${postgresCandidates
-      .map((candidate) => `${candidate.serviceName ?? 'unknown'}:${candidate.id}`)
-      .join(', ')}`,
+    `Expected exactly one production volume instance attached to canonical ${expectedPostgresService} service ${canonicalPostgresService.id}, found ${postgresCandidates.length}: ${postgresCandidates
+      .map((candidate) => `${candidate.volumeName}:${candidate.id}:${candidate.mountPath ?? 'unknown-mount'}`)
+      .join(', ') || 'none'}`,
   );
 }
 
@@ -164,7 +169,7 @@ const verdict =
     : 'blocked';
 
 const evidence = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   evidenceType: 'railway-production-volume-backup-audit',
   observedAt: new Date().toISOString(),
   project: { id: project.id, name: project.name },
@@ -176,6 +181,7 @@ const evidence = {
     volumeName: postgres.volumeName,
     volumeInstanceId: postgres.id,
     mountPath: postgres.mountPath,
+    selectionBoundary: 'exact-canonical-service-id',
   },
   railwaySchema: {
     scheduleQuery: 'volumeInstanceBackupScheduleList',
@@ -200,6 +206,7 @@ const evidence = {
       }
     : null,
   checks: {
+    canonicalServiceResolved: true,
     scheduleConfigured: scheduleCount > 0,
     visibleBackupExists: backupCount > 0,
     latestBackupFresh,
@@ -209,12 +216,13 @@ const evidence = {
   backups,
   verdict,
   boundary:
-    'Read-only provider metadata audit. It proves configured Railway volume-backup schedules and a recent retained backup; it does not prove a restore drill. A zero-schedule result can reflect an unconfigured provider capability or a plan that does not expose native backups, but remains a release blocker until provider backup evidence exists.',
+    'Read-only provider metadata audit bound to the exact canonical production Postgres service ID. Restore/rehearsal helper services are excluded even when their names or mounts contain postgres. It proves configured Railway volume-backup schedules and a recent retained backup; it does not prove a restore drill.',
 };
 
 mkdirSync(evidencePath.split('/').slice(0, -1).join('/') || '.', { recursive: true });
 writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
 
+console.log(`Canonical PostgreSQL service: ${canonicalPostgresService.name} (${canonicalPostgresService.id})`);
 console.log(`Production PostgreSQL volume: ${postgres.volumeName} (${postgres.id})`);
 console.log(`Configured backup schedules: ${scheduleCount}`);
 console.log(`Visible backups: ${backupCount}`);
