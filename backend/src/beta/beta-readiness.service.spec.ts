@@ -131,6 +131,8 @@ describe("BetaReadinessService", () => {
         isVerified: true,
         isActive: true,
         verificationStatus: VerificationStatus.APPROVED,
+        latitude: { not: null },
+        longitude: { not: null },
         city: {
           contains: "cartagena",
           mode: "insensitive",
@@ -148,6 +150,8 @@ describe("BetaReadinessService", () => {
     expect(snapshot.cohort.membershipSource).toBe("admin-control-plane");
     expect(snapshot.support.state).toBe("ACTIVE");
     expect(snapshot.support.configurationSource).toBe("admin-control-plane");
+    expect(snapshot.vetCoverage.geoLocationRequired).toBe(true);
+    expect(snapshot.vetCoverage.serviceRadiusRequired).toBe(true);
     expect(snapshot.privacy.supportContactExposed).toBe(false);
   });
 
