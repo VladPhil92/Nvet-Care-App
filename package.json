@@ -23,6 +23,11 @@
     "security:convergence": "node scripts/security-convergence-gate.mjs",
     "release:global:contract": "node scripts/verify-global-readiness.mjs --contract-only",
     "release:global:runtime": "node scripts/verify-global-readiness.mjs --runtime",
+    "release:closure:contract": "node scripts/verify-release-closure-control.mjs --contract-only",
+    "release:closure:report": "node scripts/verify-release-closure-control.mjs",
+    "release:closure:rc": "node scripts/verify-release-closure-control.mjs --enforce=rc",
+    "release:closure:beta": "node scripts/verify-release-closure-control.mjs --enforce=beta",
+    "release:closure:android": "node scripts/verify-release-closure-control.mjs --enforce=android",
     "release:android:compliance": "node scripts/audit-android-play-compliance.mjs --write-evidence",
     "release:android:contract": "node scripts/verify-android-production-readiness.mjs --contract-only && node scripts/audit-android-play-compliance.mjs",
     "install:all": "npm install && cd mobile && npm install && cd ../backend && npm install && cd ../dashboard && npm install"
