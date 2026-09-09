@@ -35,11 +35,11 @@ The machine-readable contract is `docs/production/ANDROID_RELEASE_PREFLIGHT.json
 The artifact reports:
 
 - `technicalPreflight: READY`
-- `externalReleaseEvidence: PENDING`
+- `externalReleaseEvidence: OPERATOR_REQUIRED`
 
 This distinction is mandatory. The workflow must never convert a Play/provider/operator gate to verified merely because repository files exist.
 
-## External handoff intentionally left pending
+## External handoff intentionally left operator-controlled
 
 The following work remains outside repository automation:
 
@@ -64,4 +64,4 @@ Phase 13E may complete while `real-transfer-rail` remains pending. The Android r
 
 ## Exit criterion
 
-Phase 13E is complete when the preflight workflow is green on `main` and the external handoff remains explicitly pending rather than silently promoted.
+Phase 13E is complete when the preflight workflow is green on `main` and the external handoff remains explicitly operator-controlled rather than silently promoted.
