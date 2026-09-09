@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "program": "release-closure-control",
+  "candidate": "1.0.0-rc.1",
+  "stages": {
+    "rc": {
+      "description": "Release Candidate promotion gate. Requires Phase 11 external evidence plus repository governance; Android/Play evidence is intentionally excluded to avoid circular promotion dependencies.",
+      "source": "docs/production/RC_READINESS.json",
+      "operatorGateIds": [
+        "main-branch-protection"
+      ]
+    },
+    "android": {
+      "description": "Android production gate. Requires RC closure first, then all Phase 13 Android evidence.",
+      "source": "docs/production/ANDROID_PRODUCTION_READINESS.json",
+      "dependsOn": [
+        "rc"
+      ]
+    },
+    "beta": {
+      "description": "Cartagena closed beta activation gate. Requires RC closure first, then beta-specific market and operations evidence.",
+      "source": "docs/production/BETA_CARTAGENA_READINESS.json",
+      "dependsOn": [
+        "rc"
+      ],
+      "inheritedRcEvidence": [
+        "productionBackupConfigured",
+        "restoreDrillVerified",
+        "productionAlertingVerified",
+        "paymentRailVerified"
+      ]
+    }
+  },
+  "sharedPromotionEvidence": {
+    "rcPromoted": [
+      "android.requiredEvidence.rcPromoted",
+      "beta.requiredEvidence.rcPromoted"
+    ]
+  },
+  "policies": {
+    "verifiedEvidenceRequiresReference": true,
+    "inheritedEvidenceMustMatchStatus": true,
+    "manualPendingEvidenceDoesNotReduceEngineeringCompletion": true,
+    "promotionIsFailClosed": true
+  }
+}
