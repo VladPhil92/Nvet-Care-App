@@ -1,0 +1,167 @@
+name: Operator Evidence Control
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: submit, approve, or report
+        required: true
+        type: choice
+        options: [submit, approve, report]
+      gate_id:
+        description: Gate id from OPERATOR_EVIDENCE_CONTROL.json
+        required: false
+        type: string
+      candidate_sha:
+        description: Full 40-char candidate/RC SHA for submit
+        required: false
+        type: string
+      observed_at:
+        description: ISO-8601 time when evidence was observed
+        required: false
+        type: string
+      evidence_kind:
+        description: Allowed evidence kind for the gate
+        required: false
+        type: string
+      evidence_reference:
+        description: Redacted reference only; never paste credentials, tokens or private URLs
+        required: false
+        type: string
+      submission_id:
+        description: Existing gateId:runId to approve
+        required: false
+        type: string
+      note:
+        description: Optional non-secret note
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operator-evidence-${{ github.event.inputs.operation }}-${{ github.event.inputs.gate_id || github.event.inputs.submission_id || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  contract:
+    name: Validate evidence contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Validate registry and append-only records
+        run: node scripts/operator-evidence-control-plane.mjs --contract-only
+
+  report:
+    name: Render operator evidence report
+    needs: contract
+    if: github.event.inputs.operation == 'report'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Build status report
+        run: node scripts/operator-evidence-control-plane.mjs --write-report
+      - name: Upload status report
+        uses: actions/upload-artifact@v7
+        with:
+          name: nvet-operator-evidence-status
+          path: .artifacts/operator-evidence-status.json
+          retention-days: 30
+
+  mutate:
+    name: Create append-only evidence PR
+    needs: contract
+    if: github.event.inputs.operation == 'submit' || github.event.inputs.operation == 'approve'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      EVIDENCE_GATE_ID: ${{ github.event.inputs.gate_id }}
+      EVIDENCE_CANDIDATE_SHA: ${{ github.event.inputs.candidate_sha }}
+      EVIDENCE_OBSERVED_AT: ${{ github.event.inputs.observed_at }}
+      EVIDENCE_KIND: ${{ github.event.inputs.evidence_kind }}
+      EVIDENCE_REFERENCE: ${{ github.event.inputs.evidence_reference }}
+      EVIDENCE_SUBMISSION_ID: ${{ github.event.inputs.submission_id }}
+      EVIDENCE_NOTE: ${{ github.event.inputs.note }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate operation inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ '${{ github.event.inputs.operation }}' == 'submit' ]]; then
+            test -n "$EVIDENCE_GATE_ID"
+            [[ "$EVIDENCE_CANDIDATE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+            test -n "$EVIDENCE_OBSERVED_AT"
+            test -n "$EVIDENCE_KIND"
+            test -n "$EVIDENCE_REFERENCE"
+          else
+            test -n "$EVIDENCE_SUBMISSION_ID"
+          fi
+
+      - name: Create append-only record
+        id: record
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ '${{ github.event.inputs.operation }}' == 'submit' ]]; then
+            node scripts/operator-evidence-control-plane.mjs --submit
+          else
+            node scripts/operator-evidence-control-plane.mjs --approve --sync-manifests
+          fi
+
+      - name: Re-validate complete ledger
+        run: node scripts/operator-evidence-control-plane.mjs --contract-only
+
+      - name: Commit evidence record to dedicated branch
+        id: commit
+        shell: bash
+        env:
+          RECORD_PATH: ${{ steps.record.outputs.record_path }}
+          RECORD_ID: ${{ steps.record.outputs.record_id }}
+        run: |
+          set -euo pipefail
+          safe_gate="$(printf '%s' "${EVIDENCE_GATE_ID:-$EVIDENCE_SUBMISSION_ID}" | tr ':/' '--' | tr -cd 'A-Za-z0-9._-')"
+          branch="operator-evidence/${safe_gate}/${GITHUB_RUN_ID}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git add -- "$RECORD_PATH"
+          if [[ '${{ github.event.inputs.operation }}' == 'approve' ]]; then
+            git add -- docs/production/RC_READINESS.json docs/production/ANDROID_PRODUCTION_READINESS.json docs/production/BETA_CARTAGENA_READINESS.json docs/production/GLOBAL_READINESS.json
+          fi
+          git diff --cached --quiet && { echo 'No append-only record produced.' >&2; exit 1; }
+          git commit -m "chore(evidence): ${{ github.event.inputs.operation }} $RECORD_ID"
+          git push origin "$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Open evidence pull request
+        shell: bash
+        env:
+          BRANCH: ${{ steps.commit.outputs.branch }}
+          RECORD_ID: ${{ steps.record.outputs.record_id }}
+        run: |
+          set -euo pipefail
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(evidence): ${{ github.event.inputs.operation }} $RECORD_ID" \
+            --body "Append-only operator evidence event generated by workflow run $GITHUB_RUN_ID. The record is redacted and candidate-bound. Approval operations deterministically synchronize readiness manifests from the approved ledger; direct/manual manifest promotion remains prohibited."
