@@ -1,0 +1,35 @@
+import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { UserRole } from "@prisma/client";
+import { Roles } from "../auth/decorators/roles.decorator";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { CoverageService } from "./coverage.service";
+import { CoveragePointQueryDto } from "./dto/coverage-query.dto";
+
+@Controller("coverage")
+export class CoverageController {
+  constructor(private readonly coverage: CoverageService) {}
+
+  /** Public launch-market catalog. Never exposes veterinarian coordinates. */
+  @Get("markets")
+  getMarkets() {
+    return this.coverage.getCatalog();
+  }
+
+  /**
+   * Public point check used by web/mobile to distinguish active, prelaunch and
+   * unsupported locations before the user reaches checkout.
+   */
+  @Get("check")
+  checkPoint(@Query() query: CoveragePointQueryDto) {
+    return this.coverage.getPointCoverage(query.latitude, query.longitude);
+  }
+
+  /** Operational counts and activation readiness are admin-only. */
+  @Get("readiness")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  getReadiness() {
+    return this.coverage.getReadinessSnapshot();
+  }
+}
