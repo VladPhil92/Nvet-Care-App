@@ -68,8 +68,8 @@
       "note": "Provider-level automatic backups must be verified. The provider audit on 2026-09-03 found zero configured schedules and zero visible backups, so this inherited RC gate remains blocked until Railway is configured and fresh evidence exists."
     },
     "restoreDrillVerified": {
-      "status": "pending",
-      "evidence": null,
+      "status": "verified",
+      "evidence": "provider-console: Railway Postgres deployment 32ff3b0e-a204-415b-a6ed-48655277bf39; restored volume 5a43f680-bc1a-4749-8b24-203afc4b0997; Web Production Convergence run 34370643266 PASS",
       "note": "A dated non-destructive provider-level restore drill is required. This gate is inherited from RC_READINESS.json and must not be promoted independently."
     },
     "productionAlertingVerified": {
