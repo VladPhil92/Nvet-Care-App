@@ -1,0 +1,77 @@
+name: Operator Evidence Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/production/OPERATOR_EVIDENCE_CONTROL.json'
+      - 'docs/production/operator-evidence/records/**'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'scripts/lib/operator-evidence.mjs'
+      - 'scripts/operator-evidence-control-plane.mjs'
+      - '.github/workflows/operator-evidence-*.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/production/OPERATOR_EVIDENCE_CONTROL.json'
+      - 'docs/production/operator-evidence/records/**'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'scripts/lib/operator-evidence.mjs'
+      - 'scripts/operator-evidence-control-plane.mjs'
+      - '.github/workflows/operator-evidence-*.yml'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  evidence-contract:
+    name: Operator Evidence Contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enforce append-only record history on pull requests
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changes="$(git diff --name-status "$BASE_SHA" "$HEAD_SHA" -- docs/production/operator-evidence/records || true)"
+          printf '%s\n' "$changes"
+          if [[ -n "$changes" ]] && awk '$1 != "A" { exit 1 }' <<< "$changes"; then
+            :
+          elif [[ -n "$changes" ]]; then
+            echo 'Operator evidence records are append-only: modification, rename or deletion is forbidden.' >&2
+            exit 1
+          fi
+
+      - name: Validate registry, records, freshness and approval separation
+        run: node scripts/operator-evidence-control-plane.mjs --contract-only
+
+      - name: Verify readiness manifests are deterministic projections of approved evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/operator-evidence-control-plane.mjs --sync-manifests
+          git diff --exit-code -- \
+            docs/production/RC_READINESS.json \
+            docs/production/ANDROID_PRODUCTION_READINESS.json \
+            docs/production/BETA_CARTAGENA_READINESS.json \
+            docs/production/GLOBAL_READINESS.json
