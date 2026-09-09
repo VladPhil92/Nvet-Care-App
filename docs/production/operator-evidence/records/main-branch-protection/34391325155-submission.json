@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "type": "submission",
+  "id": "main-branch-protection:34391325155",
+  "gateId": "main-branch-protection",
+  "candidate": "1.0.0-rc.1",
+  "candidateSha": "2ba821d765379a658bb7a1240bdd94a1a4043a65",
+  "observedAt": "2026-09-09T13:48:06-05:00",
+  "submittedAt": "2026-09-09T18:50:01.473Z",
+  "submitter": "VladPhil92",
+  "evidence": {
+    "kind": "github-ruleset",
+    "reference": "GitHub ruleset 22639793 Protect main; PR required; CI Success required; deletion and non-fast-forward blocked; no bypass actors",
+    "note": "Main branch protection independently verified against active repository ruleset.",
+    "redacted": true
+  }
+}
