@@ -6,10 +6,11 @@ import { TodayAppointmentsService } from "./today-appointments.service";
 import { LiveLocationService } from "./live-location.service";
 import { AuthModule } from "../auth/auth.module";
 import { BetaModule } from "../beta/beta.module";
+import { CoverageModule } from "../coverage/coverage.module";
 import { VetsModule } from "../vets/vets.module";
 
 @Module({
-  imports: [AuthModule, BetaModule, VetsModule],
+  imports: [AuthModule, BetaModule, CoverageModule, VetsModule],
   controllers: [AppointmentsController, LiveLocationController],
   providers: [
     AppointmentsService,
