@@ -1,4 +1,5 @@
 import { apiClient } from './api'
+import liveLocationService from './live-location.service'
 
 export type AppointmentStatus =
   | 'PENDING'
@@ -79,6 +80,14 @@ export interface CreateAppointmentData {
   date: string
   time: string
   address: string
+  /**
+   * Service-point coordinates are attached at booking time to let the backend
+   * validate the active Nvet market and the selected veterinarian's radius.
+   * They are not required from callers because the mobile service resolves the
+   * device location immediately before checkout.
+   */
+  serviceLatitude?: number
+  serviceLongitude?: number
   paymentMethod: PaymentMethod
   amount: number
   amountCtg?: number
@@ -171,11 +180,33 @@ class AppointmentService {
 
   async createAppointment(data: CreateAppointmentData): Promise<Appointment> {
     const { idempotencyKey, ...payload } = data
-    const response = await apiClient.post('/appointments', payload, {
-      headers: idempotencyKey
-        ? { 'Idempotency-Key': idempotencyKey }
-        : undefined,
-    })
+    let serviceLatitude = payload.serviceLatitude
+    let serviceLongitude = payload.serviceLongitude
+
+    if (serviceLatitude == null || serviceLongitude == null) {
+      const coordinates = await liveLocationService.getDeviceCoordinates()
+      if (!coordinates) {
+        throw new Error(
+          'Necesitamos tu ubicación para confirmar que el domicilio está dentro de la cobertura del veterinario.',
+        )
+      }
+      serviceLatitude = coordinates.latitude
+      serviceLongitude = coordinates.longitude
+    }
+
+    const response = await apiClient.post(
+      '/appointments',
+      {
+        ...payload,
+        serviceLatitude,
+        serviceLongitude,
+      },
+      {
+        headers: idempotencyKey
+          ? { 'Idempotency-Key': idempotencyKey }
+          : undefined,
+      },
+    )
     return normalizeAppointment(response.data)
   }
 
