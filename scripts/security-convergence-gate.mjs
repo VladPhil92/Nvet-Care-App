@@ -227,6 +227,36 @@ requireText(
   'Web convergence staging loader must use explicit staging target names',
 )
 
+// ---------------------------------------------------------------------------
+// 7. Operator evidence is part of the aggregated CI security boundary.
+//    A manual readiness promotion must be reproducible from the append-only
+//    approved ledger; otherwise the sync would change the checked-in manifest.
+// ---------------------------------------------------------------------------
+const operatorEvidenceManifestPaths = [
+  'docs/production/RC_READINESS.json',
+  'docs/production/ANDROID_PRODUCTION_READINESS.json',
+  'docs/production/BETA_CARTAGENA_READINESS.json',
+  'docs/production/GLOBAL_READINESS.json',
+]
+try {
+  const {
+    loadOperatorEvidenceControl,
+    loadOperatorEvidenceRecords,
+    syncReadinessManifestsFromOperatorEvidence,
+  } = await import('./lib/operator-evidence.mjs')
+  const control = await loadOperatorEvidenceControl()
+  await loadOperatorEvidenceRecords(control)
+  const before = new Map(operatorEvidenceManifestPaths.map((rel) => [rel, read(rel)]))
+  await syncReadinessManifestsFromOperatorEvidence()
+  for (const rel of operatorEvidenceManifestPaths) {
+    if (read(rel) !== before.get(rel)) {
+      failures.push(`Operator evidence projection mismatch: ${rel} is not derived from the approved append-only ledger`)
+    }
+  }
+} catch (error) {
+  failures.push(`Operator evidence control plane failed closed: ${error?.message ?? error}`)
+}
+
 if (failures.length > 0) {
   console.error('❌ Production Security, Privacy & Canonical Runtime Convergence gate failed:')
   for (const failure of failures) console.error(` - ${failure}`)
@@ -242,3 +272,4 @@ console.log('   - sensitive uploads: magic-bytes + private storage contract')
 console.log('   - dashboard HTTP perimeter: CSP + transport + anti-framing headers')
 console.log('   - workflow_run certification concurrency: valid-trigger scoped + skipped-run isolated')
 console.log('   - web convergence staging context: explicit environment/service isolation')
+console.log('   - operator evidence projection: append-only approved ledger bound to CI Success')
