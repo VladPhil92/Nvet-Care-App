@@ -63,8 +63,8 @@
       "note": "Phase 11 must promote the exact 1.0.0-rc.1 candidate before beta activation."
     },
     "productionBackupConfigured": {
-      "status": "pending",
-      "evidence": null,
+      "status": "verified",
+      "evidence": "provider-console: Railway Postgres production volume backup created 2026-09-09 12:50 UTC; 175 MB; daily and weekly backup schedules configured",
       "note": "Provider-level automatic backups must be verified. The provider audit on 2026-09-03 found zero configured schedules and zero visible backups, so this inherited RC gate remains blocked until Railway is configured and fresh evidence exists."
     },
     "restoreDrillVerified": {

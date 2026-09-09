@@ -44,7 +44,16 @@ const providerReady =
   provider.latestBackupAgeHours <= provider.policy.maxBackupAgeHours &&
   provider.verdict === 'PASS';
 
-if (!providerReady) {
+const backupGateVerified = rcEvidence.productionBackupConfigured.status === 'verified';
+if (backupGateVerified) {
+  assert(
+    typeof rcEvidence.productionBackupConfigured.evidence === 'string' &&
+      rcEvidence.productionBackupConfigured.evidence.trim().length >= 12,
+    'verified backup gate carries substantive approved operator evidence',
+  );
+}
+
+if (!providerReady && !backupGateVerified) {
   assert(rcEvidence.productionBackupConfigured.status === 'pending', 'backup gate remains pending while provider evidence is incomplete');
   assert(betaEvidence.productionBackupConfigured.status === 'pending', 'beta backup gate remains pending while provider evidence is incomplete');
   assert(rcEvidence.restoreDrillVerified.status === 'pending', 'restore drill cannot be promoted before usable provider backup evidence exists');

@@ -131,6 +131,7 @@ jobs:
             node scripts/operator-evidence-control-plane.mjs --submit
           else
             node scripts/operator-evidence-control-plane.mjs --approve --sync-manifests
+            node scripts/sync-beta-closure-blockers.mjs
           fi
 
       - name: Re-validate complete ledger
@@ -152,7 +153,7 @@ jobs:
           git switch -c "$branch"
           git add -- "$RECORD_PATH"
           if [[ '${{ github.event.inputs.operation }}' == 'approve' ]]; then
-            git add -- docs/production/RC_READINESS.json docs/production/ANDROID_PRODUCTION_READINESS.json docs/production/BETA_CARTAGENA_READINESS.json docs/production/GLOBAL_READINESS.json
+            git add -- docs/production/RC_READINESS.json docs/production/ANDROID_PRODUCTION_READINESS.json docs/production/BETA_CARTAGENA_READINESS.json docs/production/GLOBAL_READINESS.json docs/production/BETA_OPERATOR_ACTIVATION_CLOSURE.json
           fi
           git diff --cached --quiet && { echo 'No append-only record produced.' >&2; exit 1; }
           git commit -m "chore(evidence): ${{ github.event.inputs.operation }} $RECORD_ID"

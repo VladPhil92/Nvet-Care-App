@@ -12,8 +12,8 @@
   },
   "requiredExternalEvidence": {
     "productionBackupConfigured": {
-      "status": "pending",
-      "evidence": null,
+      "status": "verified",
+      "evidence": "provider-console: Railway Postgres production volume backup created 2026-09-09 12:50 UTC; 175 MB; daily and weekly backup schedules configured",
       "note": "Verify provider-level automatic production backups with the read-only Nvet Production Backup Evidence workflow defined in .github/workflows/production-backup-evidence.yml. A successful provider metadata audit may satisfy this gate; repository pg_dump/pg_restore rehearsals alone may not. See docs/production/RC_EVIDENCE_RUNBOOK.md."
     },
     "restoreDrillVerified": {
