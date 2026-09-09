@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "program": "rc-evidence-closure-phase-vi",
+  "candidate": "1.0.0-rc.1",
+  "mainBranch": "main",
+  "policy": {
+    "failClosed": true,
+    "liveObservationNeverAutoVerifies": true,
+    "operatorEvidenceControlIsAuthoritative": true,
+    "promotionRequiresAllTrackedGatesVerified": true,
+    "providerRestoreRequiresBackupGateVerified": true,
+    "realTransferRequiresRestoreGateVerified": true,
+    "branchProtectionMayCloseInParallel": true
+  },
+  "lanes": [
+    {
+      "id": "provider-recovery",
+      "gates": [
+        {
+          "id": "production-backup-configured",
+          "source": "rc.requiredExternalEvidence.productionBackupConfigured",
+          "owner": "railway-operator",
+          "dependsOn": [],
+          "liveObservation": "railway-production-backup-evidence",
+          "operatorEvidenceGate": "production-backup-configured"
+        },
+        {
+          "id": "provider-restore-drill",
+          "source": "rc.requiredExternalEvidence.restoreDrillVerified",
+          "owner": "railway-operator",
+          "dependsOn": ["production-backup-configured"],
+          "liveObservation": null,
+          "operatorEvidenceGate": "provider-restore-drill"
+        }
+      ]
+    },
+    {
+      "id": "financial-proof",
+      "gates": [
+        {
+          "id": "real-transfer-rail",
+          "source": "rc.requiredExternalEvidence.paymentRailVerified",
+          "owner": "finance-operator",
+          "dependsOn": ["provider-restore-drill"],
+          "liveObservation": null,
+          "operatorEvidenceGate": "real-transfer-rail"
+        }
+      ]
+    },
+    {
+      "id": "repository-governance",
+      "gates": [
+        {
+          "id": "main-branch-protection",
+          "source": "global.operatorGates.main-branch-protection",
+          "owner": "repository-admin",
+          "dependsOn": [],
+          "liveObservation": "github-main-branch-protection",
+          "operatorEvidenceGate": "main-branch-protection"
+        }
+      ]
+    }
+  ],
+  "promotion": {
+    "candidateTag": "1.0.0-rc.1",
+    "requiredGateIds": [
+      "production-backup-configured",
+      "provider-restore-drill",
+      "real-transfer-rail",
+      "main-branch-protection"
+    ],
+    "postPromotionEvidenceGate": "rc-promoted"
+  }
+}
