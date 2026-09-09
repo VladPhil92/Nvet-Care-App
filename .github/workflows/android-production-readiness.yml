@@ -28,18 +28,24 @@ on:
       - 'backend/src/auth/dto/delete-account.dto.ts'
       - '.github/workflows/release-android.yml'
       - '.github/workflows/android-production-readiness.yml'
+      - '.github/workflows/android-release-preflight.yml'
       - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/ANDROID_RELEASE_PREFLIGHT.json'
       - 'docs/production/ANDROID_PLAY_COMPLIANCE.json'
+      - 'docs/production/ANDROID_PLAY_INTERNAL_RUNBOOK.md'
       - 'docs/production/GOOGLE_PLAY_DATA_SAFETY.md'
       - 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md'
       - 'docs/production/ANDROID_PLAY_REVIEWER_ACCESS.md'
       - 'docs/production/ANDROID_16_BEHAVIOR_REVIEW.md'
       - 'docs/PHASE_13_ANDROID_PRODUCTION.md'
+      - 'docs/PHASE_13E_ANDROID_PLAY_RELEASE_PREFLIGHT.md'
       - 'scripts/verify-android-production-readiness.mjs'
+      - 'scripts/verify-android-release-preflight.mjs'
       - 'scripts/audit-android-play-compliance.mjs'
       - 'scripts/verify-android16-compatibility.mjs'
       - '.github/workflows/ci.yml'
       - '.gitignore'
+      - 'package.json'
   schedule:
     - cron: '41 12 * * *'
   workflow_dispatch:
@@ -77,6 +83,8 @@ jobs:
         run: node scripts/audit-android-play-compliance.mjs --write-evidence
       - name: Validate Android 16 compatibility contract
         run: node scripts/verify-android16-compatibility.mjs
+      - name: Validate Phase 13E release preflight
+        run: node scripts/verify-android-release-preflight.mjs --write-evidence
 
   audit:
     name: Audit live Android production evidence
@@ -97,5 +105,7 @@ jobs:
         run: node scripts/audit-android-play-compliance.mjs --write-evidence
       - name: Validate Android 16 compatibility contract
         run: node scripts/verify-android16-compatibility.mjs
+      - name: Validate Phase 13E release preflight
+        run: node scripts/verify-android-release-preflight.mjs --write-evidence
       - name: Audit current main Android evidence
         run: node scripts/verify-android-production-readiness.mjs --runtime
