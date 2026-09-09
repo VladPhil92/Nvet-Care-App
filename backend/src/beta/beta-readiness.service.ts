@@ -45,11 +45,15 @@ export class BetaReadinessService {
       cohort,
       support,
     ] = await Promise.all([
+      // A vet without service coordinates cannot satisfy Phase 14 radius
+      // enforcement, so beta coverage now counts only geo-ready professionals.
       this.prisma.vetProfile.count({
         where: {
           isVerified: true,
           isActive: true,
           verificationStatus: VerificationStatus.APPROVED,
+          latitude: { not: null },
+          longitude: { not: null },
           city: {
             contains: "cartagena",
             mode: "insensitive",
@@ -103,6 +107,7 @@ export class BetaReadinessService {
       phase: 12,
       program: "closed-beta-cartagena",
       market: this.access.getMarket(),
+      geographicCoverageProgram: "colombia-service-coverage-phase-14",
       runtime: {
         closedBetaEnabled,
         bookingEnabled,
@@ -144,6 +149,9 @@ export class BetaReadinessService {
         verifiedActiveVets,
         minimumRequired: MIN_VERIFIED_VETS,
         satisfied: vetCoverageSatisfied,
+        geoLocationRequired: true,
+        serviceRadiusRequired: true,
+        nationalCoverageReadinessEndpoint: "GET /api/coverage/readiness",
       },
       legal: {
         termsVersion: BETA_LEGAL_DOCUMENTS.terms.version,
