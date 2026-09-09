@@ -1,0 +1,99 @@
+name: Nvet Release Closure Control
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/production/RELEASE_CLOSURE_CONTROL.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'scripts/verify-release-closure-control.mjs'
+      - '.github/workflows/release-closure-control.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/production/RELEASE_CLOSURE_CONTROL.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'scripts/verify-release-closure-control.mjs'
+      - '.github/workflows/release-closure-control.yml'
+  schedule:
+    - cron: '41 10 * * *'
+  workflow_dispatch:
+    inputs:
+      enforce_stage:
+        description: 'Optional fail-closed stage gate. report only produces the closure artifact.'
+        required: true
+        default: report
+        type: choice
+        options:
+          - report
+          - rc
+          - beta
+          - android
+          - global
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-release-closure-control-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  contract:
+    name: Validate release closure contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate stage dependency contract
+        run: node scripts/verify-release-closure-control.mjs --contract-only
+
+  report:
+    name: Build stage-aware closure report
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Generate closure artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="${{ github.event_name == 'workflow_dispatch' && inputs.enforce_stage || 'report' }}"
+          if [ "$STAGE" = "report" ]; then
+            node scripts/verify-release-closure-control.mjs
+          else
+            node scripts/verify-release-closure-control.mjs "--enforce=$STAGE"
+          fi
+
+      - name: Upload closure evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nvet-release-closure-control
+          path: .artifacts/release-closure-control.json
+          if-no-files-found: warn
+          retention-days: 30
