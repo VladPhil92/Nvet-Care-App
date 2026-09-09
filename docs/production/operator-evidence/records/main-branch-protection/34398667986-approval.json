@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "type": "approval",
+  "id": "main-branch-protection:approval-34398667986",
+  "gateId": "main-branch-protection",
+  "candidate": "1.0.0-rc.1",
+  "candidateSha": "2ba821d765379a658bb7a1240bdd94a1a4043a65",
+  "submissionId": "main-branch-protection:34391325155",
+  "decision": "approved",
+  "approvedAt": "2026-09-09T20:03:10.788Z",
+  "approver": "VladPhil92",
+  "note": "Approved after verification of active Protect main ruleset and required CI Success enforcement."
+}
