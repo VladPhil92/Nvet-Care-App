@@ -7,6 +7,7 @@ on:
       - 'docs/production/RC_READINESS.json'
       - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
       - 'scripts/verify-global-readiness.mjs'
+      - 'scripts/converge-global-runtime-evidence.mjs'
       - '.github/workflows/global-release-readiness.yml'
       - '.github/workflows/ci.yml'
       - '.github/workflows/railway-contract.yml'
@@ -22,6 +23,7 @@ on:
       - 'docs/production/RC_READINESS.json'
       - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
       - 'scripts/verify-global-readiness.mjs'
+      - 'scripts/converge-global-runtime-evidence.mjs'
       - '.github/workflows/**'
       - 'backend/**'
       - 'mobile/**'
@@ -72,7 +74,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Verify canonical readiness contract
-        run: node scripts/verify-global-readiness.mjs --contract-only
+        run: |
+          node --check scripts/converge-global-runtime-evidence.mjs
+          node scripts/verify-global-readiness.mjs --contract-only
 
   runtime:
     name: Global runtime evidence
@@ -94,8 +98,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Generate global readiness evidence
+      - name: Generate exact-SHA global readiness evidence
         run: node scripts/verify-global-readiness.mjs --runtime
+
+      - name: Converge safe reusable runtime evidence
+        run: node scripts/converge-global-runtime-evidence.mjs
 
       - name: Upload global readiness evidence
         if: always()
