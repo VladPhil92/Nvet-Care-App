@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "program": "operator-evidence-control-plane",
+  "candidate": "1.0.0-rc.1",
+  "recordsDirectory": "docs/production/operator-evidence/records",
+  "policy": {
+    "failClosed": true,
+    "appendOnlyRecords": true,
+    "submittedEvidenceNeverAutoVerifies": true,
+    "requireApprovalEvent": true,
+    "requireCandidateMatch": true,
+    "requireCandidateSha": true,
+    "requireRedactedEvidence": true,
+    "rejectSecretLikeContent": true,
+    "futureClockSkewMinutes": 10,
+    "approvalMaxAgeHours": 87600,
+    "downstreamAndroidMustMatchPromotedRcSha": true
+  },
+  "gates": [
+    {
+      "id": "production-backup-configured",
+      "sourceManifest": "rc",
+      "sourceKey": "requiredExternalEvidence.productionBackupConfigured",
+      "owner": "railway-operator",
+      "evidenceKinds": ["provider-console", "github-run", "redacted-document"],
+      "maxAgeHours": 168,
+      "requireDistinctApprover": false,
+      "mirrors": [{"sourceManifest": "beta", "sourceKey": "requiredEvidence.productionBackupConfigured"}]
+    },
+    {
+      "id": "provider-restore-drill",
+      "sourceManifest": "rc",
+      "sourceKey": "requiredExternalEvidence.restoreDrillVerified",
+      "owner": "railway-operator",
+      "evidenceKinds": ["provider-console", "redacted-document", "github-issue"],
+      "maxAgeHours": 168,
+      "requireDistinctApprover": true,
+      "mirrors": [{"sourceManifest": "beta", "sourceKey": "requiredEvidence.restoreDrillVerified"}]
+    },
+    {
+      "id": "real-transfer-rail",
+      "sourceManifest": "rc",
+      "sourceKey": "requiredExternalEvidence.paymentRailVerified",
+      "owner": "finance-operator",
+      "evidenceKinds": ["bank-reference", "redacted-document", "github-issue"],
+      "maxAgeHours": 168,
+      "requireDistinctApprover": true,
+      "mirrors": [{"sourceManifest": "beta", "sourceKey": "requiredEvidence.paymentRailVerified"}]
+    },
+    {
+      "id": "rc-promoted",
+      "sourceManifest": "android",
+      "sourceKey": "requiredEvidence.rcPromoted",
+      "owner": "release-operator",
+      "evidenceKinds": ["git-tag", "github-release"],
+      "maxAgeHours": null,
+      "requireDistinctApprover": false,
+      "mirrors": [{"sourceManifest": "beta", "sourceKey": "requiredEvidence.rcPromoted"}]
+    },
+    {"id":"play-console-app","sourceManifest":"android","sourceKey":"requiredEvidence.playConsoleAppCreated","owner":"play-operator","evidenceKinds":["play-console","redacted-document"],"maxAgeHours":720,"requireDistinctApprover":false},
+    {"id":"play-app-signing","sourceManifest":"android","sourceKey":"requiredEvidence.playAppSigningEnabled","owner":"play-operator","evidenceKinds":["play-console","redacted-document"],"maxAgeHours":720,"requireDistinctApprover":false},
+    {"id":"upload-certificate","sourceManifest":"android","sourceKey":"requiredEvidence.uploadCertificatePinned","owner":"release-operator","evidenceKinds":["certificate-fingerprint","github-run","redacted-document"],"maxAgeHours":720,"requireDistinctApprover":false},
+    {"id":"privacy-policy-published","sourceManifest":"android","sourceKey":"requiredEvidence.privacyPolicyPublished","owner":"legal-product-operator","evidenceKinds":["public-url","redacted-document"],"maxAgeHours":720,"requireDistinctApprover":false},
+    {"id":"data-safety-reviewed","sourceManifest":"android","sourceKey":"requiredEvidence.dataSafetyReviewed","owner":"play-product-operator","evidenceKinds":["play-console","redacted-document"],"maxAgeHours":720,"requireDistinctApprover":false},
+    {"id":"play-reviewer-access","sourceManifest":"android","sourceKey":"requiredEvidence.playReviewerAccessConfigured","owner":"play-operator","evidenceKinds":["play-console","redacted-document"],"maxAgeHours":168,"requireDistinctApprover":false},
+    {"id":"signed-aab","sourceManifest":"android","sourceKey":"requiredEvidence.signedAabVerified","owner":"release-operator","evidenceKinds":["github-run","artifact-checksum","redacted-document"],"maxAgeHours":168,"requireDistinctApprover":true},
+    {"id":"internal-track-uploaded","sourceManifest":"android","sourceKey":"requiredEvidence.internalTrackUploaded","owner":"play-operator","evidenceKinds":["play-console","github-run","redacted-document"],"maxAgeHours":168,"requireDistinctApprover":false},
+    {"id":"physical-device-smoke","sourceManifest":"android","sourceKey":"requiredEvidence.physicalDeviceSmokeVerified","owner":"qa-operator","evidenceKinds":["device-test","redacted-document","github-issue"],"maxAgeHours":168,"requireDistinctApprover":true},
+    {"id":"cartagena-vet-coverage","sourceManifest":"beta","sourceKey":"requiredEvidence.cartagenaVetCoverageVerified","owner":"beta-operator","evidenceKinds":["runtime-snapshot","redacted-document"],"maxAgeHours":72,"requireDistinctApprover":false},
+    {"id":"client-cohort-configured","sourceManifest":"beta","sourceKey":"requiredEvidence.clientCohortConfigured","owner":"beta-operator","evidenceKinds":["runtime-snapshot","redacted-document"],"maxAgeHours":72,"requireDistinctApprover":false},
+    {"id":"support-owner-confirmed","sourceManifest":"beta","sourceKey":"requiredEvidence.supportOwnerConfirmed","owner":"operations-operator","evidenceKinds":["runtime-snapshot","redacted-document"],"maxAgeHours":168,"requireDistinctApprover":false},
+    {"id":"privacy-terms-reviewed","sourceManifest":"beta","sourceKey":"requiredEvidence.privacyAndTermsReviewed","owner":"legal-product-operator","evidenceKinds":["redacted-document","github-issue"],"maxAgeHours":720,"requireDistinctApprover":false},
+    {"id":"rollback-drill","sourceManifest":"beta","sourceKey":"requiredEvidence.rollbackDrillVerified","owner":"operations-operator","evidenceKinds":["provider-console","runtime-snapshot","redacted-document"],"maxAgeHours":168,"requireDistinctApprover":true},
+    {"id":"main-branch-protection","sourceManifest":"global","sourceKey":"operatorGates.main-branch-protection","owner":"repository-admin","evidenceKinds":["github-settings","github-ruleset","redacted-document"],"maxAgeHours":720,"requireDistinctApprover":false}
+  ]
+}
