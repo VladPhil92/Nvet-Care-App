@@ -22,10 +22,11 @@ const EXPECTED_STATES = [
   'misconfigured',
 ];
 
-const MUST_REMAIN_PENDING = [
+const OPERATOR_EVIDENCE_GATES = [
   'rcPromoted',
   'productionBackupConfigured',
   'restoreDrillVerified',
+  'productionAlertingVerified',
   'paymentRailVerified',
   'cartagenaVetCoverageVerified',
   'clientCohortConfigured',
@@ -111,9 +112,18 @@ if (manifest.policy?.supportRevokeEndpoint !== 'POST /api/beta/support/revoke') 
   fail('Unexpected beta support revoke endpoint.');
 }
 
-for (const key of MUST_REMAIN_PENDING) {
-  if (manifest.requiredEvidence?.[key]?.status !== 'pending') {
-    fail(`${key} must remain pending until external/operator evidence exists.`);
+for (const key of OPERATOR_EVIDENCE_GATES) {
+  const gate = manifest.requiredEvidence?.[key];
+  if (!gate) fail(`${key} evidence gate is missing.`);
+  if (!['pending', 'verified'].includes(gate.status)) {
+    fail(`${key} has unsupported status ${gate.status}.`);
+  }
+  if (gate.status === 'verified') {
+    if (typeof gate.evidence !== 'string' || gate.evidence.trim().length < 12) {
+      fail(`${key} is verified without substantive operator evidence.`);
+    }
+  } else if (gate.evidence != null) {
+    fail(`${key} is pending but contains evidence; promote it atomically through the operator evidence control plane.`);
   }
 }
 if (manifest.requiredEvidence?.productionAlertingVerified?.status !== 'verified') {
@@ -171,4 +181,4 @@ if (
 console.log('Beta Operational Activation Readiness contract verified.');
 console.log(`Activation states: ${EXPECTED_STATES.join(', ')}`);
 console.log('Support readiness is append-only, time-bounded and admin-controlled.');
-console.log('External/operator evidence remains fail-closed and activation requires a lease.');
+console.log('External/operator evidence may advance only through approved evidence while activation remains fail-closed.');
