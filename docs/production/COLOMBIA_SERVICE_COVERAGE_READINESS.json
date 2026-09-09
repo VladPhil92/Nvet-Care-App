@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "phase": 14,
+  "program": "colombia-service-coverage",
+  "country": "CO",
+  "launchStrategy": "Cartagena-first, nationally extensible",
+  "activationSource": "NVET_ACTIVE_SERVICE_MARKETS",
+  "activationRequiresCodeDeploy": false,
+  "bookingGeoEnforcement": true,
+  "defaultActiveMarkets": [
+    "13001"
+  ],
+  "requirements": {
+    "minimumVerifiedGeoReadyVetsPerMarket": 3,
+    "bookingRequiresServiceCoordinates": true,
+    "vetServiceRadiusEnforced": true,
+    "verifiedVetRequired": true,
+    "activeVetRequired": true,
+    "closedBetaRemainsCartagenaOnly": true,
+    "futureMarketActivationRequiresOperationalEvidence": true,
+    "catalogPresenceDoesNotAuthorizeCommercialLaunch": true
+  },
+  "markets": [
+    {
+      "daneCode": "13001",
+      "code": "cartagena",
+      "city": "Cartagena de Indias",
+      "department": "Bolívar",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "ACTIVE",
+      "commercialEvidenceStatus": "PENDING_EXISTING_CARTAGENA_GATES"
+    },
+    {
+      "daneCode": "11001",
+      "code": "bogota",
+      "city": "Bogotá D.C.",
+      "department": "Bogotá D.C.",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "PRELAUNCH",
+      "commercialEvidenceStatus": "PENDING"
+    },
+    {
+      "daneCode": "05001",
+      "code": "medellin",
+      "city": "Medellín",
+      "department": "Antioquia",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "PRELAUNCH",
+      "commercialEvidenceStatus": "PENDING"
+    },
+    {
+      "daneCode": "08001",
+      "code": "barranquilla",
+      "city": "Barranquilla",
+      "department": "Atlántico",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "PRELAUNCH",
+      "commercialEvidenceStatus": "PENDING"
+    },
+    {
+      "daneCode": "68001",
+      "code": "bucaramanga",
+      "city": "Bucaramanga",
+      "department": "Santander",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "PRELAUNCH",
+      "commercialEvidenceStatus": "PENDING",
+      "metroGroup": "bucaramanga-metropolitana"
+    },
+    {
+      "daneCode": "68276",
+      "code": "floridablanca",
+      "city": "Floridablanca",
+      "department": "Santander",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "PRELAUNCH",
+      "commercialEvidenceStatus": "PENDING",
+      "metroGroup": "bucaramanga-metropolitana"
+    },
+    {
+      "daneCode": "76001",
+      "code": "cali",
+      "city": "Cali",
+      "department": "Valle del Cauca",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "PRELAUNCH",
+      "commercialEvidenceStatus": "PENDING"
+    },
+    {
+      "daneCode": "70001",
+      "code": "sincelejo",
+      "city": "Sincelejo",
+      "department": "Sucre",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "PRELAUNCH",
+      "commercialEvidenceStatus": "PENDING"
+    },
+    {
+      "daneCode": "23001",
+      "code": "monteria",
+      "city": "Montería",
+      "department": "Córdoba",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "PRELAUNCH",
+      "commercialEvidenceStatus": "PENDING"
+    },
+    {
+      "daneCode": "47001",
+      "code": "santa-marta",
+      "city": "Santa Marta",
+      "department": "Magdalena",
+      "engineeringStatus": "CONFIGURED",
+      "defaultOperationalStatus": "PRELAUNCH",
+      "commercialEvidenceStatus": "PENDING"
+    }
+  ],
+  "runtimeEndpoints": {
+    "publicMarketCatalog": "GET /api/coverage/markets",
+    "publicPointCheck": "GET /api/coverage/check?latitude={lat}&longitude={lng}",
+    "adminReadiness": "GET /api/coverage/readiness"
+  },
+  "cartagenaClosure": {
+    "required": [
+      "At least three verified, active and geo-ready veterinarians in Cartagena",
+      "Each launch veterinarian has valid latitude, longitude and serviceRadius",
+      "Controlled real-funds payment rail evidence is verified",
+      "Client beta cohort is configured",
+      "Support owner and monitored channel are configured",
+      "Privacy and terms review is documented",
+      "Rollback/booking kill-switch drill is verified",
+      "RC promotion and remaining release controls are closed"
+    ],
+    "sourceOfTruth": "docs/production/BETA_CARTAGENA_READINESS.json"
+  },
+  "futureMarketActivation": {
+    "failClosed": true,
+    "steps": [
+      "Onboard and verify at least three geo-ready veterinarians",
+      "Confirm support, legal/privacy, payment and incident ownership",
+      "Confirm market readiness through GET /api/coverage/readiness",
+      "Add the DANE code to NVET_ACTIVE_SERVICE_MARKETS",
+      "Deploy provider configuration and run smoke checks",
+      "Observe launch metrics before expanding the cohort"
+    ]
+  }
+}
