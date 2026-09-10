@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { CoverageModule } from "../coverage/coverage.module";
+import { VetRecruitmentModule } from "../recruitment/vet-recruitment.module";
 import { BetaActivationService } from "./beta-activation.service";
 import { BetaCohortService } from "./beta-cohort.service";
 import { BetaController } from "./beta.controller";
@@ -8,10 +9,11 @@ import { BetaEvidenceService } from "./beta-evidence.service";
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import { BetaReadinessService } from "./beta-readiness.service";
 import { BetaSupportService } from "./beta-support.service";
+import { CartagenaLaunchReadinessService } from "./cartagena-launch-readiness.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 
 @Module({
-  imports: [AuthModule, CoverageModule],
+  imports: [AuthModule, CoverageModule, VetRecruitmentModule],
   controllers: [BetaController],
   providers: [
     BetaEvidenceService,
@@ -21,6 +23,7 @@ import { ClosedBetaAccessService } from "./closed-beta-access.service";
     BetaActivationService,
     ClosedBetaAccessService,
     BetaReadinessService,
+    CartagenaLaunchReadinessService,
   ],
   exports: [
     BetaEvidenceService,
@@ -30,6 +33,7 @@ import { ClosedBetaAccessService } from "./closed-beta-access.service";
     BetaActivationService,
     ClosedBetaAccessService,
     BetaReadinessService,
+    CartagenaLaunchReadinessService,
   ],
 })
 export class BetaModule {}
