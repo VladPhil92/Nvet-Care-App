@@ -6,6 +6,7 @@ import { CoverageService } from "./coverage.service";
 import { MarketLaunchGuard } from "./market-launch.guard";
 import { MarketLaunchPolicyService } from "./market-launch-policy.service";
 import { VetSupplyReadinessService } from "./vet-supply-readiness.service";
+import { CartagenaVetActivationService } from "./cartagena-vet-activation.service";
 
 @Module({
   imports: [AuthModule],
@@ -14,6 +15,7 @@ import { VetSupplyReadinessService } from "./vet-supply-readiness.service";
     CoverageService,
     MarketLaunchPolicyService,
     VetSupplyReadinessService,
+    CartagenaVetActivationService,
     {
       provide: APP_GUARD,
       useClass: MarketLaunchGuard,
@@ -23,6 +25,7 @@ import { VetSupplyReadinessService } from "./vet-supply-readiness.service";
     CoverageService,
     MarketLaunchPolicyService,
     VetSupplyReadinessService,
+    CartagenaVetActivationService,
   ],
 })
 export class CoverageModule {}
