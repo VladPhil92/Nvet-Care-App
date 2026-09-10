@@ -41,6 +41,12 @@ type LatencySummary = {
   maxMinutes: number | null;
 };
 
+type CensoredLatencySummary = LatencySummary & {
+  censoredSampleSize: number;
+  exactSampleSize: number;
+  overdueUnconfirmed: number;
+};
+
 type SloMetric = {
   id: string;
   label: string;
@@ -55,7 +61,6 @@ type SloMetric = {
 type AppointmentRow = {
   status: AppointmentStatus;
   createdAt: Date;
-  updatedAt: Date;
   confirmedAt: Date | null;
   inProgressAt: Date | null;
   completedAt: Date | null;
@@ -68,11 +73,12 @@ type AppointmentRow = {
     status: TransactionStatus;
     paymentMethod: PaymentMethod;
     createdAt: Date;
-    updatedAt: Date;
     verifiedAt: Date | null;
     liquidatedAt: Date | null;
   } | null;
 };
+
+type TransactionRow = NonNullable<AppointmentRow["transaction"]>;
 
 @Injectable()
 export class ServiceQualityTelemetryService {
@@ -109,7 +115,6 @@ export class ServiceQualityTelemetryService {
         select: {
           status: true,
           createdAt: true,
-          updatedAt: true,
           confirmedAt: true,
           inProgressAt: true,
           completedAt: true,
@@ -125,7 +130,6 @@ export class ServiceQualityTelemetryService {
               status: true,
               paymentMethod: true,
               createdAt: true,
-              updatedAt: true,
               verifiedAt: true,
               liquidatedAt: true,
             },
@@ -160,19 +164,38 @@ export class ServiceQualityTelemetryService {
     const transactionRows = scopedRows.flatMap((row) =>
       row.transaction ? [row.transaction] : [],
     );
+    const resolvedTransactions = transactionRows.filter((row) =>
+      [
+        TransactionStatus.CONFIRMED,
+        TransactionStatus.LIQUIDATED,
+        TransactionStatus.DISPUTED,
+        TransactionStatus.FAILED,
+      ].includes(row.status),
+    );
     const transactionStatusCounts = this.transactionStatusCounts(transactionRows);
     const paymentMethodCounts = this.paymentMethodCounts(transactionRows);
 
     const confirmedEver = scopedRows.filter((row) => row.confirmedAt).length;
     const completedEver = scopedRows.filter((row) => row.completedAt).length;
-    const cancelled = appointmentStatusCounts.CANCELLED;
-    const disputed = appointmentStatusCounts.DISPUTED;
+    const cancelledBeforeCompletion = scopedRows.filter(
+      (row) => row.status === AppointmentStatus.CANCELLED && !row.completedAt,
+    ).length;
+    const terminalOutcomeCount = completedEver + cancelledBeforeCompletion;
+    const disputedWithoutTerminalOutcome = scopedRows.filter(
+      (row) =>
+        row.status === AppointmentStatus.DISPUTED &&
+        !row.completedAt &&
+        row.status !== AppointmentStatus.CANCELLED,
+    ).length;
+    const outcomeEvaluableCount =
+      terminalOutcomeCount + disputedWithoutTerminalOutcome;
 
     const vetResponse = this.latency(
       scopedRows,
       (row) => row.createdAt,
       (row) => row.confirmedAt,
     );
+    const vetResponseSlo = this.censoredVetResponseLatency(scopedRows, now);
     const confirmedToStart = this.latency(
       scopedRows,
       (row) => row.confirmedAt,
@@ -197,12 +220,25 @@ export class ServiceQualityTelemetryService {
     const dataQuality = this.buildDataQuality(scopedRows);
     const appointmentTotal = scopedRows.length;
     const transactionTotal = transactionRows.length;
-    const completionRatePct = this.percent(completedEver, appointmentTotal);
-    const cancellationRatePct = this.percent(cancelled, appointmentTotal);
-    const disputeRatePct = this.percent(disputed, appointmentTotal);
+    const completionRatePct = this.percent(completedEver, terminalOutcomeCount);
+    const cancellationRatePct = this.percent(
+      cancelledBeforeCompletion,
+      terminalOutcomeCount,
+    );
+    const disputeRatePct = this.percent(
+      appointmentStatusCounts.DISPUTED,
+      outcomeEvaluableCount,
+    );
     const paymentFailureRatePct = this.percent(
-      transactionStatusCounts.FAILED,
-      transactionTotal,
+      resolvedTransactions.filter((row) => row.status === TransactionStatus.FAILED)
+        .length,
+      resolvedTransactions.length,
+    );
+    const paymentDisputeRatePct = this.percent(
+      resolvedTransactions.filter(
+        (row) => row.status === TransactionStatus.DISPUTED,
+      ).length,
+      resolvedTransactions.length,
     );
     const dataQualityIssueRatePct = this.percent(
       dataQuality.appointmentsWithIssues,
@@ -213,10 +249,10 @@ export class ServiceQualityTelemetryService {
       this.upperBoundMetric({
         id: "vet-response-p95",
         label: "VET response p95",
-        value: vetResponse.p95Minutes,
+        value: vetResponseSlo.p95Minutes,
         target: INTERNAL_SLO_TARGETS.vetResponseP95Minutes,
         unit: "minutes",
-        sampleSize: vetResponse.sampleSize,
+        sampleSize: vetResponseSlo.sampleSize,
       }),
       this.lowerBoundMetric({
         id: "completion-rate",
@@ -224,7 +260,7 @@ export class ServiceQualityTelemetryService {
         value: completionRatePct,
         target: INTERNAL_SLO_TARGETS.completionRatePct,
         unit: "percent",
-        sampleSize: appointmentTotal,
+        sampleSize: terminalOutcomeCount,
       }),
       this.upperBoundMetric({
         id: "cancellation-rate",
@@ -232,7 +268,7 @@ export class ServiceQualityTelemetryService {
         value: cancellationRatePct,
         target: INTERNAL_SLO_TARGETS.cancellationRatePct,
         unit: "percent",
-        sampleSize: appointmentTotal,
+        sampleSize: terminalOutcomeCount,
       }),
       this.upperBoundMetric({
         id: "dispute-rate",
@@ -240,7 +276,7 @@ export class ServiceQualityTelemetryService {
         value: disputeRatePct,
         target: INTERNAL_SLO_TARGETS.disputeRatePct,
         unit: "percent",
-        sampleSize: appointmentTotal,
+        sampleSize: outcomeEvaluableCount,
       }),
       this.upperBoundMetric({
         id: "payment-failure-rate",
@@ -248,7 +284,7 @@ export class ServiceQualityTelemetryService {
         value: paymentFailureRatePct,
         target: INTERNAL_SLO_TARGETS.paymentFailureRatePct,
         unit: "percent",
-        sampleSize: transactionTotal,
+        sampleSize: resolvedTransactions.length,
       }),
       this.upperBoundMetric({
         id: "data-quality-issue-rate",
@@ -259,7 +295,7 @@ export class ServiceQualityTelemetryService {
         sampleSize: appointmentTotal,
       }),
     ];
-    const overallSloState = this.overallSloState(sloMetrics, appointmentTotal);
+    const overallSloState = this.overallSloState(sloMetrics);
 
     return {
       phase: 26,
@@ -282,26 +318,36 @@ export class ServiceQualityTelemetryService {
         statusCounts: appointmentStatusCounts,
         confirmedEver,
         completedEver,
+        cancelledBeforeCompletion,
+        terminalOutcomeCount,
+        outcomeEvaluableCount,
         confirmationRatePct: this.percent(confirmedEver, appointmentTotal),
         completionRatePct,
         cancellationRatePct,
         disputeRatePct,
+        outcomeRatesExcludeImmatureAppointments: true,
       },
       latency: {
         vetResponseMinutes: vetResponse,
+        vetResponseSloMinutes: vetResponseSlo,
         confirmedToStartMinutes: confirmedToStart,
         serviceDurationMinutes: serviceDuration,
         semantics: {
           vetResponse: "appointment.createdAt -> confirmedAt",
+          vetResponseSlo:
+            "confirmed response time plus mature unconfirmed lower-bound observations",
           confirmedToStart: "confirmedAt -> inProgressAt",
           serviceDuration: "inProgressAt -> completedAt",
           assignmentLatencyMeasured: false,
+          survivorBiasControlled: true,
           reason:
             "Appointment.vetId is already selected at creation; no independent assignment event is persisted.",
         },
       },
       payments: {
         transactions: transactionTotal,
+        resolvedTransactions: resolvedTransactions.length,
+        unresolvedTransactions: transactionTotal - resolvedTransactions.length,
         transactionCoverageRatePct: this.percent(
           transactionTotal,
           appointmentTotal,
@@ -311,10 +357,8 @@ export class ServiceQualityTelemetryService {
         verifiedEver: transactionRows.filter((row) => row.verifiedAt).length,
         liquidatedEver: transactionRows.filter((row) => row.liquidatedAt).length,
         failureRatePct: paymentFailureRatePct,
-        disputeRatePct: this.percent(
-          transactionStatusCounts.DISPUTED,
-          transactionTotal,
-        ),
+        disputeRatePct: paymentDisputeRatePct,
+        failureRateExcludesPendingAndVerifying: true,
         verificationLatencyMinutes: paymentVerification,
         settlementLatencyMinutes: settlement,
       },
@@ -342,7 +386,6 @@ export class ServiceQualityTelemetryService {
         : null,
       operatorAction: this.operatorAction({
         overallSloState,
-        appointmentTotal,
         dataQualityIssues: dataQuality.appointmentsWithIssues,
       }),
       boundaries: {
@@ -388,9 +431,7 @@ export class ServiceQualityTelemetryService {
     return counts;
   }
 
-  private transactionStatusCounts(
-    rows: NonNullable<AppointmentRow["transaction"]>[],
-  ) {
+  private transactionStatusCounts(rows: TransactionRow[]) {
     const counts: Record<TransactionStatus, number> = {
       PENDING: 0,
       VERIFYING: 0,
@@ -403,9 +444,7 @@ export class ServiceQualityTelemetryService {
     return counts;
   }
 
-  private paymentMethodCounts(
-    rows: NonNullable<AppointmentRow["transaction"]>[],
-  ) {
+  private paymentMethodCounts(rows: TransactionRow[]) {
     const counts: Record<PaymentMethod, number> = {
       CTG: 0,
       PSE: 0,
@@ -425,12 +464,59 @@ export class ServiceQualityTelemetryService {
         const startAt = start(row);
         const endAt = end(row);
         if (!startAt || !endAt) return null;
-        const minutes = (endAt.getTime() - startAt.getTime()) / MINUTE_MS;
-        return Number.isFinite(minutes) && minutes >= 0 ? minutes : null;
+        return this.durationMinutes(startAt, endAt);
       })
       .filter((value): value is number => value !== null)
       .sort((a, b) => a - b);
 
+    return this.summarizeLatencies(values);
+  }
+
+  private censoredVetResponseLatency(
+    rows: AppointmentRow[],
+    now: Date,
+  ): CensoredLatencySummary {
+    const observations: Array<{ minutes: number; censored: boolean }> = [];
+    let overdueUnconfirmed = 0;
+
+    for (const row of rows) {
+      if (row.confirmedAt) {
+        const minutes = this.durationMinutes(row.createdAt, row.confirmedAt);
+        if (minutes !== null) observations.push({ minutes, censored: false });
+        continue;
+      }
+
+      let censorAt: Date | null = now;
+      if (row.status === AppointmentStatus.CANCELLED) {
+        censorAt = row.lastStatusChangeAt;
+      }
+      if (!censorAt) continue;
+
+      const lowerBoundMinutes = this.durationMinutes(row.createdAt, censorAt);
+      if (
+        lowerBoundMinutes === null ||
+        lowerBoundMinutes < INTERNAL_SLO_TARGETS.vetResponseP95Minutes
+      ) {
+        continue;
+      }
+      observations.push({ minutes: lowerBoundMinutes, censored: true });
+      if (lowerBoundMinutes > INTERNAL_SLO_TARGETS.vetResponseP95Minutes) {
+        overdueUnconfirmed += 1;
+      }
+    }
+
+    const values = observations
+      .map((observation) => observation.minutes)
+      .sort((a, b) => a - b);
+    return {
+      ...this.summarizeLatencies(values),
+      censoredSampleSize: observations.filter((item) => item.censored).length,
+      exactSampleSize: observations.filter((item) => !item.censored).length,
+      overdueUnconfirmed,
+    };
+  }
+
+  private summarizeLatencies(values: number[]): LatencySummary {
     return {
       sampleSize: values.length,
       medianMinutes: this.percentile(values, 0.5),
@@ -439,6 +525,11 @@ export class ServiceQualityTelemetryService {
         ? Number(values[values.length - 1].toFixed(2))
         : null,
     };
+  }
+
+  private durationMinutes(startAt: Date, endAt: Date) {
+    const minutes = (endAt.getTime() - startAt.getTime()) / MINUTE_MS;
+    return Number.isFinite(minutes) && minutes >= 0 ? minutes : null;
   }
 
   private percentile(values: number[], quantile: number) {
@@ -461,6 +552,8 @@ export class ServiceQualityTelemetryService {
       missingInProgressTimestamp: 0,
       missingCompletedTimestamp: 0,
       missingCancellationStatusTimestamp: 0,
+      missingPaymentVerifiedTimestamp: 0,
+      missingPaymentLiquidatedTimestamp: 0,
       appointmentChronologyInvalid: 0,
       paymentChronologyInvalid: 0,
     };
@@ -507,19 +600,37 @@ export class ServiceQualityTelemetryService {
         categories.appointmentChronologyInvalid += 1;
         hasIssue = true;
       }
-      if (
-        row.transaction &&
-        (this.invalidChronology(
-          row.transaction.createdAt,
-          row.transaction.verifiedAt,
-        ) ||
+
+      if (row.transaction) {
+        if (
+          [TransactionStatus.CONFIRMED, TransactionStatus.LIQUIDATED].includes(
+            row.transaction.status,
+          ) &&
+          !row.transaction.verifiedAt
+        ) {
+          categories.missingPaymentVerifiedTimestamp += 1;
+          hasIssue = true;
+        }
+        if (
+          row.transaction.status === TransactionStatus.LIQUIDATED &&
+          !row.transaction.liquidatedAt
+        ) {
+          categories.missingPaymentLiquidatedTimestamp += 1;
+          hasIssue = true;
+        }
+        if (
+          this.invalidChronology(
+            row.transaction.createdAt,
+            row.transaction.verifiedAt,
+          ) ||
           this.invalidChronology(
             row.transaction.verifiedAt,
             row.transaction.liquidatedAt,
-          ))
-      ) {
-        categories.paymentChronologyInvalid += 1;
-        hasIssue = true;
+          )
+        ) {
+          categories.paymentChronologyInvalid += 1;
+          hasIssue = true;
+        }
       }
       if (hasIssue) appointmentsWithIssues += 1;
     }
@@ -530,6 +641,7 @@ export class ServiceQualityTelemetryService {
       measurementIntegrity: {
         historicalTransitionsAreDerivedOnlyFromPersistedTimestamps: true,
         cancellationTimestampMayBeLegacyIncomplete: true,
+        matureUnconfirmedResponseUsesElapsedLowerBound: true,
         noSyntheticTimestamps: true,
       },
     } as const;
@@ -573,29 +685,31 @@ export class ServiceQualityTelemetryService {
     return { ...input, state, comparator: "GTE" };
   }
 
-  private overallSloState(
-    metrics: SloMetric[],
-    appointmentTotal: number,
-  ): OverallSloState {
-    if (appointmentTotal < MINIMUM_SLO_SAMPLE) return "INSUFFICIENT_DATA";
+  private overallSloState(metrics: SloMetric[]): OverallSloState {
     if (metrics.some((metric) => metric.state === "BREACHED")) {
       return "BREACHED";
     }
     if (metrics.some((metric) => metric.state === "WATCH")) return "WATCH";
+    if (metrics.some((metric) => metric.state === "INSUFFICIENT_DATA")) {
+      return "INSUFFICIENT_DATA";
+    }
     return "HEALTHY";
   }
 
   private operatorAction(input: {
     overallSloState: OverallSloState;
-    appointmentTotal: number;
     dataQualityIssues: number;
   }) {
-    if (input.dataQualityIssues > 0) return "REVIEW_TELEMETRY_DATA_INTEGRITY";
-    if (input.appointmentTotal < MINIMUM_SLO_SAMPLE) {
+    if (input.dataQualityIssues > 0) {
+      return "REVIEW_TELEMETRY_DATA_INTEGRITY";
+    }
+    if (input.overallSloState === "INSUFFICIENT_DATA") {
       return "ACCUMULATE_CONTROLLED_BETA_SAMPLE";
     }
     if (input.overallSloState === "BREACHED") return "REMEDIATE_SLO_BREACHES";
-    if (input.overallSloState === "WATCH") return "MONITOR_SERVICE_QUALITY_TREND";
+    if (input.overallSloState === "WATCH") {
+      return "MONITOR_SERVICE_QUALITY_TREND";
+    }
     return "CONTINUE_CONTROLLED_SERVICE_OBSERVATION";
   }
 }
