@@ -20,6 +20,7 @@ import {
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import { BetaReadinessService } from "./beta-readiness.service";
 import { BetaSupportService } from "./beta-support.service";
+import { CartagenaLaunchReadinessService } from "./cartagena-launch-readiness.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 import { AcceptBetaLegalDto } from "./dto/accept-beta-legal.dto";
 import {
@@ -50,6 +51,7 @@ export class BetaController {
     private readonly activation: BetaActivationService,
     private readonly cohort: BetaCohortService,
     private readonly support: BetaSupportService,
+    private readonly launchReadiness: CartagenaLaunchReadinessService,
   ) {}
 
   @Get("policy")
@@ -74,6 +76,12 @@ export class BetaController {
   @Roles(UserRole.ADMIN)
   getReadiness() {
     return this.readiness.getCartagenaSnapshot();
+  }
+
+  @Get("launch-readiness")
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  getLaunchReadiness() {
+    return this.launchReadiness.getSnapshot();
   }
 
   @Get("cohort/me")
