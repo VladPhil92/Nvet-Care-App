@@ -7,6 +7,7 @@ import { StorageModule } from "./common/storage/storage.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { HealthModule } from "./health/health.module";
 import { AuthModule } from "./auth/auth.module";
+import { CoverageModule } from "./coverage/coverage.module";
 import { AppointmentsModule } from "./appointments/appointments.module";
 import { ChatModule } from "./chat/chat.module";
 import { VetsModule } from "./vets/vets.module";
@@ -42,6 +43,7 @@ import { AiModule } from "./ai/ai.module";
     StorageModule,
     HealthModule,
     AuthModule,
+    CoverageModule,
     AppointmentsModule,
     ChatModule,
     VetsModule,

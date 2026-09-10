@@ -9,6 +9,7 @@ import { AppointmentStatus, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { ScheduleService } from "../vets/schedule.service";
 import { ClosedBetaAccessService } from "../beta/closed-beta-access.service";
+import { CoverageService } from "../coverage/coverage.service";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { UpdateAppointmentDto } from "./dto/update-appointment.dto";
 
@@ -18,6 +19,7 @@ export class AppointmentsService {
     private readonly prisma: PrismaService,
     private readonly scheduleService: ScheduleService,
     private readonly closedBetaAccess: ClosedBetaAccessService = new ClosedBetaAccessService(),
+    private readonly coverage?: CoverageService,
   ) {}
 
   async getAppointments(
@@ -159,9 +161,25 @@ export class AppointmentsService {
       throw new BadRequestException("Veterinarian is not verified");
     }
 
-    // Phase 12 closed-beta boundary. Disabled by default; when operations
-    // enables it, booking becomes invite-only, Cartagena-only and requires
-    // explicit acceptance of the current beta legal contract.
+    // Phase 14 national coverage boundary. Cartagena is the only active market
+    // by default; future markets become operational through provider config.
+    // The client service point must also fall inside the selected vet's radius.
+    if (this.coverage) {
+      this.coverage.assertBookableLocation({
+        serviceLatitude: data.serviceLatitude,
+        serviceLongitude: data.serviceLongitude,
+        vet: {
+          city: vet.city,
+          department: vet.department,
+          latitude: vet.latitude,
+          longitude: vet.longitude,
+          serviceRadius: vet.serviceRadius,
+        },
+      });
+    }
+
+    // Phase 12 closed-beta boundary remains defense in depth for the first
+    // commercial pilot: invite-only, Cartagena-only and current legal consent.
     await this.closedBetaAccess.assertBookingAllowed(clientId, vet.city);
 
     const pet = await this.prisma.pet.findUnique({

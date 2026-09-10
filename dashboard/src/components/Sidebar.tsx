@@ -18,6 +18,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
     { id: 'evidence', label: 'Evidencia', icon: '✓' },
     { id: 'cohort', label: 'Cohorte Beta', icon: '◎' },
     { id: 'support', label: 'Soporte Beta', icon: '!' },
+    { id: 'coverage', label: 'Cobertura', icon: '⌖' },
     { id: 'tracking', label: 'Tracking', icon: '⊙' },
     { id: 'mobile', label: 'Mobile', icon: '📱' },
   ]
