@@ -131,6 +131,7 @@ export interface VetActivationTelemetryLead {
     permissionRevokedAt: string | null
     invitationIssuedAt: string | null
     invitationProviderAcceptedAt: string | null
+    invitationExpiresAt: string | null
     invitationClaimedAt: string | null
     accountCreatedAt: string | null
     profileCreatedAt: string | null
