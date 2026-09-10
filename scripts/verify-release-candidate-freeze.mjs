@@ -10,6 +10,7 @@ const FREEZE_PATH = 'docs/production/RELEASE_CANDIDATE_FREEZE.json';
 const BLOCKERS_PATH = 'docs/production/RELEASE_BLOCKERS.json';
 const RC_PATH = 'docs/production/RC_READINESS.json';
 const GLOBAL_PATH = 'docs/production/GLOBAL_READINESS.json';
+const ANDROID_PATH = 'docs/production/ANDROID_PRODUCTION_READINESS.json';
 
 function fail(message) {
   throw new Error(`Phase 27 release freeze violation: ${message}`);
@@ -139,6 +140,7 @@ const freeze = await readJson(FREEZE_PATH);
 const blockers = await readJson(BLOCKERS_PATH);
 const rc = await readJson(RC_PATH);
 const globalReadiness = await readJson(GLOBAL_PATH);
+const androidReadiness = await readJson(ANDROID_PATH);
 
 if (freeze.schemaVersion !== 1) fail('schemaVersion must be 1');
 if (freeze.phase !== 27) fail('phase must be 27');
@@ -161,6 +163,7 @@ validateBlockerRegistry(blockers, freeze.candidate);
 
 if (rc.candidate !== freeze.candidate) fail(`RC_READINESS candidate ${rc.candidate} diverges from ${freeze.candidate}`);
 if (globalReadiness.candidate !== freeze.candidate) fail(`GLOBAL_READINESS candidate ${globalReadiness.candidate} diverges from ${freeze.candidate}`);
+if (androidReadiness.prerequisiteRcTag !== freeze.candidate) fail(`ANDROID_PRODUCTION_READINESS prerequisite ${androidReadiness.prerequisiteRcTag} diverges from ${freeze.candidate}`);
 if (globalReadiness.auditBaselineSha !== freeze.baseline.mainCommitSha) fail('GLOBAL_READINESS auditBaselineSha must equal the Phase 27 frozen baseline');
 if (rc.phase27Freeze?.state !== 'FROZEN') fail('RC_READINESS must expose the active Phase 27 freeze');
 if (rc.phase27Freeze?.baselineMainCommitSha !== freeze.baseline.mainCommitSha) fail('RC_READINESS Phase 27 baseline diverges from freeze manifest');
