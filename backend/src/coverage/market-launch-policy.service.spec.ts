@@ -5,7 +5,26 @@ import {
 import { CoverageService } from "./coverage.service";
 import { MarketLaunchPolicyService } from "./market-launch-policy.service";
 
-const makeVet = (city: string, department: string) => ({ city, department });
+const makeVet = (
+  city: string,
+  department: string,
+  latitude?: number,
+  longitude?: number,
+) => {
+  const normalized = city.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const point = normalized.includes("bogot")
+    ? { latitude: 4.711, longitude: -74.0721 }
+    : normalized.includes("medell")
+      ? { latitude: 6.2442, longitude: -75.5812 }
+      : { latitude: 10.4, longitude: -75.49 };
+  return {
+    city,
+    department,
+    latitude: latitude ?? point.latitude,
+    longitude: longitude ?? point.longitude,
+    serviceRadius: 10,
+  };
+};
 
 describe("MarketLaunchPolicyService", () => {
   const originalNodeEnv = process.env.NODE_ENV;
@@ -31,7 +50,13 @@ describe("MarketLaunchPolicyService", () => {
 
   function build(options?: {
     vet?: any;
-    geoReadyVets?: Array<{ city: string; department: string }>;
+    geoReadyVets?: Array<{
+      city: string;
+      department: string;
+      latitude: number;
+      longitude: number;
+      serviceRadius: number;
+    }>;
   }) {
     const prisma: any = {
       vetProfile: {
@@ -77,6 +102,24 @@ describe("MarketLaunchPolicyService", () => {
       geoReadyVets: [
         makeVet("Cartagena", "Bolívar"),
         makeVet("Cartagena", "Bolívar"),
+      ],
+    });
+
+    await expect(
+      policy.assertBookingAllowed({
+        vetId: cartagenaVet.id,
+        serviceLatitude: 10.4,
+        serviceLongitude: -75.49,
+      }),
+    ).rejects.toThrow(ServiceUnavailableException);
+  });
+
+  it("does not count a veterinarian whose coordinates contradict the declared market", async () => {
+    const { policy } = build({
+      geoReadyVets: [
+        makeVet("Cartagena", "Bolívar"),
+        makeVet("Cartagena", "Bolívar"),
+        makeVet("Cartagena", "Bolívar", 4.711, -74.0721),
       ],
     });
 
@@ -169,6 +212,7 @@ describe("MarketLaunchPolicyService", () => {
     expect(medellin?.coverageSatisfied).toBe(true);
     expect(medellin?.bookingGateEligible).toBe(false);
     expect(medellin?.state).toBe("EXPANSION_LOCKED");
+    expect(snapshot.vetServiceAreaConsistencyRequired).toBe(true);
     expect(snapshot.commercialLaunchAuthorized).toBe(false);
   });
 });

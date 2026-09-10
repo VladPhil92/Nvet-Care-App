@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react'
 import AdminDashboard from './pages/AdminDashboard'
 import VetPanel from './pages/VetPanel'
 import VetOnboardingPage from './pages/VetOnboardingPage'
+import VetServiceAreaPage from './pages/VetServiceAreaPage'
 import ClientDashboard from './pages/ClientDashboard'
 import TiersPage from './pages/TiersPage'
 import AccountingPage from './pages/AccountingPage'
@@ -113,12 +114,25 @@ function ProfessionalShell({ children }: { children: ReactNode }) {
 function VetExperience() {
   const profileQuery = useVetProfileQuery(true)
   const status = (profileQuery.error as { response?: { status?: number } } | null)?.response?.status
-
-  return (
-    <ProfessionalShell>
-      {profileQuery.isError && status === 404 ? <VetOnboardingPage /> : <VetPanel mode="live" />}
-    </ProfessionalShell>
+  const profile = profileQuery.data
+  const radius = Number(profile?.serviceRadius)
+  const serviceAreaComplete = Boolean(
+    profile?.city &&
+      profile?.department &&
+      profile?.latitude != null &&
+      profile?.longitude != null &&
+      Number.isFinite(radius) &&
+      radius > 0,
   )
+
+  let content: ReactNode = <VetPanel mode="live" />
+  if (profileQuery.isError && status === 404) {
+    content = <VetOnboardingPage />
+  } else if (profile && !serviceAreaComplete) {
+    content = <VetServiceAreaPage profile={profile} />
+  }
+
+  return <ProfessionalShell>{content}</ProfessionalShell>
 }
 
 function UnknownRole() {

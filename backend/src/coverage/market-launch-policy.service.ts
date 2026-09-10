@@ -48,23 +48,12 @@ export class MarketLaunchPolicyService {
     return process.env.NVET_NATIONAL_EXPANSION_ENABLED === "true";
   }
 
-  /**
-   * Phase 15 hard boundary. Provider configuration can request a market, but
-   * non-Cartagena markets cannot accept bookings until the national expansion
-   * lock is deliberately opened and the affected market(s) each have at least
-   * the minimum verified, active and geo-ready veterinarian supply.
-   *
-   * This does NOT replace Cartagena closed-beta evidence, legal, support or
-   * payment gates. It prevents a provider-variable mistake from bypassing the
-   * supply/expansion boundary.
-   */
   async assertBookingAllowed(input: BookingPolicyInput) {
     if (!this.isGuardEnabled()) {
       return { enforced: false } as const;
     }
 
     if (!input.vetId) {
-      // DTO/domain validation remains authoritative for malformed requests.
       return { enforced: true, evaluated: false } as const;
     }
 
@@ -77,7 +66,6 @@ export class MarketLaunchPolicyService {
     });
 
     if (!vet) {
-      // AppointmentsService will return the canonical not-found response.
       return { enforced: true, evaluated: false } as const;
     }
 
@@ -169,7 +157,7 @@ export class MarketLaunchPolicyService {
     });
 
     return {
-      phase: 15,
+      phase: 16,
       program: "market-launch-guard",
       country: "CO",
       guardEnabled: this.isGuardEnabled(),
@@ -177,6 +165,7 @@ export class MarketLaunchPolicyService {
       nationalExpansionSource: "NVET_NATIONAL_EXPANSION_ENABLED",
       marketActivationSource: catalog.activationSource,
       minimumGeoReadyVetsPerMarket: MIN_VERIFIED_GEO_READY_VETS_PER_MARKET,
+      vetServiceAreaConsistencyRequired: true,
       cartagenaDaneCode: CARTAGENA_DANE_CODE,
       cartagenaDoesNotRequireNationalExpansionFlag: true,
       commercialLaunchAuthorized: false,
@@ -223,13 +212,16 @@ export class MarketLaunchPolicyService {
       select: {
         city: true,
         department: true,
+        latitude: true,
+        longitude: true,
+        serviceRadius: true,
       },
     });
 
     const counts = new Map<string, number>();
     for (const vet of vets) {
       const market = this.coverage.resolveMarketByCity(vet.city, vet.department);
-      if (!market) continue;
+      if (!market || !this.coverage.isVetServiceAreaConsistent(vet)) continue;
       counts.set(market.daneCode, (counts.get(market.daneCode) ?? 0) + 1);
     }
     return counts;

@@ -12,6 +12,7 @@ import VetScheduleStack from './stacks/VetScheduleStack'
 import VetEarningsStack from './stacks/VetEarningsStack'
 import VetProfileStack from './stacks/VetProfileStack'
 import VetOnboardingScreen from '../screens/vet/VetOnboardingScreen'
+import VetServiceAreaScreen from '../screens/vet/VetServiceAreaScreen'
 import AiAssistantScreen from '../screens/shared/AiAssistantScreen'
 
 const Tab = createBottomTabNavigator<VetTabParamList>()
@@ -20,9 +21,9 @@ const Tab = createBottomTabNavigator<VetTabParamList>()
  * VetNavigator — bottom tabs para usuarios con rol VET.
  *
  * El rol ya fue definido al registrarse. Antes de montar módulos que dependen
- * de VetProfile, comprobamos que el perfil profesional exista; cuentas VET
- * nuevas o legacy sin perfil pasan por un onboarding profesional de una sola vez.
- * El copiloto IA opera únicamente sobre citas autorizadas del veterinario.
+ * de VetProfile, comprobamos que el perfil profesional exista y que la zona de
+ * servicio sea geo-ready. Un perfil sin ciudad/coordenadas/radio válido queda
+ * en el onboarding de cobertura y no puede acceder al dashboard operativo.
  */
 export default function VetNavigator() {
   const profileQuery = useMyVetProfileQuery()
@@ -39,6 +40,30 @@ export default function VetNavigator() {
 
   if (profileQuery.isError && status === 404) {
     return <VetOnboardingScreen />
+  }
+
+  if (profileQuery.isError) {
+    return (
+      <View style={styles.loading}>
+        <Text style={styles.errorTitle}>No pudimos cargar tu perfil veterinario</Text>
+        <Text style={styles.loadingText}>Verifica tu conexión e inténtalo nuevamente.</Text>
+      </View>
+    )
+  }
+
+  const profile = profileQuery.data
+  const serviceRadius = Number((profile as { serviceRadius?: number | null } | undefined)?.serviceRadius ?? 0)
+  const serviceAreaComplete = Boolean(
+    profile?.city &&
+      profile?.department &&
+      profile?.latitude != null &&
+      profile?.longitude != null &&
+      Number.isFinite(serviceRadius) &&
+      serviceRadius > 0,
+  )
+
+  if (profile && !serviceAreaComplete) {
+    return <VetServiceAreaScreen profile={profile} />
   }
 
   return (
@@ -141,10 +166,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FAFAF7',
     gap: 14,
+    padding: 28,
   },
   loadingText: {
     color: Colors.inkMuted,
     fontSize: 13,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  errorTitle: {
+    color: Colors.ink,
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
   },
 })
