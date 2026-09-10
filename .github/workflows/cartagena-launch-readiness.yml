@@ -1,0 +1,43 @@
+name: Cartagena Launch Readiness
+
+on:
+  pull_request:
+    paths:
+      - 'backend/src/beta/**'
+      - 'backend/src/recruitment/**'
+      - 'backend/src/coverage/**'
+      - 'dashboard/src/pages/LaunchReadinessPage.tsx'
+      - 'dashboard/src/services/launch-readiness.service.ts'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'dashboard/src/App.tsx'
+      - 'docs/production/PHASE_24_CARTAGENA_LAUNCH_READINESS.md'
+      - 'scripts/verify-cartagena-launch-readiness.mjs'
+      - '.github/workflows/cartagena-launch-readiness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/beta/**'
+      - 'backend/src/recruitment/**'
+      - 'backend/src/coverage/**'
+      - 'dashboard/src/pages/LaunchReadinessPage.tsx'
+      - 'dashboard/src/services/launch-readiness.service.ts'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'dashboard/src/App.tsx'
+      - 'docs/production/PHASE_24_CARTAGENA_LAUNCH_READINESS.md'
+      - 'scripts/verify-cartagena-launch-readiness.mjs'
+      - '.github/workflows/cartagena-launch-readiness.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify Cartagena launch readiness contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+      - name: Enforce Phase 24 launch decision boundaries
+        run: node scripts/verify-cartagena-launch-readiness.mjs
