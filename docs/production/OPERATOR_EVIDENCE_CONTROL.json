@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "program": "operator-evidence-control-plane",
-  "candidate": "1.0.0-rc.1",
+  "candidate": "1.0.0-rc.2",
   "recordsDirectory": "docs/production/operator-evidence/records",
   "policy": {
     "failClosed": true,
@@ -14,7 +14,14 @@
     "rejectSecretLikeContent": true,
     "futureClockSkewMinutes": 10,
     "approvalMaxAgeHours": 87600,
-    "downstreamAndroidMustMatchPromotedRcSha": true
+    "downstreamAndroidMustMatchPromotedRcSha": true,
+    "acceptedHistoricalCandidates": ["1.0.0-rc.1"],
+    "historicalCandidateRecordsReadOnly": true,
+    "reusableAcrossCandidates": [
+      "production-backup-configured",
+      "provider-restore-drill",
+      "main-branch-protection"
+    ]
   },
   "gates": [
     {
