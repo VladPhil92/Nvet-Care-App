@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "phase": 15,
+  "program": "market-launch-guard",
+  "country": "CO",
+  "initialMarket": {
+    "city": "Cartagena de Indias",
+    "daneCode": "13001"
+  },
+  "preparedMarkets": [
+    "11001",
+    "05001",
+    "08001",
+    "68001",
+    "68276",
+    "76001",
+    "70001",
+    "23001",
+    "47001"
+  ],
+  "runtimeContract": {
+    "providerIntentVariable": "NVET_ACTIVE_SERVICE_MARKETS",
+    "nationalExpansionVariable": "NVET_NATIONAL_EXPANSION_ENABLED",
+    "launchGuardVariable": "NVET_MARKET_LAUNCH_GUARD_ENABLED",
+    "geoEnforcementVariable": "NVET_BOOKING_GEO_ENFORCEMENT",
+    "minimumGeoReadyVetsPerMarket": 3,
+    "cartagenaRequiresNationalExpansionFlag": false,
+    "futureMarketsRequireNationalExpansionFlag": true,
+    "futureMarketsRequireProviderIntent": true,
+    "bookingRequiresSupplyGate": true,
+    "commercialLaunchAuthorizedByThisContract": false
+  },
+  "expectedCartagenaProviderConfiguration": {
+    "NVET_ACTIVE_SERVICE_MARKETS": "13001",
+    "NVET_NATIONAL_EXPANSION_ENABLED": "false",
+    "NVET_MARKET_LAUNCH_GUARD_ENABLED": "true",
+    "NVET_BOOKING_GEO_ENFORCEMENT": "true"
+  },
+  "manualEvidenceStillRequired": [
+    "cartagena-vet-coverage",
+    "client-cohort-configured",
+    "support-owner-confirmed",
+    "privacy-terms-reviewed",
+    "rollback-drill",
+    "real-transfer-rail",
+    "android-play-release-evidence",
+    "physical-device-smoke",
+    "closed-beta-observation"
+  ],
+  "nationalExpansionBoundary": {
+    "futureCitiesRemainPrelaunch": true,
+    "providerVariableAloneCannotAuthorizeNationalExpansion": true,
+    "marketSupplyIsEvaluatedAtBookingBoundary": true,
+    "legalSupportPaymentsRemainSeparateOperationalGates": true
+  }
+}
