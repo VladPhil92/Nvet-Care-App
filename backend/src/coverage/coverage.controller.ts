@@ -4,11 +4,15 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { CoverageService } from "./coverage.service";
+import { MarketLaunchPolicyService } from "./market-launch-policy.service";
 import { CoveragePointQueryDto } from "./dto/coverage-query.dto";
 
 @Controller("coverage")
 export class CoverageController {
-  constructor(private readonly coverage: CoverageService) {}
+  constructor(
+    private readonly coverage: CoverageService,
+    private readonly launchPolicy: MarketLaunchPolicyService,
+  ) {}
 
   /** Public launch-market catalog. Never exposes veterinarian coordinates. */
   @Get("markets")
@@ -31,5 +35,16 @@ export class CoverageController {
   @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   getReadiness() {
     return this.coverage.getReadinessSnapshot();
+  }
+
+  /**
+   * Phase 15 launch lock snapshot. Distinguishes provider intent from the
+   * effective booking gate and never claims commercial launch authorization.
+   */
+  @Get("launch-policy")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  getLaunchPolicy() {
+    return this.launchPolicy.getPolicySnapshot();
   }
 }
