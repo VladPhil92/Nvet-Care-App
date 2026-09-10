@@ -5,6 +5,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { CoverageService } from "./coverage.service";
 import { MarketLaunchPolicyService } from "./market-launch-policy.service";
+import { VetSupplyReadinessService } from "./vet-supply-readiness.service";
 import { CoveragePointQueryDto } from "./dto/coverage-query.dto";
 
 @Controller("coverage")
@@ -12,6 +13,7 @@ export class CoverageController {
   constructor(
     private readonly coverage: CoverageService,
     private readonly launchPolicy: MarketLaunchPolicyService,
+    private readonly vetSupply: VetSupplyReadinessService,
   ) {}
 
   /** Public launch-market catalog. Never exposes veterinarian coordinates. */
@@ -46,5 +48,17 @@ export class CoverageController {
   @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   getLaunchPolicy() {
     return this.launchPolicy.getPolicySnapshot();
+  }
+
+  /**
+   * Phase 17 aggregate veterinarian acquisition/verification funnel by market.
+   * Admin-only and deliberately excludes veterinarian identities and exact
+   * coordinates so readiness can be managed without exposing PII.
+   */
+  @Get("supply-funnel")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  getSupplyFunnel() {
+    return this.vetSupply.getSupplyFunnelSnapshot();
   }
 }
