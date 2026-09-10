@@ -2,11 +2,17 @@ import { AuditAction } from "@prisma/client";
 import { CartagenaLaunchOperationsService } from "./cartagena-launch-operations.service";
 
 describe("CartagenaLaunchOperationsService", () => {
+  const auditLog = {
+    findMany: jest.fn(),
+    create: jest.fn(),
+  };
+  const tx = {
+    auditLog,
+    $queryRaw: jest.fn(),
+  };
   const prisma = {
-    auditLog: {
-      findMany: jest.fn(),
-      create: jest.fn(),
-    },
+    auditLog,
+    $transaction: jest.fn(),
   } as any;
   const launchReadiness = { getSnapshot: jest.fn() } as any;
   const activation = { getStatus: jest.fn() } as any;
@@ -49,6 +55,8 @@ describe("CartagenaLaunchOperationsService", () => {
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(new Date("2026-09-10T16:00:00.000Z"));
     jest.clearAllMocks();
+    prisma.$transaction.mockImplementation(async (work: any) => work(tx));
+    tx.$queryRaw.mockResolvedValue([]);
     service = new CartagenaLaunchOperationsService(
       prisma,
       launchReadiness,
@@ -70,8 +78,8 @@ describe("CartagenaLaunchOperationsService", () => {
       configured: true,
       expiresAt: "2026-09-18T16:00:00.000Z",
     });
-    prisma.auditLog.findMany.mockResolvedValue([]);
-    prisma.auditLog.create.mockResolvedValue({ id: "log-1" });
+    auditLog.findMany.mockResolvedValue([]);
+    auditLog.create.mockResolvedValue({ id: "log-1" });
   });
 
   afterEach(() => {
@@ -110,7 +118,7 @@ describe("CartagenaLaunchOperationsService", () => {
       ...readiness,
       runtime: { ...readiness.runtime, closedBetaEnabled: true },
     });
-    prisma.auditLog.findMany.mockResolvedValue([
+    auditLog.findMany.mockResolvedValue([
       {
         targetId: "obs-old",
         createdAt: new Date("2026-09-01T16:00:00.000Z"),
@@ -150,7 +158,7 @@ describe("CartagenaLaunchOperationsService", () => {
   });
 
   it("classifies an active observation as eligible to close after seven days", async () => {
-    prisma.auditLog.findMany.mockResolvedValue([
+    auditLog.findMany.mockResolvedValue([
       {
         targetId: "obs-1",
         createdAt: new Date("2026-09-02T16:00:00.000Z"),
@@ -237,15 +245,17 @@ describe("CartagenaLaunchOperationsService", () => {
         minimumHoursRequired: 169,
       }),
     });
-    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    expect(auditLog.create).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
-  it("writes an authorization-bound observation start as append-only audit evidence", async () => {
+  it("writes an authorization-bound observation start through the serialized append-only ledger", async () => {
     launchReadiness.getSnapshot.mockResolvedValue({
       ...readiness,
       runtime: { ...readiness.runtime, closedBetaEnabled: true },
     });
-    prisma.auditLog.findMany
+    auditLog.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
@@ -268,7 +278,9 @@ describe("CartagenaLaunchOperationsService", () => {
       { id: "admin-1", role: "ADMIN" },
     );
 
-    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           action: AuditAction.CONFIG_CHANGED,
