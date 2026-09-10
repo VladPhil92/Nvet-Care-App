@@ -85,6 +85,63 @@ for (const [rel, operations] of [
   }
 }
 
+// ---------------------------------------------------------------------------
+// Phase 22. Recruitment contact governance is an explicit trust boundary.
+// A lead is not permission to contact: production invitation delivery must be
+// backed by an append-only, auditable permission record and the admin console
+// must expose that state instead of silently bypassing it.
+// ---------------------------------------------------------------------------
+const outreachConsentService =
+  "backend/src/recruitment/vet-outreach-consent.service.ts";
+const outreachConsentController =
+  "backend/src/recruitment/vet-outreach-consent.controller.ts";
+const invitationController =
+  "backend/src/recruitment/vet-invitation.controller.ts";
+const outreachConsentDto =
+  "backend/src/recruitment/dto/vet-outreach-consent.dto.ts";
+const outreachConsentDashboardService =
+  "dashboard/src/services/vet-outreach-consent.service.ts";
+const invitationOpsPage = "dashboard/src/pages/VetInvitationOpsPage.tsx";
+
+for (const rel of [
+  outreachConsentService,
+  outreachConsentController,
+  outreachConsentDto,
+  outreachConsentDashboardService,
+]) {
+  requireFile(rel);
+}
+requireText(
+  outreachConsentService,
+  /VET_RECRUITMENT_CONTACT_PERMISSION/,
+  "outreach permission must use a dedicated audit target",
+);
+requireText(
+  outreachConsentService,
+  /CONSENT_GRANTED[\s\S]*CONSENT_REVOKED|CONSENT_REVOKED[\s\S]*CONSENT_GRANTED/,
+  "outreach permission history must support grant and revocation",
+);
+requireText(
+  outreachConsentService,
+  /process\.env\.NODE_ENV\s*===\s*["']production["']/,
+  "production outreach permission enforcement must be non-optional",
+);
+requireText(
+  invitationController,
+  /outreachConsent\.assertEmailDeliveryAllowed\(leadId\)/,
+  "invitation delivery must fail closed behind outreach permission",
+);
+requireText(
+  invitationOpsPage,
+  /permission\?\.contactAllowed/,
+  "admin invitation action must reflect contact permission state",
+);
+requireText(
+  invitationOpsPage,
+  /Registrar autorización/,
+  "admin console must expose permission evidence capture",
+);
+
 if (failures.length > 0) {
   console.error("❌ Veterinary Trust Convergence gate failed:");
   for (const failure of failures) console.error(` - ${failure}`);
@@ -95,3 +152,4 @@ console.log("✅ Veterinary Trust Convergence gate passed.");
 console.log("   identity: VET remains onboarding-only");
 console.log("   operation: documents APPROVED + active profile + official registry VERIFIED");
 console.log("   registry: auditable admin evidence; no brittle scraping dependency");
+console.log("   recruitment: production invitation delivery requires auditable contact permission");
