@@ -19,17 +19,36 @@ const MIN_WINDOW_HOURS = 1;
 const MAX_WINDOW_HOURS = 720;
 const MAX_APPOINTMENTS = 5000;
 const MINIMUM_SLO_SAMPLE = 10;
+const SERVICE_COMPLETION_GRACE_MINUTES = 180;
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
 const INTERNAL_SLO_TARGETS = {
-  vetResponseP95Minutes: 30,
+  serviceStartDelayP95Minutes: 30,
   completionRatePct: 85,
   cancellationRatePct: 15,
   disputeRatePct: 5,
   paymentFailureRatePct: 5,
   dataQualityIssueRatePct: 2,
 } as const;
+
+const RESOLVED_TRANSACTION_STATUSES = new Set<TransactionStatus>([
+  TransactionStatus.CONFIRMED,
+  TransactionStatus.LIQUIDATED,
+  TransactionStatus.DISPUTED,
+  TransactionStatus.FAILED,
+]);
+
+const NEEDS_IN_PROGRESS_TIMESTAMP = new Set<AppointmentStatus>([
+  AppointmentStatus.IN_PROGRESS,
+  AppointmentStatus.COMPLETED,
+  AppointmentStatus.DISPUTED,
+]);
+
+const NEEDS_VERIFIED_PAYMENT_TIMESTAMP = new Set<TransactionStatus>([
+  TransactionStatus.CONFIRMED,
+  TransactionStatus.LIQUIDATED,
+]);
 
 type SloMetricState = "PASS" | "WATCH" | "BREACHED" | "INSUFFICIENT_DATA";
 type OverallSloState = "HEALTHY" | "WATCH" | "BREACHED" | "INSUFFICIENT_DATA";
@@ -44,7 +63,7 @@ type LatencySummary = {
 type CensoredLatencySummary = LatencySummary & {
   censoredSampleSize: number;
   exactSampleSize: number;
-  overdueUnconfirmed: number;
+  overdueWithoutEvent: number;
 };
 
 type SloMetric = {
@@ -60,6 +79,9 @@ type SloMetric = {
 
 type AppointmentRow = {
   status: AppointmentStatus;
+  date: Date;
+  time: string;
+  scheduledAt: Date | null;
   createdAt: Date;
   confirmedAt: Date | null;
   inProgressAt: Date | null;
@@ -114,6 +136,9 @@ export class ServiceQualityTelemetryService {
         take: MAX_APPOINTMENTS + 1,
         select: {
           status: true,
+          date: true,
+          time: true,
+          scheduledAt: true,
           createdAt: true,
           confirmedAt: true,
           inProgressAt: true,
@@ -165,37 +190,34 @@ export class ServiceQualityTelemetryService {
       row.transaction ? [row.transaction] : [],
     );
     const resolvedTransactions = transactionRows.filter((row) =>
-      [
-        TransactionStatus.CONFIRMED,
-        TransactionStatus.LIQUIDATED,
-        TransactionStatus.DISPUTED,
-        TransactionStatus.FAILED,
-      ].includes(row.status),
+      RESOLVED_TRANSACTION_STATUSES.has(row.status),
     );
     const transactionStatusCounts = this.transactionStatusCounts(transactionRows);
     const paymentMethodCounts = this.paymentMethodCounts(transactionRows);
 
     const confirmedEver = scopedRows.filter((row) => row.confirmedAt).length;
     const completedEver = scopedRows.filter((row) => row.completedAt).length;
-    const cancelledBeforeCompletion = scopedRows.filter(
-      (row) => row.status === AppointmentStatus.CANCELLED && !row.completedAt,
+    const matureOutcomeRows = scopedRows.filter((row) =>
+      this.isOutcomeMature(row, now),
+    );
+    const completedMature = matureOutcomeRows.filter(
+      (row) => row.completedAt !== null,
     ).length;
-    const terminalOutcomeCount = completedEver + cancelledBeforeCompletion;
-    const disputedWithoutTerminalOutcome = scopedRows.filter(
+    const cancelledMature = matureOutcomeRows.filter(
       (row) =>
-        row.status === AppointmentStatus.DISPUTED &&
-        !row.completedAt &&
-        row.status !== AppointmentStatus.CANCELLED,
+        row.status === AppointmentStatus.CANCELLED && row.completedAt === null,
     ).length;
-    const outcomeEvaluableCount =
-      terminalOutcomeCount + disputedWithoutTerminalOutcome;
+    const disputedMature = matureOutcomeRows.filter(
+      (row) => row.status === AppointmentStatus.DISPUTED,
+    ).length;
 
-    const vetResponse = this.latency(
+    const bookingConfirmation = this.latency(
       scopedRows,
       (row) => row.createdAt,
       (row) => row.confirmedAt,
     );
-    const vetResponseSlo = this.censoredVetResponseLatency(scopedRows, now);
+    const unavailableVetResponse = this.summarizeLatencies([]);
+    const serviceStartDelay = this.censoredServiceStartDelay(scopedRows, now);
     const confirmedToStart = this.latency(
       scopedRows,
       (row) => row.confirmedAt,
@@ -220,15 +242,10 @@ export class ServiceQualityTelemetryService {
     const dataQuality = this.buildDataQuality(scopedRows);
     const appointmentTotal = scopedRows.length;
     const transactionTotal = transactionRows.length;
-    const completionRatePct = this.percent(completedEver, terminalOutcomeCount);
-    const cancellationRatePct = this.percent(
-      cancelledBeforeCompletion,
-      terminalOutcomeCount,
-    );
-    const disputeRatePct = this.percent(
-      appointmentStatusCounts.DISPUTED,
-      outcomeEvaluableCount,
-    );
+    const matureOutcomeCount = matureOutcomeRows.length;
+    const completionRatePct = this.percent(completedMature, matureOutcomeCount);
+    const cancellationRatePct = this.percent(cancelledMature, matureOutcomeCount);
+    const disputeRatePct = this.percent(disputedMature, matureOutcomeCount);
     const paymentFailureRatePct = this.percent(
       resolvedTransactions.filter((row) => row.status === TransactionStatus.FAILED)
         .length,
@@ -247,40 +264,40 @@ export class ServiceQualityTelemetryService {
 
     const sloMetrics: SloMetric[] = [
       this.upperBoundMetric({
-        id: "vet-response-p95",
-        label: "VET response p95",
-        value: vetResponseSlo.p95Minutes,
-        target: INTERNAL_SLO_TARGETS.vetResponseP95Minutes,
+        id: "service-start-delay-p95",
+        label: "Service start delay p95",
+        value: serviceStartDelay.p95Minutes,
+        target: INTERNAL_SLO_TARGETS.serviceStartDelayP95Minutes,
         unit: "minutes",
-        sampleSize: vetResponseSlo.sampleSize,
+        sampleSize: serviceStartDelay.sampleSize,
       }),
       this.lowerBoundMetric({
         id: "completion-rate",
-        label: "Appointment completion rate",
+        label: "Mature appointment completion rate",
         value: completionRatePct,
         target: INTERNAL_SLO_TARGETS.completionRatePct,
         unit: "percent",
-        sampleSize: terminalOutcomeCount,
+        sampleSize: matureOutcomeCount,
       }),
       this.upperBoundMetric({
         id: "cancellation-rate",
-        label: "Appointment cancellation rate",
+        label: "Mature appointment cancellation rate",
         value: cancellationRatePct,
         target: INTERNAL_SLO_TARGETS.cancellationRatePct,
         unit: "percent",
-        sampleSize: terminalOutcomeCount,
+        sampleSize: matureOutcomeCount,
       }),
       this.upperBoundMetric({
         id: "dispute-rate",
-        label: "Appointment dispute rate",
+        label: "Mature appointment dispute rate",
         value: disputeRatePct,
         target: INTERNAL_SLO_TARGETS.disputeRatePct,
         unit: "percent",
-        sampleSize: outcomeEvaluableCount,
+        sampleSize: matureOutcomeCount,
       }),
       this.upperBoundMetric({
         id: "payment-failure-rate",
-        label: "Payment failure rate",
+        label: "Resolved payment failure rate",
         value: paymentFailureRatePct,
         target: INTERNAL_SLO_TARGETS.paymentFailureRatePct,
         unit: "percent",
@@ -318,30 +335,48 @@ export class ServiceQualityTelemetryService {
         statusCounts: appointmentStatusCounts,
         confirmedEver,
         completedEver,
-        cancelledBeforeCompletion,
-        terminalOutcomeCount,
-        outcomeEvaluableCount,
+        cancelledBeforeCompletion: scopedRows.filter(
+          (row) =>
+            row.status === AppointmentStatus.CANCELLED &&
+            row.completedAt === null,
+        ).length,
+        terminalOutcomeCount: matureOutcomeCount,
+        outcomeEvaluableCount: matureOutcomeCount,
+        matureOutcomeCount,
+        immatureOutcomeCount: appointmentTotal - matureOutcomeCount,
         confirmationRatePct: this.percent(confirmedEver, appointmentTotal),
         completionRatePct,
         cancellationRatePct,
         disputeRatePct,
         outcomeRatesExcludeImmatureAppointments: true,
+        maturityGraceMinutes: SERVICE_COMPLETION_GRACE_MINUTES,
       },
       latency: {
-        vetResponseMinutes: vetResponse,
-        vetResponseSloMinutes: vetResponseSlo,
+        vetResponseMinutes: unavailableVetResponse,
+        vetResponseSloMinutes: {
+          ...unavailableVetResponse,
+          censoredSampleSize: 0,
+          exactSampleSize: 0,
+          overdueWithoutEvent: 0,
+        },
+        bookingConfirmationMinutes: bookingConfirmation,
+        serviceStartDelayMinutes: serviceStartDelay,
         confirmedToStartMinutes: confirmedToStart,
         serviceDurationMinutes: serviceDuration,
         semantics: {
-          vetResponse: "appointment.createdAt -> confirmedAt",
-          vetResponseSlo:
-            "confirmed response time plus mature unconfirmed lower-bound observations",
+          vetResponse:
+            "not measured: no veterinarian-exclusive durable response event is persisted",
+          vetResponseMeasured: false,
+          bookingConfirmation: "appointment.createdAt -> confirmedAt",
+          bookingConfirmationMayBeFinanciallyTriggered: true,
+          serviceStartDelay:
+            "scheduled service time -> inProgressAt; mature missing starts use elapsed lower-bound observation",
           confirmedToStart: "confirmedAt -> inProgressAt",
           serviceDuration: "inProgressAt -> completedAt",
           assignmentLatencyMeasured: false,
           survivorBiasControlled: true,
           reason:
-            "Appointment.vetId is already selected at creation; no independent assignment event is persisted.",
+            "Appointment.vetId is already selected at creation; no independent assignment event is persisted, and confirmedAt can be written by financial confirmation paths.",
         },
       },
       payments: {
@@ -375,6 +410,7 @@ export class ServiceQualityTelemetryService {
         policySource: "internal-beta-operating-targets",
         targetsAreCustomerPromises: false,
         automaticallyChangesLaunchDecision: false,
+        insufficientMetricMakesOverallInsufficient: true,
       },
       observationContext: launch
         ? {
@@ -472,37 +508,36 @@ export class ServiceQualityTelemetryService {
     return this.summarizeLatencies(values);
   }
 
-  private censoredVetResponseLatency(
+  private censoredServiceStartDelay(
     rows: AppointmentRow[],
     now: Date,
   ): CensoredLatencySummary {
     const observations: Array<{ minutes: number; censored: boolean }> = [];
-    let overdueUnconfirmed = 0;
+    let overdueWithoutEvent = 0;
 
     for (const row of rows) {
-      if (row.confirmedAt) {
-        const minutes = this.durationMinutes(row.createdAt, row.confirmedAt);
-        if (minutes !== null) observations.push({ minutes, censored: false });
+      const scheduled = this.resolveScheduledAt(row);
+      if (!scheduled) continue;
+
+      if (row.inProgressAt) {
+        const rawMinutes =
+          (row.inProgressAt.getTime() - scheduled.getTime()) / MINUTE_MS;
+        if (Number.isFinite(rawMinutes)) {
+          observations.push({ minutes: Math.max(0, rawMinutes), censored: false });
+        }
         continue;
       }
 
-      let censorAt: Date | null = now;
-      if (row.status === AppointmentStatus.CANCELLED) {
-        censorAt = row.lastStatusChangeAt;
-      }
-      if (!censorAt) continue;
-
-      const lowerBoundMinutes = this.durationMinutes(row.createdAt, censorAt);
+      if (row.status === AppointmentStatus.CANCELLED) continue;
+      const elapsedMinutes = (now.getTime() - scheduled.getTime()) / MINUTE_MS;
       if (
-        lowerBoundMinutes === null ||
-        lowerBoundMinutes < INTERNAL_SLO_TARGETS.vetResponseP95Minutes
+        !Number.isFinite(elapsedMinutes) ||
+        elapsedMinutes < INTERNAL_SLO_TARGETS.serviceStartDelayP95Minutes
       ) {
         continue;
       }
-      observations.push({ minutes: lowerBoundMinutes, censored: true });
-      if (lowerBoundMinutes > INTERNAL_SLO_TARGETS.vetResponseP95Minutes) {
-        overdueUnconfirmed += 1;
-      }
+      observations.push({ minutes: elapsedMinutes, censored: true });
+      overdueWithoutEvent += 1;
     }
 
     const values = observations
@@ -512,8 +547,32 @@ export class ServiceQualityTelemetryService {
       ...this.summarizeLatencies(values),
       censoredSampleSize: observations.filter((item) => item.censored).length,
       exactSampleSize: observations.filter((item) => !item.censored).length,
-      overdueUnconfirmed,
+      overdueWithoutEvent,
     };
+  }
+
+  private isOutcomeMature(row: AppointmentRow, now: Date) {
+    if (
+      row.completedAt ||
+      row.status === AppointmentStatus.CANCELLED ||
+      row.status === AppointmentStatus.DISPUTED
+    ) {
+      return true;
+    }
+    const scheduled = this.resolveScheduledAt(row);
+    if (!scheduled) return false;
+    return (
+      scheduled.getTime() + SERVICE_COMPLETION_GRACE_MINUTES * MINUTE_MS <=
+      now.getTime()
+    );
+  }
+
+  private resolveScheduledAt(row: AppointmentRow): Date | null {
+    if (row.scheduledAt) return row.scheduledAt;
+    if (!/^\d{2}:\d{2}$/.test(row.time)) return null;
+    const dateOnly = row.date.toISOString().slice(0, 10);
+    const value = new Date(`${dateOnly}T${row.time}:00-05:00`);
+    return Number.isNaN(value.getTime()) ? null : value;
   }
 
   private summarizeLatencies(values: number[]): LatencySummary {
@@ -554,6 +613,7 @@ export class ServiceQualityTelemetryService {
       missingCancellationStatusTimestamp: 0,
       missingPaymentVerifiedTimestamp: 0,
       missingPaymentLiquidatedTimestamp: 0,
+      scheduledTimeUnresolvable: 0,
       appointmentChronologyInvalid: 0,
       paymentChronologyInvalid: 0,
     };
@@ -561,23 +621,14 @@ export class ServiceQualityTelemetryService {
 
     for (const row of rows) {
       let hasIssue = false;
-      const needsConfirmed = [
-        AppointmentStatus.CONFIRMED,
-        AppointmentStatus.IN_PROGRESS,
-        AppointmentStatus.COMPLETED,
-        AppointmentStatus.DISPUTED,
-      ].includes(row.status);
-      const needsInProgress = [
-        AppointmentStatus.IN_PROGRESS,
-        AppointmentStatus.COMPLETED,
-        AppointmentStatus.DISPUTED,
-      ].includes(row.status);
 
-      if (needsConfirmed && !row.confirmedAt) {
+      if (
+        row.status === AppointmentStatus.CONFIRMED &&
+        !row.confirmedAt
+      ) {
         categories.missingConfirmedTimestamp += 1;
-        hasIssue = true;
       }
-      if (needsInProgress && !row.inProgressAt) {
+      if (NEEDS_IN_PROGRESS_TIMESTAMP.has(row.status) && !row.inProgressAt) {
         categories.missingInProgressTimestamp += 1;
         hasIssue = true;
       }
@@ -592,6 +643,10 @@ export class ServiceQualityTelemetryService {
         categories.missingCancellationStatusTimestamp += 1;
         hasIssue = true;
       }
+      if (!this.resolveScheduledAt(row)) {
+        categories.scheduledTimeUnresolvable += 1;
+        hasIssue = true;
+      }
       if (
         this.invalidChronology(row.createdAt, row.confirmedAt) ||
         this.invalidChronology(row.confirmedAt, row.inProgressAt) ||
@@ -603,9 +658,7 @@ export class ServiceQualityTelemetryService {
 
       if (row.transaction) {
         if (
-          [TransactionStatus.CONFIRMED, TransactionStatus.LIQUIDATED].includes(
-            row.transaction.status,
-          ) &&
+          NEEDS_VERIFIED_PAYMENT_TIMESTAMP.has(row.transaction.status) &&
           !row.transaction.verifiedAt
         ) {
           categories.missingPaymentVerifiedTimestamp += 1;
@@ -641,7 +694,9 @@ export class ServiceQualityTelemetryService {
       measurementIntegrity: {
         historicalTransitionsAreDerivedOnlyFromPersistedTimestamps: true,
         cancellationTimestampMayBeLegacyIncomplete: true,
-        matureUnconfirmedResponseUsesElapsedLowerBound: true,
+        matureUnconfirmedResponseUsesElapsedLowerBound: false,
+        missingConfirmationTimestampIsCoverageGapNotVetResponseFailure: true,
+        matureMissingStartUsesElapsedLowerBound: true,
         noSyntheticTimestamps: true,
       },
     } as const;
