@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
+import { CoverageModule } from "../coverage/coverage.module";
 import { BetaActivationService } from "./beta-activation.service";
 import { BetaCohortService } from "./beta-cohort.service";
 import { BetaController } from "./beta.controller";
@@ -10,7 +11,7 @@ import { BetaSupportService } from "./beta-support.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, CoverageModule],
   controllers: [BetaController],
   providers: [
     BetaEvidenceService,
