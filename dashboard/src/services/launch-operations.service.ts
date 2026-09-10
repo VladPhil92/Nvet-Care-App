@@ -36,6 +36,8 @@ export interface LaunchOperationsSnapshot {
   observation: {
     state: ObservationState
     observationId: string | null
+    authorizationId: string | null
+    belongsToCurrentAuthorization: boolean
     startedAt: string | null
     eligibleToCloseAt: string | null
     closedAt: string | null
@@ -47,6 +49,7 @@ export interface LaunchOperationsSnapshot {
     conflictReasons: string[]
     requiredWhenClosedBetaEnabled: true
     minimumObservationDays: number
+    minimumControlRemainingHoursAtStart: number
     closureProvesElapsedWindowOnly: true
     uninterruptedRuntimeEvidenceMustBeReviewedSeparately: true
   }
@@ -101,6 +104,7 @@ export interface LaunchOperationsSnapshot {
     phase24Source: string
     observationLedger: 'audit_logs'
     observationLedgerAppendOnly: true
+    observationBoundToActivationAuthorization: true
     observationActionsNeverToggleProviderFlags: true
     observationCloseNeverClaimsCommercialLaunch: true
     expiryWatchIsReadOnly: true
