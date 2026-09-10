@@ -21,6 +21,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
     { id: 'coverage', label: 'Cobertura', icon: '⌖' },
     { id: 'launch', label: 'Lanzamiento CTG', icon: '◉' },
     { id: 'launch-operations', label: 'Operación CTG', icon: '◇' },
+    { id: 'service-quality', label: 'Calidad CTG', icon: '∿' },
     { id: 'recruitment', label: 'Captación VET', icon: '+' },
     { id: 'invitations', label: 'Invitaciones VET', icon: '↗' },
     { id: 'verification', label: 'Verificación VET', icon: '✓' },
@@ -30,23 +31,25 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
 
   if (isMobile) {
     return (
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        minHeight: 64,
-        background: T.surface,
-        borderTop: `1px solid ${T.line}`,
-        display: 'flex',
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        overflowX: 'auto',
-        zIndex: 100,
-        boxShadow: '0 -2px 8px rgba(0,0,0,.05)',
-        padding: '4px 6px',
-      }}>
-        {items.map(item => {
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          minHeight: 64,
+          background: T.surface,
+          borderTop: `1px solid ${T.line}`,
+          display: 'flex',
+          justifyContent: 'flex-start',
+          alignItems: 'center',
+          overflowX: 'auto',
+          zIndex: 100,
+          boxShadow: '0 -2px 8px rgba(0,0,0,.05)',
+          padding: '4px 6px',
+        }}
+      >
+        {items.map((item) => {
           const active = activePage === item.id
           return (
             <button
@@ -80,20 +83,24 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
   }
 
   return (
-    <div style={{
-      width: isTablet ? 80 : 240,
-      background: T.dark,
-      padding: isTablet ? '24px 12px' : '24px 16px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
-      transition: 'width .2s',
-    }}>
-      <div style={{
-        marginBottom: 24,
-        paddingLeft: isTablet ? 0 : 12,
-        textAlign: isTablet ? 'center' : 'left',
-      }}>
+    <div
+      style={{
+        width: isTablet ? 80 : 240,
+        background: T.dark,
+        padding: isTablet ? '24px 12px' : '24px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        transition: 'width .2s',
+      }}
+    >
+      <div
+        style={{
+          marginBottom: 24,
+          paddingLeft: isTablet ? 0 : 12,
+          textAlign: isTablet ? 'center' : 'left',
+        }}
+      >
         {isTablet ? (
           <Logo size={32} text={false} inverted />
         ) : (
@@ -103,7 +110,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
         )}
       </div>
 
-      {items.map(item => {
+      {items.map((item) => {
         const active = activePage === item.id
         return (
           <button
@@ -112,7 +119,9 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
             title={isTablet ? item.label : undefined}
             style={{
               background: active ? T.darkAlt : 'transparent',
-              border: active ? `1px solid ${T.darkLine}` : '1px solid transparent',
+              border: active
+                ? `1px solid ${T.darkLine}`
+                : '1px solid transparent',
               color: active ? T.inkInv : T.inkMuted,
               padding: isTablet ? '14px 8px' : '12px 14px',
               borderRadius: 8,
@@ -128,8 +137,14 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
             }}
           >
             <span style={{ fontSize: isTablet ? 20 : 18 }}>{item.icon}</span>
-            <span style={{ display: isTablet ? 'none' : 'block' }}>{item.label}</span>
-            {isTablet && <span style={{ fontSize: 10, marginTop: 2 }}>{item.label.slice(0, 6)}</span>}
+            <span style={{ display: isTablet ? 'none' : 'block' }}>
+              {item.label}
+            </span>
+            {isTablet && (
+              <span style={{ fontSize: 10, marginTop: 2 }}>
+                {item.label.slice(0, 6)}
+              </span>
+            )}
           </button>
         )
       })}
