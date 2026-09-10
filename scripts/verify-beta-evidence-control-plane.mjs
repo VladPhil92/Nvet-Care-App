@@ -22,6 +22,8 @@ const [
   access,
   controller,
   readiness,
+  cartagenaSupply,
+  betaModule,
   app,
   sidebar,
   evidencePage,
@@ -35,6 +37,8 @@ const [
   read('backend/src/beta/closed-beta-access.service.ts'),
   read('backend/src/beta/beta.controller.ts'),
   read('backend/src/beta/beta-readiness.service.ts'),
+  read('backend/src/coverage/cartagena-vet-activation.service.ts'),
+  read('backend/src/beta/beta.module.ts'),
   read('dashboard/src/App.tsx'),
   read('dashboard/src/components/Sidebar.tsx'),
   read('dashboard/src/pages/BetaEvidencePage.tsx'),
@@ -76,15 +80,30 @@ if (/auditLog\.(update|delete|deleteMany|updateMany)\s*\(/.test(cohort)) {
   fail('Cohort ledger must remain append-only; mutable auditLog operation detected.')
 }
 
+includes(cartagenaSupply, 'MIN_VERIFIED_GEO_READY_VETS_PER_MARKET', 'Cartagena supply service')
+includes(cartagenaSupply, 'operationalReady', 'Cartagena supply service')
+includes(cartagenaSupply, 'supplyActivationReady', 'Cartagena supply service')
+includes(cartagenaSupply, 'formalEvidenceEligible', 'Cartagena supply service')
+includes(cartagenaSupply, 'registryVerified', 'Cartagena supply service')
+includes(cartagenaSupply, 'approvedRequired === REQUIRED_DOCUMENTS.length', 'Cartagena supply service')
+includes(cartagenaSupply, 'this.coverage.isVetServiceAreaConsistent(profile)', 'Cartagena supply service')
+
+includes(betaModule, 'CoverageModule', 'Beta module')
 includes(activation, 'BETA_ACTIVATION_AUTHORIZATION', 'Activation service')
 includes(activation, 'eventType: "AUTHORIZED"', 'Activation service')
 includes(activation, '"REVOKED"', 'Activation service')
 includes(activation, 'MAX_INITIAL_CLIENTS = 50', 'Activation service')
-includes(activation, 'MIN_VERIFIED_VETS = 3', 'Activation service')
+includes(activation, 'CartagenaVetActivationService', 'Activation service')
+includes(activation, 'this.cartagenaSupply.getSnapshot()', 'Activation service')
+includes(activation, 'supply.operationalReady', 'Activation service')
+includes(activation, 'supply.supplyActivationReady', 'Activation service')
 includes(activation, 'this.cohort.getOperationalSnapshot()', 'Activation service')
 includes(activation, 'COHORT_MEMBER_INELIGIBLE', 'Activation service')
 includes(activation, 'assertActiveForBooking', 'Activation service')
 includes(activation, 'PRODUCTION_EVIDENCE_GATES_INCOMPLETE', 'Activation service')
+if (/vetProfile\.count\s*\(/.test(activation)) {
+  fail('Activation service must not use a weaker direct veterinarian count; Phase 18 supply is canonical.')
+}
 if (/auditLog\.(update|delete|deleteMany|updateMany)\s*\(/.test(activation)) {
   fail('Activation authorization ledger must remain append-only.')
 }
@@ -121,6 +140,11 @@ includes(readiness, 'awaiting-authorization', 'Beta readiness')
 includes(readiness, 'authorizationRequired: true', 'Beta readiness')
 includes(readiness, 'authorizationActive', 'Beta readiness')
 includes(readiness, 'operatorActivationEligible', 'Beta readiness')
+includes(readiness, 'this.cartagenaSupply.getSnapshot()', 'Beta readiness')
+includes(readiness, 'supply.operationalReady', 'Beta readiness')
+includes(readiness, 'supply.supplyActivationReady', 'Beta readiness')
+includes(readiness, 'geoConsistencyRequired: true', 'Beta readiness')
+includes(readiness, 'professionalRegistryVerificationRequired: true', 'Beta readiness')
 includes(readiness, 'this.cohort.getOperationalSnapshot()', 'Beta readiness')
 includes(readiness, 'membershipSource: "admin-control-plane"', 'Beta readiness')
 includes(readiness, 'cohortLedger: "audit_logs"', 'Beta readiness')
@@ -128,6 +152,9 @@ includes(readiness, 'evidencePromotion.eligibleForOperatorActivation', 'Beta rea
 includes(readiness, 'evidenceApprovalIsNotCommercialLaunchApproval: true', 'Beta readiness')
 includes(readiness, 'operatorAuthorizationDoesNotToggleProviderConfiguration: true', 'Beta readiness')
 includes(readiness, 'evidenceReferencesAdminOnly: true', 'Beta readiness')
+if (/vetProfile\.count\s*\(/.test(readiness)) {
+  fail('Beta readiness must not use a weaker direct veterinarian count; Phase 18 supply is canonical.')
+}
 
 includes(app, "'evidence'", 'Dashboard routing')
 includes(app, "'cohort'", 'Dashboard routing')
@@ -174,6 +201,20 @@ if (manifest.policy?.cohortMaximumClients !== 50) {
 if (manifest.policy?.cohortRequiresVerifiedActiveClient !== true) {
   fail('Cohort membership must require verified active CLIENT accounts.')
 }
+if (manifest.policy?.strictVetSupplySource !== 'GET /api/coverage/cartagena-activation') {
+  fail('Manifest must point beta supply readiness at the Phase 18 Cartagena activation source.')
+}
+if (manifest.policy?.strictVetSupplySourcePhase !== 18) {
+  fail('Manifest strict veterinarian supply source must remain Phase 18.')
+}
+for (const key of [
+  'strictVetSupplyRequiresGeoConsistency',
+  'strictVetSupplyRequiresApprovedDocuments',
+  'strictVetSupplyRequiresProfessionalRegistryVerification',
+  'strictVetSupplyRequiresActiveProfile',
+]) {
+  if (manifest.policy?.[key] !== true) fail(`Manifest must require ${key}.`)
+}
 if (manifest.policy?.authorizationLedger !== 'audit_logs') {
   fail('Manifest authorizationLedger must be audit_logs.')
 }
@@ -200,5 +241,5 @@ if (manifest.policy?.manifestEvidenceNeverAutoMutated !== true) {
 }
 
 console.log(
-  `Beta control plane valid: ${codeGates.length} production gates, append-only evidence + cohort + authorization ledgers, booking fail-closed, admin control UI wired.`,
+  `Beta control plane valid: ${codeGates.length} production gates, Phase 18 strict veterinarian supply, append-only evidence + cohort + authorization ledgers, booking fail-closed, admin control UI wired.`,
 )
