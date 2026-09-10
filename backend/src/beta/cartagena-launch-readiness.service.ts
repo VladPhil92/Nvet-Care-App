@@ -116,7 +116,9 @@ export class CartagenaLaunchReadinessService {
 
     const categories = CATEGORY_ORDER.map((category) => {
       const gates = evidenceGates.filter((gate) => gate.category === category);
-      const verified = gates.filter((gate) => gate.status === "VERIFIED").length;
+      const verified = gates.filter(
+        (gate) => gate.status === "VERIFIED",
+      ).length;
       const conflicted = gates.filter(
         (gate) => gate.status === "CONFLICTED",
       ).length;
@@ -126,7 +128,8 @@ export class CartagenaLaunchReadinessService {
         verified,
         pending: gates.length - verified - conflicted,
         conflicted,
-        ready: gates.length > 0 && verified === gates.length && conflicted === 0,
+        ready:
+          gates.length > 0 && verified === gates.length && conflicted === 0,
         gates,
       } as const;
     });
@@ -208,8 +211,7 @@ export class CartagenaLaunchReadinessService {
           vetActivation.totals.medianLeadToOperationalEvidenceHours,
         bottlenecks: vetActivation.bottlenecks.slice(0, 5),
         blockingForLaunchDecision: false,
-        note:
-          "Recruitment SLA health is an operational resilience signal. Strict verified VET supply remains the launch gate source of truth.",
+        note: "Recruitment SLA health is an operational resilience signal. Strict verified VET supply remains the launch gate source of truth.",
       },
       boundaries: {
         sourceEvidenceGates: BETA_EVIDENCE_GATES,
