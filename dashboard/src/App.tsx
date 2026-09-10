@@ -5,6 +5,7 @@ import VetOnboardingPage from './pages/VetOnboardingPage'
 import VetServiceAreaPage from './pages/VetServiceAreaPage'
 import VetVerificationOpsPage from './pages/VetVerificationOpsPage'
 import VetRecruitmentPage from './pages/VetRecruitmentPage'
+import VetInvitationRegisterPage from './pages/VetInvitationRegisterPage'
 import ClientDashboard from './pages/ClientDashboard'
 import TiersPage from './pages/TiersPage'
 import AccountingPage from './pages/AccountingPage'
@@ -20,6 +21,7 @@ import { useResponsive } from './hooks/useResponsive'
 import { useAuthStore } from './stores/useAuthStore'
 import { useVetProfileQuery } from './hooks/queries/useVetQueries'
 import { QueryProvider } from './lib/QueryProvider'
+import { vetInvitationService } from './services/vet-invitation.service'
 import { T, F } from './theme/tokens'
 
 type AdminPage =
@@ -35,6 +37,24 @@ type AdminPage =
   | 'verification'
   | 'tracking'
 type PublicAuthPage = 'login' | 'register'
+
+function getInviteTokenFromHash(): string | null {
+  if (typeof window === 'undefined') return null
+  const value = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash
+  const token = new URLSearchParams(value).get('vetInvite')?.trim() ?? ''
+  return token.length >= 32 && token.length <= 128 ? token : null
+}
+
+function clearInviteHash() {
+  if (typeof window === 'undefined') return
+  window.history.replaceState(
+    null,
+    '',
+    `${window.location.pathname}${window.location.search}`,
+  )
+}
 
 function AdminApp() {
   const [page, setPage] = useState<AdminPage>('admin')
@@ -211,18 +231,59 @@ function SessionRestoreScreen() {
 }
 
 function AppContent() {
-  const [authPage, setAuthPage] = useState<PublicAuthPage>('login')
+  const initialInvite = getInviteTokenFromHash()
+  const [authPage, setAuthPage] = useState<PublicAuthPage>(
+    initialInvite ? 'register' : 'login',
+  )
+  const [inviteToken, setInviteToken] = useState<string | null>(initialInvite)
   const { user, isAuthenticated, isLoading, checkAuth } = useAuthStore()
 
   useEffect(() => {
     void checkAuth()
   }, [checkAuth])
 
+  useEffect(() => {
+    const handleHashChange = () => {
+      const token = getInviteTokenFromHash()
+      setInviteToken(token)
+      if (token) setAuthPage('register')
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
+
+  useEffect(() => {
+    if (!inviteToken || !isAuthenticated || !user || user.role !== 'VET') return
+    let cancelled = false
+    void vetInvitationService
+      .claim(inviteToken)
+      .then(() => {
+        if (cancelled) return
+        clearInviteHash()
+        setInviteToken(null)
+      })
+      .catch(() => {
+        // Keep the fragment so the claim can be retried after the user resolves
+        // an account/email mismatch or receives a fresh invitation.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [inviteToken, isAuthenticated, user])
+
   if (isLoading) {
     return <SessionRestoreScreen />
   }
 
   if (!isAuthenticated || !user) {
+    if (inviteToken && authPage === 'register') {
+      return (
+        <VetInvitationRegisterPage
+          token={inviteToken}
+          onLogin={() => setAuthPage('login')}
+        />
+      )
+    }
     return authPage === 'register' ? (
       <RegisterPage onLogin={() => setAuthPage('login')} />
     ) : (
