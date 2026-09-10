@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "candidate": "1.0.0-rc.2",
+  "policy": {
+    "featureFreezeActive": true,
+    "protectedProductChangesRequireLabel": "release-blocker",
+    "allowedSeverity": "release-blocking",
+    "allowedOpenStatus": "open",
+    "note": "During the Phase 27 freeze, product-code changes require an auditable blocker entry tied to the pull request. Empty is the expected steady state."
+  },
+  "blockers": []
+}
