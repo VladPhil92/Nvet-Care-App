@@ -661,7 +661,9 @@ export class CartagenaLaunchOperationsService {
     if (!input.closedBetaEnabled) {
       return "ENABLE_BETA_ONLY_THROUGH_OPERATOR_PROVIDER_ACTION" as const;
     }
-    if (["MISSING", "ABORTED", "CONFLICTED"].includes(input.observation.state)) {
+    if (
+      ["MISSING", "ABORTED", "CONFLICTED"].includes(input.observation.state)
+    ) {
       return "START_OR_RECONCILE_OBSERVATION_WINDOW" as const;
     }
     if (input.observation.state === "ELIGIBLE_TO_CLOSE") {
