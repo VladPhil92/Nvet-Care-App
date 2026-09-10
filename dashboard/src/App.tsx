@@ -4,6 +4,7 @@ import VetPanel from './pages/VetPanel'
 import VetOnboardingPage from './pages/VetOnboardingPage'
 import VetServiceAreaPage from './pages/VetServiceAreaPage'
 import VetVerificationOpsPage from './pages/VetVerificationOpsPage'
+import VetRecruitmentPage from './pages/VetRecruitmentPage'
 import ClientDashboard from './pages/ClientDashboard'
 import TiersPage from './pages/TiersPage'
 import AccountingPage from './pages/AccountingPage'
@@ -30,6 +31,7 @@ type AdminPage =
   | 'cohort'
   | 'support'
   | 'coverage'
+  | 'recruitment'
   | 'verification'
   | 'tracking'
 type PublicAuthPage = 'login' | 'register'
@@ -62,6 +64,7 @@ function AdminApp() {
         {page === 'cohort' && <BetaCohortPage />}
         {page === 'support' && <BetaSupportPage />}
         {page === 'coverage' && <CoveragePage />}
+        {page === 'recruitment' && <VetRecruitmentPage />}
         {page === 'verification' && <VetVerificationOpsPage />}
         {page === 'tracking' && <TrackingPage />}
       </div>
