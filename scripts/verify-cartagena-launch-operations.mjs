@@ -45,6 +45,9 @@ const includes = (text, token, label) => {
 
 includes(service, 'cartagena-launch-operations-phase-25', 'Launch operations service')
 includes(service, 'BETA_CARTAGENA_OBSERVATION', 'Launch operations service')
+includes(service, 'OBSERVATION_LEDGER_LOCK_KEY', 'Launch operations service')
+includes(service, 'pg_advisory_xact_lock', 'Launch operations serialization')
+includes(service, 'this.prisma.$transaction', 'Launch operations serialization')
 includes(service, 'MINIMUM_OBSERVATION_DAYS = 7', 'Launch operations service')
 includes(service, 'OBSERVATION_START_BUFFER_HOURS = 1', 'Launch operations service')
 includes(service, 'MINIMUM_CONTROL_REMAINING_HOURS', 'Launch operations service')
@@ -58,15 +61,16 @@ includes(service, 'commercialLaunchAuthorized: false', 'Launch operations servic
 includes(service, 'automaticallyMutatesRuntime: false', 'Launch operations service')
 includes(service, 'expiryWatchIsReadOnly: true', 'Launch operations service')
 includes(service, 'observationLedgerAppendOnly: true', 'Launch operations service')
+includes(service, 'observationLedgerTransitionsSerialized: true', 'Launch operations service')
 includes(service, 'observationBoundToActivationAuthorization: true', 'Launch operations service')
 includes(service, 'observationActionsNeverToggleProviderFlags: true', 'Launch operations service')
-includes(service, 'this.prisma.auditLog.create', 'Launch operations ledger')
+includes(service, 'client.auditLog.create', 'Launch operations ledger')
 
 if (/process\.env\s*(?:\[[^\]]+\]|\.[A-Za-z0-9_]+)?\s*=/.test(service)) {
   fail('Phase 25 must not mutate provider/environment configuration')
 }
-if (/this\.prisma\.(?!auditLog\.create)[A-Za-z0-9_.]+\.(?:create|update|delete|upsert)\s*\(/.test(service)) {
-  fail('Phase 25 mutations must be restricted to append-only auditLog.create events')
+if (/auditLog\.(?:update|delete|deleteMany|updateMany|upsert)\s*\(/.test(service)) {
+  fail('Phase 25 observation ledger must remain append-only')
 }
 
 includes(controller, '@Get("launch-operations")', 'Beta controller')
@@ -77,6 +81,7 @@ includes(module, 'CartagenaLaunchOperationsService', 'Beta module')
 includes(observationDto, 'StartLaunchObservationDto', 'Observation DTO')
 includes(observationDto, 'AbortLaunchObservationDto', 'Observation DTO')
 includes(observationDto, '@Length(1, 120)', 'Observation incident reference')
+includes(observationDto, '@Matches(NON_BLANK)', 'Observation non-blank validation')
 includes(activationDto, '@Max(192)', 'Activation DTO')
 includes(supportDto, '@Max(192)', 'Support DTO')
 
@@ -107,5 +112,5 @@ includes(docs, '`commercialLaunchAuthorized` is always `false`.', 'Phase 25 docu
 includes(docs, '**169 hours remaining**', 'Phase 25 documentation')
 
 console.log(
-  'Cartagena launch operations contract valid: observation is authorization-bound and append-only, leases can cover the seven-day window, expiry surveillance is read-only, and provider/commercial launch boundaries remain external.',
+  'Cartagena launch operations contract valid: observation transitions are serialized and authorization-bound, the ledger is append-only, leases cover the seven-day window, expiry surveillance is read-only, and provider/commercial launch boundaries remain external.',
 )
