@@ -232,7 +232,10 @@ export class VetInvitationService {
     const latestByLead = new Map<string, InvitationRecord>();
     for (const record of records) {
       const current = latestByLead.get(record.leadId);
-      if (!current || Date.parse(record.issuedAt) > Date.parse(current.issuedAt)) {
+      if (
+        !current ||
+        Date.parse(record.issuedAt) > Date.parse(current.issuedAt)
+      ) {
         latestByLead.set(record.leadId, record);
       }
     }
@@ -249,7 +252,8 @@ export class VetInvitationService {
         active: records.filter((record) => record.status === "ACTIVE").length,
         claimed: records.filter((record) => record.status === "CLAIMED").length,
         expired: records.filter((record) => record.status === "EXPIRED").length,
-        failed: records.filter((record) => record.status === "SEND_FAILED").length,
+        failed: records.filter((record) => record.status === "SEND_FAILED")
+          .length,
         conflicted: records.filter((record) => record.status === "CONFLICTED")
           .length,
       },
@@ -289,11 +293,7 @@ export class VetInvitationService {
     } as const;
   }
 
-  async claimInvitation(
-    token: string,
-    userId: string,
-    actor: InvitationActor,
-  ) {
+  async claimInvitation(token: string, userId: string, actor: InvitationActor) {
     const tokenHash = this.hashToken(token);
     const initial = await this.resolveUsableInvitation(token);
     if (!initial) {
@@ -395,7 +395,9 @@ export class VetInvitationService {
   ): Promise<InvitationRecord | null> {
     const tokenHash = this.hashToken(token);
     const records = await this.getInvitationRecords();
-    const record = records.find((candidate) => candidate.tokenHash === tokenHash);
+    const record = records.find(
+      (candidate) => candidate.tokenHash === tokenHash,
+    );
     if (!record || record.status !== "ACTIVE") return null;
     if (Date.parse(record.expiresAt) <= Date.now()) return null;
     return record;
@@ -474,7 +476,8 @@ export class VetInvitationService {
       providerAcceptedAt: accepted?.createdAt.toISOString() ?? null,
       claimedAt: claim?.createdAt.toISOString() ?? null,
       claimedUserId: claim?.metadata.claimedUserId ?? null,
-      mailDriver: accepted?.metadata.mailDriver ?? failed?.metadata.mailDriver ?? null,
+      mailDriver:
+        accepted?.metadata.mailDriver ?? failed?.metadata.mailDriver ?? null,
       providerMessageId: accepted?.metadata.providerMessageId ?? null,
       status,
       conflicted,
@@ -526,7 +529,8 @@ export class VetInvitationService {
   private parseInvitationMetadata(
     value: Prisma.JsonValue | null,
   ): InvitationMetadata | null {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return null;
     const raw = value as Record<string, unknown>;
     if (raw.schemaVersion !== 1 || raw.program !== PROGRAM) return null;
     if (!INVITATION_EVENTS.includes(raw.eventType as InvitationEventType)) {
@@ -557,13 +561,11 @@ export class VetInvitationService {
 
     const metadata = rows
       .map((row) => row.metadata)
-      .filter(
-        (value): value is Prisma.JsonObject =>
-          Boolean(value && typeof value === "object" && !Array.isArray(value)),
+      .filter((value): value is Prisma.JsonObject =>
+        Boolean(value && typeof value === "object" && !Array.isArray(value)),
       )
       .filter(
-        (value) =>
-          value.schemaVersion === 1 && value.program === LEAD_PROGRAM,
+        (value) => value.schemaVersion === 1 && value.program === LEAD_PROGRAM,
       );
     const created = metadata.filter((value) => value.eventType === "CREATED");
     const seed = created[0];
@@ -719,7 +721,9 @@ export class VetInvitationService {
       (candidate) => candidate.daneCode === daneCode,
     );
     if (!market) {
-      throw new BadRequestException("Unsupported veterinarian recruitment market.");
+      throw new BadRequestException(
+        "Unsupported veterinarian recruitment market.",
+      );
     }
     return market;
   }
@@ -745,8 +749,10 @@ export class VetInvitationService {
     } catch {
       throw new ServiceUnavailableException("NVET_PUBLIC_APP_URL is invalid.");
     }
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      throw new ServiceUnavailableException("NVET_PUBLIC_APP_URL must use HTTP(S).");
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw new ServiceUnavailableException(
+        "NVET_PUBLIC_APP_URL must use HTTP(S).",
+      );
     }
     if (process.env.NODE_ENV === "production" && !configured) {
       throw new ServiceUnavailableException(
