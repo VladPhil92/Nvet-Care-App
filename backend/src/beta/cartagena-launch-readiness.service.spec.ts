@@ -3,6 +3,7 @@ import { CartagenaLaunchReadinessService } from "./cartagena-launch-readiness.se
 
 describe("CartagenaLaunchReadinessService", () => {
   const betaReadiness = { getCartagenaSnapshot: jest.fn() } as any;
+  const betaActivation = { getPrerequisites: jest.fn() } as any;
   const marketLaunchPolicy = { getPolicySnapshot: jest.fn() } as any;
   const vetActivationTelemetry = { getSnapshot: jest.fn() } as any;
   let service: CartagenaLaunchReadinessService;
@@ -48,6 +49,25 @@ describe("CartagenaLaunchReadinessService", () => {
     },
   };
 
+  const activationPrerequisites = {
+    eligible: true,
+    blockers: [],
+    evidenceEligible: true,
+    verifiedActiveVets: 3,
+    minimumVerifiedVets: 3,
+    vetCoverageGap: 0,
+    vetCoverageSource: "cartagena-vet-supply-activation-phase-18",
+    vetCoverageFormalEvidenceEligible: true,
+    configuredClients: 10,
+    eligibleCohortMembers: 10,
+    ineligibleCohortMembers: 0,
+    maxInitialClients: 50,
+    supportConfigured: true,
+    supportState: "ACTIVE",
+    supportExpiresAt: "2026-09-17T12:00:00.000Z",
+    marketConfigured: true,
+  };
+
   const marketSnapshot = {
     guardEnabled: true,
     markets: [
@@ -86,10 +106,12 @@ describe("CartagenaLaunchReadinessService", () => {
     jest.clearAllMocks();
     service = new CartagenaLaunchReadinessService(
       betaReadiness,
+      betaActivation,
       marketLaunchPolicy,
       vetActivationTelemetry,
     );
     betaReadiness.getCartagenaSnapshot.mockResolvedValue(betaSnapshot);
+    betaActivation.getPrerequisites.mockResolvedValue(activationPrerequisites);
     marketLaunchPolicy.getPolicySnapshot.mockResolvedValue(marketSnapshot);
     vetActivationTelemetry.getSnapshot.mockResolvedValue(telemetrySnapshot);
   });
@@ -106,6 +128,7 @@ describe("CartagenaLaunchReadinessService", () => {
     expect(snapshot.progress.evidenceCompletionPercentage).toBe(100);
     expect(snapshot.progress.operationalSupplyPercentage).toBe(100);
     expect(vetActivationTelemetry.getSnapshot).toHaveBeenCalledWith("13001");
+    expect(betaActivation.getPrerequisites).toHaveBeenCalledTimes(1);
   });
 
   it("returns HOLD when a required production evidence gate is pending", async () => {
@@ -157,6 +180,24 @@ describe("CartagenaLaunchReadinessService", () => {
         "CARTAGENA_BOOKING_GATE_NOT_ELIGIBLE",
       ]),
     );
+  });
+
+  it("returns HOLD when the closed-beta market drifts away from Cartagena", async () => {
+    betaActivation.getPrerequisites.mockResolvedValue({
+      ...activationPrerequisites,
+      eligible: false,
+      blockers: ["BETA_MARKET_MISMATCH"],
+      marketConfigured: false,
+    });
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.decision.state).toBe("HOLD");
+    expect(snapshot.decision.blockers).toContain(
+      "ACTIVATION_PREREQUISITE_BETA_MARKET_MISMATCH",
+    );
+    expect(snapshot.runtime.activationPrerequisitesEligible).toBe(false);
+    expect(snapshot.runtime.betaMarketConfiguredForCartagena).toBe(false);
   });
 
   it("returns PAUSE when the booking kill switch is active during beta", async () => {
