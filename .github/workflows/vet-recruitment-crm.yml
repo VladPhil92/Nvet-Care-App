@@ -10,6 +10,7 @@ on:
       - 'dashboard/src/components/Sidebar.tsx'
       - 'dashboard/src/App.tsx'
       - 'docs/production/PHASE_20_VET_RECRUITMENT_CRM.md'
+      - 'docs/production/PHASE_23_VET_ACTIVATION_TELEMETRY.md'
       - 'scripts/verify-vet-recruitment-crm.mjs'
       - '.github/workflows/vet-recruitment-crm.yml'
   push:
@@ -22,6 +23,7 @@ on:
       - 'dashboard/src/components/Sidebar.tsx'
       - 'dashboard/src/App.tsx'
       - 'docs/production/PHASE_20_VET_RECRUITMENT_CRM.md'
+      - 'docs/production/PHASE_23_VET_ACTIVATION_TELEMETRY.md'
       - 'scripts/verify-vet-recruitment-crm.mjs'
       - '.github/workflows/vet-recruitment-crm.yml'
 
@@ -37,5 +39,5 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22.x
-      - name: Enforce Phase 20 recruitment boundaries
+      - name: Enforce Phase 20-23 recruitment and activation boundaries
         run: node scripts/verify-vet-recruitment-crm.mjs
