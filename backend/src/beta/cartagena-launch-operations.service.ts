@@ -25,6 +25,7 @@ import {
 
 const PROGRAM = "cartagena-launch-operations-phase-25";
 const OBSERVATION_TARGET_TYPE = "BETA_CARTAGENA_OBSERVATION";
+const OBSERVATION_LEDGER_LOCK_KEY = 1314276692;
 const MINIMUM_OBSERVATION_DAYS = 7;
 const OBSERVATION_START_BUFFER_HOURS = 1;
 const MINIMUM_CONTROL_REMAINING_HOURS =
@@ -66,6 +67,8 @@ type ObservationEvent = {
   metadata: ObservationMetadata;
 };
 
+type ObservationLedgerClient = Pick<Prisma.TransactionClient, "auditLog">;
+
 @Injectable()
 export class CartagenaLaunchOperationsService {
   constructor(
@@ -102,9 +105,7 @@ export class CartagenaLaunchOperationsService {
     const observationTracked =
       !observationRequired ||
       (observationBelongsToCurrentAuthorization &&
-        ["ACTIVE", "ELIGIBLE_TO_CLOSE", "CLOSED"].includes(
-          observation.state,
-        ));
+        ["ACTIVE", "ELIGIBLE_TO_CLOSE", "CLOSED"].includes(observation.state));
 
     const effectiveDecision =
       readiness.decision.state === "PAUSE"
@@ -199,12 +200,10 @@ export class CartagenaLaunchOperationsService {
       },
       observation: {
         ...observation,
-        belongsToCurrentAuthorization:
-          observationBelongsToCurrentAuthorization,
+        belongsToCurrentAuthorization: observationBelongsToCurrentAuthorization,
         requiredWhenClosedBetaEnabled: true,
         minimumObservationDays: MINIMUM_OBSERVATION_DAYS,
-        minimumControlRemainingHoursAtStart:
-          MINIMUM_CONTROL_REMAINING_HOURS,
+        minimumControlRemainingHoursAtStart: MINIMUM_CONTROL_REMAINING_HOURS,
         closureProvesElapsedWindowOnly: true,
         uninterruptedRuntimeEvidenceMustBeReviewedSeparately: true,
       },
@@ -223,6 +222,7 @@ export class CartagenaLaunchOperationsService {
         phase24Source: "GET /api/beta/launch-readiness",
         observationLedger: "audit_logs",
         observationLedgerAppendOnly: true,
+        observationLedgerTransitionsSerialized: true,
         observationBoundToActivationAuthorization: true,
         observationActionsNeverToggleProviderFlags: true,
         observationCloseNeverClaimsCommercialLaunch: true,
@@ -239,72 +239,78 @@ export class CartagenaLaunchOperationsService {
     dto: StartLaunchObservationDto,
     actor: BetaEvidenceActor,
   ) {
-    const [readiness, current, activation, support] = await Promise.all([
-      this.launchReadiness.getSnapshot(),
-      this.getObservationStatus(),
-      this.activation.getStatus(),
-      this.support.getOperationalSnapshot(),
-    ]);
+    await this.withObservationLedgerLock(async (tx) => {
+      const [readiness, current, activation, support] = await Promise.all([
+        this.launchReadiness.getSnapshot(),
+        this.getObservationStatus(tx),
+        this.activation.getStatus(),
+        this.support.getOperationalSnapshot(),
+      ]);
 
-    if (current.state === "CONFLICTED") {
-      throw new ConflictException(
-        "Observation ledger is conflicted and requires reconciliation.",
+      if (current.state === "CONFLICTED") {
+        throw new ConflictException(
+          "Observation ledger is conflicted and requires reconciliation.",
+        );
+      }
+      if (["ACTIVE", "ELIGIBLE_TO_CLOSE"].includes(current.state)) {
+        throw new ConflictException(
+          "A Cartagena beta observation window is already active.",
+        );
+      }
+      if (
+        readiness.decision.state !== "GO" ||
+        !readiness.runtime.closedBetaEnabled ||
+        !readiness.runtime.bookingEnabled ||
+        activation.state !== "ACTIVE" ||
+        !activation.authorizationId
+      ) {
+        throw new ConflictException({
+          error: "OBSERVATION_START_PREREQUISITES_NOT_SATISFIED",
+          launchDecision: readiness.decision.state,
+          closedBetaEnabled: readiness.runtime.closedBetaEnabled,
+          bookingEnabled: readiness.runtime.bookingEnabled,
+          activationState: activation.state,
+          blockers: readiness.decision.blockers,
+        });
+      }
+
+      const authorizationHoursRemaining = this.hoursUntil(
+        activation.expiresAt,
+        Date.now(),
       );
-    }
-    if (["ACTIVE", "ELIGIBLE_TO_CLOSE"].includes(current.state)) {
-      throw new ConflictException(
-        "A Cartagena beta observation window is already active.",
+      const supportHoursRemaining = this.hoursUntil(
+        support.expiresAt,
+        Date.now(),
       );
-    }
-    if (
-      readiness.decision.state !== "GO" ||
-      !readiness.runtime.closedBetaEnabled ||
-      !readiness.runtime.bookingEnabled ||
-      activation.state !== "ACTIVE" ||
-      !activation.authorizationId
-    ) {
-      throw new ConflictException({
-        error: "OBSERVATION_START_PREREQUISITES_NOT_SATISFIED",
-        launchDecision: readiness.decision.state,
-        closedBetaEnabled: readiness.runtime.closedBetaEnabled,
-        bookingEnabled: readiness.runtime.bookingEnabled,
-        activationState: activation.state,
-        blockers: readiness.decision.blockers,
-      });
-    }
+      if (
+        authorizationHoursRemaining === null ||
+        authorizationHoursRemaining < MINIMUM_CONTROL_REMAINING_HOURS ||
+        supportHoursRemaining === null ||
+        supportHoursRemaining < MINIMUM_CONTROL_REMAINING_HOURS
+      ) {
+        throw new ConflictException({
+          error: "OBSERVATION_CONTROL_LEASE_TOO_SHORT",
+          minimumHoursRequired: MINIMUM_CONTROL_REMAINING_HOURS,
+          authorizationHoursRemaining,
+          supportHoursRemaining,
+        });
+      }
 
-    const authorizationHoursRemaining = this.hoursUntil(
-      activation.expiresAt,
-      Date.now(),
-    );
-    const supportHoursRemaining = this.hoursUntil(support.expiresAt, Date.now());
-    if (
-      authorizationHoursRemaining === null ||
-      authorizationHoursRemaining < MINIMUM_CONTROL_REMAINING_HOURS ||
-      supportHoursRemaining === null ||
-      supportHoursRemaining < MINIMUM_CONTROL_REMAINING_HOURS
-    ) {
-      throw new ConflictException({
-        error: "OBSERVATION_CONTROL_LEASE_TOO_SHORT",
-        minimumHoursRequired: MINIMUM_CONTROL_REMAINING_HOURS,
-        authorizationHoursRemaining,
-        supportHoursRemaining,
-      });
-    }
-
-    await this.appendObservationEvent(
-      randomUUID(),
-      {
-        schemaVersion: 1,
-        program: PROGRAM,
-        eventType: "STARTED",
-        minimumObservationDays: MINIMUM_OBSERVATION_DAYS,
-        authorizationId: activation.authorizationId,
-        baselineDecision: "GO",
-        reason: dto.reason.trim(),
-      },
-      actor,
-    );
+      await this.appendObservationEvent(
+        randomUUID(),
+        {
+          schemaVersion: 1,
+          program: PROGRAM,
+          eventType: "STARTED",
+          minimumObservationDays: MINIMUM_OBSERVATION_DAYS,
+          authorizationId: activation.authorizationId,
+          baselineDecision: "GO",
+          reason: dto.reason.trim(),
+        },
+        actor,
+        tx,
+      );
+    });
     return this.getSnapshot();
   }
 
@@ -312,46 +318,49 @@ export class CartagenaLaunchOperationsService {
     dto: CloseLaunchObservationDto,
     actor: BetaEvidenceActor,
   ) {
-    const [readiness, current, activation] = await Promise.all([
-      this.launchReadiness.getSnapshot(),
-      this.getObservationStatus(),
-      this.activation.getStatus(),
-    ]);
-    if (current.state !== "ELIGIBLE_TO_CLOSE" || !current.observationId) {
-      throw new ConflictException(
-        "Observation window cannot be closed before the minimum seven-day period has elapsed.",
-      );
-    }
-    if (readiness.decision.state !== "GO") {
-      throw new ConflictException({
-        error: "OBSERVATION_CLOSE_BLOCKED_BY_LAUNCH_READINESS",
-        launchDecision: readiness.decision.state,
-        blockers: readiness.decision.blockers,
-      });
-    }
-    if (
-      activation.state !== "ACTIVE" ||
-      !activation.authorizationId ||
-      current.authorizationId !== activation.authorizationId
-    ) {
-      throw new ConflictException({
-        error: "OBSERVATION_AUTHORIZATION_DRIFT",
-        observationAuthorizationId: current.authorizationId,
-        currentAuthorizationId: activation.authorizationId,
-        activationState: activation.state,
-      });
-    }
+    await this.withObservationLedgerLock(async (tx) => {
+      const [readiness, current, activation] = await Promise.all([
+        this.launchReadiness.getSnapshot(),
+        this.getObservationStatus(tx),
+        this.activation.getStatus(),
+      ]);
+      if (current.state !== "ELIGIBLE_TO_CLOSE" || !current.observationId) {
+        throw new ConflictException(
+          "Observation window cannot be closed before the minimum seven-day period has elapsed.",
+        );
+      }
+      if (readiness.decision.state !== "GO") {
+        throw new ConflictException({
+          error: "OBSERVATION_CLOSE_BLOCKED_BY_LAUNCH_READINESS",
+          launchDecision: readiness.decision.state,
+          blockers: readiness.decision.blockers,
+        });
+      }
+      if (
+        activation.state !== "ACTIVE" ||
+        !activation.authorizationId ||
+        current.authorizationId !== activation.authorizationId
+      ) {
+        throw new ConflictException({
+          error: "OBSERVATION_AUTHORIZATION_DRIFT",
+          observationAuthorizationId: current.authorizationId,
+          currentAuthorizationId: activation.authorizationId,
+          activationState: activation.state,
+        });
+      }
 
-    await this.appendObservationEvent(
-      current.observationId,
-      {
-        schemaVersion: 1,
-        program: PROGRAM,
-        eventType: "CLOSED",
-        reason: dto.reason.trim(),
-      },
-      actor,
-    );
+      await this.appendObservationEvent(
+        current.observationId,
+        {
+          schemaVersion: 1,
+          program: PROGRAM,
+          eventType: "CLOSED",
+          reason: dto.reason.trim(),
+        },
+        actor,
+        tx,
+      );
+    });
     return this.getSnapshot();
   }
 
@@ -359,32 +368,35 @@ export class CartagenaLaunchOperationsService {
     dto: AbortLaunchObservationDto,
     actor: BetaEvidenceActor,
   ) {
-    const current = await this.getObservationStatus();
-    if (
-      !current.observationId ||
-      !["ACTIVE", "ELIGIBLE_TO_CLOSE"].includes(current.state)
-    ) {
-      throw new ConflictException(
-        "There is no active observation window to abort.",
-      );
-    }
+    await this.withObservationLedgerLock(async (tx) => {
+      const current = await this.getObservationStatus(tx);
+      if (
+        !current.observationId ||
+        !["ACTIVE", "ELIGIBLE_TO_CLOSE"].includes(current.state)
+      ) {
+        throw new ConflictException(
+          "There is no active observation window to abort.",
+        );
+      }
 
-    await this.appendObservationEvent(
-      current.observationId,
-      {
-        schemaVersion: 1,
-        program: PROGRAM,
-        eventType: "ABORTED",
-        reason: dto.reason.trim(),
-        incidentReference: dto.incidentReference.trim(),
-      },
-      actor,
-    );
+      await this.appendObservationEvent(
+        current.observationId,
+        {
+          schemaVersion: 1,
+          program: PROGRAM,
+          eventType: "ABORTED",
+          reason: dto.reason.trim(),
+          incidentReference: dto.incidentReference.trim(),
+        },
+        actor,
+        tx,
+      );
+    });
     return this.getSnapshot();
   }
 
-  async getObservationStatus() {
-    const events = await this.getObservationEvents();
+  async getObservationStatus(client: ObservationLedgerClient = this.prisma) {
+    const events = await this.getObservationEvents(client);
     if (events.length === 0) {
       return this.emptyObservation("MISSING");
     }
@@ -409,9 +421,7 @@ export class CartagenaLaunchOperationsService {
       return {
         ...this.emptyObservation("CONFLICTED"),
         conflictReasons: [
-          ...(active.length > 1
-            ? ["MULTIPLE_ACTIVE_OBSERVATION_WINDOWS"]
-            : []),
+          ...(active.length > 1 ? ["MULTIPLE_ACTIVE_OBSERVATION_WINDOWS"] : []),
           ...conflicted.flatMap((item) => item.conflictReasons),
         ],
       };
@@ -597,9 +607,7 @@ export class CartagenaLaunchOperationsService {
   }
 
   private buildExpiryWatch(
-    items: ReturnType<
-      CartagenaLaunchOperationsService["buildExpiryItems"]
-    >,
+    items: ReturnType<CartagenaLaunchOperationsService["buildExpiryItems"]>,
   ) {
     const weight: Record<ExpiryState, number> = {
       NON_EXPIRING: 0,
@@ -653,9 +661,7 @@ export class CartagenaLaunchOperationsService {
     if (!input.closedBetaEnabled) {
       return "ENABLE_BETA_ONLY_THROUGH_OPERATOR_PROVIDER_ACTION" as const;
     }
-    if (
-      ["MISSING", "ABORTED", "CONFLICTED"].includes(input.observation.state)
-    ) {
+    if (["MISSING", "ABORTED", "CONFLICTED"].includes(input.observation.state)) {
       return "START_OR_RECONCILE_OBSERVATION_WINDOW" as const;
     }
     if (input.observation.state === "ELIGIBLE_TO_CLOSE") {
@@ -684,12 +690,22 @@ export class CartagenaLaunchOperationsService {
     };
   }
 
+  private async withObservationLedgerLock<T>(
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${OBSERVATION_LEDGER_LOCK_KEY})`;
+      return work(tx);
+    });
+  }
+
   private async appendObservationEvent(
     observationId: string,
     metadata: ObservationMetadata,
     actor: BetaEvidenceActor,
+    client: ObservationLedgerClient = this.prisma,
   ) {
-    await this.prisma.auditLog.create({
+    await client.auditLog.create({
       data: {
         actorId: actor.id,
         actorRole: actor.role,
@@ -708,8 +724,10 @@ export class CartagenaLaunchOperationsService {
     });
   }
 
-  private async getObservationEvents(): Promise<ObservationEvent[]> {
-    const rows = await this.prisma.auditLog.findMany({
+  private async getObservationEvents(
+    client: ObservationLedgerClient = this.prisma,
+  ): Promise<ObservationEvent[]> {
+    const rows = await client.auditLog.findMany({
       where: {
         action: AuditAction.CONFIG_CHANGED,
         targetType: OBSERVATION_TARGET_TYPE,
