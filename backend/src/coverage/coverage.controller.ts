@@ -6,6 +6,7 @@ import { RolesGuard } from "../auth/guards/roles.guard";
 import { CoverageService } from "./coverage.service";
 import { MarketLaunchPolicyService } from "./market-launch-policy.service";
 import { VetSupplyReadinessService } from "./vet-supply-readiness.service";
+import { CartagenaVetActivationService } from "./cartagena-vet-activation.service";
 import { CoveragePointQueryDto } from "./dto/coverage-query.dto";
 
 @Controller("coverage")
@@ -14,6 +15,7 @@ export class CoverageController {
     private readonly coverage: CoverageService,
     private readonly launchPolicy: MarketLaunchPolicyService,
     private readonly vetSupply: VetSupplyReadinessService,
+    private readonly cartagenaActivation: CartagenaVetActivationService,
   ) {}
 
   /** Public launch-market catalog. Never exposes veterinarian coordinates. */
@@ -60,5 +62,18 @@ export class CoverageController {
   @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   getSupplyFunnel() {
     return this.vetSupply.getSupplyFunnelSnapshot();
+  }
+
+  /**
+   * Phase 18 operator workspace for Cartagena supply activation. This endpoint
+   * contains the minimum identity needed for an authorized admin to process
+   * real verification cases, but never exposes exact coordinates or storage
+   * URLs. It cannot auto-submit operator evidence or authorize launch.
+   */
+  @Get("cartagena-activation")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  getCartagenaActivation() {
+    return this.cartagenaActivation.getSnapshot();
   }
 }
