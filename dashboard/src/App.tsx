@@ -115,13 +115,14 @@ function VetExperience() {
   const profileQuery = useVetProfileQuery(true)
   const status = (profileQuery.error as { response?: { status?: number } } | null)?.response?.status
   const profile = profileQuery.data
+  const radius = Number(profile?.serviceRadius)
   const serviceAreaComplete = Boolean(
     profile?.city &&
       profile?.department &&
       profile?.latitude != null &&
       profile?.longitude != null &&
-      Number.isFinite(profile?.serviceRadius) &&
-      Number(profile?.serviceRadius) > 0,
+      Number.isFinite(radius) &&
+      radius > 0,
   )
 
   let content: ReactNode = <VetPanel mode="live" />
