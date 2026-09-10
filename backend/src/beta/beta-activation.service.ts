@@ -4,11 +4,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import {
-  AuditAction,
-  AuditSeverity,
-  Prisma,
-} from "@prisma/client";
+import { AuditAction, AuditSeverity, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CartagenaVetActivationService } from "../coverage/cartagena-vet-activation.service";
 import { BetaCohortService } from "./beta-cohort.service";
