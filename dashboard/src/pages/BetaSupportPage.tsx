@@ -36,7 +36,7 @@ export default function BetaSupportPage() {
   const [form, setForm] = useState({
     ownerRole: '',
     channelReference: '',
-    durationHours: 168,
+    durationHours: 192,
     monitoringConfirmed: false,
     reason: '',
   })
@@ -72,7 +72,7 @@ export default function BetaSupportPage() {
       setForm({
         ownerRole: '',
         channelReference: '',
-        durationHours: 168,
+        durationHours: 192,
         monitoringConfirmed: false,
         reason: '',
       })
@@ -215,9 +215,9 @@ export default function BetaSupportPage() {
               <input
                 type="number"
                 min={1}
-                max={168}
+                max={192}
                 value={form.durationHours}
-                onChange={(event) => setForm((current) => ({ ...current, durationHours: Math.min(168, Math.max(1, Number(event.target.value) || 1)) }))}
+                onChange={(event) => setForm((current) => ({ ...current, durationHours: Math.min(192, Math.max(1, Number(event.target.value) || 1)) }))}
                 style={{ padding: 10, border: `1px solid ${T.lineHi}`, borderRadius: 8 }}
               />
             </label>
