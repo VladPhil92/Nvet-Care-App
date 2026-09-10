@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "program": "global-release-closure",
-  "candidate": "1.0.0-rc.1",
-  "auditBaselineSha": "33e7c52f46ee73ff38bb0f6f07a819d1abddd97e",
+  "candidate": "1.0.0-rc.2",
+  "auditBaselineSha": "0789ac8d405405b04372fc1ec92e749f7f6a29aa",
   "scorePolicy": {
     "engineeringWeight": 0.7,
     "machineRuntimeWeight": 0.15,
@@ -21,6 +21,19 @@
       "blocking": true,
       "evidencePaths": [
         ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "id": "release-candidate-freeze",
+      "status": "verified",
+      "owner": "release-engineering",
+      "blocking": true,
+      "evidencePaths": [
+        "docs/production/RELEASE_CANDIDATE_FREEZE.json",
+        "docs/production/RELEASE_BLOCKERS.json",
+        "scripts/verify-release-candidate-freeze.mjs",
+        "scripts/verify-release-build-budgets.mjs",
+        ".github/workflows/release-candidate-certification.yml"
       ]
     },
     {
