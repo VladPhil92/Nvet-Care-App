@@ -104,6 +104,7 @@ type Milestones = {
   permissionRevokedAt: string | null;
   invitationIssuedAt: string | null;
   invitationProviderAcceptedAt: string | null;
+  invitationExpiresAt: string | null;
   invitationClaimedAt: string | null;
   accountCreatedAt: string | null;
   profileCreatedAt: string | null;
@@ -282,6 +283,7 @@ export class VetActivationTelemetryService {
       invitationIssuedAt: latestInvitation?.issuedAt ?? null,
       invitationProviderAcceptedAt:
         latestInvitation?.providerAcceptedAt ?? null,
+      invitationExpiresAt: latestInvitation?.expiresAt ?? null,
       invitationClaimedAt: latestInvitation?.claimedAt ?? null,
       accountCreatedAt: user?.createdAt.toISOString() ?? null,
       profileCreatedAt: user?.vetProfile?.createdAt.toISOString() ?? null,
@@ -443,13 +445,29 @@ export class VetActivationTelemetryService {
         return milestones.permissionGrantedAt ?? milestones.leadCreatedAt;
       case "INVITATION_DELIVERY_PENDING":
       case "INVITATION_DELIVERY_FAILED":
+        return (
+          milestones.invitationIssuedAt ??
+          milestones.permissionGrantedAt ??
+          milestones.leadCreatedAt
+        );
       case "INVITATION_REISSUE_REQUIRED":
+        return (
+          milestones.invitationExpiresAt ??
+          milestones.invitationIssuedAt ??
+          milestones.permissionGrantedAt ??
+          milestones.leadCreatedAt
+        );
       case "INVITATION_CLAIM_REQUIRED":
-      case "ACCOUNT_LINK_REQUIRED":
         return (
           milestones.invitationProviderAcceptedAt ??
           milestones.invitationIssuedAt ??
-          milestones.permissionGrantedAt ??
+          milestones.leadCreatedAt
+        );
+      case "ACCOUNT_LINK_REQUIRED":
+        return (
+          milestones.invitationClaimedAt ??
+          milestones.invitationProviderAcceptedAt ??
+          milestones.invitationIssuedAt ??
           milestones.leadCreatedAt
         );
       case "ACCOUNT_ROLE_MISMATCH":
@@ -482,8 +500,8 @@ export class VetActivationTelemetryService {
         );
       case "PROFILE_INACTIVE":
         return (
-          milestones.verificationApprovedAt ??
           user?.vetProfile?.updatedAt.toISOString() ??
+          milestones.verificationApprovedAt ??
           milestones.profileCreatedAt
         );
       case "DATA_CONFLICT":
