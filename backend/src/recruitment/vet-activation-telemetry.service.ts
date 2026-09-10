@@ -142,7 +142,10 @@ export class VetActivationTelemetryService {
       consents.permissions.map((permission) => [permission.leadId, permission]),
     );
     const latestInvitationByLead = new Map(
-      invitations.latestByLead.map((invitation) => [invitation.leadId, invitation]),
+      invitations.latestByLead.map((invitation) => [
+        invitation.leadId,
+        invitation,
+      ]),
     );
 
     const now = new Date();
@@ -520,7 +523,8 @@ export class VetActivationTelemetryService {
       const approved = documents
         .filter(
           (document) =>
-            document.type === type && document.status === DocumentStatus.APPROVED,
+            document.type === type &&
+            document.status === DocumentStatus.APPROVED,
         )
         .map((document) => document.reviewedAt ?? document.uploadedAt)
         .sort((a, b) => b.getTime() - a.getTime())[0];
@@ -585,10 +589,7 @@ export class VetActivationTelemetryService {
       if (["BREACHED", "CRITICAL"].includes(lead.risk)) {
         current.breachedOrCritical += 1;
       }
-      current.oldestHours = Math.max(
-        current.oldestHours,
-        lead.blockerAgeHours,
-      );
+      current.oldestHours = Math.max(current.oldestHours, lead.blockerAgeHours);
       grouped.set(lead.currentBlocker, current);
     }
     return [...grouped.values()].sort(
@@ -622,14 +623,8 @@ export class VetActivationTelemetryService {
         "NVET_SLA_EMAIL_VERIFICATION_HOURS",
         24,
       ),
-      ACCOUNT_REGISTERED: this.readHours(
-        "NVET_SLA_PROFILE_CREATION_HOURS",
-        24,
-      ),
-      SERVICE_AREA_REQUIRED: this.readHours(
-        "NVET_SLA_SERVICE_AREA_HOURS",
-        24,
-      ),
+      ACCOUNT_REGISTERED: this.readHours("NVET_SLA_PROFILE_CREATION_HOURS", 24),
+      SERVICE_AREA_REQUIRED: this.readHours("NVET_SLA_SERVICE_AREA_HOURS", 24),
       DOCUMENT_REVIEW_REQUIRED: this.readHours(
         "NVET_SLA_DOCUMENT_REVIEW_HOURS",
         72,
