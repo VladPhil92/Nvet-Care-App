@@ -2,13 +2,25 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import coverageService, {
   CoverageReadinessSnapshot,
   MarketLaunchPolicySnapshot,
+  VetSupplyFunnelSnapshot,
+  VetSupplyStage,
 } from '../services/coverage.service'
 import { getErrorMessage } from '../services/api'
 import { F, T } from '../theme/tokens'
 
+const STAGE_LABEL: Record<VetSupplyStage, string> = {
+  ACQUISITION_REQUIRED: 'CAPTACIÓN',
+  SERVICE_AREA_REQUIRED: 'ZONA PENDIENTE',
+  VERIFICATION_REQUIRED: 'VERIFICACIÓN PENDIENTE',
+  VERIFICATION_IN_PROGRESS: 'EN VERIFICACIÓN',
+  COVERAGE_GAP: 'BRECHA DE COBERTURA',
+  SUPPLY_READY: 'OFERTA LISTA',
+}
+
 export default function CoveragePage() {
   const [snapshot, setSnapshot] = useState<CoverageReadinessSnapshot | null>(null)
   const [policy, setPolicy] = useState<MarketLaunchPolicySnapshot | null>(null)
+  const [supply, setSupply] = useState<VetSupplyFunnelSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -16,12 +28,14 @@ export default function CoveragePage() {
     setLoading(true)
     setError(null)
     try {
-      const [nextSnapshot, nextPolicy] = await Promise.all([
+      const [nextSnapshot, nextPolicy, nextSupply] = await Promise.all([
         coverageService.getReadiness(),
         coverageService.getLaunchPolicy(),
+        coverageService.getSupplyFunnel(),
       ])
       setSnapshot(nextSnapshot)
       setPolicy(nextPolicy)
+      setSupply(nextSupply)
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -48,7 +62,7 @@ export default function CoveragePage() {
         color: T.ink,
       }}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1240, margin: '0 auto' }}>
         <header
           style={{
             display: 'flex',
@@ -69,15 +83,15 @@ export default function CoveragePage() {
                 textTransform: 'uppercase',
               }}
             >
-              Phase 15 · Market Launch Guard
+              Phase 17 · Vet Supply & Market Readiness
             </div>
             <h1 style={{ fontFamily: F.serif, margin: '7px 0 8px', fontSize: 34 }}>
-              Cobertura y expansión nacional
+              Cobertura, oferta veterinaria y expansión nacional
             </h1>
-            <p style={{ margin: 0, maxWidth: 780, color: T.inkMuted, lineHeight: 1.6 }}>
-              Cartagena continúa como mercado inicial. Una ciudad futura necesita intención del
-              proveedor, apertura deliberada de expansión nacional y cobertura veterinaria mínima
-              antes de que el backend permita reservas.
+            <p style={{ margin: 0, maxWidth: 850, color: T.inkMuted, lineHeight: 1.6 }}>
+              Cartagena continúa como mercado inicial. Este panel separa la captación de veterinarios,
+              la configuración geográfica, la verificación profesional y la oferta realmente operativa.
+              Ninguna cifra de este panel autoriza por sí sola un lanzamiento comercial.
             </p>
           </div>
           <button
@@ -114,36 +128,134 @@ export default function CoveragePage() {
           </div>
         )}
 
-        {snapshot && policy && (
+        {snapshot && policy && supply && (
           <>
             <section
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
                 gap: 14,
                 marginBottom: 22,
               }}
             >
               <SummaryCard
-                label="Mercados solicitados"
-                value={String(snapshot.activeMarketDaneCodes.length)}
-                detail="Intención configurada en proveedor"
+                label="Perfiles VET en mercados objetivo"
+                value={String(supply.totals.totalProfiles)}
+                detail="Embudo agregado, sin PII"
               />
               <SummaryCard
-                label="Launch guard"
-                value={policy.guardEnabled ? 'ACTIVO' : 'DESACTIVADO'}
-                detail="Bloquea activaciones incompletas"
+                label="VETs operativos geo-ready"
+                value={String(supply.totals.operationalGeoReady)}
+                detail="Aprobados + activos + zona consistente"
+              />
+              <SummaryCard
+                label="En revisión profesional"
+                value={String(supply.totals.pendingReview)}
+                detail="PENDING + IN_REVIEW"
+              />
+              <SummaryCard
+                label="Mercados supply-ready"
+                value={`${supply.totals.supplyReadyMarkets}/${supply.markets.length}`}
+                detail="No equivale a lanzamiento comercial"
+              />
+              <SummaryCard
+                label="Brecha Cartagena"
+                value={String(supply.cartagena?.coverageGap ?? supply.minimumOperationalVetsPerMarket)}
+                detail="VETs adicionales hasta el mínimo"
               />
               <SummaryCard
                 label="Expansión nacional"
                 value={policy.nationalExpansionEnabled ? 'ABIERTA' : 'BLOQUEADA'}
                 detail="Cartagena no depende de este interruptor"
               />
-              <SummaryCard
-                label="Mínimo por mercado"
-                value={String(policy.minimumGeoReadyVetsPerMarket)}
-                detail="Vets verificados, activos y geo-ready"
-              />
+            </section>
+
+            <section
+              style={{
+                background: T.surface,
+                border: `1px solid ${T.line}`,
+                borderRadius: 14,
+                overflow: 'hidden',
+                marginBottom: 22,
+              }}
+            >
+              <div style={{ padding: '18px 20px', borderBottom: `1px solid ${T.line}` }}>
+                <strong>Embudo de oferta veterinaria por ciudad</strong>
+                <div style={{ color: T.inkMuted, fontSize: 13, marginTop: 4, lineHeight: 1.55 }}>
+                  Registrado → zona de servicio completa → geografía consistente → verificación → VET operativo.
+                  Solo el último nivel cuenta para la cobertura mínima de mercado.
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table
+                  style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    minWidth: 1180,
+                    fontSize: 13,
+                  }}
+                >
+                  <thead>
+                    <tr style={{ background: T.surfaceAlt, textAlign: 'left' }}>
+                      {[
+                        'Ciudad',
+                        'Registrados',
+                        'Zona completa',
+                        'Geo-consistentes',
+                        'Pend. revisión',
+                        'Aprobados',
+                        'Operativos',
+                        'Meta',
+                        'Brecha',
+                        'Progreso',
+                        'Etapa',
+                      ].map((label) => (
+                        <th key={label} style={{ padding: '12px 13px', color: T.inkSec }}>
+                          {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {supply.markets.map((market) => {
+                      const pendingReview = market.verification.pending + market.verification.inReview
+                      const progress = Math.min(
+                        100,
+                        Math.round((market.operationalGeoReady / market.minimumOperationalVets) * 100),
+                      )
+                      return (
+                        <tr key={market.daneCode} style={{ borderTop: `1px solid ${T.line}` }}>
+                          <td style={{ padding: '13px', fontWeight: 750 }}>
+                            {market.city}
+                            <div style={{ color: T.inkMuted, fontSize: 11, marginTop: 2 }}>
+                              {market.department} · DANE {market.daneCode}
+                            </div>
+                          </td>
+                          <td style={{ padding: '13px' }}>{market.totalProfiles}</td>
+                          <td style={{ padding: '13px' }}>{market.serviceAreaComplete}</td>
+                          <td style={{ padding: '13px' }}>{market.geoConsistent}</td>
+                          <td style={{ padding: '13px' }}>{pendingReview}</td>
+                          <td style={{ padding: '13px' }}>{market.verification.approved}</td>
+                          <td style={{ padding: '13px', fontWeight: 800 }}>{market.operationalGeoReady}</td>
+                          <td style={{ padding: '13px' }}>{market.minimumOperationalVets}</td>
+                          <td style={{ padding: '13px', fontWeight: 800 }}>{market.coverageGap}</td>
+                          <td style={{ padding: '13px', minWidth: 130 }}>
+                            <Progress value={progress} />
+                            <div style={{ marginTop: 4, color: T.inkMuted, fontSize: 11 }}>{progress}%</div>
+                          </td>
+                          <td style={{ padding: '13px', maxWidth: 260 }}>
+                            <StatusPill active={market.supplyReady}>{STAGE_LABEL[market.stage]}</StatusPill>
+                            <div style={{ color: T.inkMuted, fontSize: 11, lineHeight: 1.45, marginTop: 6 }}>
+                              {market.recommendedAction}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </section>
 
             <section
@@ -155,10 +267,10 @@ export default function CoveragePage() {
               }}
             >
               <div style={{ padding: '18px 20px', borderBottom: `1px solid ${T.line}` }}>
-                <strong>Mercados preparados para expansión</strong>
+                <strong>Control de activación de mercados</strong>
                 <div style={{ color: T.inkMuted, fontSize: 13, marginTop: 4 }}>
-                  BOOKING_GATE_ELIGIBLE significa únicamente que superó este gate técnico; no
-                  autoriza por sí solo un lanzamiento comercial.
+                  BOOKING_GATE_ELIGIBLE significa únicamente que superó el gate técnico de oferta y configuración;
+                  no autoriza por sí solo un lanzamiento comercial.
                 </div>
               </div>
 
@@ -195,12 +307,8 @@ export default function CoveragePage() {
                       return (
                         <tr key={market.daneCode} style={{ borderTop: `1px solid ${T.line}` }}>
                           <td style={{ padding: '13px 14px', fontWeight: 750 }}>{market.city}</td>
-                          <td style={{ padding: '13px 14px', color: T.inkMuted }}>
-                            {market.department}
-                          </td>
-                          <td style={{ padding: '13px 14px', fontFamily: F.mono }}>
-                            {market.daneCode}
-                          </td>
+                          <td style={{ padding: '13px 14px', color: T.inkMuted }}>{market.department}</td>
+                          <td style={{ padding: '13px 14px', fontFamily: F.mono }}>{market.daneCode}</td>
                           <td style={{ padding: '13px 14px' }}>
                             <StatusPill active={Boolean(launch?.providerRequested)}>
                               {launch?.providerRequested ? 'SOLICITADO' : 'PRELAUNCH'}
@@ -237,27 +345,29 @@ export default function CoveragePage() {
                 lineHeight: 1.65,
               }}
             >
-              <strong style={{ color: T.ink }}>Secuencia de activación</strong>
+              <strong style={{ color: T.ink }}>Secuencia operativa</strong>
               <div style={{ marginTop: 6 }}>
-                Para una ciudad fuera de Cartagena: primero se alcanza la cobertura mínima, luego
-                se agrega su DANE a <code style={{ fontFamily: F.mono }}>NVET_ACTIVE_SERVICE_MARKETS</code>{' '}
-                y, cuando exista autorización operacional para expansión, se habilita{' '}
-                <code style={{ fontFamily: F.mono }}>NVET_NATIONAL_EXPANSION_ENABLED=true</code>.
+                Para Cartagena: captar VETs → configurar zona → completar verificación profesional → alcanzar al menos{' '}
+                {supply.minimumOperationalVetsPerMarket} VETs operativos geo-ready → cerrar los gates externos de beta.
               </div>
               <div style={{ marginTop: 8 }}>
-                Los controles de pagos, soporte, privacidad, evidencia externa y disponibilidad
-                comercial siguen siendo gates independientes.
+                Para una ciudad futura: completar primero el mismo embudo de oferta; luego agregar su DANE a{' '}
+                <code style={{ fontFamily: F.mono }}>NVET_ACTIVE_SERVICE_MARKETS</code> y, únicamente con autorización
+                operacional, habilitar <code style={{ fontFamily: F.mono }}>NVET_NATIONAL_EXPANSION_ENABLED=true</code>.
+              </div>
+              <div style={{ marginTop: 8 }}>
+                Pagos, soporte, privacidad, evidencia externa y aprobación comercial continúan como controles independientes.
               </div>
               <div style={{ marginTop: 8, fontSize: 12 }}>
-                Snapshot: {new Date(policy.generatedAt).toLocaleString('es-CO')}
+                Supply snapshot: {new Date(supply.generatedAt).toLocaleString('es-CO')}
               </div>
             </section>
           </>
         )}
 
-        {(!snapshot || !policy) && loading && (
+        {(!snapshot || !policy || !supply) && loading && (
           <div style={{ padding: 32, textAlign: 'center', color: T.inkMuted }}>
-            Consultando cobertura y política de lanzamiento…
+            Consultando cobertura, política de lanzamiento y oferta veterinaria…
           </div>
         )}
       </div>
@@ -298,5 +408,20 @@ function StatusPill({ active, children }: { active: boolean; children: string })
     >
       {children}
     </span>
+  )
+}
+
+function Progress({ value }: { value: number }) {
+  return (
+    <div style={{ height: 7, borderRadius: 999, background: T.surfaceAlt, overflow: 'hidden' }}>
+      <div
+        style={{
+          width: `${Math.max(0, Math.min(100, value))}%`,
+          height: '100%',
+          background: T.sage,
+          borderRadius: 999,
+        }}
+      />
+    </div>
   )
 }
