@@ -27,8 +27,8 @@ describe("VetActivationTelemetryService", () => {
     lastEventAt: "2026-09-09T06:00:00.000Z",
     eventCount: 1,
     conflicted: false,
-    conflictReasons: [],
-    linkedUserId: null,
+    conflictReasons: [] as string[],
+    linkedUserId: null as string | null,
     conversionStage: "LEAD_ONLY",
     nextAction: "Contact candidate",
     followUpDue: false,
@@ -38,7 +38,7 @@ describe("VetActivationTelemetryService", () => {
       city: "Cartagena de Indias",
       department: "Bolívar",
     },
-  } as const;
+  };
 
   const market = {
     code: "CTG",
@@ -167,9 +167,9 @@ describe("VetActivationTelemetryService", () => {
   it("reports verified operational supply as complete with milestone evidence", async () => {
     const operationalLead = {
       ...baseLead,
-      stage: "INVITED" as const,
+      stage: "INVITED",
       linkedUserId: "vet-user-1",
-      conversionStage: "OPERATIONAL_READY" as const,
+      conversionStage: "OPERATIONAL_READY",
       nextAction: "Maintain availability",
     };
     setRecruitment(operationalLead);
@@ -225,7 +225,7 @@ describe("VetActivationTelemetryService", () => {
   });
 
   it("pauses lost leads instead of treating them as SLA failures", async () => {
-    setRecruitment({ ...baseLead, stage: "LOST" as const });
+    setRecruitment({ ...baseLead, stage: "LOST" });
 
     const snapshot = await service.getSnapshot();
 
