@@ -19,12 +19,16 @@ import {
   InvitationActor,
   VetInvitationService,
 } from "./vet-invitation.service";
+import { VetOutreachConsentService } from "./vet-outreach-consent.service";
 
 @Controller("recruitment/vets")
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
 export class VetInvitationAdminController {
-  constructor(private readonly invitations: VetInvitationService) {}
+  constructor(
+    private readonly invitations: VetInvitationService,
+    private readonly outreachConsent: VetOutreachConsentService,
+  ) {}
 
   @Get("invitations/summary")
   getSummary() {
@@ -32,11 +36,12 @@ export class VetInvitationAdminController {
   }
 
   @Post(":leadId/invite")
-  sendInvitation(
+  async sendInvitation(
     @Request() req,
     @Param("leadId") leadId: string,
     @Body() dto: SendVetInvitationDto,
   ) {
+    await this.outreachConsent.assertEmailDeliveryAllowed(leadId);
     return this.invitations.sendInvitation(leadId, dto, this.getActor(req));
   }
 
