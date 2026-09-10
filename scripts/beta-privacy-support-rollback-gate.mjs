@@ -79,7 +79,7 @@ const invariants = [
   [manifest.policy?.supportLedgerAppendOnly === true, 'manifest requires append-only support history'],
   [manifest.policy?.supportConfigurationSource === 'admin-control-plane', 'manifest pins admin support source'],
   [manifest.policy?.legacyEnvSupportConfigurationAccepted === false, 'manifest rejects legacy support env configuration'],
-  [manifest.policy?.supportLeaseMaxHours === 168, 'support lease is capped at 168 hours'],
+  [manifest.policy?.supportLeaseMaxHours === 192, 'support lease is capped at 192 hours'],
   [manifest.policy?.supportMonitoringConfirmationRequired === true, 'support monitoring confirmation is mandatory'],
   [manifest.requiredEvidence.privacyAndTermsReviewed.status === 'pending', 'legal review remains human-gated'],
   [manifest.requiredEvidence.supportOwnerConfirmed.status === 'pending', 'support confirmation remains human-gated'],
