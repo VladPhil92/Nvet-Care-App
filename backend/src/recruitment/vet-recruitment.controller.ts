@@ -17,6 +17,7 @@ import {
   ScheduleVetRecruitmentFollowUpDto,
   UpdateVetRecruitmentStageDto,
 } from "./dto/vet-recruitment.dto";
+import { VetActivationTelemetryService } from "./vet-activation-telemetry.service";
 import {
   RecruitmentActor,
   VetRecruitmentService,
@@ -26,11 +27,21 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
 export class VetRecruitmentController {
-  constructor(private readonly recruitment: VetRecruitmentService) {}
+  constructor(
+    private readonly recruitment: VetRecruitmentService,
+    private readonly activationTelemetry: VetActivationTelemetryService,
+  ) {}
 
   @Get()
   getSnapshot(@Query("marketDaneCode") marketDaneCode?: string) {
     return this.recruitment.getAdminSnapshot(
+      marketDaneCode?.trim() || undefined,
+    );
+  }
+
+  @Get("activation-telemetry")
+  getActivationTelemetry(@Query("marketDaneCode") marketDaneCode?: string) {
+    return this.activationTelemetry.getSnapshot(
       marketDaneCode?.trim() || undefined,
     );
   }

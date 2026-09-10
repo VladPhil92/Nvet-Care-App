@@ -14,6 +14,33 @@ export type VetRecruitmentConversionStage =
   | 'PROFILE_INACTIVE'
   | 'OPERATIONAL_READY'
 
+export type VetActivationRisk =
+  | 'ON_TRACK'
+  | 'AT_RISK'
+  | 'BREACHED'
+  | 'CRITICAL'
+  | 'COMPLETE'
+  | 'PAUSED'
+
+export type VetActivationBlocker =
+  | 'CONTACT_PERMISSION_REQUIRED'
+  | 'INVITATION_REQUIRED'
+  | 'INVITATION_DELIVERY_PENDING'
+  | 'INVITATION_DELIVERY_FAILED'
+  | 'INVITATION_REISSUE_REQUIRED'
+  | 'INVITATION_CLAIM_REQUIRED'
+  | 'ACCOUNT_LINK_REQUIRED'
+  | 'ACCOUNT_ROLE_MISMATCH'
+  | 'ACCOUNT_EMAIL_UNVERIFIED'
+  | 'ACCOUNT_REGISTERED'
+  | 'SERVICE_AREA_REQUIRED'
+  | 'DOCUMENT_REVIEW_REQUIRED'
+  | 'REGISTRY_CHECK_REQUIRED'
+  | 'VERIFICATION_APPROVAL_REQUIRED'
+  | 'PROFILE_INACTIVE'
+  | 'DATA_CONFLICT'
+  | 'LEAD_LOST'
+
 export interface VetRecruitmentLead {
   leadId: string
   fullName: string
@@ -82,6 +109,105 @@ export interface VetRecruitmentSnapshot {
   generatedAt: string
 }
 
+export interface VetActivationTelemetryLead {
+  leadId: string
+  fullName: string
+  email: string
+  marketDaneCode: string
+  market: VetRecruitmentLead['market']
+  outreachStage: VetRecruitmentStage
+  conversionStage: VetRecruitmentConversionStage
+  currentBlocker: VetActivationBlocker | null
+  risk: VetActivationRisk
+  blockerSince: string | null
+  blockerAgeHours: number
+  blockerSlaHours: number | null
+  slaRemainingHours: number | null
+  slaProgressRatio: number | null
+  nextAction: string
+  milestones: {
+    leadCreatedAt: string
+    permissionGrantedAt: string | null
+    permissionRevokedAt: string | null
+    invitationIssuedAt: string | null
+    invitationProviderAcceptedAt: string | null
+    invitationExpiresAt: string | null
+    invitationClaimedAt: string | null
+    accountCreatedAt: string | null
+    profileCreatedAt: string | null
+    documentsApprovedAt: string | null
+    registryVerifiedAt: string | null
+    verificationApprovedAt: string | null
+    operationalEvidenceAt: string | null
+  }
+  durationsHours: {
+    leadToPermission: number | null
+    permissionToInvitation: number | null
+    invitationToClaim: number | null
+    accountToProfile: number | null
+    profileToDocumentsApproved: number | null
+    documentsToRegistry: number | null
+    registryToVerification: number | null
+    leadToOperationalEvidence: number | null
+  }
+}
+
+export interface VetActivationTelemetrySnapshot {
+  phase: 23
+  program: string
+  measurementMode: 'read-only-observability'
+  commercialLaunchAuthorized: false
+  operationalSupplySource: string
+  leadPresenceNeverCountsAsCoverage: true
+  slaPolicy: {
+    timezone: 'America/Bogota'
+    configurableByEnvironment: true
+    atRiskThresholdRatio: number
+    hours: Partial<Record<VetActivationBlocker, number>>
+  }
+  totals: {
+    leads: number
+    operationalReady: number
+    onTrack: number
+    atRisk: number
+    breached: number
+    critical: number
+    paused: number
+    medianLeadToOperationalEvidenceHours: number | null
+  }
+  funnel: {
+    leadCreated: number
+    permissionEverGranted: number
+    invitationProviderAccepted: number
+    invitationClaimed: number
+    accountLinked: number
+    profileCreated: number
+    documentsApproved: number
+    registryVerified: number
+    verificationApproved: number
+    operationalReady: number
+  }
+  bottlenecks: Array<{
+    blocker: VetActivationBlocker
+    count: number
+    breachedOrCritical: number
+    oldestHours: number
+  }>
+  markets: Array<
+    VetRecruitmentMarket & {
+      onTrack: number
+      atRisk: number
+      breached: number
+      critical: number
+      medianLeadToOperationalEvidenceHours: number | null
+    }
+  >
+  priorityQueue: VetActivationTelemetryLead[]
+  leads: VetActivationTelemetryLead[]
+  evidenceNotes: string[]
+  generatedAt: string
+}
+
 export interface CreateVetRecruitmentLeadInput {
   fullName: string
   email: string
@@ -96,6 +222,15 @@ export const vetRecruitmentService = {
     return dedupedGet<VetRecruitmentSnapshot>('/recruitment/vets', {
       ...(marketDaneCode ? { marketDaneCode } : {}),
     })
+  },
+
+  getActivationTelemetry(marketDaneCode?: string) {
+    return dedupedGet<VetActivationTelemetrySnapshot>(
+      '/recruitment/vets/activation-telemetry',
+      {
+        ...(marketDaneCode ? { marketDaneCode } : {}),
+      },
+    )
   },
 
   async createLead(input: CreateVetRecruitmentLeadInput) {
