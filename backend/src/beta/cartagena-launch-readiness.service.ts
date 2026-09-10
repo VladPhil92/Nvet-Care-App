@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { MarketLaunchPolicyService } from "../coverage/market-launch-policy.service";
 import { VetActivationTelemetryService } from "../recruitment/vet-activation-telemetry.service";
+import { BetaActivationService } from "./beta-activation.service";
 import {
   BETA_EVIDENCE_GATES,
   BetaEvidenceGate,
@@ -45,16 +46,19 @@ const CATEGORY_ORDER: LaunchGateCategory[] = [
 export class CartagenaLaunchReadinessService {
   constructor(
     private readonly betaReadiness: BetaReadinessService,
+    private readonly betaActivation: BetaActivationService,
     private readonly marketLaunchPolicy: MarketLaunchPolicyService,
     private readonly vetActivationTelemetry: VetActivationTelemetryService,
   ) {}
 
   async getSnapshot() {
-    const [beta, marketPolicy, vetActivation] = await Promise.all([
-      this.betaReadiness.getCartagenaSnapshot(),
-      this.marketLaunchPolicy.getPolicySnapshot(),
-      this.vetActivationTelemetry.getSnapshot(CARTAGENA_DANE_CODE),
-    ]);
+    const [beta, activationPrerequisites, marketPolicy, vetActivation] =
+      await Promise.all([
+        this.betaReadiness.getCartagenaSnapshot(),
+        this.betaActivation.getPrerequisites(),
+        this.marketLaunchPolicy.getPolicySnapshot(),
+        this.vetActivationTelemetry.getSnapshot(CARTAGENA_DANE_CODE),
+      ]);
 
     const cartagenaPolicy = marketPolicy.markets.find(
       (market) => market.daneCode === CARTAGENA_DANE_CODE,
@@ -83,6 +87,9 @@ export class CartagenaLaunchReadinessService {
 
     for (const reason of beta.activation.blockingReasons) {
       blockers.push(`BETA_${reason}`);
+    }
+    for (const reason of activationPrerequisites.blockers) {
+      blockers.push(`ACTIVATION_PREREQUISITE_${reason}`);
     }
     for (const gate of evidenceGates) {
       if (gate.status !== "VERIFIED") {
@@ -185,6 +192,9 @@ export class CartagenaLaunchReadinessService {
         betaActivationState: beta.activation.state,
         authorizationActive: beta.activation.authorizationActive,
         authorizationExpiresAt: beta.activation.authorizationExpiresAt,
+        activationPrerequisitesEligible: activationPrerequisites.eligible,
+        betaMarketConfiguredForCartagena:
+          activationPrerequisites.marketConfigured,
         marketGuardEnabled: marketPolicy.guardEnabled,
         cartagenaBookingGateEligible:
           cartagenaPolicy?.bookingGateEligible ?? false,
@@ -216,6 +226,8 @@ export class CartagenaLaunchReadinessService {
       boundaries: {
         sourceEvidenceGates: BETA_EVIDENCE_GATES,
         strictSupplySource: beta.vetCoverage.source,
+        activationPrerequisitesSource:
+          "BetaActivationService.getPrerequisites() / booking enforcement parity",
         activationTelemetrySource:
           "GET /api/recruitment/vets/activation-telemetry?marketDaneCode=13001",
         providerPolicySource: "GET /api/coverage/launch-policy",
