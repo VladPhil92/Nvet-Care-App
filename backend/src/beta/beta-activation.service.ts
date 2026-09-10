@@ -8,9 +8,9 @@ import {
   AuditAction,
   AuditSeverity,
   Prisma,
-  VerificationStatus,
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { CartagenaVetActivationService } from "../coverage/cartagena-vet-activation.service";
 import { BetaCohortService } from "./beta-cohort.service";
 import { BETA_EVIDENCE_PROGRAM } from "./beta-evidence.constants";
 import {
@@ -27,7 +27,6 @@ const BETA_ACTIVATION_TARGET_TYPE = "BETA_ACTIVATION_AUTHORIZATION";
 const MAX_EVENT_ROWS = 500;
 const DEFAULT_LEASE_HOURS = 24;
 const MAX_INITIAL_CLIENTS = 50;
-const MIN_VERIFIED_VETS = 3;
 
 type ActivationEventType = "AUTHORIZED" | "REVOKED";
 type ActivationState =
@@ -58,6 +57,9 @@ export type BetaActivationPrerequisites = {
   evidenceEligible: boolean;
   verifiedActiveVets: number;
   minimumVerifiedVets: number;
+  vetCoverageGap: number;
+  vetCoverageSource: string;
+  vetCoverageFormalEvidenceEligible: boolean;
   configuredClients: number;
   eligibleCohortMembers: number;
   ineligibleCohortMembers: number;
@@ -75,6 +77,7 @@ export class BetaActivationService {
     private readonly evidence: BetaEvidenceService,
     private readonly cohort: BetaCohortService,
     private readonly support: BetaSupportService,
+    private readonly cartagenaSupply: CartagenaVetActivationService,
   ) {}
 
   async authorize(dto: AuthorizeBetaActivationDto, actor: BetaEvidenceActor) {
@@ -163,19 +166,9 @@ export class BetaActivationService {
   }
 
   async getPrerequisites(): Promise<BetaActivationPrerequisites> {
-    const [promotion, verifiedActiveVets, cohort, support] = await Promise.all([
+    const [promotion, supply, cohort, support] = await Promise.all([
       this.evidence.getPromotionSummary(),
-      this.prisma.vetProfile.count({
-        where: {
-          isVerified: true,
-          isActive: true,
-          verificationStatus: VerificationStatus.APPROVED,
-          city: {
-            contains: "cartagena",
-            mode: "insensitive",
-          },
-        },
-      }),
+      this.cartagenaSupply.getSnapshot(),
       this.cohort.getOperationalSnapshot(),
       this.support.getOperationalSnapshot(),
     ]);
@@ -185,12 +178,14 @@ export class BetaActivationService {
     const marketConfigured = this.isCartagenaMarket(
       process.env.NVET_CLOSED_BETA_MARKET,
     );
+    const verifiedActiveVets = supply.operationalReady;
+    const minimumVerifiedVets = supply.minimumOperationalVets;
     const blockers: string[] = [];
 
     if (!promotion.eligibleForOperatorActivation) {
       blockers.push("PRODUCTION_EVIDENCE_GATES_INCOMPLETE");
     }
-    if (verifiedActiveVets < MIN_VERIFIED_VETS) {
+    if (!supply.supplyActivationReady) {
       blockers.push("CARTAGENA_VET_COVERAGE_INSUFFICIENT");
     }
     if (configuredClients === 0) {
@@ -214,7 +209,10 @@ export class BetaActivationService {
       blockers,
       evidenceEligible: promotion.eligibleForOperatorActivation,
       verifiedActiveVets,
-      minimumVerifiedVets: MIN_VERIFIED_VETS,
+      minimumVerifiedVets,
+      vetCoverageGap: supply.coverageGap,
+      vetCoverageSource: "cartagena-vet-supply-activation-phase-18",
+      vetCoverageFormalEvidenceEligible: supply.formalEvidence.eligible,
       configuredClients,
       eligibleCohortMembers: cohort.eligibleActiveMembers,
       ineligibleCohortMembers: cohort.ineligibleMembers,
