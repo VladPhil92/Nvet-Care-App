@@ -193,17 +193,26 @@ if (freeze.scope?.marketDaneCode !== '13001') fail('Phase 27 release scope must 
 if (freeze.scope?.channel !== 'closed-beta') fail('Phase 27 channel must remain closed-beta');
 if (freeze.scope?.commercialLaunchAuthorized !== false) fail('freeze cannot authorize commercial launch');
 if (freeze.scope?.publicStoreReleaseAuthorized !== false) fail('freeze cannot authorize public store release');
+if (freeze.packageIdentity?.androidApplicationId !== 'com.nvetcare') fail('Android applicationId must remain com.nvetcare');
+if (freeze.packageIdentity?.androidVersionName !== freeze.candidate) fail('Android versionName must equal the frozen candidate');
+if (!Number.isInteger(freeze.packageIdentity?.androidVersionCode) || freeze.packageIdentity.androidVersionCode <= 1) fail('Android versionCode must be a positive frozen RC code greater than the default');
 if (freeze.governance?.featureFreezeActive !== true) fail('feature freeze must be active');
 if (freeze.governance?.releaseBlockerLabel !== 'release-blocker') fail('release blocker label must be release-blocker');
 if (freeze.governance?.releaseBlockerRegistry !== BLOCKERS_PATH) fail('release blocker registry path is not canonical');
 if (freeze.governance?.releaseBlockerMergeMethod !== 'merge-commit') fail('release blockers must use auditable merge commits');
 if (!Array.isArray(freeze.governance?.protectedProductPaths) || freeze.governance.protectedProductPaths.length < 10) fail('protected product path policy is incomplete');
+for (const requiredMobileRoot of ['mobile/App.tsx', 'mobile/index.js']) {
+  if (!freeze.governance.protectedProductPaths.includes(requiredMobileRoot)) {
+    fail(`mobile root entry point must be protected: ${requiredMobileRoot}`);
+  }
+}
 
 validateBlockerRegistry(blockers, freeze.candidate);
 
 if (rc.candidate !== freeze.candidate) fail(`RC_READINESS candidate ${rc.candidate} diverges from ${freeze.candidate}`);
 if (globalReadiness.candidate !== freeze.candidate) fail(`GLOBAL_READINESS candidate ${globalReadiness.candidate} diverges from ${freeze.candidate}`);
 if (androidReadiness.prerequisiteRcTag !== freeze.candidate) fail(`ANDROID_PRODUCTION_READINESS prerequisite ${androidReadiness.prerequisiteRcTag} diverges from ${freeze.candidate}`);
+if (androidReadiness.applicationId !== freeze.packageIdentity.androidApplicationId) fail('Android production applicationId diverges from the frozen package identity');
 if (globalReadiness.auditBaselineSha !== freeze.baseline.mainCommitSha) fail('GLOBAL_READINESS auditBaselineSha must equal the Phase 27 frozen baseline');
 if (rc.phase27Freeze?.state !== 'FROZEN') fail('RC_READINESS must expose the active Phase 27 freeze');
 if (rc.phase27Freeze?.baselineMainCommitSha !== freeze.baseline.mainCommitSha) fail('RC_READINESS Phase 27 baseline diverges from freeze manifest');
@@ -266,6 +275,7 @@ if (context.eventName && context.baseSha && context.headSha && !/^0+$/.test(cont
 
 console.log('Nvet Care — Phase 27 Release Candidate Freeze');
 console.log(`Candidate: ${freeze.candidate}`);
+console.log(`Android package: ${freeze.packageIdentity.androidApplicationId} ${freeze.packageIdentity.androidVersionName} (${freeze.packageIdentity.androidVersionCode})`);
 console.log(`Baseline main: ${freeze.baseline.mainCommitSha}`);
 console.log('Feature freeze: ACTIVE');
 console.log('Commercial launch authorization: FALSE');
