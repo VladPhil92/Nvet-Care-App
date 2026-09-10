@@ -6,9 +6,6 @@ describe("BetaActivationService", () => {
   const rows: any[] = [];
   let sequence = 0;
   const prisma = {
-    vetProfile: {
-      count: jest.fn(),
-    },
     auditLog: {
       create: jest.fn(async ({ data }) => {
         sequence += 1;
@@ -38,6 +35,9 @@ describe("BetaActivationService", () => {
   } as any;
   const support = {
     getOperationalSnapshot: jest.fn(),
+  } as any;
+  const cartagenaSupply = {
+    getSnapshot: jest.fn(),
   } as any;
   const actor = {
     id: "admin-user-id",
@@ -72,19 +72,38 @@ describe("BetaActivationService", () => {
     configurationSource: "admin-control-plane",
   });
 
+  const supplySnapshot = (operationalReady = 3) => ({
+    phase: 18,
+    program: "cartagena-vet-supply-activation",
+    minimumOperationalVets: 3,
+    operationalReady,
+    coverageGap: Math.max(0, 3 - operationalReady),
+    supplyActivationReady: operationalReady >= 3,
+    formalEvidence: {
+      gateId: "cartagena-vet-coverage",
+      eligible: operationalReady >= 3,
+    },
+  });
+
   beforeEach(() => {
     process.env = { ...originalEnv };
     process.env.NVET_CLOSED_BETA_MARKET = "Cartagena de Indias";
     rows.length = 0;
     sequence = 0;
     jest.clearAllMocks();
-    prisma.vetProfile.count.mockResolvedValue(3);
     evidence.getPromotionSummary.mockResolvedValue({
       eligibleForOperatorActivation: true,
     });
     cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort());
     support.getOperationalSnapshot.mockResolvedValue(healthySupport());
-    service = new BetaActivationService(prisma, evidence, cohort, support);
+    cartagenaSupply.getSnapshot.mockResolvedValue(supplySnapshot());
+    service = new BetaActivationService(
+      prisma,
+      evidence,
+      cohort,
+      support,
+      cartagenaSupply,
+    );
   });
 
   afterAll(() => {
@@ -100,6 +119,22 @@ describe("BetaActivationService", () => {
     expect(rows).toHaveLength(1);
   });
 
+  it("uses Phase 18 operational supply rather than a loose city-only vet count", async () => {
+    cartagenaSupply.getSnapshot.mockResolvedValue(supplySnapshot(2));
+
+    const prerequisites = await service.getPrerequisites();
+
+    expect(prerequisites.verifiedActiveVets).toBe(2);
+    expect(prerequisites.minimumVerifiedVets).toBe(3);
+    expect(prerequisites.vetCoverageGap).toBe(1);
+    expect(prerequisites.vetCoverageSource).toBe(
+      "cartagena-vet-supply-activation-phase-18",
+    );
+    expect(prerequisites.blockers).toContain(
+      "CARTAGENA_VET_COVERAGE_INSUFFICIENT",
+    );
+  });
+
   it("refuses authorization when production evidence is incomplete", async () => {
     evidence.getPromotionSummary.mockResolvedValue({
       eligibleForOperatorActivation: false,
@@ -111,9 +146,18 @@ describe("BetaActivationService", () => {
     expect(rows).toHaveLength(0);
   });
 
+  it("refuses authorization when Phase 18 supply is not operationally ready", async () => {
+    cartagenaSupply.getSnapshot.mockResolvedValue(supplySnapshot(2));
+
+    await expect(service.authorize({}, actor)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
   it("detects veterinarian prerequisite drift and blocks bookings after authorization", async () => {
     await service.authorize({}, actor);
-    prisma.vetProfile.count.mockResolvedValue(2);
+    cartagenaSupply.getSnapshot.mockResolvedValue(supplySnapshot(2));
 
     await expect(service.assertActiveForBooking()).rejects.toBeInstanceOf(
       ServiceUnavailableException,

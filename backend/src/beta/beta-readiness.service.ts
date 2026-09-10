@@ -1,6 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { VerificationStatus } from "@prisma/client";
-import { PrismaService } from "../prisma/prisma.service";
+import { CartagenaVetActivationService } from "../coverage/cartagena-vet-activation.service";
 import { BetaActivationService } from "./beta-activation.service";
 import { BetaCohortService } from "./beta-cohort.service";
 import { BetaEvidenceService } from "./beta-evidence.service";
@@ -9,7 +8,6 @@ import { BetaSupportService } from "./beta-support.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 
 const MAX_INITIAL_CLIENTS = 50;
-const MIN_VERIFIED_VETS = 3;
 
 type ActivationState =
   | "blocked"
@@ -29,48 +27,30 @@ type LocalBlocker =
 @Injectable()
 export class BetaReadinessService {
   constructor(
-    private readonly prisma: PrismaService,
     private readonly access: ClosedBetaAccessService,
     private readonly evidence: BetaEvidenceService,
     private readonly authorization: BetaActivationService,
     private readonly cohort: BetaCohortService,
     private readonly support: BetaSupportService,
+    private readonly cartagenaSupply: CartagenaVetActivationService,
   ) {}
 
   async getCartagenaSnapshot() {
-    const [
-      verifiedActiveVets,
-      evidencePromotion,
-      authorization,
-      cohort,
-      support,
-    ] = await Promise.all([
-      // A vet without service coordinates cannot satisfy Phase 14 radius
-      // enforcement, so beta coverage now counts only geo-ready professionals.
-      this.prisma.vetProfile.count({
-        where: {
-          isVerified: true,
-          isActive: true,
-          verificationStatus: VerificationStatus.APPROVED,
-          latitude: { not: null },
-          longitude: { not: null },
-          city: {
-            contains: "cartagena",
-            mode: "insensitive",
-          },
-        },
-      }),
-      this.evidence.getPromotionSummary(),
-      this.authorization.getStatus(),
-      this.cohort.getOperationalSnapshot(),
-      this.support.getOperationalSnapshot(),
-    ]);
+    const [supply, evidencePromotion, authorization, cohort, support] =
+      await Promise.all([
+        this.cartagenaSupply.getSnapshot(),
+        this.evidence.getPromotionSummary(),
+        this.authorization.getStatus(),
+        this.cohort.getOperationalSnapshot(),
+        this.support.getOperationalSnapshot(),
+      ]);
 
     const configuredClients = cohort.activeMemberships;
     const cohortConfigured = cohort.configured;
     const cohortWithinLimit = cohort.withinLimit;
     const cohortMembersEligible = cohort.ineligibleMembers === 0;
-    const vetCoverageSatisfied = verifiedActiveVets >= MIN_VERIFIED_VETS;
+    const verifiedActiveVets = supply.operationalReady;
+    const vetCoverageSatisfied = supply.supplyActivationReady;
     const supportConfigured = support.configured;
     const closedBetaEnabled = this.access.isEnabled();
     const bookingEnabled = this.access.isBookingEnabled();
@@ -104,8 +84,9 @@ export class BetaReadinessService {
     });
 
     return {
-      phase: 12,
+      phase: 19,
       program: "closed-beta-cartagena",
+      readinessConvergence: "cartagena-vet-supply-activation-phase-18",
       market: this.access.getMarket(),
       geographicCoverageProgram: "colombia-service-coverage-phase-14",
       runtime: {
@@ -147,10 +128,20 @@ export class BetaReadinessService {
       },
       vetCoverage: {
         verifiedActiveVets,
-        minimumRequired: MIN_VERIFIED_VETS,
+        minimumRequired: supply.minimumOperationalVets,
+        coverageGap: supply.coverageGap,
         satisfied: vetCoverageSatisfied,
+        source: "GET /api/coverage/cartagena-activation",
+        sourcePhase: supply.phase,
+        sourceProgram: supply.program,
+        formalEvidenceGate: supply.formalEvidence.gateId,
+        formalEvidenceEligible: supply.formalEvidence.eligible,
         geoLocationRequired: true,
+        geoConsistencyRequired: true,
         serviceRadiusRequired: true,
+        approvedDocumentsRequired: true,
+        professionalRegistryVerificationRequired: true,
+        activeProfileRequired: true,
         nationalCoverageReadinessEndpoint: "GET /api/coverage/readiness",
       },
       legal: {
@@ -177,6 +168,7 @@ export class BetaReadinessService {
         evidenceApprovalIsNotCommercialLaunchApproval: true,
         operatorAuthorizationDoesNotToggleProviderConfiguration: true,
         authorizationRequiredForBooking: true,
+        strictVetSupplySnapshotRequired: true,
         evidenceLedger: "audit_logs",
         authorizationLedger: "audit_logs",
         cohortLedger: "audit_logs",
@@ -192,6 +184,7 @@ export class BetaReadinessService {
         supportConfigurationAdminOnly: true,
         evidenceReferencesAdminOnly: true,
         cohortMemberDetailsAdminOnly: true,
+        vetCoordinatesExposed: false,
       },
       generatedAt: new Date().toISOString(),
     } as const;

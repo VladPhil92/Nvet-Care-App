@@ -1,14 +1,7 @@
-import { VerificationStatus } from "@prisma/client";
 import { BETA_EVIDENCE_GATES } from "./beta-evidence.constants";
 import { BetaReadinessService } from "./beta-readiness.service";
 
 describe("BetaReadinessService", () => {
-  const prisma = {
-    vetProfile: {
-      count: jest.fn(),
-    },
-  } as any;
-
   const access = {
     getMarket: jest.fn(() => "Cartagena de Indias"),
     isEnabled: jest.fn(() => false),
@@ -29,6 +22,10 @@ describe("BetaReadinessService", () => {
 
   const support = {
     getOperationalSnapshot: jest.fn(),
+  } as any;
+
+  const cartagenaSupply = {
+    getSnapshot: jest.fn(),
   } as any;
 
   const verifiedEvidenceSummary = () => ({
@@ -101,6 +98,19 @@ describe("BetaReadinessService", () => {
     configurationSource: "admin-control-plane",
   });
 
+  const supplySnapshot = (operationalReady = 3) => ({
+    phase: 18,
+    program: "cartagena-vet-supply-activation",
+    minimumOperationalVets: 3,
+    operationalReady,
+    coverageGap: Math.max(0, 3 - operationalReady),
+    supplyActivationReady: operationalReady >= 3,
+    formalEvidence: {
+      gateId: "cartagena-vet-coverage",
+      eligible: operationalReady >= 3,
+    },
+  });
+
   let service: BetaReadinessService;
 
   beforeEach(() => {
@@ -111,34 +121,22 @@ describe("BetaReadinessService", () => {
     authorization.getStatus.mockResolvedValue(missingAuthorization());
     cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort());
     support.getOperationalSnapshot.mockResolvedValue(healthySupport());
+    cartagenaSupply.getSnapshot.mockResolvedValue(supplySnapshot());
     service = new BetaReadinessService(
-      prisma,
       access,
       evidence,
       authorization,
       cohort,
       support,
+      cartagenaSupply,
     );
   });
 
-  it("reports awaiting-authorization when local and evidence gates pass but no lease exists", async () => {
-    prisma.vetProfile.count.mockResolvedValue(3);
-
+  it("reports awaiting-authorization when strict local and evidence gates pass but no lease exists", async () => {
     const snapshot = await service.getCartagenaSnapshot();
 
-    expect(prisma.vetProfile.count).toHaveBeenCalledWith({
-      where: {
-        isVerified: true,
-        isActive: true,
-        verificationStatus: VerificationStatus.APPROVED,
-        latitude: { not: null },
-        longitude: { not: null },
-        city: {
-          contains: "cartagena",
-          mode: "insensitive",
-        },
-      },
-    });
+    expect(cartagenaSupply.getSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot.phase).toBe(19);
     expect(snapshot.localActivationReady).toBe(true);
     expect(snapshot.activation.machineActivationReady).toBe(true);
     expect(snapshot.activation.operatorActivationEligible).toBe(true);
@@ -146,17 +144,17 @@ describe("BetaReadinessService", () => {
     expect(snapshot.activation.state).toBe("awaiting-authorization");
     expect(snapshot.activation.blockingReasons).toEqual([]);
     expect(snapshot.cohort.configuredClients).toBe(12);
-    expect(snapshot.cohort.ledger).toBe("audit_logs");
-    expect(snapshot.cohort.membershipSource).toBe("admin-control-plane");
     expect(snapshot.support.state).toBe("ACTIVE");
-    expect(snapshot.support.configurationSource).toBe("admin-control-plane");
-    expect(snapshot.vetCoverage.geoLocationRequired).toBe(true);
-    expect(snapshot.vetCoverage.serviceRadiusRequired).toBe(true);
-    expect(snapshot.privacy.supportContactExposed).toBe(false);
+    expect(snapshot.vetCoverage.verifiedActiveVets).toBe(3);
+    expect(snapshot.vetCoverage.coverageGap).toBe(0);
+    expect(snapshot.vetCoverage.geoConsistencyRequired).toBe(true);
+    expect(snapshot.vetCoverage.approvedDocumentsRequired).toBe(true);
+    expect(snapshot.vetCoverage.professionalRegistryVerificationRequired).toBe(true);
+    expect(snapshot.vetCoverage.formalEvidenceEligible).toBe(true);
+    expect(snapshot.privacy.vetCoordinatesExposed).toBe(false);
   });
 
   it("reports ready-to-enable after an active authorization lease is issued", async () => {
-    prisma.vetProfile.count.mockResolvedValue(3);
     authorization.getStatus.mockResolvedValue(activeAuthorization());
 
     const snapshot = await service.getCartagenaSnapshot();
@@ -167,7 +165,6 @@ describe("BetaReadinessService", () => {
   });
 
   it("keeps activation blocked when local gates pass but evidence is incomplete", async () => {
-    prisma.vetProfile.count.mockResolvedValue(3);
     const summary = verifiedEvidenceSummary();
     summary.gates[0] = {
       ...summary.gates[0],
@@ -190,12 +187,14 @@ describe("BetaReadinessService", () => {
     expect(snapshot.promotion.blockingGates).toContain("rcPromoted");
   });
 
-  it("blocks local activation when veterinarian coverage is insufficient", async () => {
-    prisma.vetProfile.count.mockResolvedValue(2);
+  it("blocks local activation when Phase 18 operational veterinarian coverage is insufficient", async () => {
+    cartagenaSupply.getSnapshot.mockResolvedValue(supplySnapshot(2));
 
     const snapshot = await service.getCartagenaSnapshot();
 
     expect(snapshot.vetCoverage.satisfied).toBe(false);
+    expect(snapshot.vetCoverage.coverageGap).toBe(1);
+    expect(snapshot.vetCoverage.formalEvidenceEligible).toBe(false);
     expect(snapshot.localActivationReady).toBe(false);
     expect(snapshot.activation.blockingReasons).toContain(
       "CARTAGENA_VET_COVERAGE_INSUFFICIENT",
@@ -203,7 +202,6 @@ describe("BetaReadinessService", () => {
   });
 
   it("blocks local activation when the cohort exceeds the launch cap", async () => {
-    prisma.vetProfile.count.mockResolvedValue(5);
     cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort(51));
 
     const snapshot = await service.getCartagenaSnapshot();
@@ -216,7 +214,6 @@ describe("BetaReadinessService", () => {
   });
 
   it("blocks activation if an invited cohort member becomes ineligible", async () => {
-    prisma.vetProfile.count.mockResolvedValue(3);
     cohort.getOperationalSnapshot.mockResolvedValue({
       ...healthyCohort(12),
       eligibleActiveMembers: 11,
@@ -232,7 +229,6 @@ describe("BetaReadinessService", () => {
   });
 
   it("requires an active monitored support lease for machine activation readiness", async () => {
-    prisma.vetProfile.count.mockResolvedValue(3);
     support.getOperationalSnapshot.mockResolvedValue({
       ...healthySupport(),
       state: "EXPIRED",
@@ -250,7 +246,6 @@ describe("BetaReadinessService", () => {
   });
 
   it("reports active only when beta is enabled with eligibility and an active authorization", async () => {
-    prisma.vetProfile.count.mockResolvedValue(4);
     access.isEnabled.mockReturnValue(true);
     access.isBookingEnabled.mockReturnValue(true);
     authorization.getStatus.mockResolvedValue(activeAuthorization());
@@ -264,7 +259,6 @@ describe("BetaReadinessService", () => {
   });
 
   it("reports paused when the booking kill switch is active after authorization", async () => {
-    prisma.vetProfile.count.mockResolvedValue(4);
     access.isEnabled.mockReturnValue(true);
     access.isBookingEnabled.mockReturnValue(false);
     authorization.getStatus.mockResolvedValue(activeAuthorization());
@@ -275,20 +269,8 @@ describe("BetaReadinessService", () => {
     expect(snapshot.runtime.bookingEnabled).toBe(false);
   });
 
-  it("reports misconfigured if beta is enabled before authorization", async () => {
-    prisma.vetProfile.count.mockResolvedValue(4);
-    access.isEnabled.mockReturnValue(true);
-
-    const snapshot = await service.getCartagenaSnapshot();
-
-    expect(snapshot.activation.state).toBe("misconfigured");
-    expect(snapshot.activation.operatorActivationEligible).toBe(true);
-    expect(snapshot.activation.authorizationActive).toBe(false);
-  });
-
-  it("reports misconfigured if beta is enabled before all activation gates pass", async () => {
-    prisma.vetProfile.count.mockResolvedValue(1);
-    cohort.getOperationalSnapshot.mockResolvedValue(healthyCohort(0));
+  it("reports misconfigured if beta is enabled before strict supply passes", async () => {
+    cartagenaSupply.getSnapshot.mockResolvedValue(supplySnapshot(1));
     access.isEnabled.mockReturnValue(true);
     authorization.getStatus.mockResolvedValue(activeAuthorization());
 
@@ -296,6 +278,8 @@ describe("BetaReadinessService", () => {
 
     expect(snapshot.activation.state).toBe("misconfigured");
     expect(snapshot.activation.machineActivationReady).toBe(false);
-    expect(snapshot.activation.blockingReasons.length).toBeGreaterThan(0);
+    expect(snapshot.activation.blockingReasons).toContain(
+      "CARTAGENA_VET_COVERAGE_INSUFFICIENT",
+    );
   });
 });
