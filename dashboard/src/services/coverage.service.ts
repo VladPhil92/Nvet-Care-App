@@ -152,6 +152,87 @@ export interface VetSupplyFunnelSnapshot {
   generatedAt: string
 }
 
+export type CartagenaActivationBlocker =
+  | 'SERVICE_AREA_MISSING'
+  | 'SERVICE_AREA_MISMATCH'
+  | 'DOCUMENTS_MISSING'
+  | 'VET_SUBMISSION_REQUIRED'
+  | 'DOCUMENT_REVIEW_REQUIRED'
+  | 'DOCUMENT_REJECTED'
+  | 'REGISTRY_CHECK_REQUIRED'
+  | 'REGISTRY_NOT_VERIFIED'
+  | 'ACTIVATION_INCONSISTENT'
+
+export interface CartagenaActivationDocument {
+  type: string
+  id: string | null
+  status: string
+  fileName: string | null
+  uploadedAt: string | null
+  reviewedAt: string | null
+  reviewNotes: string | null
+}
+
+export interface CartagenaActivationCandidate {
+  vetProfileId: string
+  userId: string
+  displayName: string
+  email: string
+  licenseNumber: string
+  comvezcolNumber: string | null
+  city: string | null
+  department: string | null
+  serviceRadiusKm: number
+  serviceAreaComplete: boolean
+  geoConsistent: boolean
+  verificationStatus: string
+  isDocumentVerified: boolean
+  isActive: boolean
+  verifiedAt: string | null
+  documents: {
+    required: number
+    uploaded: number
+    approved: number
+    rejected: number
+    items: CartagenaActivationDocument[]
+  }
+  registry: {
+    status: string
+    checkedAt: string | null
+    sourceUrl: string | null
+  }
+  operationalReady: boolean
+  blockers: CartagenaActivationBlocker[]
+  nextAction: string
+  updatedAt: string
+}
+
+export interface CartagenaVetActivationSnapshot {
+  phase: 18
+  program: 'cartagena-vet-supply-activation'
+  market: {
+    daneCode: '13001'
+    city: string
+    department: string
+  }
+  minimumOperationalVets: number
+  operationalReady: number
+  coverageGap: number
+  supplyActivationReady: boolean
+  candidateCount: number
+  formalEvidence: {
+    gateId: 'cartagena-vet-coverage'
+    evidenceKind: 'runtime-snapshot'
+    eligible: boolean
+    submissionMustRemainManual: true
+    reference: string
+  }
+  privacyBoundary: string
+  commercialLaunchAuthorized: false
+  candidates: CartagenaActivationCandidate[]
+  generatedAt: string
+}
+
 export const coverageService = {
   async getReadiness(): Promise<CoverageReadinessSnapshot> {
     const response = await apiClient.get<CoverageReadinessSnapshot>('/coverage/readiness')
@@ -165,6 +246,11 @@ export const coverageService = {
 
   async getSupplyFunnel(): Promise<VetSupplyFunnelSnapshot> {
     const response = await apiClient.get<VetSupplyFunnelSnapshot>('/coverage/supply-funnel')
+    return response.data
+  },
+
+  async getCartagenaActivation(): Promise<CartagenaVetActivationSnapshot> {
+    const response = await apiClient.get<CartagenaVetActivationSnapshot>('/coverage/cartagena-activation')
     return response.data
   },
 
