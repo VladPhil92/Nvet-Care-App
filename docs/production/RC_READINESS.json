@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "phase": 11,
-  "candidate": "1.0.0-rc.1",
+  "candidate": "1.0.0-rc.2",
   "policy": {
     "productionCanaryMaxAgeHours": 6,
     "stagingE2eMaxAgeHours": 72,
@@ -31,6 +31,16 @@
       "evidence": null,
       "note": "The machine gate certifies TRANSFER autonomously in isolated Railway staging using runtime-rotated synthetic CLIENT/VET/ADMIN credentials and the exact candidate SHA. Keep this external gate pending until a controlled real bank transfer is retained as redacted operator evidence showing actual funds movement; an application state alone is insufficient. CTG remains disabled and PSE remains fail-closed while its adapter is sandbox/mock. See docs/production/RC_EVIDENCE_RUNBOOK.md."
     }
+  },
+  "phase27Freeze": {
+    "state": "FROZEN",
+    "candidate": "1.0.0-rc.2",
+    "baselineMainCommitSha": "0789ac8d405405b04372fc1ec92e749f7f6a29aa",
+    "phase26CertifiedHeadSha": "99ee55f4a1dea82fac54c167fb156a76a00b90f7",
+    "featureDevelopmentPaused": true,
+    "releaseBlockersOnly": true,
+    "commercialLaunchAuthorized": false,
+    "note": "Phase 27 freezes product development at the Phase 26 certified baseline. Product-code changes require the release-blocker governance contract and do not themselves authorize production or public-store launch."
   },
   "postRcTracks": {
     "iosProduction": "phase-14",
