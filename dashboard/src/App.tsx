@@ -17,6 +17,7 @@ import BetaSupportPage from './pages/BetaSupportPage'
 import CoveragePage from './pages/CoveragePage'
 import LaunchReadinessPage from './pages/LaunchReadinessPage'
 import LaunchOperationsPage from './pages/LaunchOperationsPage'
+import ServiceQualityPage from './pages/ServiceQualityPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import Sidebar from './components/Sidebar'
@@ -38,6 +39,7 @@ type AdminPage =
   | 'coverage'
   | 'launch'
   | 'launch-operations'
+  | 'service-quality'
   | 'recruitment'
   | 'invitations'
   | 'verification'
@@ -92,6 +94,7 @@ function AdminApp() {
         {page === 'coverage' && <CoveragePage />}
         {page === 'launch' && <LaunchReadinessPage />}
         {page === 'launch-operations' && <LaunchOperationsPage />}
+        {page === 'service-quality' && <ServiceQualityPage />}
         {page === 'recruitment' && <VetRecruitmentPage />}
         {page === 'invitations' && <VetInvitationOpsPage />}
         {page === 'verification' && <VetVerificationOpsPage />}
