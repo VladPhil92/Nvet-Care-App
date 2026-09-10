@@ -132,6 +132,31 @@ export class CoverageService {
   }
 
   /**
+   * A veterinarian is geo-ready only when the declared city, service center
+   * coordinates and positive service radius all describe the same prepared
+   * Nvet market. This prevents arbitrary coordinates from satisfying supply
+   * readiness merely because city text was populated.
+   */
+  isVetServiceAreaConsistent(vet: VetCoverageInput): boolean {
+    if (
+      vet.latitude == null ||
+      vet.longitude == null ||
+      !Number.isFinite(vet.latitude) ||
+      !Number.isFinite(vet.longitude) ||
+      !Number.isFinite(vet.serviceRadius) ||
+      Number(vet.serviceRadius) <= 0
+    ) {
+      return false;
+    }
+
+    const declaredMarket = this.resolveMarketByCity(vet.city, vet.department);
+    if (!declaredMarket) return false;
+
+    const coordinateMarket = this.resolveMarketForPoint(vet.latitude, vet.longitude);
+    return coordinateMarket?.market.daneCode === declaredMarket.daneCode;
+  }
+
+  /**
    * Commercial booking boundary for both the Cartagena launch and future
    * Colombian markets. Market activation is provider configuration, while the
    * final serviceability decision is always the selected vet's own radius.
@@ -207,6 +232,14 @@ export class CoverageService {
       });
     }
 
+    if (!this.isVetServiceAreaConsistent(vet)) {
+      throw new ServiceUnavailableException({
+        error: "VET_SERVICE_AREA_INCONSISTENT",
+        message:
+          "La ubicación base del veterinario no coincide con su mercado de servicio declarado.",
+      });
+    }
+
     const serviceRadiusKm = vet.serviceRadius ?? 10;
     if (!Number.isFinite(serviceRadiusKm) || serviceRadiusKm <= 0) {
       throw new ServiceUnavailableException({
@@ -266,12 +299,15 @@ export class CoverageService {
           this.resolveMarketByCity(vet.city, vet.department)?.daneCode ===
           market.daneCode,
       );
-      const geoReadyVets = marketVets.filter(
+      const geoReadyVets = marketVets.filter((vet) =>
+        this.isVetServiceAreaConsistent(vet),
+      ).length;
+      const geoMismatchedVets = marketVets.filter(
         (vet) =>
           vet.latitude != null &&
           vet.longitude != null &&
-          Number.isFinite(vet.serviceRadius) &&
-          Number(vet.serviceRadius) > 0,
+          Number(vet.serviceRadius) > 0 &&
+          !this.isVetServiceAreaConsistent(vet),
       ).length;
       const coverageSatisfied =
         geoReadyVets >= MIN_VERIFIED_GEO_READY_VETS_PER_MARKET;
@@ -282,6 +318,7 @@ export class CoverageService {
         status: active ? "ACTIVE" : "PRELAUNCH",
         verifiedActiveVets: marketVets.length,
         geoReadyVets,
+        geoMismatchedVets,
         minimumGeoReadyVets: MIN_VERIFIED_GEO_READY_VETS_PER_MARKET,
         coverageSatisfied,
         launchEligible: coverageSatisfied,
@@ -291,12 +328,13 @@ export class CoverageService {
 
     const activeMarkets = markets.filter((market) => market.status === "ACTIVE");
     return {
-      phase: 14,
-      program: "colombia-service-coverage",
+      phase: 16,
+      program: "colombia-service-area-readiness",
       country: "CO",
       activationSource: "NVET_ACTIVE_SERVICE_MARKETS",
       activationRequiresCodeDeploy: false,
       bookingGeoEnforcement: this.isGeoBookingEnforced(),
+      serviceAreaConsistencyRequired: true,
       minimumGeoReadyVetsPerMarket: MIN_VERIFIED_GEO_READY_VETS_PER_MARKET,
       activeMarketDaneCodes: [...activeCodes],
       allActiveMarketsReady:
