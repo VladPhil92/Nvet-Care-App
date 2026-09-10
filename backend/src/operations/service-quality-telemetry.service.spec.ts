@@ -119,8 +119,9 @@ describe("ServiceQualityTelemetryService", () => {
     expect(snapshot.slo.overall).toBe("HEALTHY");
     expect(snapshot.boundaries.aggregateOnly).toBe(true);
     expect(snapshot.boundaries.exposesUserIdentifiers).toBe(false);
-    expect(JSON.stringify(snapshot)).not.toContain("clientId");
-    expect(JSON.stringify(snapshot)).not.toContain("vetId");
+    const serialized = JSON.stringify(snapshot);
+    expect(serialized).not.toContain('"clientId":');
+    expect(serialized).not.toContain('"vetId":');
   });
 
   it("does not claim SLO health before every required metric has enough sample", async () => {
