@@ -33,7 +33,7 @@ describe("CartagenaLaunchOperationsService", () => {
       closedBetaEnabled: false,
       bookingEnabled: true,
       authorizationActive: true,
-      authorizationExpiresAt: "2026-09-12T12:00:00.000Z",
+      authorizationExpiresAt: "2026-09-18T16:00:00.000Z",
       marketGuardEnabled: true,
       cartagenaBookingGateEligible: true,
     },
@@ -60,15 +60,15 @@ describe("CartagenaLaunchOperationsService", () => {
     activation.getStatus.mockResolvedValue({
       state: "ACTIVE",
       authorizationId: "auth-1",
-      authorizedAt: "2026-09-10T14:00:00.000Z",
-      expiresAt: "2026-09-12T12:00:00.000Z",
+      authorizedAt: "2026-09-10T16:00:00.000Z",
+      expiresAt: "2026-09-18T16:00:00.000Z",
       revokedAt: null,
     });
     evidence.getHistory.mockResolvedValue({ evidence: [] });
     support.getOperationalSnapshot.mockResolvedValue({
       state: "ACTIVE",
       configured: true,
-      expiresAt: null,
+      expiresAt: "2026-09-18T16:00:00.000Z",
     });
     prisma.auditLog.findMany.mockResolvedValue([]);
     prisma.auditLog.create.mockResolvedValue({ id: "log-1" });
@@ -105,6 +105,50 @@ describe("CartagenaLaunchOperationsService", () => {
     );
   });
 
+  it("rejects a stale observation from a previous activation authorization", async () => {
+    launchReadiness.getSnapshot.mockResolvedValue({
+      ...readiness,
+      runtime: { ...readiness.runtime, closedBetaEnabled: true },
+    });
+    prisma.auditLog.findMany.mockResolvedValue([
+      {
+        targetId: "obs-old",
+        createdAt: new Date("2026-09-01T16:00:00.000Z"),
+        metadata: {
+          schemaVersion: 1,
+          program: "cartagena-launch-operations-phase-25",
+          eventType: "STARTED",
+          minimumObservationDays: 7,
+          authorizationId: "auth-old",
+          baselineDecision: "GO",
+          reason: "Previous beta cycle",
+        },
+      },
+      {
+        targetId: "obs-old",
+        createdAt: new Date("2026-09-08T17:00:00.000Z"),
+        metadata: {
+          schemaVersion: 1,
+          program: "cartagena-launch-operations-phase-25",
+          eventType: "CLOSED",
+          reason: "Previous observation completed",
+        },
+      },
+    ]);
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.observation.state).toBe("CLOSED");
+    expect(snapshot.observation.belongsToCurrentAuthorization).toBe(false);
+    expect(snapshot.decision.effective).toBe("HOLD");
+    expect(snapshot.decision.blockers).toEqual(
+      expect.arrayContaining([
+        "ACTIVE_BETA_OBSERVATION_NOT_TRACKED",
+        "OBSERVATION_AUTHORIZATION_MISMATCH",
+      ]),
+    );
+  });
+
   it("classifies an active observation as eligible to close after seven days", async () => {
     prisma.auditLog.findMany.mockResolvedValue([
       {
@@ -115,6 +159,7 @@ describe("CartagenaLaunchOperationsService", () => {
           program: "cartagena-launch-operations-phase-25",
           eventType: "STARTED",
           minimumObservationDays: 7,
+          authorizationId: "auth-1",
           baselineDecision: "GO",
           reason: "Start controlled beta observation",
         },
@@ -125,6 +170,7 @@ describe("CartagenaLaunchOperationsService", () => {
 
     expect(observation.state).toBe("ELIGIBLE_TO_CLOSE");
     expect(observation.observationId).toBe("obs-1");
+    expect(observation.authorizationId).toBe("auth-1");
     expect(observation.daysElapsed).toBeGreaterThanOrEqual(7);
   });
 
@@ -167,7 +213,34 @@ describe("CartagenaLaunchOperationsService", () => {
     );
   });
 
-  it("writes observation start as append-only audit evidence only after live GO", async () => {
+  it("blocks observation start when activation or support cannot cover the seven-day window", async () => {
+    launchReadiness.getSnapshot.mockResolvedValue({
+      ...readiness,
+      runtime: { ...readiness.runtime, closedBetaEnabled: true },
+    });
+    activation.getStatus.mockResolvedValue({
+      state: "ACTIVE",
+      authorizationId: "auth-short",
+      authorizedAt: "2026-09-10T16:00:00.000Z",
+      expiresAt: "2026-09-17T16:00:00.000Z",
+      revokedAt: null,
+    });
+
+    await expect(
+      service.startObservation(
+        { reason: "Begin beta observation" },
+        { id: "admin-1", role: "ADMIN" },
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        error: "OBSERVATION_CONTROL_LEASE_TOO_SHORT",
+        minimumHoursRequired: 169,
+      }),
+    });
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("writes an authorization-bound observation start as append-only audit evidence", async () => {
     launchReadiness.getSnapshot.mockResolvedValue({
       ...readiness,
       runtime: { ...readiness.runtime, closedBetaEnabled: true },
@@ -183,6 +256,7 @@ describe("CartagenaLaunchOperationsService", () => {
             program: "cartagena-launch-operations-phase-25",
             eventType: "STARTED",
             minimumObservationDays: 7,
+            authorizationId: "auth-1",
             baselineDecision: "GO",
             reason: "Begin beta observation",
           },
@@ -199,7 +273,10 @@ describe("CartagenaLaunchOperationsService", () => {
         data: expect.objectContaining({
           action: AuditAction.CONFIG_CHANGED,
           targetType: "BETA_CARTAGENA_OBSERVATION",
-          metadata: expect.objectContaining({ eventType: "STARTED" }),
+          metadata: expect.objectContaining({
+            eventType: "STARTED",
+            authorizationId: "auth-1",
+          }),
         }),
       }),
     );
