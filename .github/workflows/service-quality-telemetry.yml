@@ -1,0 +1,45 @@
+name: Service Quality Telemetry
+
+on:
+  pull_request:
+    paths:
+      - 'backend/src/operations/**'
+      - 'backend/src/app.module.ts'
+      - 'backend/prisma/schema.prisma'
+      - 'dashboard/src/pages/ServiceQualityPage.tsx'
+      - 'dashboard/src/services/service-quality.service.ts'
+      - 'dashboard/src/App.tsx'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'scripts/verify-service-quality-telemetry.mjs'
+      - 'docs/production/PHASE_26_SERVICE_QUALITY_TELEMETRY.md'
+      - '.github/workflows/service-quality-telemetry.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/operations/**'
+      - 'backend/src/app.module.ts'
+      - 'backend/prisma/schema.prisma'
+      - 'dashboard/src/pages/ServiceQualityPage.tsx'
+      - 'dashboard/src/services/service-quality.service.ts'
+      - 'dashboard/src/App.tsx'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'scripts/verify-service-quality-telemetry.mjs'
+      - 'docs/production/PHASE_26_SERVICE_QUALITY_TELEMETRY.md'
+      - '.github/workflows/service-quality-telemetry.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Verify service quality telemetry contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+      - name: Enforce Phase 26 telemetry boundaries
+        run: node scripts/verify-service-quality-telemetry.mjs
