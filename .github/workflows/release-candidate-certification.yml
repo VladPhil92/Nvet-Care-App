@@ -8,6 +8,7 @@ on:
       - 'docs/production/RELEASE_BLOCKERS.json'
       - 'docs/production/RC_READINESS.json'
       - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
       - 'docs/production/PHASE_27_RELEASE_CANDIDATE_FREEZE.md'
       - 'scripts/verify-release-candidate-freeze.mjs'
       - 'scripts/verify-release-build-budgets.mjs'
@@ -19,6 +20,11 @@ on:
       - 'backend/src/**'
       - 'backend/prisma/**'
       - 'mobile/package.json'
+      - 'mobile/App.tsx'
+      - 'mobile/index.js'
+      - 'mobile/app.json'
+      - 'mobile/babel.config.js'
+      - 'mobile/metro.config.js'
       - 'mobile/src/**'
       - 'mobile/android/**'
       - 'mobile/ios/**'
@@ -31,6 +37,7 @@ on:
       - 'docs/production/RELEASE_BLOCKERS.json'
       - 'docs/production/RC_READINESS.json'
       - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
       - 'docs/production/PHASE_27_RELEASE_CANDIDATE_FREEZE.md'
       - 'scripts/verify-release-candidate-freeze.mjs'
       - 'scripts/verify-release-build-budgets.mjs'
@@ -42,6 +49,11 @@ on:
       - 'backend/src/**'
       - 'backend/prisma/**'
       - 'mobile/package.json'
+      - 'mobile/App.tsx'
+      - 'mobile/index.js'
+      - 'mobile/app.json'
+      - 'mobile/babel.config.js'
+      - 'mobile/metro.config.js'
       - 'mobile/src/**'
       - 'mobile/android/**'
       - 'mobile/ios/**'
@@ -216,6 +228,19 @@ jobs:
           test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
           ./android/gradlew --version
 
+      - name: Load frozen Android package identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(node -p "require('./docs/production/RELEASE_CANDIDATE_FREEZE.json').packageIdentity.androidVersionName")"
+          VERSION_CODE="$(node -p "require('./docs/production/RELEASE_CANDIDATE_FREEZE.json').packageIdentity.androidVersionCode")"
+          CANDIDATE="$(node -p "require('./docs/production/RELEASE_CANDIDATE_FREEZE.json').candidate")"
+          test "$VERSION_NAME" = "$CANDIDATE"
+          test "$VERSION_CODE" -gt 1
+          echo "NVET_ANDROID_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "NVET_ANDROID_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "Android RC identity: $VERSION_NAME ($VERSION_CODE)"
+
       - name: Build unsigned Android release candidate
         working-directory: mobile/android
         env:
@@ -229,7 +254,7 @@ jobs:
       - name: Upload unsigned RC bundle evidence
         uses: actions/upload-artifact@v7
         with:
-          name: phase27-android-release-unsigned-aab
+          name: phase27-android-release-unsigned-aab-${{ env.NVET_ANDROID_VERSION_NAME }}-${{ env.NVET_ANDROID_VERSION_CODE }}
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
