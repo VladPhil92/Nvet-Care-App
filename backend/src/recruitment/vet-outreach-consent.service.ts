@@ -93,8 +93,7 @@ export class VetOutreachConsentService {
         channel: dto.channel,
         source: dto.source,
         evidenceReference: dto.evidenceReference.trim(),
-        authorizationStatementVersion:
-          dto.authorizationStatementVersion.trim(),
+        authorizationStatementVersion: dto.authorizationStatementVersion.trim(),
         note: dto.note?.trim() || undefined,
       },
       actor,
@@ -318,13 +317,17 @@ export class VetOutreachConsentService {
       .filter((event): event is ConsentEvent => Boolean(event));
   }
 
-  private parseMetadata(value: Prisma.JsonValue | null): ConsentMetadata | null {
+  private parseMetadata(
+    value: Prisma.JsonValue | null,
+  ): ConsentMetadata | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return null;
     }
     const raw = value as Record<string, unknown>;
     if (raw.schemaVersion !== 1 || raw.program !== PROGRAM) return null;
-    if (!["CONSENT_GRANTED", "CONSENT_REVOKED"].includes(String(raw.eventType))) {
+    if (
+      !["CONSENT_GRANTED", "CONSENT_REVOKED"].includes(String(raw.eventType))
+    ) {
       return null;
     }
     return raw as unknown as ConsentMetadata;
