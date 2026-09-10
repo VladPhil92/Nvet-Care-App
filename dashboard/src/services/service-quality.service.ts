@@ -10,6 +10,12 @@ type LatencySummary = {
   maxMinutes: number | null
 }
 
+type CensoredLatencySummary = LatencySummary & {
+  censoredSampleSize: number
+  exactSampleSize: number
+  overdueWithoutEvent: number
+}
+
 export interface ServiceQualitySnapshot {
   phase: 26
   program: string
@@ -31,25 +37,42 @@ export interface ServiceQualitySnapshot {
     statusCounts: Record<string, number>
     confirmedEver: number
     completedEver: number
+    cancelledBeforeCompletion: number
+    terminalOutcomeCount: number
+    outcomeEvaluableCount: number
+    matureOutcomeCount: number
+    immatureOutcomeCount: number
     confirmationRatePct: number | null
     completionRatePct: number | null
     cancellationRatePct: number | null
     disputeRatePct: number | null
+    outcomeRatesExcludeImmatureAppointments: true
+    maturityGraceMinutes: number
   }
   latency: {
     vetResponseMinutes: LatencySummary
+    vetResponseSloMinutes: CensoredLatencySummary
+    bookingConfirmationMinutes: LatencySummary
+    serviceStartDelayMinutes: CensoredLatencySummary
     confirmedToStartMinutes: LatencySummary
     serviceDurationMinutes: LatencySummary
     semantics: {
       vetResponse: string
+      vetResponseMeasured: false
+      bookingConfirmation: string
+      bookingConfirmationMayBeFinanciallyTriggered: true
+      serviceStartDelay: string
       confirmedToStart: string
       serviceDuration: string
       assignmentLatencyMeasured: false
+      survivorBiasControlled: true
       reason: string
     }
   }
   payments: {
     transactions: number
+    resolvedTransactions: number
+    unresolvedTransactions: number
     transactionCoverageRatePct: number | null
     statusCounts: Record<string, number>
     methodCounts: Record<string, number>
@@ -57,6 +80,7 @@ export interface ServiceQualitySnapshot {
     liquidatedEver: number
     failureRatePct: number | null
     disputeRatePct: number | null
+    failureRateExcludesPendingAndVerifying: true
     verificationLatencyMinutes: LatencySummary
     settlementLatencyMinutes: LatencySummary
   }
@@ -68,6 +92,9 @@ export interface ServiceQualitySnapshot {
     measurementIntegrity: {
       historicalTransitionsAreDerivedOnlyFromPersistedTimestamps: true
       cancellationTimestampMayBeLegacyIncomplete: true
+      matureUnconfirmedResponseUsesElapsedLowerBound: false
+      missingConfirmationTimestampIsCoverageGapNotVetResponseFailure: true
+      matureMissingStartUsesElapsedLowerBound: true
       noSyntheticTimestamps: true
     }
   }
@@ -88,6 +115,7 @@ export interface ServiceQualitySnapshot {
     policySource: string
     targetsAreCustomerPromises: false
     automaticallyChangesLaunchDecision: false
+    insufficientMetricMakesOverallInsufficient: true
   }
   observationContext: {
     phase25Decision: 'GO' | 'HOLD' | 'PAUSE'
