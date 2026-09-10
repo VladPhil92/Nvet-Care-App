@@ -148,6 +148,7 @@ describe("VetActivationTelemetryService", () => {
           status: "ACTIVE",
           issuedAt: "2026-09-08T00:00:00.000Z",
           providerAcceptedAt: "2026-09-08T00:00:00.000Z",
+          expiresAt: "2026-09-11T00:00:00.000Z",
           claimedAt: null,
         },
       ],
@@ -162,6 +163,43 @@ describe("VetActivationTelemetryService", () => {
     expect(snapshot.leads[0].blockerAgeHours).toBe(60);
     expect(snapshot.leads[0].slaProgressRatio).toBeCloseTo(0.833, 3);
     expect(snapshot.funnel.invitationProviderAccepted).toBe(1);
+  });
+
+  it("starts the reissue SLA when the current invitation expires", async () => {
+    outreachConsent.getAdminSummary.mockResolvedValue({
+      permissions: [
+        {
+          leadId: "lead-1",
+          state: "ACTIVE",
+          contactAllowed: true,
+          grantedAt: "2026-09-06T00:00:00.000Z",
+          revokedAt: null,
+        },
+      ],
+    });
+    invitations.getAdminSummary.mockResolvedValue({
+      latestByLead: [
+        {
+          invitationId: "invite-expired",
+          leadId: "lead-1",
+          status: "EXPIRED",
+          issuedAt: "2026-09-07T10:00:00.000Z",
+          providerAcceptedAt: "2026-09-07T10:00:00.000Z",
+          expiresAt: "2026-09-10T10:00:00.000Z",
+          claimedAt: null,
+        },
+      ],
+    });
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.leads[0].currentBlocker).toBe(
+      "INVITATION_REISSUE_REQUIRED",
+    );
+    expect(snapshot.leads[0].blockerSince).toBe("2026-09-10T10:00:00.000Z");
+    expect(snapshot.leads[0].blockerAgeHours).toBe(2);
+    expect(snapshot.leads[0].blockerSlaHours).toBe(4);
+    expect(snapshot.leads[0].risk).toBe("ON_TRACK");
   });
 
   it("reports verified operational supply as complete with milestone evidence", async () => {
@@ -222,6 +260,45 @@ describe("VetActivationTelemetryService", () => {
     );
     expect(snapshot.totals.operationalReady).toBe(1);
     expect(snapshot.funnel.operationalReady).toBe(1);
+  });
+
+  it("starts profile-reactivation SLA from the profile suspension update", async () => {
+    setRecruitment({
+      ...baseLead,
+      stage: "INVITED",
+      linkedUserId: "vet-user-1",
+      conversionStage: "PROFILE_INACTIVE",
+      nextAction: "Reactivate profile",
+    });
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: "vet-user-1",
+        email: "ana@example.com",
+        emailVerified: true,
+        isActive: true,
+        role: UserRole.VET,
+        createdAt: new Date("2026-07-01T10:00:00.000Z"),
+        updatedAt: new Date("2026-09-10T06:00:00.000Z"),
+        vetProfile: {
+          id: "profile-1",
+          createdAt: new Date("2026-07-01T12:00:00.000Z"),
+          updatedAt: new Date("2026-09-10T06:00:00.000Z"),
+          verifiedAt: new Date("2026-07-03T12:00:00.000Z"),
+          verificationStatus: VerificationStatus.APPROVED,
+          isVerified: true,
+          isActive: false,
+          verificationDocuments: [],
+          professionalRegistryCheck: null,
+        },
+      },
+    ]);
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.leads[0].currentBlocker).toBe("PROFILE_INACTIVE");
+    expect(snapshot.leads[0].blockerSince).toBe("2026-09-10T06:00:00.000Z");
+    expect(snapshot.leads[0].blockerAgeHours).toBe(6);
+    expect(snapshot.leads[0].risk).toBe("ON_TRACK");
   });
 
   it("pauses lost leads instead of treating them as SLA failures", async () => {
