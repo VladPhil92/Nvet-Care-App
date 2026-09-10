@@ -19,6 +19,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
     { id: 'cohort', label: 'Cohorte Beta', icon: '◎' },
     { id: 'support', label: 'Soporte Beta', icon: '!' },
     { id: 'coverage', label: 'Cobertura', icon: '⌖' },
+    { id: 'recruitment', label: 'Captación VET', icon: '+' },
     { id: 'verification', label: 'Verificación VET', icon: '✓' },
     { id: 'tracking', label: 'Tracking', icon: '⊙' },
     { id: 'mobile', label: 'Mobile', icon: '📱' },
