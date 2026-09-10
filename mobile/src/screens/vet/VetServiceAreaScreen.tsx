@@ -83,7 +83,7 @@ export default function VetServiceAreaScreen({ profile }: Props) {
     [marketCode],
   )
 
-  const useCurrentLocation = async () => {
+  const handleCurrentLocation = async () => {
     setError(null)
     setNotice(null)
     setLocating(true)
@@ -232,7 +232,7 @@ export default function VetServiceAreaScreen({ profile }: Props) {
             />
 
             <Pressable
-              onPress={() => void useCurrentLocation()}
+              onPress={() => void handleCurrentLocation()}
               disabled={submitting || locating}
               style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed, (submitting || locating) && styles.disabled]}
               accessibilityRole="button"
