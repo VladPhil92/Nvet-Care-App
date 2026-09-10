@@ -1,0 +1,41 @@
+name: Vet Recruitment CRM
+
+on:
+  pull_request:
+    paths:
+      - 'backend/src/recruitment/**'
+      - 'backend/src/app.module.ts'
+      - 'dashboard/src/pages/VetRecruitmentPage.tsx'
+      - 'dashboard/src/services/vet-recruitment.service.ts'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'dashboard/src/App.tsx'
+      - 'docs/production/PHASE_20_VET_RECRUITMENT_CRM.md'
+      - 'scripts/verify-vet-recruitment-crm.mjs'
+      - '.github/workflows/vet-recruitment-crm.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/recruitment/**'
+      - 'backend/src/app.module.ts'
+      - 'dashboard/src/pages/VetRecruitmentPage.tsx'
+      - 'dashboard/src/services/vet-recruitment.service.ts'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'dashboard/src/App.tsx'
+      - 'docs/production/PHASE_20_VET_RECRUITMENT_CRM.md'
+      - 'scripts/verify-vet-recruitment-crm.mjs'
+      - '.github/workflows/vet-recruitment-crm.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify vet recruitment CRM contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+      - name: Enforce Phase 20 recruitment boundaries
+        run: node scripts/verify-vet-recruitment-crm.mjs
