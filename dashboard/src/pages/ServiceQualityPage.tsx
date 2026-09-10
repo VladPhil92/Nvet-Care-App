@@ -15,12 +15,12 @@ function statusColor(state: OverallSloState | SloMetricState) {
   return T.pending
 }
 
-function value(value: number | null, suffix = '') {
-  return value == null ? '—' : `${value}${suffix}`
+function value(input: number | null, suffix = '') {
+  return input == null ? '—' : `${input}${suffix}`
 }
 
-function minutes(valueMinutes: number | null) {
-  return valueMinutes == null ? '—' : `${valueMinutes} min`
+function minutes(input: number | null) {
+  return input == null ? '—' : `${input} min`
 }
 
 export default function ServiceQualityPage() {
@@ -101,10 +101,10 @@ export default function ServiceQualityPage() {
             >
               Calidad Beta Cartagena
             </h1>
-            <p style={{ margin: 0, color: T.inkMuted, maxWidth: 780, lineHeight: 1.6 }}>
-              Telemetría agregada derivada de timestamps persistidos de citas y transacciones.
-              Estos SLO son objetivos internos de operación: no autorizan lanzamiento comercial ni
-              modifican el runtime.
+            <p style={{ margin: 0, color: T.inkMuted, maxWidth: 800, lineHeight: 1.6 }}>
+              Telemetría agregada derivada de eventos persistidos de citas y transacciones. Los SLO
+              son objetivos internos de operación: no autorizan lanzamiento comercial ni modifican
+              el runtime.
             </p>
           </div>
           <label style={{ display: 'grid', gap: 5, color: T.inkSec, fontSize: 12 }}>
@@ -159,19 +159,25 @@ export default function ServiceQualityPage() {
             </strong>
           </div>
           <div style={card}>
-            <div style={{ color: T.inkMuted, fontSize: 12 }}>Finalización</div>
+            <div style={{ color: T.inkMuted, fontSize: 12 }}>Cohorte madura</div>
+            <strong style={{ display: 'block', marginTop: 6, fontSize: 28, color: T.ink }}>
+              {snapshot?.appointments.matureOutcomeCount ?? 0}
+            </strong>
+          </div>
+          <div style={card}>
+            <div style={{ color: T.inkMuted, fontSize: 12 }}>Finalización madura</div>
             <strong style={{ display: 'block', marginTop: 6, fontSize: 28, color: T.ink }}>
               {value(snapshot?.appointments.completionRatePct ?? null, '%')}
             </strong>
           </div>
           <div style={card}>
-            <div style={{ color: T.inkMuted, fontSize: 12 }}>Respuesta VET p95</div>
+            <div style={{ color: T.inkMuted, fontSize: 12 }}>Demora inicio p95</div>
             <strong style={{ display: 'block', marginTop: 6, fontSize: 28, color: T.ink }}>
-              {minutes(snapshot?.latency.vetResponseMinutes.p95Minutes ?? null)}
+              {minutes(snapshot?.latency.serviceStartDelayMinutes.p95Minutes ?? null)}
             </strong>
           </div>
           <div style={card}>
-            <div style={{ color: T.inkMuted, fontSize: 12 }}>Fallo de pago</div>
+            <div style={{ color: T.inkMuted, fontSize: 12 }}>Fallo de pago resuelto</div>
             <strong style={{ display: 'block', marginTop: 6, fontSize: 28, color: T.ink }}>
               {value(snapshot?.payments.failureRatePct ?? null, '%')}
             </strong>
@@ -191,6 +197,7 @@ export default function ServiceQualityPage() {
               <h2 style={{ margin: 0, color: T.ink, fontSize: 20 }}>Objetivos internos SLO</h2>
               <div style={{ marginTop: 4, color: T.inkMuted, fontSize: 12 }}>
                 Muestra mínima: {snapshot?.slo.minimumSampleSize ?? 10} observaciones por métrica.
+                Una métrica sin muestra suficiente impide declarar HEALTHY.
               </div>
             </div>
             <strong style={{ color: statusColor(snapshot?.slo.overall ?? 'INSUFFICIENT_DATA') }}>
@@ -242,33 +249,36 @@ export default function ServiceQualityPage() {
         >
           <div style={{ ...card, display: 'grid', gap: 12 }}>
             <h2 style={{ margin: 0, color: T.ink, fontSize: 20 }}>Ciclo de la cita</h2>
-            <div style={{ color: T.inkSec, lineHeight: 1.7, fontSize: 13 }}>
-              Confirmación: <strong>{value(snapshot?.appointments.confirmationRatePct ?? null, '%')}</strong>
+            <div style={{ color: T.inkSec, lineHeight: 1.8, fontSize: 13 }}>
+              Confirmación de reserva:{' '}
+              <strong>{value(snapshot?.appointments.confirmationRatePct ?? null, '%')}</strong>
               <br />
-              Finalización: <strong>{value(snapshot?.appointments.completionRatePct ?? null, '%')}</strong>
+              Finalización madura:{' '}
+              <strong>{value(snapshot?.appointments.completionRatePct ?? null, '%')}</strong>
               <br />
-              Cancelación: <strong>{value(snapshot?.appointments.cancellationRatePct ?? null, '%')}</strong>
+              Cancelación madura:{' '}
+              <strong>{value(snapshot?.appointments.cancellationRatePct ?? null, '%')}</strong>
               <br />
-              Disputa: <strong>{value(snapshot?.appointments.disputeRatePct ?? null, '%')}</strong>
+              Disputa madura:{' '}
+              <strong>{value(snapshot?.appointments.disputeRatePct ?? null, '%')}</strong>
+              <br />
+              Pendientes de madurar:{' '}
+              <strong>{snapshot?.appointments.immatureOutcomeCount ?? 0}</strong>
             </div>
             <div style={{ color: T.inkMuted, fontSize: 12, lineHeight: 1.6 }}>
-              PENDING {snapshot?.appointments.statusCounts.PENDING ?? 0} · CONFIRMED{' '}
-              {snapshot?.appointments.statusCounts.CONFIRMED ?? 0} · IN_PROGRESS{' '}
-              {snapshot?.appointments.statusCounts.IN_PROGRESS ?? 0} · COMPLETED{' '}
-              {snapshot?.appointments.statusCounts.COMPLETED ?? 0} · CANCELLED{' '}
-              {snapshot?.appointments.statusCounts.CANCELLED ?? 0} · DISPUTED{' '}
-              {snapshot?.appointments.statusCounts.DISPUTED ?? 0}
+              Las tasas de outcome excluyen citas futuras hasta que alcance su horario de servicio
+              más {snapshot?.appointments.maturityGraceMinutes ?? 180} minutos de gracia.
             </div>
           </div>
 
           <div style={{ ...card, display: 'grid', gap: 12 }}>
             <h2 style={{ margin: 0, color: T.ink, fontSize: 20 }}>Latencias</h2>
             <div style={{ color: T.inkSec, lineHeight: 1.8, fontSize: 13 }}>
-              Respuesta VET mediana:{' '}
-              <strong>{minutes(snapshot?.latency.vetResponseMinutes.medianMinutes ?? null)}</strong>
+              Confirmación de reserva p95:{' '}
+              <strong>{minutes(snapshot?.latency.bookingConfirmationMinutes.p95Minutes ?? null)}</strong>
               <br />
-              Respuesta VET p95:{' '}
-              <strong>{minutes(snapshot?.latency.vetResponseMinutes.p95Minutes ?? null)}</strong>
+              Demora de inicio p95:{' '}
+              <strong>{minutes(snapshot?.latency.serviceStartDelayMinutes.p95Minutes ?? null)}</strong>
               <br />
               Confirmación → inicio p95:{' '}
               <strong>{minutes(snapshot?.latency.confirmedToStartMinutes.p95Minutes ?? null)}</strong>
@@ -276,8 +286,9 @@ export default function ServiceQualityPage() {
               Duración servicio p95:{' '}
               <strong>{minutes(snapshot?.latency.serviceDurationMinutes.p95Minutes ?? null)}</strong>
             </div>
-            <div style={{ color: T.inkMuted, fontSize: 12, lineHeight: 1.5 }}>
-              No se fabrica una latencia de asignación: la cita ya contiene `vetId` al crearse.
+            <div style={{ color: T.inkMuted, fontSize: 12, lineHeight: 1.6 }}>
+              Respuesta VET no medida: no existe todavía un evento durable exclusivo del veterinario.
+              `confirmedAt` puede originarse en confirmación financiera y no se usa como respuesta VET.
             </div>
           </div>
 
@@ -285,6 +296,10 @@ export default function ServiceQualityPage() {
             <h2 style={{ margin: 0, color: T.ink, fontSize: 20 }}>Pagos</h2>
             <div style={{ color: T.inkSec, lineHeight: 1.8, fontSize: 13 }}>
               Transacciones: <strong>{snapshot?.payments.transactions ?? 0}</strong>
+              <br />
+              Resueltas: <strong>{snapshot?.payments.resolvedTransactions ?? 0}</strong>
+              <br />
+              Pendientes/verificando: <strong>{snapshot?.payments.unresolvedTransactions ?? 0}</strong>
               <br />
               Cobertura transaccional:{' '}
               <strong>{value(snapshot?.payments.transactionCoverageRatePct ?? null, '%')}</strong>
@@ -299,24 +314,33 @@ export default function ServiceQualityPage() {
               Liquidación p95:{' '}
               <strong>{minutes(snapshot?.payments.settlementLatencyMinutes.p95Minutes ?? null)}</strong>
             </div>
+            <div style={{ color: T.inkMuted, fontSize: 12, lineHeight: 1.6 }}>
+              PENDING y VERIFYING no cuentan como éxito ni como fallo hasta resolverse.
+            </div>
           </div>
         </section>
 
         <section style={{ ...card, display: 'grid', gap: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
             <h2 style={{ margin: 0, color: T.ink, fontSize: 20 }}>Integridad de medición</h2>
             <strong
               style={{
-                color:
-                  (snapshot?.dataQuality.appointmentsWithIssues ?? 0) > 0 ? T.warn : T.ok,
+                color: (snapshot?.dataQuality.appointmentsWithIssues ?? 0) > 0 ? T.warn : T.ok,
               }}
             >
               {snapshot?.dataQuality.appointmentsWithIssues ?? 0} citas con inconsistencias
             </strong>
           </div>
           <div style={{ color: T.inkMuted, lineHeight: 1.6, fontSize: 12 }}>
-            La telemetría solo usa timestamps realmente persistidos. No reconstruye timestamps históricos
-            ausentes. Citas con mercado no resoluble en la ventana:{' '}
+            La telemetría solo usa timestamps realmente persistidos. No reconstruye eventos ausentes.
+            Citas con mercado no resoluble en la ventana:{' '}
             {snapshot?.dataQuality.unresolvedMarketAppointmentsInWindow ?? 0}.
           </div>
           <div style={{ fontFamily: F.mono, color: T.inkSec, fontSize: 11, lineHeight: 1.7 }}>
