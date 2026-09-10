@@ -91,6 +91,7 @@ export default function VetServiceAreaScreen({ profile }: Props) {
       const permitted = await requestAndroidLocationPermission()
       if (!permitted) {
         setError('No se otorgó permiso de ubicación. Puedes registrar las coordenadas manualmente.')
+        setLocating(false)
         return
       }
 
