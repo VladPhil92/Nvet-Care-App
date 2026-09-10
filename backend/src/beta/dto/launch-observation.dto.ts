@@ -1,4 +1,4 @@
-import { IsString, Length, MaxLength } from "class-validator";
+import { IsString, Length } from "class-validator";
 
 export class StartLaunchObservationDto {
   @IsString()
@@ -18,6 +18,6 @@ export class AbortLaunchObservationDto {
   reason: string;
 
   @IsString()
-  @MaxLength(120)
+  @Length(1, 120)
   incidentReference: string;
 }
