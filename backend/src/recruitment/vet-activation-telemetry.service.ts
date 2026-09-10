@@ -63,7 +63,7 @@ type RecruitmentLead = RecruitmentSnapshot["leads"][number];
 type InvitationSummary = Awaited<
   ReturnType<VetInvitationService["getAdminSummary"]>
 >;
-type InvitationRecord = InvitationSummary["records"][number];
+type InvitationRecord = InvitationSummary["latestByLead"][number];
 type ConsentSummary = Awaited<
   ReturnType<VetOutreachConsentService["getAdminSummary"]>
 >;
@@ -141,12 +141,6 @@ export class VetActivationTelemetryService {
     const consentByLead = new Map(
       consents.permissions.map((permission) => [permission.leadId, permission]),
     );
-    const invitationHistory = new Map<string, InvitationRecord[]>();
-    for (const invitation of invitations.records) {
-      const history = invitationHistory.get(invitation.leadId) ?? [];
-      history.push(invitation);
-      invitationHistory.set(invitation.leadId, history);
-    }
     const latestInvitationByLead = new Map(
       invitations.latestByLead.map((invitation) => [invitation.leadId, invitation]),
     );
@@ -158,14 +152,12 @@ export class VetActivationTelemetryService {
         lead,
         user: usersByEmail.get(lead.email) ?? null,
         consent: consentByLead.get(lead.leadId) ?? null,
-        invitationHistory: invitationHistory.get(lead.leadId) ?? [],
         latestInvitation: latestInvitationByLead.get(lead.leadId) ?? null,
         now,
         sla,
       }),
     );
 
-    const bottlenecks = this.buildBottlenecks(leads);
     const markets = recruitment.markets.map((market) => {
       const marketLeads = leads.filter(
         (lead) => lead.marketDaneCode === market.daneCode,
@@ -179,22 +171,20 @@ export class VetActivationTelemetryService {
         atRisk: marketLeads.filter((lead) => lead.risk === "AT_RISK").length,
         breached: marketLeads.filter((lead) => lead.risk === "BREACHED").length,
         critical: marketLeads.filter((lead) => lead.risk === "CRITICAL").length,
-        medianLeadToOperationalEvidenceHours:
-          this.median(activationDurations),
+        medianLeadToOperationalEvidenceHours: this.median(activationDurations),
       } as const;
     });
 
     const operationalDurations = leads
       .map((lead) => lead.durationsHours.leadToOperationalEvidence)
       .filter((value): value is number => value !== null);
-    const actionable = leads.filter(
-      (lead) => !["COMPLETE", "PAUSED"].includes(lead.risk),
-    );
-    const priorityQueue = [...actionable].sort((a, b) => {
-      const riskDelta = this.riskWeight(b.risk) - this.riskWeight(a.risk);
-      if (riskDelta !== 0) return riskDelta;
-      return b.blockerAgeHours - a.blockerAgeHours;
-    });
+    const priorityQueue = leads
+      .filter((lead) => !["COMPLETE", "PAUSED"].includes(lead.risk))
+      .sort((a, b) => {
+        const riskDelta = this.riskWeight(b.risk) - this.riskWeight(a.risk);
+        if (riskDelta !== 0) return riskDelta;
+        return b.blockerAgeHours - a.blockerAgeHours;
+      });
 
     return {
       phase: 23,
@@ -218,8 +208,7 @@ export class VetActivationTelemetryService {
         breached: leads.filter((lead) => lead.risk === "BREACHED").length,
         critical: leads.filter((lead) => lead.risk === "CRITICAL").length,
         paused: leads.filter((lead) => lead.risk === "PAUSED").length,
-        medianLeadToOperationalEvidenceHours:
-          this.median(operationalDurations),
+        medianLeadToOperationalEvidenceHours: this.median(operationalDurations),
       },
       funnel: {
         leadCreated: leads.length,
@@ -248,12 +237,12 @@ export class VetActivationTelemetryService {
         operationalReady: leads.filter((lead) => lead.risk === "COMPLETE")
           .length,
       },
-      bottlenecks,
+      bottlenecks: this.buildBottlenecks(leads),
       markets,
       priorityQueue,
       leads,
       evidenceNotes: [
-        "Invitation, consent, account, profile, document, registry and verification timestamps are derived from durable application records.",
+        "Consent, current invitation cycle, account, profile, document, registry and verification timestamps are derived from durable application records.",
         "Operational readiness is a current-state assertion. operationalEvidenceAt is a lower-bound evidence timestamp built from durable prerequisites, not a guaranteed historical first-ready timestamp.",
         "SLA metrics are operational management signals only; they do not relax veterinarian verification, coverage or financial controls.",
       ],
@@ -265,35 +254,11 @@ export class VetActivationTelemetryService {
     lead: RecruitmentLead;
     user: TelemetryUser | null;
     consent: ConsentStatus | null;
-    invitationHistory: InvitationRecord[];
     latestInvitation: InvitationRecord | null;
     now: Date;
     sla: SlaConfig;
   }) {
-    const {
-      lead,
-      user,
-      consent,
-      invitationHistory,
-      latestInvitation,
-      now,
-      sla,
-    } = params;
-    const firstAcceptedInvitation = [...invitationHistory]
-      .filter((invitation) => invitation.providerAcceptedAt)
-      .sort(
-        (a, b) =>
-          Date.parse(a.providerAcceptedAt!) - Date.parse(b.providerAcceptedAt!),
-      )[0];
-    const firstClaimedInvitation = [...invitationHistory]
-      .filter((invitation) => invitation.claimedAt)
-      .sort(
-        (a, b) => Date.parse(a.claimedAt!) - Date.parse(b.claimedAt!),
-      )[0];
-    const firstIssuedInvitation = [...invitationHistory].sort(
-      (a, b) => Date.parse(a.issuedAt) - Date.parse(b.issuedAt),
-    )[0];
-
+    const { lead, user, consent, latestInvitation, now, sla } = params;
     const documentsApprovedAt = this.getDocumentsApprovedAt(user);
     const registryVerifiedAt = this.getRegistryVerifiedAt(user);
     const verificationApprovedAt = this.getVerificationApprovedAt(user);
@@ -311,10 +276,10 @@ export class VetActivationTelemetryService {
       leadCreatedAt: lead.createdAt,
       permissionGrantedAt: consent?.grantedAt ?? null,
       permissionRevokedAt: consent?.revokedAt ?? null,
-      invitationIssuedAt: firstIssuedInvitation?.issuedAt ?? null,
+      invitationIssuedAt: latestInvitation?.issuedAt ?? null,
       invitationProviderAcceptedAt:
-        firstAcceptedInvitation?.providerAcceptedAt ?? null,
-      invitationClaimedAt: firstClaimedInvitation?.claimedAt ?? null,
+        latestInvitation?.providerAcceptedAt ?? null,
+      invitationClaimedAt: latestInvitation?.claimedAt ?? null,
       accountCreatedAt: user?.createdAt.toISOString() ?? null,
       profileCreatedAt: user?.vetProfile?.createdAt.toISOString() ?? null,
       documentsApprovedAt,
@@ -328,7 +293,6 @@ export class VetActivationTelemetryService {
       consent,
       latestInvitation,
       user,
-      milestones,
     });
     const blockerSince = this.resolveBlockerSince(blocker, milestones, user);
     const blockerAgeHours = blockerSince
@@ -407,7 +371,6 @@ export class VetActivationTelemetryService {
     consent: ConsentStatus | null;
     latestInvitation: InvitationRecord | null;
     user: TelemetryUser | null;
-    milestones: Milestones;
   }): VetActivationBlocker | null {
     const { lead, consent, latestInvitation, user } = params;
     if (lead.conflicted) return "DATA_CONFLICT";
@@ -711,7 +674,9 @@ export class VetActivationTelemetryService {
       .map((value) => (value instanceof Date ? value : new Date(value)))
       .filter((value) => Number.isFinite(value.getTime()));
     if (timestamps.length === 0) return null;
-    return new Date(Math.max(...timestamps.map((value) => value.getTime()))).toISOString();
+    return new Date(
+      Math.max(...timestamps.map((value) => value.getTime())),
+    ).toISOString();
   }
 
   private median(values: number[]): number | null {
