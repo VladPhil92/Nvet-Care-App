@@ -70,8 +70,10 @@ A support lease requires:
 1. a stable accountable **owner role** rather than a secret or credential;
 2. an official **channel reference** used for escalation;
 3. explicit confirmation that the route is monitored during the lease;
-4. a lease duration between 1 and 168 hours;
+4. a lease duration between 1 and 192 hours;
 5. append-only CONFIGURED / REVOKED events in `audit_logs`.
+
+The eight-day ceiling exists so Phase 25 can require at least 169 hours remaining when the seven-day observation starts. The lease remains bounded, non-renewing and operator-controlled.
 
 If the lease expires, is revoked or becomes conflicted, `support.configured=false`; activation eligibility drifts and new bookings fail closed even when an older activation authorization still exists.
 
@@ -153,23 +155,25 @@ The application can record and evaluate a reference, but it cannot manufacture t
 
 Do not mark an evidence item `APPROVED` unless the referenced event actually occurred and the reviewer inspected sufficient evidence.
 
-## 10. Activation sequence
+## 10. Activation and Phase 25 observation sequence
 
 Only after `GET /api/beta/readiness` reports `activation.state=ready-to-enable` and `activation.operatorActivationEligible=true`:
 
 1. review `GET /api/beta/evidence/summary` and confirm all ten gates are `VERIFIED` with zero conflicts;
-2. confirm `GET /api/beta/support` reports an ACTIVE lease that spans the intended operational window;
-3. record the exact production revision and operator/approver;
-4. confirm there is no active P0/P1 incident or stop condition;
-5. set `NVET_CLOSED_BETA_ENABLED=true` using the canonical provider configuration;
-6. keep `NVET_BOOKING_ENABLED=true` only if there is no stop condition;
-7. verify readiness reports `active` and the configured cohort can complete the intended booking path;
-8. start the seven-day observation window defined in the readiness policy;
-9. renew support coverage before expiry or stop new bookings;
-10. use `NVET_BOOKING_ENABLED=false` immediately if a stop condition is met.
+2. configure `GET /api/beta/support` so the ACTIVE lease has at least 169 hours remaining before observation begins;
+3. issue an activation authorization of up to 192 hours and ensure at least 169 hours remain before observation begins;
+4. record the exact production revision and operator/approver;
+5. confirm there is no active P0/P1 incident or stop condition;
+6. set `NVET_CLOSED_BETA_ENABLED=true` using the canonical provider configuration;
+7. keep `NVET_BOOKING_ENABLED=true` only if there is no stop condition;
+8. verify readiness reports `active` and the configured cohort can complete the intended booking path;
+9. verify `GET /api/beta/launch-operations` reports Phase 24 `GO` and then call `POST /api/beta/launch-operations/observation/start`;
+10. monitor Phase 25 expiry watch, support, booking health and incidents throughout the seven-day observation;
+11. use `NVET_BOOKING_ENABLED=false` immediately if a stop condition is met and record an observation abort with an incident reference;
+12. after seven full days, close the observation only while Phase 24 remains `GO` and the same activation authorization remains active.
 
 If enabling the beta produces `misconfigured`, disable the beta gate or correct the blockers before allowing bookings.
 
 ## 11. Launch authority
 
-The beta remains **NO LANZADA** until the live evidence control plane verifies every required gate, local readiness passes, support coverage is active, and an authorized operator deliberately activates the provider-side beta configuration. Repository merge, CI success, support configuration and evidence approval alone never activate commercial access.
+The beta remains **NO LANZADA** until the live evidence control plane verifies every required gate, local readiness passes, support coverage is active, and an authorized operator deliberately activates the provider-side beta configuration. Repository merge, CI success, support configuration, observation-window completion and evidence approval alone never activate commercial access.

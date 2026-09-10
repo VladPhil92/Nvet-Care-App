@@ -20,6 +20,7 @@ import {
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import { BetaReadinessService } from "./beta-readiness.service";
 import { BetaSupportService } from "./beta-support.service";
+import { CartagenaLaunchOperationsService } from "./cartagena-launch-operations.service";
 import { CartagenaLaunchReadinessService } from "./cartagena-launch-readiness.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 import { AcceptBetaLegalDto } from "./dto/accept-beta-legal.dto";
@@ -39,6 +40,11 @@ import {
   ConfigureBetaSupportDto,
   RevokeBetaSupportDto,
 } from "./dto/beta-support.dto";
+import {
+  AbortLaunchObservationDto,
+  CloseLaunchObservationDto,
+  StartLaunchObservationDto,
+} from "./dto/launch-observation.dto";
 
 @Controller("beta")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -52,6 +58,7 @@ export class BetaController {
     private readonly cohort: BetaCohortService,
     private readonly support: BetaSupportService,
     private readonly launchReadiness: CartagenaLaunchReadinessService,
+    private readonly launchOperations: CartagenaLaunchOperationsService,
   ) {}
 
   @Get("policy")
@@ -82,6 +89,48 @@ export class BetaController {
   @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   getLaunchReadiness() {
     return this.launchReadiness.getSnapshot();
+  }
+
+  @Get("launch-operations")
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  getLaunchOperations() {
+    return this.launchOperations.getSnapshot();
+  }
+
+  @Post("launch-operations/observation/start")
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  startLaunchObservation(
+    @Request() req,
+    @Body() dto: StartLaunchObservationDto,
+  ) {
+    return this.launchOperations.startObservation(
+      dto,
+      this.getEvidenceActor(req),
+    );
+  }
+
+  @Post("launch-operations/observation/close")
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  closeLaunchObservation(
+    @Request() req,
+    @Body() dto: CloseLaunchObservationDto,
+  ) {
+    return this.launchOperations.closeObservation(
+      dto,
+      this.getEvidenceActor(req),
+    );
+  }
+
+  @Post("launch-operations/observation/abort")
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  abortLaunchObservation(
+    @Request() req,
+    @Body() dto: AbortLaunchObservationDto,
+  ) {
+    return this.launchOperations.abortObservation(
+      dto,
+      this.getEvidenceActor(req),
+    );
   }
 
   @Get("cohort/me")

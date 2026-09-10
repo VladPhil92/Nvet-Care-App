@@ -96,8 +96,14 @@ if (manifest.policy?.supportConfigurationSource !== 'admin-control-plane') {
 if (manifest.policy?.legacyEnvSupportConfigurationAccepted !== false) {
   fail('Legacy support environment configuration must remain disabled.');
 }
-if (manifest.policy?.supportLeaseMaxHours !== 168) {
-  fail('Support coverage lease must remain capped at 168 hours.');
+if (manifest.policy?.supportLeaseMaxHours !== 192) {
+  fail('Support coverage lease must remain capped at 192 hours.');
+}
+if (manifest.policy?.authorizationLeaseMaxHours !== 192) {
+  fail('Beta activation authorization must remain capped at 192 hours.');
+}
+if (manifest.policy?.observationWindowDays !== 7) {
+  fail('Cartagena beta observation must remain seven days.');
 }
 if (manifest.policy?.supportMonitoringConfirmationRequired !== true) {
   fail('Support coverage must require explicit monitoring confirmation.');

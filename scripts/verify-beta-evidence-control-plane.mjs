@@ -221,8 +221,8 @@ if (manifest.policy?.authorizationLedger !== 'audit_logs') {
 if (manifest.policy?.authorizationLedgerAppendOnly !== true) {
   fail('Manifest must require append-only activation authorization.')
 }
-if (manifest.policy?.authorizationLeaseMaxHours !== 168) {
-  fail('Activation authorization lease must be capped at 168 hours.')
+if (manifest.policy?.authorizationLeaseMaxHours !== 192) {
+  fail('Activation authorization lease must be capped at 192 hours.')
 }
 if (manifest.policy?.productionEvidenceRequiredForActivation !== true) {
   fail('Production evidence must be required for activation.')

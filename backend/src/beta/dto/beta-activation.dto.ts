@@ -11,7 +11,7 @@ export class AuthorizeBetaActivationDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(168)
+  @Max(192)
   durationHours?: number;
 
   @IsOptional()
