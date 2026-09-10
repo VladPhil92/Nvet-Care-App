@@ -5,10 +5,13 @@ on:
     paths:
       - 'backend/src/beta/**'
       - 'dashboard/src/pages/LaunchOperationsPage.tsx'
+      - 'dashboard/src/pages/BetaSupportPage.tsx'
+      - 'dashboard/src/pages/BetaEvidencePage.tsx'
       - 'dashboard/src/services/launch-operations.service.ts'
       - 'dashboard/src/App.tsx'
       - 'dashboard/src/components/Sidebar.tsx'
       - 'scripts/verify-cartagena-launch-operations.mjs'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
       - 'docs/production/PHASE_25_CARTAGENA_LAUNCH_OPERATIONS.md'
       - '.github/workflows/cartagena-launch-operations.yml'
   push:
@@ -16,10 +19,13 @@ on:
     paths:
       - 'backend/src/beta/**'
       - 'dashboard/src/pages/LaunchOperationsPage.tsx'
+      - 'dashboard/src/pages/BetaSupportPage.tsx'
+      - 'dashboard/src/pages/BetaEvidencePage.tsx'
       - 'dashboard/src/services/launch-operations.service.ts'
       - 'dashboard/src/App.tsx'
       - 'dashboard/src/components/Sidebar.tsx'
       - 'scripts/verify-cartagena-launch-operations.mjs'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
       - 'docs/production/PHASE_25_CARTAGENA_LAUNCH_OPERATIONS.md'
       - '.github/workflows/cartagena-launch-operations.yml'
 
