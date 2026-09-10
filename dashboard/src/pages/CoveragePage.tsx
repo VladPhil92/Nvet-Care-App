@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import coverageService, {
   CoverageReadinessSnapshot,
+  MarketLaunchPolicySnapshot,
 } from '../services/coverage.service'
 import { getErrorMessage } from '../services/api'
 import { F, T } from '../theme/tokens'
 
 export default function CoveragePage() {
   const [snapshot, setSnapshot] = useState<CoverageReadinessSnapshot | null>(null)
+  const [policy, setPolicy] = useState<MarketLaunchPolicySnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -14,7 +16,12 @@ export default function CoveragePage() {
     setLoading(true)
     setError(null)
     try {
-      setSnapshot(await coverageService.getReadiness())
+      const [nextSnapshot, nextPolicy] = await Promise.all([
+        coverageService.getReadiness(),
+        coverageService.getLaunchPolicy(),
+      ])
+      setSnapshot(nextSnapshot)
+      setPolicy(nextPolicy)
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -25,6 +32,11 @@ export default function CoveragePage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const policyByDane = useMemo(
+    () => new Map(policy?.markets.map((market) => [market.daneCode, market]) ?? []),
+    [policy],
+  )
 
   return (
     <main
@@ -57,14 +69,15 @@ export default function CoveragePage() {
                 textTransform: 'uppercase',
               }}
             >
-              Phase 14 · Colombia Service Coverage
+              Phase 15 · Market Launch Guard
             </div>
             <h1 style={{ fontFamily: F.serif, margin: '7px 0 8px', fontSize: 34 }}>
-              Cobertura nacional
+              Cobertura y expansión nacional
             </h1>
-            <p style={{ margin: 0, maxWidth: 760, color: T.inkMuted, lineHeight: 1.6 }}>
-              Cartagena continúa como mercado inicial. Las demás ciudades permanecen en
-              pre-lanzamiento hasta cerrar cobertura veterinaria y controles operativos.
+            <p style={{ margin: 0, maxWidth: 780, color: T.inkMuted, lineHeight: 1.6 }}>
+              Cartagena continúa como mercado inicial. Una ciudad futura necesita intención del
+              proveedor, apertura deliberada de expansión nacional y cobertura veterinaria mínima
+              antes de que el backend permita reservas.
             </p>
           </div>
           <button
@@ -101,7 +114,7 @@ export default function CoveragePage() {
           </div>
         )}
 
-        {snapshot && (
+        {snapshot && policy && (
           <>
             <section
               style={{
@@ -112,24 +125,24 @@ export default function CoveragePage() {
               }}
             >
               <SummaryCard
-                label="Mercados activos"
+                label="Mercados solicitados"
                 value={String(snapshot.activeMarketDaneCodes.length)}
-                detail="Controlados por configuración del proveedor"
+                detail="Intención configurada en proveedor"
+              />
+              <SummaryCard
+                label="Launch guard"
+                value={policy.guardEnabled ? 'ACTIVO' : 'DESACTIVADO'}
+                detail="Bloquea activaciones incompletas"
+              />
+              <SummaryCard
+                label="Expansión nacional"
+                value={policy.nationalExpansionEnabled ? 'ABIERTA' : 'BLOQUEADA'}
+                detail="Cartagena no depende de este interruptor"
               />
               <SummaryCard
                 label="Mínimo por mercado"
-                value={String(snapshot.minimumGeoReadyVetsPerMarket)}
-                detail="Veterinarios verificados y geo-ready"
-              />
-              <SummaryCard
-                label="Geo-enforcement"
-                value={snapshot.bookingGeoEnforcement ? 'ACTIVO' : 'DESACTIVADO'}
-                detail="Mercado + radio del veterinario"
-              />
-              <SummaryCard
-                label="Mercados activos listos"
-                value={snapshot.allActiveMarketsReady ? 'SÍ' : 'NO'}
-                detail="Estado de cobertura técnica actual"
+                value={String(policy.minimumGeoReadyVetsPerMarket)}
+                detail="Vets verificados, activos y geo-ready"
               />
             </section>
 
@@ -144,7 +157,8 @@ export default function CoveragePage() {
               <div style={{ padding: '18px 20px', borderBottom: `1px solid ${T.line}` }}>
                 <strong>Mercados preparados para expansión</strong>
                 <div style={{ color: T.inkMuted, fontSize: 13, marginTop: 4 }}>
-                  Tener una ciudad configurada no autoriza su lanzamiento comercial.
+                  BOOKING_GATE_ELIGIBLE significa únicamente que superó este gate técnico; no
+                  autoriza por sí solo un lanzamiento comercial.
                 </div>
               </div>
 
@@ -153,7 +167,7 @@ export default function CoveragePage() {
                   style={{
                     width: '100%',
                     borderCollapse: 'collapse',
-                    minWidth: 820,
+                    minWidth: 1040,
                     fontSize: 14,
                   }}
                 >
@@ -163,11 +177,11 @@ export default function CoveragePage() {
                         'Ciudad',
                         'Departamento',
                         'DANE',
-                        'Estado',
-                        'Vets verificados',
+                        'Proveedor',
                         'Geo-ready',
                         'Mínimo',
-                        'Cobertura',
+                        'Expansión',
+                        'Launch guard',
                       ].map((label) => (
                         <th key={label} style={{ padding: '12px 14px', color: T.inkSec }}>
                           {label}
@@ -176,30 +190,37 @@ export default function CoveragePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {snapshot.markets.map((market) => (
-                      <tr key={market.daneCode} style={{ borderTop: `1px solid ${T.line}` }}>
-                        <td style={{ padding: '13px 14px', fontWeight: 750 }}>{market.city}</td>
-                        <td style={{ padding: '13px 14px', color: T.inkMuted }}>
-                          {market.department}
-                        </td>
-                        <td style={{ padding: '13px 14px', fontFamily: F.mono }}>
-                          {market.daneCode}
-                        </td>
-                        <td style={{ padding: '13px 14px' }}>
-                          <StatusPill active={market.status === 'ACTIVE'}>
-                            {market.status}
-                          </StatusPill>
-                        </td>
-                        <td style={{ padding: '13px 14px' }}>{market.verifiedActiveVets}</td>
-                        <td style={{ padding: '13px 14px' }}>{market.geoReadyVets}</td>
-                        <td style={{ padding: '13px 14px' }}>{market.minimumGeoReadyVets}</td>
-                        <td style={{ padding: '13px 14px' }}>
-                          <StatusPill active={market.coverageSatisfied}>
-                            {market.coverageSatisfied ? 'SUFICIENTE' : 'PENDIENTE'}
-                          </StatusPill>
-                        </td>
-                      </tr>
-                    ))}
+                    {snapshot.markets.map((market) => {
+                      const launch = policyByDane.get(market.daneCode)
+                      return (
+                        <tr key={market.daneCode} style={{ borderTop: `1px solid ${T.line}` }}>
+                          <td style={{ padding: '13px 14px', fontWeight: 750 }}>{market.city}</td>
+                          <td style={{ padding: '13px 14px', color: T.inkMuted }}>
+                            {market.department}
+                          </td>
+                          <td style={{ padding: '13px 14px', fontFamily: F.mono }}>
+                            {market.daneCode}
+                          </td>
+                          <td style={{ padding: '13px 14px' }}>
+                            <StatusPill active={Boolean(launch?.providerRequested)}>
+                              {launch?.providerRequested ? 'SOLICITADO' : 'PRELAUNCH'}
+                            </StatusPill>
+                          </td>
+                          <td style={{ padding: '13px 14px' }}>{launch?.geoReadyVets ?? 0}</td>
+                          <td style={{ padding: '13px 14px' }}>{launch?.minimumRequired ?? 3}</td>
+                          <td style={{ padding: '13px 14px' }}>
+                            <StatusPill active={Boolean(launch?.expansionAllowed)}>
+                              {launch?.expansionAllowed ? 'PERMITIDA' : 'BLOQUEADA'}
+                            </StatusPill>
+                          </td>
+                          <td style={{ padding: '13px 14px' }}>
+                            <StatusPill active={Boolean(launch?.bookingGateEligible)}>
+                              {launch?.state ?? 'PRELAUNCH'}
+                            </StatusPill>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -216,23 +237,27 @@ export default function CoveragePage() {
                 lineHeight: 1.65,
               }}
             >
-              <strong style={{ color: T.ink }}>Regla de activación</strong>
+              <strong style={{ color: T.ink }}>Secuencia de activación</strong>
               <div style={{ marginTop: 6 }}>
-                Una nueva ciudad se activa únicamente después de alcanzar cobertura mínima,
-                cerrar soporte/legal/pagos y agregar su código DANE a{' '}
-                <code style={{ fontFamily: F.mono }}>NVET_ACTIVE_SERVICE_MARKETS</code>. La
-                activación no exige un cambio de código de Nvet.
+                Para una ciudad fuera de Cartagena: primero se alcanza la cobertura mínima, luego
+                se agrega su DANE a <code style={{ fontFamily: F.mono }}>NVET_ACTIVE_SERVICE_MARKETS</code>{' '}
+                y, cuando exista autorización operacional para expansión, se habilita{' '}
+                <code style={{ fontFamily: F.mono }}>NVET_NATIONAL_EXPANSION_ENABLED=true</code>.
+              </div>
+              <div style={{ marginTop: 8 }}>
+                Los controles de pagos, soporte, privacidad, evidencia externa y disponibilidad
+                comercial siguen siendo gates independientes.
               </div>
               <div style={{ marginTop: 8, fontSize: 12 }}>
-                Snapshot: {new Date(snapshot.generatedAt).toLocaleString('es-CO')}
+                Snapshot: {new Date(policy.generatedAt).toLocaleString('es-CO')}
               </div>
             </section>
           </>
         )}
 
-        {!snapshot && loading && (
+        {(!snapshot || !policy) && loading && (
           <div style={{ padding: 32, textAlign: 'center', color: T.inkMuted }}>
-            Consultando cobertura operativa…
+            Consultando cobertura y política de lanzamiento…
           </div>
         )}
       </div>
