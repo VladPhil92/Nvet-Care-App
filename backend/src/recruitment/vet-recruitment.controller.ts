@@ -30,7 +30,9 @@ export class VetRecruitmentController {
 
   @Get()
   getSnapshot(@Query("marketDaneCode") marketDaneCode?: string) {
-    return this.recruitment.getAdminSnapshot(marketDaneCode?.trim() || undefined);
+    return this.recruitment.getAdminSnapshot(
+      marketDaneCode?.trim() || undefined,
+    );
   }
 
   @Post()

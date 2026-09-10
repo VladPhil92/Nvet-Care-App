@@ -45,10 +45,7 @@ const STAGE_RANK: Record<Exclude<VetRecruitmentStage, "LOST">, number> = {
   INVITED: 3,
 };
 
-type RecruitmentEventType =
-  | "CREATED"
-  | "STAGE_CHANGED"
-  | "FOLLOW_UP_SCHEDULED";
+type RecruitmentEventType = "CREATED" | "STAGE_CHANGED" | "FOLLOW_UP_SCHEDULED";
 
 type RecruitmentMetadata = {
   schemaVersion: 1;
@@ -224,7 +221,9 @@ export class VetRecruitmentService {
     const users = await this.getUsersForLeads(filtered);
     const usersByEmail = new Map(users.map((user) => [user.email, user]));
     const leads = filtered
-      .map((lead) => this.enrichLead(lead, usersByEmail.get(lead.email) ?? null))
+      .map((lead) =>
+        this.enrichLead(lead, usersByEmail.get(lead.email) ?? null),
+      )
       .sort((a, b) => this.sortLeads(a, b));
 
     const markets = COLOMBIA_LAUNCH_MARKETS.map((market) => {
@@ -250,8 +249,10 @@ export class VetRecruitmentService {
         leads: marketLeads.length,
         activeLeads: activeLeads.length,
         new: marketLeads.filter((lead) => lead.stage === "NEW").length,
-        contacted: marketLeads.filter((lead) => lead.stage === "CONTACTED").length,
-        interested: marketLeads.filter((lead) => lead.stage === "INTERESTED").length,
+        contacted: marketLeads.filter((lead) => lead.stage === "CONTACTED")
+          .length,
+        interested: marketLeads.filter((lead) => lead.stage === "INTERESTED")
+          .length,
         invited: marketLeads.filter((lead) => lead.stage === "INVITED").length,
         lost: marketLeads.filter((lead) => lead.stage === "LOST").length,
         registeredAccounts: registered,
@@ -266,7 +267,9 @@ export class VetRecruitmentService {
       } as const;
     });
 
-    const dueFollowUps = leads.filter((lead) => this.isFollowUpDue(lead)).length;
+    const dueFollowUps = leads.filter((lead) =>
+      this.isFollowUpDue(lead),
+    ).length;
     const activeLeads = leads.filter((lead) => lead.stage !== "LOST").length;
     const registeredAccounts = leads.filter(
       (lead) => lead.conversionStage !== "LEAD_ONLY",
@@ -334,7 +337,8 @@ export class VetRecruitmentService {
       (event) => event.metadata.eventType === "CREATED",
     );
     const conflictReasons: string[] = [];
-    if (created.length !== 1) conflictReasons.push("INVALID_CREATED_EVENT_COUNT");
+    if (created.length !== 1)
+      conflictReasons.push("INVALID_CREATED_EVENT_COUNT");
 
     const seed = created[0]?.metadata;
     if (
@@ -349,7 +353,10 @@ export class VetRecruitmentService {
     let stage: VetRecruitmentStage = "NEW";
     let nextFollowUpAt = seed?.nextFollowUpAt ?? null;
     for (const event of sorted) {
-      if (event.metadata.eventType === "STAGE_CHANGED" && event.metadata.stage) {
+      if (
+        event.metadata.eventType === "STAGE_CHANGED" &&
+        event.metadata.stage
+      ) {
         stage = event.metadata.stage;
       }
       if (event.metadata.nextFollowUpAt !== undefined) {
@@ -367,7 +374,9 @@ export class VetRecruitmentService {
       stage,
       nextFollowUpAt,
       createdAt: sorted[0].createdAt.toISOString(),
-      lastEventAt: sorted.at(-1)?.createdAt.toISOString() ?? sorted[0].createdAt.toISOString(),
+      lastEventAt:
+        sorted.at(-1)?.createdAt.toISOString() ??
+        sorted[0].createdAt.toISOString(),
       eventCount: sorted.length,
       conflicted: conflictReasons.length > 0,
       conflictReasons,
@@ -399,7 +408,8 @@ export class VetRecruitmentService {
       return {
         linkedUserId: null,
         conversionStage: "LEAD_ONLY" as const,
-        nextAction: "Contact candidate and send the veterinarian registration path.",
+        nextAction:
+          "Contact candidate and send the veterinarian registration path.",
       };
     }
     if (user.role !== UserRole.VET) {
@@ -430,7 +440,8 @@ export class VetRecruitmentService {
       return {
         linkedUserId: user.id,
         conversionStage: "SERVICE_AREA_REQUIRED" as const,
-        nextAction: "Complete a geo-consistent city, coordinates and service radius.",
+        nextAction:
+          "Complete a geo-consistent city, coordinates and service radius.",
       };
     }
 
@@ -470,17 +481,21 @@ export class VetRecruitmentService {
       return {
         linkedUserId: user.id,
         conversionStage: "PROFILE_INACTIVE" as const,
-        nextAction: "Resolve the inactive account/profile before counting supply.",
+        nextAction:
+          "Resolve the inactive account/profile before counting supply.",
       };
     }
     return {
       linkedUserId: user.id,
       conversionStage: "OPERATIONAL_READY" as const,
-      nextAction: "Operational supply ready; maintain availability and monitoring.",
+      nextAction:
+        "Operational supply ready; maintain availability and monitoring.",
     };
   }
 
-  private async getUsersForLeads(leads: DerivedLead[]): Promise<RecruitmentUser[]> {
+  private async getUsersForLeads(
+    leads: DerivedLead[],
+  ): Promise<RecruitmentUser[]> {
     const emails = [...new Set(leads.map((lead) => lead.email))];
     if (emails.length === 0) return [];
     return this.prisma.user.findMany({
@@ -521,7 +536,9 @@ export class VetRecruitmentService {
       throw new ConflictException("Recruitment lead is already in that stage.");
     }
     if (target === "NEW") {
-      throw new BadRequestException("NEW is only valid when a lead is created.");
+      throw new BadRequestException(
+        "NEW is only valid when a lead is created.",
+      );
     }
     if (target === "LOST") return;
     if (current === "LOST" && target === "CONTACTED") return;
@@ -557,7 +574,9 @@ export class VetRecruitmentService {
       throw new BadRequestException("Invalid follow-up timestamp.");
     }
     if (timestamp <= Date.now()) {
-      throw new BadRequestException("Follow-up must be scheduled in the future.");
+      throw new BadRequestException(
+        "Follow-up must be scheduled in the future.",
+      );
     }
     return new Date(timestamp).toISOString();
   }
@@ -574,8 +593,16 @@ export class VetRecruitmentService {
   }
 
   private sortLeads(
-    a: { followUpDue: boolean; nextFollowUpAt: string | null; createdAt: string },
-    b: { followUpDue: boolean; nextFollowUpAt: string | null; createdAt: string },
+    a: {
+      followUpDue: boolean;
+      nextFollowUpAt: string | null;
+      createdAt: string;
+    },
+    b: {
+      followUpDue: boolean;
+      nextFollowUpAt: string | null;
+      createdAt: string;
+    },
   ): number {
     if (a.followUpDue !== b.followUpDue) return a.followUpDue ? -1 : 1;
     if (a.nextFollowUpAt && b.nextFollowUpAt) {
@@ -647,7 +674,8 @@ export class VetRecruitmentService {
   private parseMetadata(
     value: Prisma.JsonValue | null,
   ): RecruitmentMetadata | null {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return null;
     const raw = value as Record<string, unknown>;
     if (raw.schemaVersion !== 1 || raw.program !== PROGRAM) return null;
     if (
