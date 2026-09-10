@@ -21,7 +21,6 @@ describe("ServiceQualityTelemetryService", () => {
   let service: ServiceQualityTelemetryService;
 
   const baseTime = new Date("2026-09-10T18:00:00.000Z");
-  const currentTime = new Date("2026-09-20T18:00:00.000Z");
   const minutesAfter = (value: number) =>
     new Date(baseTime.getTime() + value * 60_000);
 
@@ -30,13 +29,19 @@ describe("ServiceQualityTelemetryService", () => {
     overrides: Record<string, unknown> = {},
   ) {
     const createdAt = minutesAfter(index * 120);
+    const scheduledAt = new Date(createdAt.getTime() + 30 * 60_000);
     return {
       status: AppointmentStatus.COMPLETED,
+      date: new Date(
+        `${scheduledAt.toISOString().slice(0, 10)}T00:00:00.000Z`,
+      ),
+      time: scheduledAt.toISOString().slice(11, 16),
+      scheduledAt,
       createdAt,
       confirmedAt: new Date(createdAt.getTime() + 10 * 60_000),
-      inProgressAt: new Date(createdAt.getTime() + 30 * 60_000),
-      completedAt: new Date(createdAt.getTime() + 90 * 60_000),
-      lastStatusChangeAt: new Date(createdAt.getTime() + 90 * 60_000),
+      inProgressAt: scheduledAt,
+      completedAt: new Date(scheduledAt.getTime() + 60 * 60_000),
+      lastStatusChangeAt: new Date(scheduledAt.getTime() + 60 * 60_000),
       vet: { city: "Cartagena", department: "Bolívar" },
       transaction: {
         status: TransactionStatus.LIQUIDATED,
@@ -49,27 +54,8 @@ describe("ServiceQualityTelemetryService", () => {
     };
   }
 
-  function recentPending(index: number) {
-    const createdAt = new Date(currentTime.getTime() - (5 + index) * 60_000);
-    return appointment(index, {
-      status: AppointmentStatus.PENDING,
-      createdAt,
-      confirmedAt: null,
-      inProgressAt: null,
-      completedAt: null,
-      lastStatusChangeAt: null,
-      transaction: {
-        status: TransactionStatus.PENDING,
-        paymentMethod: PaymentMethod.PSE,
-        createdAt,
-        verifiedAt: null,
-        liquidatedAt: null,
-      },
-    });
-  }
-
   beforeEach(() => {
-    jest.useFakeTimers().setSystemTime(currentTime);
+    jest.useFakeTimers().setSystemTime(new Date("2026-09-20T18:00:00.000Z"));
     jest.clearAllMocks();
     service = new ServiceQualityTelemetryService(
       prisma,
@@ -110,7 +96,7 @@ describe("ServiceQualityTelemetryService", () => {
     jest.useRealTimers();
   });
 
-  it("computes aggregate Cartagena service-quality telemetry without identifiers", async () => {
+  it("computes mature aggregate Cartagena telemetry without inventing VET response evidence", async () => {
     prisma.appointment.findMany.mockResolvedValue(
       Array.from({ length: 10 }, (_, index) => appointment(index)),
     );
@@ -123,14 +109,13 @@ describe("ServiceQualityTelemetryService", () => {
     expect(snapshot.phase).toBe(26);
     expect(snapshot.market.daneCode).toBe("13001");
     expect(snapshot.appointments.total).toBe(10);
-    expect(snapshot.appointments.completedEver).toBe(10);
-    expect(snapshot.appointments.terminalOutcomeCount).toBe(10);
+    expect(snapshot.appointments.matureOutcomeCount).toBe(10);
     expect(snapshot.appointments.completionRatePct).toBe(100);
-    expect(snapshot.latency.vetResponseMinutes.p95Minutes).toBe(10);
-    expect(snapshot.latency.vetResponseSloMinutes.p95Minutes).toBe(10);
-    expect(snapshot.latency.vetResponseSloMinutes.censoredSampleSize).toBe(0);
+    expect(snapshot.latency.vetResponseMinutes.sampleSize).toBe(0);
+    expect(snapshot.latency.semantics.vetResponseMeasured).toBe(false);
+    expect(snapshot.latency.bookingConfirmationMinutes.p95Minutes).toBe(10);
+    expect(snapshot.latency.serviceStartDelayMinutes.p95Minutes).toBe(0);
     expect(snapshot.payments.statusCounts.LIQUIDATED).toBe(10);
-    expect(snapshot.payments.resolvedTransactions).toBe(10);
     expect(snapshot.slo.overall).toBe("HEALTHY");
     expect(snapshot.boundaries.aggregateOnly).toBe(true);
     expect(snapshot.boundaries.exposesUserIdentifiers).toBe(false);
@@ -138,7 +123,7 @@ describe("ServiceQualityTelemetryService", () => {
     expect(JSON.stringify(snapshot)).not.toContain("vetId");
   });
 
-  it("does not claim SLO health before the minimum sample exists", async () => {
+  it("does not claim SLO health before every required metric has enough sample", async () => {
     prisma.appointment.findMany.mockResolvedValue([
       appointment(0),
       appointment(1),
@@ -154,56 +139,62 @@ describe("ServiceQualityTelemetryService", () => {
     expect(snapshot.slo.automaticallyChangesLaunchDecision).toBe(false);
   });
 
-  it("keeps ten brand-new pending appointments out of mature outcome denominators", async () => {
+  it("keeps future bookings outside the mature completion denominator", async () => {
+    const future = new Date("2026-09-25T18:00:00.000Z");
     prisma.appointment.findMany.mockResolvedValue(
-      Array.from({ length: 10 }, (_, index) => recentPending(index)),
+      Array.from({ length: 10 }, (_, index) =>
+        appointment(index, {
+          status: AppointmentStatus.PENDING,
+          scheduledAt: new Date(future.getTime() + index * 60_000),
+          date: new Date("2026-09-25T00:00:00.000Z"),
+          time: "13:00",
+          confirmedAt: null,
+          inProgressAt: null,
+          completedAt: null,
+          lastStatusChangeAt: null,
+          transaction: null,
+        }),
+      ),
     );
 
     const snapshot = await service.getSnapshot();
 
     expect(snapshot.appointments.total).toBe(10);
-    expect(snapshot.appointments.terminalOutcomeCount).toBe(0);
+    expect(snapshot.appointments.matureOutcomeCount).toBe(0);
     expect(snapshot.appointments.completionRatePct).toBeNull();
-    expect(snapshot.latency.vetResponseSloMinutes.sampleSize).toBe(0);
-    expect(snapshot.payments.resolvedTransactions).toBe(0);
-    expect(snapshot.payments.failureRatePct).toBeNull();
     expect(snapshot.slo.overall).toBe("INSUFFICIENT_DATA");
-    expect(snapshot.operatorAction).toBe("ACCUMULATE_CONTROLLED_BETA_SAMPLE");
   });
 
-  it("counts overdue unconfirmed appointments as censored response evidence", async () => {
-    const rows = Array.from({ length: 10 }, (_, index) => appointment(index));
-    rows[0] = appointment(0, {
-      status: AppointmentStatus.PENDING,
-      confirmedAt: null,
-      inProgressAt: null,
-      completedAt: null,
-      lastStatusChangeAt: null,
-      transaction: {
-        status: TransactionStatus.PENDING,
-        paymentMethod: PaymentMethod.PSE,
-        createdAt: baseTime,
-        verifiedAt: null,
-        liquidatedAt: null,
-      },
-    });
-    prisma.appointment.findMany.mockResolvedValue(rows);
+  it("censors overdue missing service starts instead of hiding them", async () => {
+    const overdueScheduled = new Date("2026-09-20T16:00:00.000Z");
+    prisma.appointment.findMany.mockResolvedValue(
+      Array.from({ length: 10 }, (_, index) =>
+        appointment(index, {
+          status: AppointmentStatus.CONFIRMED,
+          scheduledAt: overdueScheduled,
+          inProgressAt: null,
+          completedAt: null,
+          lastStatusChangeAt: overdueScheduled,
+        }),
+      ),
+    );
 
     const snapshot = await service.getSnapshot();
 
-    expect(snapshot.latency.vetResponseMinutes.sampleSize).toBe(9);
-    expect(snapshot.latency.vetResponseSloMinutes.sampleSize).toBe(10);
-    expect(snapshot.latency.vetResponseSloMinutes.censoredSampleSize).toBe(1);
-    expect(snapshot.latency.vetResponseSloMinutes.overdueUnconfirmed).toBe(1);
+    expect(snapshot.latency.serviceStartDelayMinutes.censoredSampleSize).toBe(10);
+    expect(snapshot.latency.serviceStartDelayMinutes.overdueWithoutEvent).toBe(10);
     expect(snapshot.slo.metrics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "vet-response-p95", state: "BREACHED" }),
+        expect.objectContaining({
+          id: "service-start-delay-p95",
+          state: "BREACHED",
+        }),
       ]),
     );
     expect(snapshot.slo.overall).toBe("BREACHED");
   });
 
-  it("marks degraded mature outcomes and resolved payment failures as breached", async () => {
+  it("marks mature cancellation and resolved payment failures as breached", async () => {
     const rows = Array.from({ length: 10 }, (_, index) => {
       if (index < 8) {
         const createdAt = minutesAfter(index * 120);
@@ -222,34 +213,52 @@ describe("ServiceQualityTelemetryService", () => {
           },
         });
       }
-      const createdAt = minutesAfter(index * 120);
-      return appointment(index, {
-        confirmedAt: new Date(createdAt.getTime() + 120 * 60_000),
-      });
+      return appointment(index);
     });
     prisma.appointment.findMany.mockResolvedValue(rows);
 
     const snapshot = await service.getSnapshot();
 
-    expect(snapshot.appointments.terminalOutcomeCount).toBe(10);
     expect(snapshot.appointments.cancellationRatePct).toBe(80);
-    expect(snapshot.payments.resolvedTransactions).toBe(10);
     expect(snapshot.payments.failureRatePct).toBe(80);
     expect(snapshot.slo.overall).toBe("BREACHED");
+    expect(snapshot.operatorAction).toBe("REMEDIATE_SLO_BREACHES");
+  });
+
+  it("does not treat pending payments as successful evidence or failures", async () => {
+    prisma.appointment.findMany.mockResolvedValue(
+      Array.from({ length: 10 }, (_, index) =>
+        appointment(index, {
+          transaction: {
+            status: TransactionStatus.PENDING,
+            paymentMethod: PaymentMethod.PSE,
+            createdAt: minutesAfter(index * 120),
+            verifiedAt: null,
+            liquidatedAt: null,
+          },
+        }),
+      ),
+    );
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.payments.resolvedTransactions).toBe(0);
+    expect(snapshot.payments.failureRatePct).toBeNull();
     expect(snapshot.slo.metrics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "cancellation-rate", state: "BREACHED" }),
-        expect.objectContaining({ id: "payment-failure-rate", state: "BREACHED" }),
+        expect.objectContaining({
+          id: "payment-failure-rate",
+          state: "INSUFFICIENT_DATA",
+        }),
       ]),
     );
-    expect(snapshot.operatorAction).toBe("REMEDIATE_SLO_BREACHES");
+    expect(snapshot.slo.overall).toBe("INSUFFICIENT_DATA");
   });
 
   it("surfaces persisted timestamp integrity problems instead of synthesizing data", async () => {
     const rows = Array.from({ length: 10 }, (_, index) => appointment(index));
     rows[0] = appointment(0, {
       status: AppointmentStatus.COMPLETED,
-      confirmedAt: null,
       inProgressAt: null,
       completedAt: null,
     });
@@ -258,48 +267,33 @@ describe("ServiceQualityTelemetryService", () => {
     const snapshot = await service.getSnapshot();
 
     expect(snapshot.dataQuality.appointmentsWithIssues).toBe(1);
-    expect(snapshot.dataQuality.categories.missingConfirmedTimestamp).toBe(1);
     expect(snapshot.dataQuality.categories.missingInProgressTimestamp).toBe(1);
     expect(snapshot.dataQuality.categories.missingCompletedTimestamp).toBe(1);
-    expect(
-      snapshot.dataQuality.measurementIntegrity
-        .matureUnconfirmedResponseUsesElapsedLowerBound,
-    ).toBe(true);
     expect(snapshot.dataQuality.measurementIntegrity.noSyntheticTimestamps).toBe(
       true,
     );
     expect(snapshot.operatorAction).toBe("REVIEW_TELEMETRY_DATA_INTEGRITY");
   });
 
-  it("excludes unresolved payment states from the failure-rate denominator", async () => {
-    const rows = Array.from({ length: 10 }, (_, index) =>
-      appointment(index, {
-        transaction: {
-          status:
-            index < 5
-              ? TransactionStatus.PENDING
-              : TransactionStatus.CONFIRMED,
-          paymentMethod: PaymentMethod.PSE,
-          createdAt: minutesAfter(index * 120),
-          verifiedAt:
-            index < 5 ? null : new Date(minutesAfter(index * 120).getTime() + 60_000),
-          liquidatedAt: null,
-        },
-      }),
+  it("treats missing financial confirmation timestamps as coverage gaps, not VET-response failures", async () => {
+    prisma.appointment.findMany.mockResolvedValue(
+      Array.from({ length: 10 }, (_, index) =>
+        appointment(index, {
+          status: AppointmentStatus.CONFIRMED,
+          confirmedAt: null,
+          scheduledAt: new Date("2026-09-25T18:00:00.000Z"),
+          inProgressAt: null,
+          completedAt: null,
+          lastStatusChangeAt: null,
+        }),
+      ),
     );
-    prisma.appointment.findMany.mockResolvedValue(rows);
 
     const snapshot = await service.getSnapshot();
 
-    expect(snapshot.payments.transactions).toBe(10);
-    expect(snapshot.payments.resolvedTransactions).toBe(5);
-    expect(snapshot.payments.unresolvedTransactions).toBe(5);
-    expect(snapshot.payments.failureRatePct).toBe(0);
-    expect(
-      snapshot.slo.metrics.find((metric) => metric.id === "payment-failure-rate")
-        ?.state,
-    ).toBe("INSUFFICIENT_DATA");
-    expect(snapshot.slo.overall).toBe("INSUFFICIENT_DATA");
+    expect(snapshot.dataQuality.categories.missingConfirmedTimestamp).toBe(10);
+    expect(snapshot.dataQuality.appointmentsWithIssues).toBe(0);
+    expect(snapshot.latency.vetResponseMinutes.sampleSize).toBe(0);
   });
 
   it("filters records by the canonical coverage market resolver", async () => {
