@@ -17,6 +17,7 @@ export interface CoverageMarketReadiness {
   status: CoverageMarketStatus
   verifiedActiveVets: number
   geoReadyVets: number
+  geoMismatchedVets?: number
   minimumGeoReadyVets: number
   coverageSatisfied: boolean
   launchEligible: boolean
@@ -30,11 +31,29 @@ export interface CoverageReadinessSnapshot {
   activationSource: string
   activationRequiresCodeDeploy: boolean
   bookingGeoEnforcement: boolean
+  serviceAreaConsistencyRequired?: boolean
   minimumGeoReadyVetsPerMarket: number
   activeMarketDaneCodes: string[]
   allActiveMarketsReady: boolean
   markets: CoverageMarketReadiness[]
   generatedAt: string
+}
+
+export interface CoveragePointResult {
+  country: 'CO'
+  supported: boolean
+  active: boolean
+  status: 'ACTIVE' | 'PRELAUNCH' | 'UNSUPPORTED'
+  market?: {
+    code: string
+    daneCode: string
+    city: string
+    department: string
+    countryCode: 'CO'
+    metroGroup: string | null
+  }
+  distanceToMarketCenterKm?: number
+  message: string
 }
 
 export interface MarketLaunchPolicyMarket {
@@ -52,7 +71,7 @@ export interface MarketLaunchPolicyMarket {
 }
 
 export interface MarketLaunchPolicySnapshot {
-  phase: 15
+  phase: number
   program: 'market-launch-guard'
   country: 'CO'
   guardEnabled: boolean
@@ -60,6 +79,7 @@ export interface MarketLaunchPolicySnapshot {
   nationalExpansionSource: string
   marketActivationSource: string
   minimumGeoReadyVetsPerMarket: number
+  vetServiceAreaConsistencyRequired?: boolean
   cartagenaDaneCode: string
   cartagenaDoesNotRequireNationalExpansionFlag: boolean
   commercialLaunchAuthorized: false
@@ -75,6 +95,13 @@ export const coverageService = {
 
   async getLaunchPolicy(): Promise<MarketLaunchPolicySnapshot> {
     const response = await apiClient.get<MarketLaunchPolicySnapshot>('/coverage/launch-policy')
+    return response.data
+  },
+
+  async checkPoint(latitude: number, longitude: number): Promise<CoveragePointResult> {
+    const response = await apiClient.get<CoveragePointResult>('/coverage/check', {
+      params: { latitude, longitude },
+    })
     return response.data
   },
 }
