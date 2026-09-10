@@ -257,6 +257,17 @@ try {
   failures.push(`Operator evidence control plane failed closed: ${error?.message ?? error}`)
 }
 
+// ---------------------------------------------------------------------------
+// 8. Phase 27 release candidate freeze is inside CI Success, not an optional
+//    side workflow. Product-code drift must therefore fail the existing
+//    protected Security Convergence job unless it is an auditable blocker.
+// ---------------------------------------------------------------------------
+try {
+  await import('./verify-release-candidate-freeze.mjs')
+} catch (error) {
+  failures.push(`Phase 27 release candidate freeze failed closed: ${error?.message ?? error}`)
+}
+
 if (failures.length > 0) {
   console.error('❌ Production Security, Privacy & Canonical Runtime Convergence gate failed:')
   for (const failure of failures) console.error(` - ${failure}`)
@@ -273,3 +284,4 @@ console.log('   - dashboard HTTP perimeter: CSP + transport + anti-framing heade
 console.log('   - workflow_run certification concurrency: valid-trigger scoped + skipped-run isolated')
 console.log('   - web convergence staging context: explicit environment/service isolation')
 console.log('   - operator evidence projection: append-only approved ledger bound to CI Success')
+console.log('   - Phase 27 product freeze: release-blocker-only drift bound to CI Success')
