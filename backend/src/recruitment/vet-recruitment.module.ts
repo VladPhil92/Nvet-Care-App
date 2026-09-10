@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { CoverageModule } from "../coverage/coverage.module";
+import { VetActivationTelemetryService } from "./vet-activation-telemetry.service";
 import {
   VetInvitationAdminController,
   VetInvitationPublicController,
@@ -23,11 +24,13 @@ import { VetRecruitmentService } from "./vet-recruitment.service";
     VetRecruitmentService,
     VetInvitationService,
     VetOutreachConsentService,
+    VetActivationTelemetryService,
   ],
   exports: [
     VetRecruitmentService,
     VetInvitationService,
     VetOutreachConsentService,
+    VetActivationTelemetryService,
   ],
 })
 export class VetRecruitmentModule {}
