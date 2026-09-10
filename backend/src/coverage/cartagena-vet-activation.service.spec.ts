@@ -80,6 +80,7 @@ describe("CartagenaVetActivationService", () => {
         Boolean(
           vet.city?.toLowerCase().includes("cartagena") &&
             vet.latitude != null &&
+            vet.latitude >= 9 &&
             vet.latitude < 11,
         ),
     ),
