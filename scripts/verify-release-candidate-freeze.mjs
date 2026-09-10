@@ -61,6 +61,60 @@ async function gitDiff(baseSha, headSha) {
     .filter(Boolean);
 }
 
+async function releaseContext() {
+  const explicitEvent = process.env.RELEASE_FREEZE_EVENT?.trim();
+  const explicitBase = process.env.RELEASE_FREEZE_BASE_SHA?.trim();
+  const explicitHead = process.env.RELEASE_FREEZE_HEAD_SHA?.trim();
+  if (explicitEvent && explicitBase && explicitHead) {
+    return {
+      eventName: explicitEvent,
+      baseSha: explicitBase,
+      headSha: explicitHead,
+      labels: (process.env.RELEASE_FREEZE_PR_LABELS ?? '')
+        .split(',')
+        .map((label) => label.trim())
+        .filter(Boolean),
+      prNumber: Number(process.env.RELEASE_FREEZE_PR_NUMBER) || null,
+    };
+  }
+
+  const eventName = process.env.GITHUB_EVENT_NAME?.trim();
+  const eventPath = process.env.GITHUB_EVENT_PATH?.trim();
+  if (!eventName || !eventPath) {
+    return { eventName: null, baseSha: null, headSha: null, labels: [], prNumber: null };
+  }
+
+  const payload = JSON.parse(await fs.readFile(eventPath, 'utf8'));
+  if (eventName === 'pull_request') {
+    return {
+      eventName,
+      baseSha: payload.pull_request?.base?.sha ?? null,
+      headSha: payload.pull_request?.head?.sha ?? null,
+      labels: (payload.pull_request?.labels ?? [])
+        .map((label) => label?.name)
+        .filter(Boolean),
+      prNumber: Number(payload.pull_request?.number ?? payload.number) || null,
+    };
+  }
+  if (eventName === 'push') {
+    return {
+      eventName,
+      baseSha: payload.before ?? null,
+      headSha: payload.after ?? process.env.GITHUB_SHA ?? null,
+      labels: [],
+      prNumber: null,
+    };
+  }
+
+  return {
+    eventName,
+    baseSha: null,
+    headSha: process.env.GITHUB_SHA ?? null,
+    labels: [],
+    prNumber: null,
+  };
+}
+
 function validateBlockerRegistry(blockers, candidate) {
   if (blockers.schemaVersion !== 1) fail('release blocker registry schemaVersion must be 1');
   if (blockers.candidate !== candidate) fail('release blocker registry candidate must match freeze candidate');
@@ -130,12 +184,9 @@ if (freeze.boundaries?.automaticProviderConfigurationMutation !== false) fail('p
 if (freeze.boundaries?.manualExternalEvidenceStillRequired !== true) fail('manual external evidence boundary must remain explicit');
 if (freeze.boundaries?.releaseCandidateStatusIsNotCommercialLaunch !== true) fail('RC status must remain distinct from commercial launch');
 
-const eventName = process.env.RELEASE_FREEZE_EVENT?.trim();
-const baseSha = process.env.RELEASE_FREEZE_BASE_SHA?.trim();
-const headSha = process.env.RELEASE_FREEZE_HEAD_SHA?.trim();
-
-if (eventName && baseSha && headSha && !/^0+$/.test(baseSha)) {
-  const changedFiles = await gitDiff(baseSha, headSha);
+const context = await releaseContext();
+if (context.eventName && context.baseSha && context.headSha && !/^0+$/.test(context.baseSha)) {
+  const changedFiles = await gitDiff(context.baseSha, context.headSha);
   const protectedChanges = changedFiles.filter((file) =>
     protectedPath(file, freeze.governance.protectedProductPaths),
   );
@@ -143,16 +194,11 @@ if (eventName && baseSha && headSha && !/^0+$/.test(baseSha)) {
   console.log(`Phase 27 diff: ${changedFiles.length} changed files; ${protectedChanges.length} protected product changes.`);
   if (protectedChanges.length > 0) {
     console.log(`Protected product changes: ${protectedChanges.join(', ')}`);
-    if (eventName !== 'pull_request') {
+    if (context.eventName !== 'pull_request') {
       fail('protected product code changed outside a pull request while the release candidate is frozen');
     }
 
-    const labels = new Set(
-      (process.env.RELEASE_FREEZE_PR_LABELS ?? '')
-        .split(',')
-        .map((label) => label.trim())
-        .filter(Boolean),
-    );
+    const labels = new Set(context.labels);
     if (!labels.has(freeze.governance.releaseBlockerLabel)) {
       fail(`protected product changes require the '${freeze.governance.releaseBlockerLabel}' PR label`);
     }
@@ -160,8 +206,8 @@ if (eventName && baseSha && headSha && !/^0+$/.test(baseSha)) {
       fail(`protected product changes must update ${BLOCKERS_PATH}`);
     }
 
-    const prNumber = Number(process.env.RELEASE_FREEZE_PR_NUMBER);
-    if (!Number.isInteger(prNumber) || prNumber <= 0) fail('release-blocker product change requires RELEASE_FREEZE_PR_NUMBER');
+    const prNumber = context.prNumber;
+    if (!Number.isInteger(prNumber) || prNumber <= 0) fail('release-blocker product change requires a PR number');
     const blocker = blockers.blockers.find((entry) => entry.prNumber === prNumber);
     if (!blocker) fail(`release blocker registry has no entry for PR #${prNumber}`);
     if (blocker.candidate !== freeze.candidate) fail(`release blocker PR #${prNumber} targets another candidate`);
