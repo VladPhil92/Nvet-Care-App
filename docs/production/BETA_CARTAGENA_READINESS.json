@@ -43,6 +43,12 @@
     ],
     "machineActivationIncludesSupportReadiness": true,
     "machineReadinessNeverAuthorizesCommercialLaunch": true,
+    "strictVetSupplySource": "GET /api/coverage/cartagena-activation",
+    "strictVetSupplySourcePhase": 18,
+    "strictVetSupplyRequiresGeoConsistency": true,
+    "strictVetSupplyRequiresApprovedDocuments": true,
+    "strictVetSupplyRequiresProfessionalRegistryVerification": true,
+    "strictVetSupplyRequiresActiveProfile": true,
     "evidenceControlPlaneSummaryEndpoint": "GET /api/beta/evidence/summary",
     "evidenceControlPlaneHistoryEndpoint": "GET /api/beta/evidence/history",
     "evidenceLedger": "audit_logs",
@@ -85,7 +91,7 @@
     "cartagenaVetCoverageVerified": {
       "status": "pending",
       "evidence": null,
-      "note": "At least three verified and active veterinarians must have Cartagena as their service city. Use the admin-only GET /api/beta/readiness runtime snapshot as redacted count evidence."
+      "note": "At least three real Cartagena veterinarians must be operational-ready under the Phase 18 source of truth: service area complete and geo-consistent, required documents approved, professional registry verified, verification APPROVED, isVerified=true and isActive=true. Use admin-only GET /api/coverage/cartagena-activation (and the converged GET /api/beta/readiness view) as redacted runtime evidence. Implementation never auto-verifies this gate."
     },
     "clientCohortConfigured": {
       "status": "pending",
