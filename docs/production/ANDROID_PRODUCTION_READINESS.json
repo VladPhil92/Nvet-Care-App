@@ -4,7 +4,7 @@
   "program": "android-production",
   "applicationId": "com.nvetcare",
   "requiredTargetApi": 36,
-  "prerequisiteRcTag": "1.0.0-rc.1",
+  "prerequisiteRcTag": "1.0.0-rc.2",
   "policy": {
     "minInternalTrackObservationHours": 24,
     "minPhysicalDevices": 2,
@@ -15,7 +15,7 @@
     "rcPromoted": {
       "status": "pending",
       "evidence": null,
-      "note": "Phase 11 must promote the approved release candidate before a production Android tag is created."
+      "note": "Phase 27 must explicitly promote the approved frozen release candidate before a production Android tag is created."
     },
     "playConsoleAppCreated": {
       "status": "pending",
