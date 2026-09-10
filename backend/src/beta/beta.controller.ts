@@ -103,7 +103,10 @@ export class BetaController {
     @Request() req,
     @Body() dto: StartLaunchObservationDto,
   ) {
-    return this.launchOperations.startObservation(dto, this.getEvidenceActor(req));
+    return this.launchOperations.startObservation(
+      dto,
+      this.getEvidenceActor(req),
+    );
   }
 
   @Post("launch-operations/observation/close")
@@ -112,7 +115,10 @@ export class BetaController {
     @Request() req,
     @Body() dto: CloseLaunchObservationDto,
   ) {
-    return this.launchOperations.closeObservation(dto, this.getEvidenceActor(req));
+    return this.launchOperations.closeObservation(
+      dto,
+      this.getEvidenceActor(req),
+    );
   }
 
   @Post("launch-operations/observation/abort")
@@ -121,7 +127,10 @@ export class BetaController {
     @Request() req,
     @Body() dto: AbortLaunchObservationDto,
   ) {
-    return this.launchOperations.abortObservation(dto, this.getEvidenceActor(req));
+    return this.launchOperations.abortObservation(
+      dto,
+      this.getEvidenceActor(req),
+    );
   }
 
   @Get("cohort/me")
