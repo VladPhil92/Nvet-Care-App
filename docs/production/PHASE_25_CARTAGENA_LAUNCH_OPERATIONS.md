@@ -44,11 +44,17 @@ Starting an observation requires all of the following at request time:
 1. Phase 24 decision is `GO`.
 2. Cartagena closed beta is enabled.
 3. New bookings are enabled.
-4. No active or conflicted observation window exists.
+4. Beta activation authorization is active.
+5. Activation authorization and support lease each have at least **169 hours remaining**: the seven-day window plus a one-hour closing buffer.
+6. No active or conflicted observation window exists.
+
+The Phase 12 authorization and support lease ceilings are extended narrowly from 168 to **192 hours (8 days)** so a seven-day observation can actually complete while the controlling leases remain valid. This does not change the requirement for deliberate operator authorization, and it does not make those leases self-renewing.
+
+Each observation is bound to the exact beta `authorizationId` active when the observation starts. A closed or active observation from a previous authorization cannot satisfy a later beta activation cycle. Closing is rejected if the authorization changed, expired or was revoked.
 
 The minimum observation window is **7 days**. Closing is rejected before the seven-day threshold and is also rejected if Phase 24 is no longer `GO`.
 
-Aborting a running observation requires a reason and incident reference. Abort records do not toggle the booking kill switch; the provider/runtime action remains deliberately separate.
+Aborting a running observation requires a reason and non-empty incident reference. Abort records do not toggle the booking kill switch; the provider/runtime action remains deliberately separate.
 
 ## Effective decision
 
@@ -57,10 +63,10 @@ Phase 25 never weakens Phase 24:
 - Phase 24 `PAUSE` → Phase 25 `PAUSE`.
 - Phase 24 `HOLD` → Phase 25 `HOLD`.
 - Phase 24 `GO` before beta activation → Phase 25 `GO`.
-- Phase 24 `GO` with active beta but no durable observation record → Phase 25 `HOLD`.
-- Phase 24 `GO` with an active, closable or closed observation record → Phase 25 `GO`.
+- Phase 24 `GO` with active beta but no durable observation record for the current authorization → Phase 25 `HOLD`.
+- Phase 24 `GO` with a current-authorization observation that is active, closable or closed → Phase 25 `GO`.
 
-An active beta without observation evidence is therefore fail-closed operational drift.
+An active beta without current observation evidence is therefore fail-closed operational drift. Historical observation records remain auditable but can never be reused to make a new activation look observed.
 
 ## Expiry watch
 
@@ -89,6 +95,7 @@ Closing the seven-day observation record proves that the elapsed window was reco
 - Observation events cannot mutate Railway/provider environment variables.
 - Observation abort does not automatically toggle the booking kill switch.
 - Observation closure cannot be represented as commercial launch authorization.
+- Observation records are bound to the activation authorization that created the observation cycle.
 - Strict verified VET supply remains the operational supply source of truth.
 - All operator mutations are append-only and auditable.
 
@@ -103,6 +110,8 @@ The admin navigation adds **Operación CTG** with:
 - operator recommendation;
 - observation start/close/abort controls;
 - control-by-control expiry table.
+
+The existing support and beta-authorization controls expose the revised **192-hour** maximum so the operator can configure leases long enough to satisfy the 169-hour observation-start floor.
 
 ## Next phase enabled
 
