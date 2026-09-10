@@ -49,6 +49,8 @@ export interface VetProfile {
   isVerified: boolean
   isActive: boolean
   verificationStatus: string
+  latitude?: number | null
+  longitude?: number | null
   city?: string | null
   department?: string | null
   serviceRadius: number
@@ -68,6 +70,19 @@ export interface CreateVetProfileInput {
   graduationYear?: number
   bio?: string
   yearsExperience?: number
+}
+
+export interface UpdateVetProfileInput {
+  bio?: string
+  yearsExperience?: number
+  specialties?: string[]
+  latitude?: number
+  longitude?: number
+  city?: string
+  department?: string
+  serviceRadius?: number
+  isAvailableNow?: boolean
+  timezone?: string
 }
 
 export interface VetEarnings {
@@ -155,6 +170,11 @@ class VetService {
 
   async createProfile(input: CreateVetProfileInput): Promise<VetProfile> {
     const response = await apiClient.post<VetProfile>('/vets/me', input)
+    return response.data
+  }
+
+  async updateProfile(input: UpdateVetProfileInput): Promise<VetProfile> {
+    const response = await apiClient.patch<VetProfile>('/vets/me', input)
     return response.data
   }
 
