@@ -9,6 +9,7 @@ import { BetaEvidenceService } from "./beta-evidence.service";
 import { BetaLegalConsentService } from "./beta-legal-consent.service";
 import { BetaReadinessService } from "./beta-readiness.service";
 import { BetaSupportService } from "./beta-support.service";
+import { CartagenaLaunchOperationsService } from "./cartagena-launch-operations.service";
 import { CartagenaLaunchReadinessService } from "./cartagena-launch-readiness.service";
 import { ClosedBetaAccessService } from "./closed-beta-access.service";
 
@@ -24,6 +25,7 @@ import { ClosedBetaAccessService } from "./closed-beta-access.service";
     ClosedBetaAccessService,
     BetaReadinessService,
     CartagenaLaunchReadinessService,
+    CartagenaLaunchOperationsService,
   ],
   exports: [
     BetaEvidenceService,
@@ -34,6 +36,7 @@ import { ClosedBetaAccessService } from "./closed-beta-access.service";
     ClosedBetaAccessService,
     BetaReadinessService,
     CartagenaLaunchReadinessService,
+    CartagenaLaunchOperationsService,
   ],
 })
 export class BetaModule {}
