@@ -62,6 +62,22 @@ async function gitDiff(baseSha, headSha) {
     .filter(Boolean);
 }
 
+async function isMergeCommit(headSha) {
+  const { stdout } = await execFileAsync(
+    'git',
+    ['rev-list', '--parents', '-n', '1', headSha],
+    { cwd: ROOT },
+  );
+  return stdout.trim().split(/\s+/).length >= 3;
+}
+
+function prNumberFromMergeMessage(message) {
+  if (typeof message !== 'string') return null;
+  const match = message.match(/Merge pull request #(\d+)\b|\(#(\d+)\)\s*$/m);
+  const value = Number(match?.[1] ?? match?.[2]);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
 async function releaseContext() {
   const explicitEvent = process.env.RELEASE_FREEZE_EVENT?.trim();
   const explicitBase = process.env.RELEASE_FREEZE_BASE_SHA?.trim();
@@ -76,13 +92,21 @@ async function releaseContext() {
         .map((label) => label.trim())
         .filter(Boolean),
       prNumber: Number(process.env.RELEASE_FREEZE_PR_NUMBER) || null,
+      commitMessage: process.env.RELEASE_FREEZE_COMMIT_MESSAGE ?? '',
     };
   }
 
   const eventName = process.env.GITHUB_EVENT_NAME?.trim();
   const eventPath = process.env.GITHUB_EVENT_PATH?.trim();
   if (!eventName || !eventPath) {
-    return { eventName: null, baseSha: null, headSha: null, labels: [], prNumber: null };
+    return {
+      eventName: null,
+      baseSha: null,
+      headSha: null,
+      labels: [],
+      prNumber: null,
+      commitMessage: '',
+    };
   }
 
   const payload = JSON.parse(await fs.readFile(eventPath, 'utf8'));
@@ -95,6 +119,7 @@ async function releaseContext() {
         .map((label) => label?.name)
         .filter(Boolean),
       prNumber: Number(payload.pull_request?.number ?? payload.number) || null,
+      commitMessage: '',
     };
   }
   if (eventName === 'push') {
@@ -104,6 +129,7 @@ async function releaseContext() {
       headSha: payload.after ?? process.env.GITHUB_SHA ?? null,
       labels: [],
       prNumber: null,
+      commitMessage: payload.head_commit?.message ?? '',
     };
   }
 
@@ -113,6 +139,7 @@ async function releaseContext() {
     headSha: process.env.GITHUB_SHA ?? null,
     labels: [],
     prNumber: null,
+    commitMessage: '',
   };
 }
 
@@ -136,6 +163,18 @@ function validateBlockerRegistry(blockers, candidate) {
   }
 }
 
+function requireOpenBlocker(blockers, candidate, prNumber) {
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    fail('release-blocker product change requires a PR number');
+  }
+  const blocker = blockers.blockers.find((entry) => entry.prNumber === prNumber);
+  if (!blocker) fail(`release blocker registry has no entry for PR #${prNumber}`);
+  if (blocker.candidate !== candidate) fail(`release blocker PR #${prNumber} targets another candidate`);
+  if (blocker.status !== 'open') fail(`release blocker PR #${prNumber} must remain open through the merge that changes product code`);
+  if (blocker.severity !== 'release-blocking') fail(`release blocker PR #${prNumber} must use release-blocking severity`);
+  return blocker;
+}
+
 const freeze = await readJson(FREEZE_PATH);
 const blockers = await readJson(BLOCKERS_PATH);
 const rc = await readJson(RC_PATH);
@@ -157,7 +196,8 @@ if (freeze.scope?.publicStoreReleaseAuthorized !== false) fail('freeze cannot au
 if (freeze.governance?.featureFreezeActive !== true) fail('feature freeze must be active');
 if (freeze.governance?.releaseBlockerLabel !== 'release-blocker') fail('release blocker label must be release-blocker');
 if (freeze.governance?.releaseBlockerRegistry !== BLOCKERS_PATH) fail('release blocker registry path is not canonical');
-if (!Array.isArray(freeze.governance?.protectedProductPaths) || freeze.governance.protectedProductPaths.length < 8) fail('protected product path policy is incomplete');
+if (freeze.governance?.releaseBlockerMergeMethod !== 'merge-commit') fail('release blockers must use auditable merge commits');
+if (!Array.isArray(freeze.governance?.protectedProductPaths) || freeze.governance.protectedProductPaths.length < 10) fail('protected product path policy is incomplete');
 
 validateBlockerRegistry(blockers, freeze.candidate);
 
@@ -197,25 +237,30 @@ if (context.eventName && context.baseSha && context.headSha && !/^0+$/.test(cont
   console.log(`Phase 27 diff: ${changedFiles.length} changed files; ${protectedChanges.length} protected product changes.`);
   if (protectedChanges.length > 0) {
     console.log(`Protected product changes: ${protectedChanges.join(', ')}`);
-    if (context.eventName !== 'pull_request') {
-      fail('protected product code changed outside a pull request while the release candidate is frozen');
-    }
 
-    const labels = new Set(context.labels);
-    if (!labels.has(freeze.governance.releaseBlockerLabel)) {
-      fail(`protected product changes require the '${freeze.governance.releaseBlockerLabel}' PR label`);
-    }
     if (!changedFiles.includes(BLOCKERS_PATH)) {
       fail(`protected product changes must update ${BLOCKERS_PATH}`);
     }
 
-    const prNumber = context.prNumber;
-    if (!Number.isInteger(prNumber) || prNumber <= 0) fail('release-blocker product change requires a PR number');
-    const blocker = blockers.blockers.find((entry) => entry.prNumber === prNumber);
-    if (!blocker) fail(`release blocker registry has no entry for PR #${prNumber}`);
-    if (blocker.candidate !== freeze.candidate) fail(`release blocker PR #${prNumber} targets another candidate`);
-    if (blocker.status !== 'open') fail(`release blocker PR #${prNumber} must remain open while product changes are under review`);
-    if (blocker.severity !== 'release-blocking') fail(`release blocker PR #${prNumber} must use release-blocking severity`);
+    if (context.eventName === 'pull_request') {
+      const labels = new Set(context.labels);
+      if (!labels.has(freeze.governance.releaseBlockerLabel)) {
+        fail(`protected product changes require the '${freeze.governance.releaseBlockerLabel}' PR label`);
+      }
+      requireOpenBlocker(blockers, freeze.candidate, context.prNumber);
+    } else if (context.eventName === 'push') {
+      const prNumber = prNumberFromMergeMessage(context.commitMessage);
+      if (!prNumber) {
+        fail('protected product push must be an audited pull-request merge commit');
+      }
+      if (!(await isMergeCommit(context.headSha))) {
+        fail(`release blocker PR #${prNumber} must be merged with an auditable merge commit`);
+      }
+      requireOpenBlocker(blockers, freeze.candidate, prNumber);
+      console.log(`Audited release-blocker merge accepted for PR #${prNumber}.`);
+    } else {
+      fail('protected product code changed outside an auditable pull-request lifecycle');
+    }
   }
 }
 
