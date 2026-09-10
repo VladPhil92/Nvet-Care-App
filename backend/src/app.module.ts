@@ -18,6 +18,7 @@ import { PetsModule } from "./pets/pets.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { ProfileModule } from "./profile/profile.module";
 import { WaitlistModule } from "./waitlist/waitlist.module";
+import { VetRecruitmentModule } from "./recruitment/vet-recruitment.module";
 import { AiModule } from "./ai/ai.module";
 
 /**
@@ -54,6 +55,7 @@ import { AiModule } from "./ai/ai.module";
     NotificationsModule,
     ProfileModule,
     WaitlistModule,
+    VetRecruitmentModule,
     AiModule,
   ],
 })
