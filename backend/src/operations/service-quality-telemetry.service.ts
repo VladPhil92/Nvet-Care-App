@@ -110,12 +110,10 @@ export class ServiceQualityTelemetryService {
     private readonly launchOperations: CartagenaLaunchOperationsService,
   ) {}
 
-  async getSnapshot(input?: {
-    windowHours?: number;
-    marketDaneCode?: string;
-  }) {
+  async getSnapshot(input?: { windowHours?: number; marketDaneCode?: string }) {
     const windowHours = this.normalizeWindowHours(input?.windowHours);
-    const marketDaneCode = input?.marketDaneCode?.trim() || DEFAULT_MARKET_DANE_CODE;
+    const marketDaneCode =
+      input?.marketDaneCode?.trim() || DEFAULT_MARKET_DANE_CODE;
     const catalog = this.coverage.getCatalog();
     const market = catalog.markets.find(
       (candidate) => candidate.daneCode === marketDaneCode,
@@ -192,7 +190,8 @@ export class ServiceQualityTelemetryService {
     const resolvedTransactions = transactionRows.filter((row) =>
       RESOLVED_TRANSACTION_STATUSES.has(row.status),
     );
-    const transactionStatusCounts = this.transactionStatusCounts(transactionRows);
+    const transactionStatusCounts =
+      this.transactionStatusCounts(transactionRows);
     const paymentMethodCounts = this.paymentMethodCounts(transactionRows);
 
     const confirmedEver = scopedRows.filter((row) => row.confirmedAt).length;
@@ -244,11 +243,15 @@ export class ServiceQualityTelemetryService {
     const transactionTotal = transactionRows.length;
     const matureOutcomeCount = matureOutcomeRows.length;
     const completionRatePct = this.percent(completedMature, matureOutcomeCount);
-    const cancellationRatePct = this.percent(cancelledMature, matureOutcomeCount);
+    const cancellationRatePct = this.percent(
+      cancelledMature,
+      matureOutcomeCount,
+    );
     const disputeRatePct = this.percent(disputedMature, matureOutcomeCount);
     const paymentFailureRatePct = this.percent(
-      resolvedTransactions.filter((row) => row.status === TransactionStatus.FAILED)
-        .length,
+      resolvedTransactions.filter(
+        (row) => row.status === TransactionStatus.FAILED,
+      ).length,
       resolvedTransactions.length,
     );
     const paymentDisputeRatePct = this.percent(
@@ -390,7 +393,8 @@ export class ServiceQualityTelemetryService {
         statusCounts: transactionStatusCounts,
         methodCounts: paymentMethodCounts,
         verifiedEver: transactionRows.filter((row) => row.verifiedAt).length,
-        liquidatedEver: transactionRows.filter((row) => row.liquidatedAt).length,
+        liquidatedEver: transactionRows.filter((row) => row.liquidatedAt)
+          .length,
         failureRatePct: paymentFailureRatePct,
         disputeRatePct: paymentDisputeRatePct,
         failureRateExcludesPendingAndVerifying: true,
@@ -523,7 +527,10 @@ export class ServiceQualityTelemetryService {
         const rawMinutes =
           (row.inProgressAt.getTime() - scheduled.getTime()) / MINUTE_MS;
         if (Number.isFinite(rawMinutes)) {
-          observations.push({ minutes: Math.max(0, rawMinutes), censored: false });
+          observations.push({
+            minutes: Math.max(0, rawMinutes),
+            censored: false,
+          });
         }
         continue;
       }
@@ -622,10 +629,7 @@ export class ServiceQualityTelemetryService {
     for (const row of rows) {
       let hasIssue = false;
 
-      if (
-        row.status === AppointmentStatus.CONFIRMED &&
-        !row.confirmedAt
-      ) {
+      if (row.status === AppointmentStatus.CONFIRMED && !row.confirmedAt) {
         categories.missingConfirmedTimestamp += 1;
       }
       if (NEEDS_IN_PROGRESS_TIMESTAMP.has(row.status) && !row.inProgressAt) {
