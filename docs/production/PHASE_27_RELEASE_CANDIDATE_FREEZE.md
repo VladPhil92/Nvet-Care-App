@@ -9,6 +9,7 @@ The frozen product baseline is the Phase 26 merge on `main`:
 - main baseline: `0789ac8d405405b04372fc1ec92e749f7f6a29aa`;
 - Phase 26 certified PR head: `99ee55f4a1dea82fac54c167fb156a76a00b90f7`;
 - candidate: `1.0.0-rc.2`;
+- Android package identity: `com.nvetcare`, versionName `1.0.0-rc.2`, versionCode `10002`;
 - market scope: Cartagena de Indias, DANE `13001`;
 - channel: closed beta.
 
@@ -18,10 +19,10 @@ The frozen product baseline is the Phase 26 merge on `main`:
 
 Phase 27 adds two machine-readable control-plane files:
 
-- `docs/production/RELEASE_CANDIDATE_FREEZE.json` — frozen baseline, protected product paths, certification domains, build budgets and authority boundaries;
+- `docs/production/RELEASE_CANDIDATE_FREEZE.json` — frozen baseline, protected product paths, certification domains, package identity, build budgets and authority boundaries;
 - `docs/production/RELEASE_BLOCKERS.json` — auditable exception registry for defects that must change product code after the freeze.
 
-`RC_READINESS.json` and `GLOBAL_READINESS.json` are advanced to `1.0.0-rc.2` and must remain aligned with the Phase 27 manifest.
+`RC_READINESS.json`, `GLOBAL_READINESS.json` and Android's `prerequisiteRcTag` are aligned to `1.0.0-rc.2` and must remain convergent with the Phase 27 manifest.
 
 ## Feature-freeze enforcement
 
@@ -29,7 +30,7 @@ The freeze protects product-affecting paths, including:
 
 - root and workspace dependency manifests/lockfile;
 - backend application and Prisma sources;
-- mobile application, Android and iOS sources;
+- mobile root entry points (`mobile/App.tsx` and `mobile/index.js`), app/build configuration, application sources, Android and iOS sources;
 - dashboard application sources.
 
 A pull request that changes a protected product path after the freeze must satisfy **all** of the following:
@@ -38,10 +39,11 @@ A pull request that changes a protected product path after the freeze must satis
 2. update `RELEASE_BLOCKERS.json`;
 3. include an entry whose `prNumber` matches the pull request;
 4. target `1.0.0-rc.2`;
-5. use severity `release-blocking` and status `open` while under review;
-6. include a named owner and a substantive justification.
+5. use severity `release-blocking` and status `open` through the merge;
+6. include a named owner and a substantive justification;
+7. use an auditable GitHub merge commit.
 
-A protected product change outside a pull request fails closed.
+A protected product push that is not the merge commit of the registered blocker PR fails closed. The post-merge `push` run is allowed only when the merge message identifies that PR, the resulting commit has multiple parents, the registry changed in the same diff, and the matching blocker entry is still `open`. This lets the approved exception lifecycle remain green after merge without permitting ordinary product drift.
 
 The enforcement is imported by `scripts/security-convergence-gate.mjs`. Because Security Convergence is already aggregated by the protected `CI Success` job, the freeze is not an optional side check.
 
@@ -55,7 +57,8 @@ The enforcement is imported by `scripts/security-convergence-gate.mjs`. Because 
 
 - candidate and baseline identity;
 - Cartagena closed-beta scope;
-- RC/GLOBAL manifest convergence;
+- RC/GLOBAL/Android candidate convergence;
+- Android package identity;
 - required release workflows and contracts;
 - blocker-registry integrity;
 - protected-path drift rules;
@@ -93,9 +96,9 @@ These are regression budgets, not a claim about end-user network latency. Runtim
 
 ### 4. Android release package
 
-The certification workflow always builds an unsigned Android `bundleRelease` using the same pinned React Native/Reanimated and Gradle wrapper integrity contract used by CI. The generated AAB is uploaded as a 30-day workflow artifact.
+The certification workflow always builds an unsigned Android `bundleRelease` using the same pinned React Native/Reanimated and Gradle wrapper integrity contract used by CI. Immediately before the build, it loads `androidVersionName` and `androidVersionCode` from the frozen manifest and exports them as `NVET_ANDROID_VERSION_NAME` and `NVET_ANDROID_VERSION_CODE`. The versionName must equal the RC candidate and the versionCode must be greater than the development default. The artifact name also carries both values.
 
-This proves the candidate can be packaged. It does **not** prove Play App Signing, upload certificate ownership, Play Console configuration, internal-track upload or physical-device smoke testing; those external/operator gates remain separate.
+This proves that the generated AAB belongs to the frozen RC identity and can be packaged reproducibly. It does **not** prove Play App Signing, upload certificate ownership, Play Console configuration, internal-track upload or physical-device smoke testing; those external/operator gates remain separate.
 
 ## Release blocker lifecycle
 
@@ -108,7 +111,8 @@ When a true release-blocking defect appears after the freeze:
 3. register the PR in `RELEASE_BLOCKERS.json` with status `open`;
 4. make the minimum corrective product change;
 5. require CI and Release Candidate Certification to pass;
-6. after merge, mark the registry entry `resolved` in a non-product follow-up if historical retention is desired.
+6. merge using a GitHub merge commit so the protected post-merge push can be tied back to the registered PR;
+7. after the merge push certifies successfully, mark the registry entry `resolved` in a non-product follow-up if historical retention is desired.
 
 Feature requests, cleanup, refactors and opportunistic improvements do not qualify as release blockers and should wait until the freeze is lifted.
 
