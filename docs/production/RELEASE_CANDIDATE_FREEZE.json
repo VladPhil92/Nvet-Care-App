@@ -23,6 +23,7 @@
     "featureFreezeActive": true,
     "releaseBlockerLabel": "release-blocker",
     "releaseBlockerRegistry": "docs/production/RELEASE_BLOCKERS.json",
+    "releaseBlockerMergeMethod": "merge-commit",
     "protectedProductPaths": [
       "package.json",
       "package-lock.json",
@@ -31,6 +32,11 @@
       "backend/prisma/",
       "backend/Dockerfile",
       "mobile/package.json",
+      "mobile/App.tsx",
+      "mobile/index.js",
+      "mobile/app.json",
+      "mobile/babel.config.js",
+      "mobile/metro.config.js",
       "mobile/src/",
       "mobile/android/",
       "mobile/ios/",
@@ -42,7 +48,8 @@
       "registryEntryRequired": true,
       "severity": "release-blocking",
       "status": "open",
-      "prNumberMustMatch": true
+      "prNumberMustMatch": true,
+      "mergeCommitRequired": true
     }
   },
   "certification": {
