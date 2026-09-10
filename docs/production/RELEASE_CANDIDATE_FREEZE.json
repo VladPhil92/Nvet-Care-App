@@ -19,6 +19,11 @@
     "commercialLaunchAuthorized": false,
     "publicStoreReleaseAuthorized": false
   },
+  "packageIdentity": {
+    "androidApplicationId": "com.nvetcare",
+    "androidVersionName": "1.0.0-rc.2",
+    "androidVersionCode": 10002
+  },
   "governance": {
     "featureFreezeActive": true,
     "releaseBlockerLabel": "release-blocker",
