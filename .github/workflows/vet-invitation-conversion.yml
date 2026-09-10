@@ -1,0 +1,41 @@
+name: Vet Invitation Conversion
+
+on:
+  pull_request:
+    paths:
+      - 'backend/src/recruitment/**'
+      - 'dashboard/src/App.tsx'
+      - 'dashboard/src/pages/VetInvitationRegisterPage.tsx'
+      - 'dashboard/src/pages/VetInvitationOpsPage.tsx'
+      - 'dashboard/src/services/vet-invitation.service.ts'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'docs/production/PHASE_21_VET_INVITATION_CONVERSION.md'
+      - 'scripts/verify-vet-invitation-conversion.mjs'
+      - '.github/workflows/vet-invitation-conversion.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/recruitment/**'
+      - 'dashboard/src/App.tsx'
+      - 'dashboard/src/pages/VetInvitationRegisterPage.tsx'
+      - 'dashboard/src/pages/VetInvitationOpsPage.tsx'
+      - 'dashboard/src/services/vet-invitation.service.ts'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'docs/production/PHASE_21_VET_INVITATION_CONVERSION.md'
+      - 'scripts/verify-vet-invitation-conversion.mjs'
+      - '.github/workflows/vet-invitation-conversion.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify veterinarian invitation conversion contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+      - name: Enforce Phase 21 invitation boundaries
+        run: node scripts/verify-vet-invitation-conversion.mjs
