@@ -1,0 +1,41 @@
+name: Cartagena Launch Operations
+
+on:
+  pull_request:
+    paths:
+      - 'backend/src/beta/**'
+      - 'dashboard/src/pages/LaunchOperationsPage.tsx'
+      - 'dashboard/src/services/launch-operations.service.ts'
+      - 'dashboard/src/App.tsx'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'scripts/verify-cartagena-launch-operations.mjs'
+      - 'docs/production/PHASE_25_CARTAGENA_LAUNCH_OPERATIONS.md'
+      - '.github/workflows/cartagena-launch-operations.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/beta/**'
+      - 'dashboard/src/pages/LaunchOperationsPage.tsx'
+      - 'dashboard/src/services/launch-operations.service.ts'
+      - 'dashboard/src/App.tsx'
+      - 'dashboard/src/components/Sidebar.tsx'
+      - 'scripts/verify-cartagena-launch-operations.mjs'
+      - 'docs/production/PHASE_25_CARTAGENA_LAUNCH_OPERATIONS.md'
+      - '.github/workflows/cartagena-launch-operations.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Verify Cartagena launch operations contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+      - name: Enforce Phase 25 operator boundaries
+        run: node scripts/verify-cartagena-launch-operations.mjs
