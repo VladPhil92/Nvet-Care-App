@@ -15,13 +15,13 @@ on:
 permissions:
   contents: read
 
-# Staging is a single mutable environment. Eligible certifications therefore
-# share one lane across candidate SHAs: a newer main candidate cancels an older
-# workflow before either can rotate fixtures concurrently. Ineligible runs keep
-# unique groups so they cannot cancel an active certification before job `if`
-# evaluation.
+# GitHub resolves workflow-level concurrency before evaluating the job `if`.
+# Therefore an ineligible workflow_run must get a unique group; otherwise a
+# skipped duplicate for the same SHA can cancel an active main certification.
+# Successful CI runs from main continue to deduplicate by candidate SHA. Railway
+# deployment overlap across candidates is serialized by railway-staging-lane.mjs.
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && 'nvet-staging-e2e-certification-main' || format('nvet-staging-e2e-noncert-{0}', github.run_id) }}
+  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && format('nvet-staging-e2e-certification-{0}', github.event.workflow_run.head_sha) || format('nvet-staging-e2e-noncert-{0}', github.run_id) }}
   cancel-in-progress: true
 
 env:
@@ -81,8 +81,8 @@ jobs:
             echo ''
             echo "- Candidate: \`${RC_CANDIDATE_SHA}\`"
             echo '- Target guard: Nvet Care App / staging / nvet-staging-backend.'
-            echo '- Concurrency: one mutable staging certification lane across main candidate SHAs.'
-            echo '- Deployment serialization: waits for Railway staging to become idle before fixture rotation and exact-SHA deploy.'
+            echo '- GitHub concurrency: successful main certifications deduplicate by candidate SHA.'
+            echo '- Railway deployment serialization: waits for the staging service to become idle before fixture rotation and exact-SHA deploy.'
             echo '- Credentials: runtime-generated synthetic CLIENT/VET/ADMIN passwords, stored only as Railway staging variables and masked in Actions.'
             echo '- Deployment: exact candidate SHA through Railway API.'
             echo '- Railway transport: bounded retries for transient 408/425/429/5xx or network failures; permanent/semantic failures remain fail-closed.'
