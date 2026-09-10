@@ -123,7 +123,7 @@ export default function BetaEvidencePage() {
   const [submitting, setSubmitting] = useState(false)
   const [authorizing, setAuthorizing] = useState(false)
   const [error, setError] = useState('')
-  const [leaseHours, setLeaseHours] = useState(24)
+  const [leaseHours, setLeaseHours] = useState(192)
   const [form, setForm] = useState({
     gate: GATES[0] as Gate,
     environment: 'production' as 'production' | 'staging',
@@ -351,9 +351,9 @@ export default function BetaEvidencePage() {
                   <input
                     type="number"
                     min={1}
-                    max={168}
+                    max={192}
                     value={leaseHours}
-                    onChange={(event) => setLeaseHours(Math.min(168, Math.max(1, Number(event.target.value) || 1)))}
+                    onChange={(event) => setLeaseHours(Math.min(192, Math.max(1, Number(event.target.value) || 1)))}
                     style={{ width: 110, padding: 9, border: `1px solid ${T.lineHi}`, borderRadius: 8 }}
                   />
                 </label>
