@@ -36,19 +36,14 @@ export class BetaReadinessService {
   ) {}
 
   async getCartagenaSnapshot() {
-    const [
-      supply,
-      evidencePromotion,
-      authorization,
-      cohort,
-      support,
-    ] = await Promise.all([
-      this.cartagenaSupply.getSnapshot(),
-      this.evidence.getPromotionSummary(),
-      this.authorization.getStatus(),
-      this.cohort.getOperationalSnapshot(),
-      this.support.getOperationalSnapshot(),
-    ]);
+    const [supply, evidencePromotion, authorization, cohort, support] =
+      await Promise.all([
+        this.cartagenaSupply.getSnapshot(),
+        this.evidence.getPromotionSummary(),
+        this.authorization.getStatus(),
+        this.cohort.getOperationalSnapshot(),
+        this.support.getOperationalSnapshot(),
+      ]);
 
     const configuredClients = cohort.activeMemberships;
     const cohortConfigured = cohort.configured;
