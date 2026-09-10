@@ -21,6 +21,7 @@ describe("ServiceQualityTelemetryService", () => {
   let service: ServiceQualityTelemetryService;
 
   const baseTime = new Date("2026-09-10T18:00:00.000Z");
+  const currentTime = new Date("2026-09-20T18:00:00.000Z");
   const minutesAfter = (value: number) =>
     new Date(baseTime.getTime() + value * 60_000);
 
@@ -32,7 +33,6 @@ describe("ServiceQualityTelemetryService", () => {
     return {
       status: AppointmentStatus.COMPLETED,
       createdAt,
-      updatedAt: new Date(createdAt.getTime() + 150 * 60_000),
       confirmedAt: new Date(createdAt.getTime() + 10 * 60_000),
       inProgressAt: new Date(createdAt.getTime() + 30 * 60_000),
       completedAt: new Date(createdAt.getTime() + 90 * 60_000),
@@ -42,7 +42,6 @@ describe("ServiceQualityTelemetryService", () => {
         status: TransactionStatus.LIQUIDATED,
         paymentMethod: PaymentMethod.PSE,
         createdAt: new Date(createdAt.getTime() + 2 * 60_000),
-        updatedAt: new Date(createdAt.getTime() + 45 * 60_000),
         verifiedAt: new Date(createdAt.getTime() + 5 * 60_000),
         liquidatedAt: new Date(createdAt.getTime() + 40 * 60_000),
       },
@@ -50,8 +49,27 @@ describe("ServiceQualityTelemetryService", () => {
     };
   }
 
+  function recentPending(index: number) {
+    const createdAt = new Date(currentTime.getTime() - (5 + index) * 60_000);
+    return appointment(index, {
+      status: AppointmentStatus.PENDING,
+      createdAt,
+      confirmedAt: null,
+      inProgressAt: null,
+      completedAt: null,
+      lastStatusChangeAt: null,
+      transaction: {
+        status: TransactionStatus.PENDING,
+        paymentMethod: PaymentMethod.PSE,
+        createdAt,
+        verifiedAt: null,
+        liquidatedAt: null,
+      },
+    });
+  }
+
   beforeEach(() => {
-    jest.useFakeTimers().setSystemTime(new Date("2026-09-20T18:00:00.000Z"));
+    jest.useFakeTimers().setSystemTime(currentTime);
     jest.clearAllMocks();
     service = new ServiceQualityTelemetryService(
       prisma,
@@ -106,9 +124,13 @@ describe("ServiceQualityTelemetryService", () => {
     expect(snapshot.market.daneCode).toBe("13001");
     expect(snapshot.appointments.total).toBe(10);
     expect(snapshot.appointments.completedEver).toBe(10);
+    expect(snapshot.appointments.terminalOutcomeCount).toBe(10);
     expect(snapshot.appointments.completionRatePct).toBe(100);
     expect(snapshot.latency.vetResponseMinutes.p95Minutes).toBe(10);
+    expect(snapshot.latency.vetResponseSloMinutes.p95Minutes).toBe(10);
+    expect(snapshot.latency.vetResponseSloMinutes.censoredSampleSize).toBe(0);
     expect(snapshot.payments.statusCounts.LIQUIDATED).toBe(10);
+    expect(snapshot.payments.resolvedTransactions).toBe(10);
     expect(snapshot.slo.overall).toBe("HEALTHY");
     expect(snapshot.boundaries.aggregateOnly).toBe(true);
     expect(snapshot.boundaries.exposesUserIdentifiers).toBe(false);
@@ -132,7 +154,56 @@ describe("ServiceQualityTelemetryService", () => {
     expect(snapshot.slo.automaticallyChangesLaunchDecision).toBe(false);
   });
 
-  it("marks degraded response and cancellation outcomes as breached", async () => {
+  it("keeps ten brand-new pending appointments out of mature outcome denominators", async () => {
+    prisma.appointment.findMany.mockResolvedValue(
+      Array.from({ length: 10 }, (_, index) => recentPending(index)),
+    );
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.appointments.total).toBe(10);
+    expect(snapshot.appointments.terminalOutcomeCount).toBe(0);
+    expect(snapshot.appointments.completionRatePct).toBeNull();
+    expect(snapshot.latency.vetResponseSloMinutes.sampleSize).toBe(0);
+    expect(snapshot.payments.resolvedTransactions).toBe(0);
+    expect(snapshot.payments.failureRatePct).toBeNull();
+    expect(snapshot.slo.overall).toBe("INSUFFICIENT_DATA");
+    expect(snapshot.operatorAction).toBe("ACCUMULATE_CONTROLLED_BETA_SAMPLE");
+  });
+
+  it("counts overdue unconfirmed appointments as censored response evidence", async () => {
+    const rows = Array.from({ length: 10 }, (_, index) => appointment(index));
+    rows[0] = appointment(0, {
+      status: AppointmentStatus.PENDING,
+      confirmedAt: null,
+      inProgressAt: null,
+      completedAt: null,
+      lastStatusChangeAt: null,
+      transaction: {
+        status: TransactionStatus.PENDING,
+        paymentMethod: PaymentMethod.PSE,
+        createdAt: baseTime,
+        verifiedAt: null,
+        liquidatedAt: null,
+      },
+    });
+    prisma.appointment.findMany.mockResolvedValue(rows);
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.latency.vetResponseMinutes.sampleSize).toBe(9);
+    expect(snapshot.latency.vetResponseSloMinutes.sampleSize).toBe(10);
+    expect(snapshot.latency.vetResponseSloMinutes.censoredSampleSize).toBe(1);
+    expect(snapshot.latency.vetResponseSloMinutes.overdueUnconfirmed).toBe(1);
+    expect(snapshot.slo.metrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "vet-response-p95", state: "BREACHED" }),
+      ]),
+    );
+    expect(snapshot.slo.overall).toBe("BREACHED");
+  });
+
+  it("marks degraded mature outcomes and resolved payment failures as breached", async () => {
     const rows = Array.from({ length: 10 }, (_, index) => {
       if (index < 8) {
         const createdAt = minutesAfter(index * 120);
@@ -146,7 +217,6 @@ describe("ServiceQualityTelemetryService", () => {
             status: TransactionStatus.FAILED,
             paymentMethod: PaymentMethod.PSE,
             createdAt,
-            updatedAt: new Date(createdAt.getTime() + 70 * 60_000),
             verifiedAt: null,
             liquidatedAt: null,
           },
@@ -161,7 +231,9 @@ describe("ServiceQualityTelemetryService", () => {
 
     const snapshot = await service.getSnapshot();
 
+    expect(snapshot.appointments.terminalOutcomeCount).toBe(10);
     expect(snapshot.appointments.cancellationRatePct).toBe(80);
+    expect(snapshot.payments.resolvedTransactions).toBe(10);
     expect(snapshot.payments.failureRatePct).toBe(80);
     expect(snapshot.slo.overall).toBe("BREACHED");
     expect(snapshot.slo.metrics).toEqual(
@@ -189,10 +261,45 @@ describe("ServiceQualityTelemetryService", () => {
     expect(snapshot.dataQuality.categories.missingConfirmedTimestamp).toBe(1);
     expect(snapshot.dataQuality.categories.missingInProgressTimestamp).toBe(1);
     expect(snapshot.dataQuality.categories.missingCompletedTimestamp).toBe(1);
+    expect(
+      snapshot.dataQuality.measurementIntegrity
+        .matureUnconfirmedResponseUsesElapsedLowerBound,
+    ).toBe(true);
     expect(snapshot.dataQuality.measurementIntegrity.noSyntheticTimestamps).toBe(
       true,
     );
     expect(snapshot.operatorAction).toBe("REVIEW_TELEMETRY_DATA_INTEGRITY");
+  });
+
+  it("excludes unresolved payment states from the failure-rate denominator", async () => {
+    const rows = Array.from({ length: 10 }, (_, index) =>
+      appointment(index, {
+        transaction: {
+          status:
+            index < 5
+              ? TransactionStatus.PENDING
+              : TransactionStatus.CONFIRMED,
+          paymentMethod: PaymentMethod.PSE,
+          createdAt: minutesAfter(index * 120),
+          verifiedAt:
+            index < 5 ? null : new Date(minutesAfter(index * 120).getTime() + 60_000),
+          liquidatedAt: null,
+        },
+      }),
+    );
+    prisma.appointment.findMany.mockResolvedValue(rows);
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.payments.transactions).toBe(10);
+    expect(snapshot.payments.resolvedTransactions).toBe(5);
+    expect(snapshot.payments.unresolvedTransactions).toBe(5);
+    expect(snapshot.payments.failureRatePct).toBe(0);
+    expect(
+      snapshot.slo.metrics.find((metric) => metric.id === "payment-failure-rate")
+        ?.state,
+    ).toBe("INSUFFICIENT_DATA");
+    expect(snapshot.slo.overall).toBe("INSUFFICIENT_DATA");
   });
 
   it("filters records by the canonical coverage market resolver", async () => {
