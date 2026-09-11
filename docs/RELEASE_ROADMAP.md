@@ -1,18 +1,19 @@
 # Nvet Care — Production Roadmap v1.0
 
-**Baseline auditado:** `main` @ `33e7c52f46ee73ff38bb0f6f07a819d1abddd97e`  
-**Revisión:** 2026-09-07  
-**Programa activo:** Global Release Closure
+**Baseline auditado:** `main` @ `bee7afd3382a63344e572f0856847db1d63eadac`  
+**Revisión:** 2026-09-10  
+**Programa activo:** Phase 28 — External Evidence Closure & Controlled RC Promotion  
+**Candidato congelado:** `1.0.0-rc.2`
 
-Este documento describe la ruta operativa hacia Nvet Care 1.0. La fuente canónica para medir el estado global es `docs/production/GLOBAL_READINESS.json`, validada por `scripts/verify-global-readiness.mjs` y por el workflow `Nvet Global Release Readiness`.
+Este documento describe la ruta operativa vigente hacia Nvet Care 1.0. La fuente canónica para medir el estado global es `docs/production/GLOBAL_READINESS.json`, validada por `scripts/verify-global-readiness.mjs` y por el workflow `Nvet Global Release Readiness`.
 
-La regla principal del cierre 1.0 es separar tres dimensiones que antes aparecían mezcladas:
+La regla principal del cierre 1.0 es separar tres dimensiones:
 
 1. **engineering completion:** software, contratos, CI, seguridad, recovery y release tooling implementados en el repositorio;
 2. **machine runtime evidence:** workflows y verificaciones ejecutadas con éxito sobre el SHA auditado;
 3. **external/operator evidence:** hechos que requieren proveedor, cuenta administrativa, dispositivo físico, banco, Play Console, firma o decisión operacional.
 
-Un pendiente externo bloquea la promoción del release, pero no puede representarse como una funcionalidad de software inexistente.
+Un pendiente externo bloquea la promoción o activación correspondiente, pero no puede representarse como una funcionalidad de software inexistente.
 
 ## Arquitectura canónica
 
@@ -22,52 +23,69 @@ La plataforma web pública de Nvet Care vive en `ctgone.com/nvetcareapp`, implem
 - `mobile/`: aplicación React Native con Android nativo y preparación iOS;
 - `dashboard/`: implementación histórica/deprecada como producto web independiente, conservada para compatibilidad y referencia.
 
-Web y móvil deben consumir el mismo backend y respetar los mismos contratos de identidad, autorización, reservas, pagos, notificaciones y ciclo de vida de cuenta.
+Web y móvil consumen el mismo backend y deben respetar los mismos contratos de identidad, autorización, reservas, pagos, notificaciones y ciclo de vida de cuenta.
 
 ## Estado ejecutivo por fase
 
-| Fase | Objetivo | Estado 2026-09-07 |
+| Fase | Objetivo | Estado 2026-09-10 |
 |---|---|---|
 | 0 | Consolidación del repositorio | COMPLETA |
 | 1 | Baseline técnico + CI reproducible | COMPLETA |
 | 2 | Base móvil nativa | ANDROID COMPLETO PARA RC / iOS POST-RC |
-| 3 | Staging aislado | IMPLEMENTADO Y CON PREFLIGHT/E2E AUTOMATIZADO |
-| 4 | Circuito E2E MVP | IMPLEMENTADO; CI/STAGING CERTIFICAN LOS FLUJOS CRÍTICOS |
-| 5 | Geolocalización Cartagena | IMPLEMENTADA; validación física sigue como evidencia externa |
-| 6 | Chat + tiempo real + notificaciones | IMPLEMENTACIÓN AVANZADA; evidencia física/proveedor sigue separada |
-| 7 | Pagos | CONTRATO Y CERTIFICACIÓN AUTOMÁTICA IMPLEMENTADOS; transferencia bancaria real pendiente |
+| 3 | Staging aislado | IMPLEMENTADO + PREFLIGHT/E2E AUTOMATIZADO |
+| 4 | Circuito E2E MVP | IMPLEMENTADO Y CERTIFICADO POR CI/STAGING |
+| 5 | Geolocalización Cartagena | IMPLEMENTADA; evidencia física permanece externa |
+| 6 | Chat + tiempo real + notificaciones | IMPLEMENTACIÓN COMPLETA PARA BASELINE RC; evidencia física/proveedor separada |
+| 7 | Pagos | CONTRATO + CERTIFICACIÓN AUTOMÁTICA IMPLEMENTADOS; transferencia bancaria real pendiente |
 | 8 | Dashboard operativo | REUBICADO a `ctgone.com/nvetcareapp` |
 | 9 | Seguridad/privacidad | CONTRATOS Y GATES IMPLEMENTADOS |
-| 10 | Observabilidad/backups | AUTOMATIZACIÓN IMPLEMENTADA; backup provider/restore real pendientes de evidencia |
-| 11 | Release Candidate | INFRAESTRUCTURA COMPLETA; promoción `1.0.0-rc.1` pendiente de evidencia externa |
-| 12 | Beta cerrada Cartagena | INFRAESTRUCTURA COMPLETA; activación comercial pendiente |
-| 13 | Android Production | CÓDIGO/CONTRATO AVANZADO; Play, firma, AAB y dispositivos físicos pendientes |
+| 10 | Observabilidad/backups | BACKUP, RESTORE Y ALERTING REPRESENTADOS COMO VERIFIED EN READINESS CANÓNICO |
+| 11 | Release Candidate | SUPERADA POR PHASE 27/28; candidato vigente `1.0.0-rc.2` |
+| 12 | Beta cerrada Cartagena | INFRAESTRUCTURA COMPLETA; evidencia humana/operativa pendiente |
+| 13 | Android Production | PREFLIGHT TÉCNICO AVANZADO; Play/signing/internal track/device smoke pendientes |
 | 14 | iOS Production | POST-RC / NO BLOQUEA ANDROID 1.0 |
-| Closure I | Readiness global canónico | EN DESPLIEGUE mediante `GLOBAL_READINESS.json` |
+| 15–23 | Cobertura, supply VET, recruitment, invitations y SLA | IMPLEMENTADAS |
+| 24 | Cartagena Launch Readiness | IMPLEMENTADA |
+| 25 | Cartagena Launch Operations | IMPLEMENTADA |
+| 26 | Service Quality Telemetry | IMPLEMENTADA |
+| 27 | Release Candidate Freeze & Production Closure | COMPLETA; `1.0.0-rc.2` FROZEN |
+| 28 | External Evidence Closure & Controlled RC Promotion | EN DESPLIEGUE |
+| 29 | Cartagena Beta Activation | SIGUIENTE; BLOQUEADA HASTA PROMOCIÓN RC + EVIDENCIA BETA REAL |
 
-## Identidad y roles
+## Estado de Phase 27
 
-La identidad compartida CTG One ↔ Nvet Care utiliza verificación server-side del token de Supabase, `ctgUserId` único y sesión Nvet emitida por el backend. El provisioning de primera visita crea un usuario CLIENT cuando no existe vínculo previo. Un correo coincidente con una cuenta Nvet preexistente no se auto-vincula: el sistema falla cerrado para evitar account takeover.
+Phase 27 congeló el producto en `1.0.0-rc.2` y activó un feature freeze fail-closed. Las rutas de producto protegidas solo pueden cambiar mediante un `release-blocker` auditable. `RELEASE_BLOCKERS.json` debe permanecer vacío en estado estable.
 
-CLIENT, VET, ADMIN y SUPERADMIN comparten el punto de entrada; el backend determina el rol efectivo y los guards son autoritativos. La selección inicial de tipo de usuario y los dashboards diferenciados no sustituyen la autorización server-side.
+El candidato congelado usa:
+
+- `applicationId`: `com.nvetcare`;
+- Android `versionName`: `1.0.0-rc.2`;
+- Android `versionCode`: `10002`;
+- mercado inicial: Cartagena de Indias, DANE `13001`;
+- canal: closed beta;
+- `commercialLaunchAuthorized=false`;
+- `publicStoreReleaseAuthorized=false`.
+
+## Phase 28 — Controlled RC Promotion
+
+Phase 28 no agrega funcionalidades de producto. Su objetivo es cerrar la evidencia externa necesaria para promover el RC y crear una promoción auditable sin conceder autoridad automática de lanzamiento.
+
+Fuentes nuevas:
+
+- `docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json`;
+- `docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.md`;
+- `scripts/verify-controlled-rc-promotion.mjs`;
+- `.github/workflows/controlled-rc-promotion.yml`.
+
+La promoción real se ejecuta únicamente mediante `workflow_dispatch`, después de que todos los gates RC estén `verified`, no existan blockers abiertos y el producto no haya derivado desde el candidato congelado.
+
+El tag `1.0.0-rc.2` debe apuntar al commit candidato exacto. La creación del tag produce evidencia; no auto-aprueba `rcPromoted`. La proyección hacia Android y Beta sigue perteneciendo al Operator Evidence Control append-only.
 
 ## Engineering completion
 
-El repositorio mantiene contratos verificables para:
+`GLOBAL_READINESS.json -> engineeringGates` es la fuente de verdad de esta dimensión. El baseline incluye CI, backend, Android nativo/E2E, seguridad, recovery, finanzas, Railway, convergencia web, Play compliance, account deletion, Android 16, Phase 27 freeze y Phase 28 controlled-promotion contract.
 
-- CI agregado y builds reproducibles;
-- backend NestJS/PostgreSQL;
-- Android nativo y Detox;
-- seguridad y límites de autorización;
-- recovery y restore tooling a nivel de aplicación;
-- pagos y reconciliación/certificación del rail TRANSFER;
-- Railway deployment/readiness;
-- convergencia web;
-- Google Play compliance;
-- eliminación de cuenta;
-- compatibilidad Android 16/API 36.
-
-La fuente de verdad de esta dimensión es `engineeringGates` dentro de `GLOBAL_READINESS.json`. Un gate marcado `verified` debe apuntar a evidencia versionada existente y el verificador falla cerrado si esa evidencia desaparece o si un source gate deriva a `pending`.
+Un gate `verified` debe apuntar a evidencia versionada existente. El verificador falla cerrado si la evidencia desaparece o un source gate deriva.
 
 ## Machine runtime evidence
 
@@ -81,77 +99,82 @@ La fuente de verdad de esta dimensión es `engineeringGates` dentro de `GLOBAL_R
 - `production-deployment-attestation.yml`;
 - `web-production-convergence.yml`.
 
-El resultado se publica en `.artifacts/global-readiness.json`. Un workflow que todavía está ejecutándose o que no tiene éxito para el SHA aparece como `BLOCKED`; el reporte no falsifica éxito por herencia de un SHA anterior.
+Los reportes de cierre y promoción consumen estos contratos pero no sustituyen la evidencia externa.
 
-## External/operator evidence pendiente
+## RC external/operator evidence
 
-La promoción 1.0 permanece fail-closed mientras falte evidencia externa obligatoria. Los principales pendientes son:
+En el estado vigente:
 
-- backup automático real del PostgreSQL productivo a nivel proveedor;
-- restore drill real y controlado;
-- transferencia bancaria real de valor mínimo y verificación independiente del movimiento;
-- protección administrativa de `main` con PR + `CI Success` requerido;
-- creación/configuración definitiva de Google Play Console;
-- Play App Signing y certificado de upload;
-- política de privacidad pública y revisión Data Safety;
-- credenciales de reviewer;
-- AAB firmado y trazable;
-- carga a internal track;
-- smoke test en al menos dos dispositivos Android físicos.
+- `productionBackupConfigured`: `verified`;
+- `restoreDrillVerified`: `verified`;
+- `productionAlertingVerified`: `verified`;
+- `main-branch-protection`: `verified` mediante repository ruleset activo;
+- `paymentRailVerified`: `pending`.
 
-Estos gates se resuelven desde `RC_READINESS.json`, `ANDROID_PRODUCTION_READINESS.json` y `operatorGates` del manifiesto global. No deben copiarse manualmente a documentos secundarios.
+Por tanto, el **único blocker externo pre-promoción del RC** es la transferencia bancaria real controlada.
 
-## Recovery
+## Pagos — frontera manual vigente
 
-El recovery a nivel de aplicación y sus gates automáticos ya forman parte del engineering baseline. No obstante, una prueba `pg_dump/pg_restore` o un workflow verde no sustituyen un restore real del proveedor. Para cerrar 1.0 se exige la cadena:
+Crear una cita o certificar el rail TRANSFER en staging no constituye movimiento real de fondos. `paymentRailVerified` solo puede cambiar a `verified` después de una transferencia bancaria real controlada, con evidencia privada/redactada y verificable del movimiento efectivo.
 
-`backup provider existente → backup seleccionado → ventana controlada → restore → PostgreSQL validado → /api/health/ready válido → evidencia operator redacted`.
+La evidencia se gobierna mediante `real-transfer-rail` en `OPERATOR_EVIDENCE_CONTROL.json`. Un estado interno de aplicación, dato sintético o workflow verde no satisface el gate.
 
-## Pagos
+## Repository governance
 
-Crear una cita no crea una transacción financiera ficticia. El rail TRANSFER dispone de certificación automatizada, pero `paymentRailVerified` solo puede cambiar a `verified` después de una transferencia bancaria real controlada, con evidencia privada/redactada de fondos efectivamente movidos. Un estado interno de la aplicación no satisface este gate.
+`main` está gobernado por el ruleset activo `Protect main` (`22639793`), que:
+
+- exige pull request;
+- exige `CI Success`;
+- bloquea eliminación de la rama;
+- bloquea non-fast-forward;
+- no contiene bypass actors.
+
+Classic branch protection no es la autoridad usada para este control; el ruleset del repositorio es la evidencia canónica.
+
+## Beta Cartagena después de RC promotion
+
+La promoción del RC no activa la beta. Phase 29 deberá cerrar los gates beta restantes, incluyendo:
+
+- al menos 3 veterinarios reales de Cartagena operational-ready;
+- cohort real de clientes;
+- owner y canal de soporte confirmados;
+- revisión legal/privacy de beta;
+- rollback drill real del booking kill switch;
+- ventana posterior de observación operativa.
+
+Las capas técnicas para supply, recruitment, invitations, launch readiness, launch operations y service-quality telemetry ya están implementadas.
 
 ## Android Production
 
-Baseline:
+Baseline técnico:
 
 - `applicationId`: `com.nvetcare`;
-- `compileSdk`: 36;
-- `targetSdk`: 36;
-- Android Gradle Plugin: 8.10.1;
-- Gradle: 8.11.1;
-- JDK: 17;
-- Node: 22.x;
-- release workflow fail-closed para signing y certificado.
+- target API 36;
+- Android 16 behavior contract verificado;
+- account deletion lifecycle verificado;
+- Play compliance contract verificado;
+- unsigned reproducible RC AAB disponible desde Phase 27 certification.
 
-La automatización puede construir y verificar el artefacto, pero no debe declarar como realizada la creación de la app en Play Console, la custodia de claves, la revisión Data Safety, la observación del internal track o las pruebas físicas hasta que exista evidencia real.
-
-## Branch protection
-
-El issue #77 sigue siendo un pendiente administrativo real. La configuración objetivo es:
-
-- exigir pull request para `main`;
-- requerir `CI Success`;
-- bloquear pushes directos;
-- mantener el gate aplicable a maintainers cuando el plan/configuración lo permita.
-
-El repositorio puede verificar y documentar esta política, pero aplicarla requiere permisos de administración de GitHub.
+La ruta Android sigue bloqueada por hechos externos como Play Console, Play App Signing, upload certificate, política pública, Data Safety, reviewer access, AAB firmado, internal track y pruebas físicas en al menos dos dispositivos.
 
 ## Regla de promoción 1.0
 
-No se promueve `1.0.0-rc.1` ni Android Production porque el software "parezca listo". La promoción solo ocurre cuando:
+No se promueve un RC porque el software "parezca listo". La promoción solo ocurre cuando:
 
-1. `engineering = 100%`;
-2. los runtime workflows obligatorios están verdes para el SHA candidato;
-3. todos los external/operator gates bloqueantes están `verified`;
-4. la evidencia tiene referencia concreta, fecha y propietario;
-5. no existe documentación canónica contradictoria.
+1. el engineering baseline requerido está verificado;
+2. los contratos/runtime obligatorios están sanos;
+3. todos los gates RC pre-promoción están `verified`;
+4. la evidencia contiene referencia concreta y propietario;
+5. no existen release blockers abiertos;
+6. no existe deriva en las rutas de producto congeladas;
+7. la promoción se ejecuta por el workflow controlado y contra el SHA candidato exacto.
 
-## Prioridad desde Closure I
+## Prioridad vigente
 
-1. **P0 técnico:** cualquier regresión en CI, seguridad, auth, recovery, pagos o build/release.
-2. **P0 externo:** backup provider, restore drill, transferencia real, branch protection y cadena Play/signing.
-3. **P1:** device smoke, internal track, reviewer access, política/Play declarations.
-4. **P2:** nuevas features que puedan esperar a 1.1/2.0.
+1. **P0 externo:** completar `paymentRailVerified` con transferencia real y evidencia redactada.
+2. **P0 release:** ejecutar Phase 28 controlled promotion y aprobar `rc-promoted` por Operator Evidence Control.
+3. **P0 beta:** cerrar evidencia real de VET supply, cohort, soporte, legal/privacy y rollback para Cartagena.
+4. **P1 Android:** Play/signing/internal track/device smoke.
+5. **P2:** iOS y nuevas features para 1.1/2.0.
 
-Hasta la promoción del RC no se abrirán migraciones arquitectónicas ni features grandes que aumenten innecesariamente la superficie de riesgo.
+Hasta la promoción y estabilización de la beta no deben abrirse features grandes o migraciones arquitectónicas que incrementen innecesariamente la superficie de riesgo.

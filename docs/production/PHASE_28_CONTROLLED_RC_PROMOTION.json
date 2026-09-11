@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "phase": 28,
+  "program": "controlled-rc-promotion",
+  "candidate": "1.0.0-rc.2",
+  "candidateCommitSha": "bee7afd3382a63344e572f0856847db1d63eadac",
+  "prerequisitePhase": 27,
+  "prerequisiteManifest": "docs/production/RELEASE_CANDIDATE_FREEZE.json",
+  "policy": {
+    "failClosed": true,
+    "featureFreezeMustRemainActive": true,
+    "openReleaseBlockersMustBeZero": true,
+    "allRcExternalEvidenceMustBeVerified": true,
+    "repositoryGovernanceMustBeVerified": true,
+    "promotionIsManualDispatchOnly": true,
+    "promotionNeverAuthorizesCommercialLaunch": true,
+    "promotionNeverPublishesToPlayStore": true,
+    "promotionNeverApprovesOperatorEvidence": true,
+    "promotionNeverMutatesProviderConfiguration": true,
+    "postPromotionProjectionRequiresOperatorEvidenceControl": true
+  },
+  "authoritativeInputs": {
+    "freeze": "docs/production/RELEASE_CANDIDATE_FREEZE.json",
+    "blockers": "docs/production/RELEASE_BLOCKERS.json",
+    "rcReadiness": "docs/production/RC_READINESS.json",
+    "globalReadiness": "docs/production/GLOBAL_READINESS.json",
+    "releaseClosure": "docs/production/RELEASE_CLOSURE_CONTROL.json",
+    "rcEvidenceClosure": "docs/production/RC_EVIDENCE_CLOSURE_CONTROL.json",
+    "operatorEvidence": "docs/production/OPERATOR_EVIDENCE_CONTROL.json",
+    "androidReadiness": "docs/production/ANDROID_PRODUCTION_READINESS.json",
+    "betaReadiness": "docs/production/BETA_CARTAGENA_READINESS.json"
+  },
+  "prePromotionRequirements": {
+    "freezeState": "FROZEN",
+    "commercialLaunchAuthorized": false,
+    "publicStoreReleaseAuthorized": false,
+    "requiredRcEvidence": [
+      "productionBackupConfigured",
+      "restoreDrillVerified",
+      "productionAlertingVerified",
+      "paymentRailVerified"
+    ],
+    "requiredOperatorGates": [
+      "main-branch-protection"
+    ],
+    "requiredEmptyBlockerRegistry": true,
+    "requiredCandidateTagAbsentOrSameTarget": true,
+    "requiredProductDriftFromCandidate": false
+  },
+  "manualBoundary": {
+    "currentExpectedBlocker": "paymentRailVerified",
+    "operatorEvidenceGate": "real-transfer-rail",
+    "requiredFact": "A controlled real bank transfer must exist and be independently evidenced; synthetic or application-only state is insufficient.",
+    "mayBeAutoApproved": false
+  },
+  "promotion": {
+    "tag": "1.0.0-rc.2",
+    "targetSha": "bee7afd3382a63344e572f0856847db1d63eadac",
+    "confirmationPhrase": "PROMOTE-1.0.0-rc.2",
+    "workflow": ".github/workflows/controlled-rc-promotion.yml",
+    "evidenceArtifact": ".artifacts/phase28-controlled-rc-promotion.json",
+    "postPromotionEvidenceGate": "rc-promoted",
+    "postPromotionEvidenceKind": "git-tag"
+  },
+  "nextStage": {
+    "phase": 29,
+    "program": "cartagena-beta-activation",
+    "requiresProjectedRcPromotionEvidence": true
+  }
+}
