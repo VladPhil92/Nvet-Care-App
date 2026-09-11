@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "program": "global-release-closure",
   "candidate": "1.0.0-rc.2",
-  "auditBaselineSha": "7a9126b71efbd85f6db5d1b7e43173cd663aacb6",
+  "auditBaselineSha": "0789ac8d405405b04372fc1ec92e749f7f6a29aa",
   "scorePolicy": {
     "engineeringWeight": 0.7,
     "machineRuntimeWeight": 0.15,
@@ -104,7 +104,7 @@
     {
       "id": "recovery-automation",
       "status": "verified",
-      "owner": "release-engineering",
+      "owner": "engineering",
       "blocking": true,
       "evidencePaths": [
         "scripts/database-recovery-convergence-gate.mjs",
