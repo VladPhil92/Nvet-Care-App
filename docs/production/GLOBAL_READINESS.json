@@ -49,6 +49,18 @@
       ]
     },
     {
+      "id": "cartagena-beta-activation-contract",
+      "status": "verified",
+      "owner": "release-operations",
+      "blocking": true,
+      "evidencePaths": [
+        "docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.json",
+        "docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.md",
+        "scripts/verify-cartagena-beta-activation-phase29.mjs",
+        ".github/workflows/cartagena-beta-activation-phase29.yml"
+      ]
+    },
+    {
       "id": "backend-production-contract",
       "status": "verified",
       "owner": "engineering",
