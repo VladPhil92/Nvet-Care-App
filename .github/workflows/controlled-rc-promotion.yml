@@ -1,0 +1,220 @@
+name: Nvet Controlled RC Promotion Phase 28
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json'
+      - 'docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.md'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RELEASE_CLOSURE_CONTROL.json'
+      - 'docs/production/RC_EVIDENCE_CLOSURE_CONTROL.json'
+      - 'docs/production/OPERATOR_EVIDENCE_CONTROL.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'scripts/verify-controlled-rc-promotion.mjs'
+      - '.github/workflows/controlled-rc-promotion.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json'
+      - 'docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.md'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RELEASE_CLOSURE_CONTROL.json'
+      - 'docs/production/RC_EVIDENCE_CLOSURE_CONTROL.json'
+      - 'docs/production/OPERATOR_EVIDENCE_CONTROL.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'scripts/verify-controlled-rc-promotion.mjs'
+      - '.github/workflows/controlled-rc-promotion.yml'
+  schedule:
+    - cron: '07 12 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Report promotion readiness or create the immutable RC tag when every gate is verified.'
+        required: true
+        default: report
+        type: choice
+        options:
+          - report
+          - promote
+      confirmation:
+        description: 'For promote mode, enter the exact confirmation phrase from the Phase 28 manifest.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-controlled-rc-promotion-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  contract-report:
+    name: Phase 28 promotion readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout full repository history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate and report controlled promotion state
+        run: node scripts/verify-controlled-rc-promotion.mjs
+
+      - name: Upload readiness artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase28-controlled-rc-promotion-readiness
+          path: .artifacts/phase28-controlled-rc-promotion.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  promote:
+    name: Promote immutable RC tag
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'promote'
+    needs: contract-report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout canonical main with tags
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Verify explicit operator confirmation
+        shell: bash
+        env:
+          PROVIDED_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          EXPECTED="$(node -p "require('./docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json').promotion.confirmationPhrase")"
+          test "$PROVIDED_CONFIRMATION" = "$EXPECTED"
+
+      - name: Enforce Phase 28 readiness
+        run: node scripts/verify-controlled-rc-promotion.mjs --enforce-ready
+
+      - name: Enforce existing RC evidence authority
+        run: node scripts/rc-evidence-closure-control.mjs --enforce-ready
+
+      - name: Enforce canonical RC closure stage
+        run: node scripts/verify-release-closure-control.mjs --enforce=rc
+
+      - name: Revalidate global readiness contract
+        run: node scripts/verify-global-readiness.mjs --contract-only
+
+      - name: Create or verify immutable candidate tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+          TAG="$(node -p "require('./docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json').promotion.tag")"
+          TARGET="$(node -p "require('./docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json').promotion.targetSha")"
+
+          if git show-ref --verify --quiet "refs/tags/$TAG"; then
+            EXISTING_TARGET="$(git rev-parse "$TAG^{commit}")"
+            test "$EXISTING_TARGET" = "$TARGET"
+            CREATED=false
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git tag -a "$TAG" "$TARGET" -m "Nvet Care $TAG controlled promotion — Phase 28"
+            git push origin "refs/tags/$TAG"
+            CREATED=true
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "created=$CREATED" >> "$GITHUB_OUTPUT"
+
+      - name: Write controlled promotion record
+        shell: bash
+        env:
+          PROMOTION_TAG: ${{ steps.tag.outputs.tag }}
+          PROMOTION_TARGET: ${{ steps.tag.outputs.target }}
+          PROMOTION_CREATED: ${{ steps.tag.outputs.created }}
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts
+          node <<'NODE'
+          const fs = require('fs');
+          const control = require('./docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json');
+          const record = {
+            schemaVersion: 1,
+            phase: 28,
+            program: 'controlled-rc-promotion',
+            candidate: control.candidate,
+            promotedAt: new Date().toISOString(),
+            tag: process.env.PROMOTION_TAG,
+            targetSha: process.env.PROMOTION_TARGET,
+            tagCreatedByThisRun: process.env.PROMOTION_CREATED === 'true',
+            repository: process.env.GITHUB_REPOSITORY,
+            runId: Number(process.env.GITHUB_RUN_ID),
+            runUrl: `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            evidenceHandoff: {
+              gate: control.promotion.postPromotionEvidenceGate,
+              kind: control.promotion.postPromotionEvidenceKind,
+              reference: `git-tag:${process.env.PROMOTION_TAG}@${process.env.PROMOTION_TARGET}`,
+              automaticApproval: false,
+              authority: 'Operator Evidence Control',
+            },
+            boundaries: {
+              commercialLaunchAuthorized: false,
+              publicStoreReleaseAuthorized: false,
+              providerConfigurationMutated: false,
+              operatorEvidenceAutoApproved: false,
+            },
+          };
+          fs.writeFileSync('.artifacts/phase28-controlled-rc-promotion-record.json', `${JSON.stringify(record, null, 2)}\n`);
+          NODE
+
+      - name: Upload immutable promotion evidence handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase28-controlled-rc-promotion-record
+          path: |
+            .artifacts/phase28-controlled-rc-promotion.json
+            .artifacts/phase28-controlled-rc-promotion-record.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize post-promotion boundary
+        shell: bash
+        run: |
+          {
+            echo '## Controlled RC promotion complete'
+            echo
+            echo "Tag: \`${{ steps.tag.outputs.tag }}\`"
+            echo "Target: \`${{ steps.tag.outputs.target }}\`"
+            echo
+            echo 'The immutable tag is promotion evidence only. `rc-promoted` remains governed by the append-only Operator Evidence Control approval flow; this workflow does not activate Cartagena, enable commercial launch, or publish to Google Play.'
+          } >> "$GITHUB_STEP_SUMMARY"
