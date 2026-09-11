@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "phase": 30,
+  "program": "cartagena-beta-observation-closure",
+  "candidate": "1.0.0-rc.2",
+  "targetMarket": {
+    "city": "Cartagena de Indias",
+    "daneCode": "13001"
+  },
+  "prerequisitePhase": 29,
+  "prerequisiteManifest": "docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.json",
+  "policy": {
+    "failClosed": true,
+    "requireActiveBetaForObservation": true,
+    "requireCurrentAuthorizationBinding": true,
+    "requirePhase25EffectiveDecisionGo": true,
+    "minimumObservationHours": 168,
+    "requireClosedObservationRecord": true,
+    "rejectAbortedObservation": true,
+    "requireServiceQualityWindowHours": 168,
+    "requireCartagenaMarketOnly": true,
+    "minimumMetricObservations": 10,
+    "requireNoBreachedRequiredMetricForPass": true,
+    "insufficientDataRequiresReview": true,
+    "watchStateRequiresReview": true,
+    "observationClosureNeverAuthorizesCommercialLaunch": true,
+    "observationClosureNeverAuthorizesNationalExpansion": true,
+    "observationClosureNeverPublishesToStore": true,
+    "observationClosureNeverMutatesProviderConfiguration": true,
+    "observationClosureNeverSynthesizesRuntimeEvidence": true
+  },
+  "authoritativeInputs": {
+    "phase29": "docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.json",
+    "betaReadiness": "docs/production/BETA_CARTAGENA_READINESS.json",
+    "phase25Contract": "docs/production/PHASE_25_CARTAGENA_LAUNCH_OPERATIONS.md",
+    "phase26Contract": "docs/production/PHASE_26_SERVICE_QUALITY_TELEMETRY.md",
+    "freeze": "docs/production/RELEASE_CANDIDATE_FREEZE.json",
+    "blockers": "docs/production/RELEASE_BLOCKERS.json",
+    "globalReadiness": "docs/production/GLOBAL_READINESS.json"
+  },
+  "runtimeSources": {
+    "launchReadiness": "GET /api/beta/launch-readiness",
+    "launchOperations": "GET /api/beta/launch-operations",
+    "serviceQuality": "GET /api/operations/service-quality?windowHours=168&marketDaneCode=13001"
+  },
+  "runtimeSnapshotSchema": {
+    "requiredFields": [
+      "candidate",
+      "marketDaneCode",
+      "phase29State",
+      "phase24Decision",
+      "phase25EffectiveDecision",
+      "betaEnabled",
+      "bookingEnabled",
+      "authorizationId",
+      "observation.authorizationId",
+      "observation.status",
+      "observation.startedAt",
+      "observation.closedAt",
+      "observation.elapsedHours",
+      "serviceQuality.windowHours",
+      "serviceQuality.marketDaneCode",
+      "serviceQuality.overallSloState",
+      "serviceQuality.requiredMetrics"
+    ],
+    "allowedObservationStatuses": [
+      "ACTIVE",
+      "CLOSABLE",
+      "CLOSED",
+      "ABORTED"
+    ],
+    "allowedSloStates": [
+      "PASS",
+      "WATCH",
+      "BREACHED",
+      "INSUFFICIENT_DATA"
+    ]
+  },
+  "requiredServiceQualityMetrics": [
+    "serviceStartDelayP95",
+    "matureCompletionRate",
+    "matureCancellationRate",
+    "matureDisputeRate",
+    "resolvedPaymentFailureRate",
+    "telemetryDataQualityIssueRate"
+  ],
+  "classification": {
+    "blocked": "BLOCKED",
+    "observing": "OBSERVING",
+    "passed": "PASSED_TECHNICAL_BETA",
+    "review": "REVIEW_REQUIRED",
+    "failed": "FAILED_TECHNICAL_BETA"
+  },
+  "reporting": {
+    "artifact": ".artifacts/phase30-cartagena-beta-observation-closure.json",
+    "runtimeSnapshotMustRemainUncommitted": true,
+    "runtimeSnapshotMustBeAggregateAndRedacted": true
+  },
+  "manualEvidenceBoundaries": {
+    "activation": "A real Cartagena beta must be deliberately enabled under Phase 29 before observation can start.",
+    "participants": "Observation must come from real verified VET and CLIENT activity; synthetic fixtures cannot satisfy Phase 30.",
+    "elapsedTime": "The minimum seven-day observation window cannot be accelerated or backfilled.",
+    "incidentReview": "Material production incidents must be reviewed by an accountable operator before using Phase 30 as business evidence.",
+    "commercialDecision": "A technically passed beta does not itself authorize commercial launch or national expansion."
+  },
+  "nextStage": {
+    "phase": 31,
+    "program": "android-play-internal-release",
+    "requiresPhase30Outcome": [
+      "PASSED_TECHNICAL_BETA",
+      "REVIEW_REQUIRED"
+    ],
+    "note": "Phase 31 may prepare Play internal release independently, but public/commercial release authority remains separate."
+  }
+}
