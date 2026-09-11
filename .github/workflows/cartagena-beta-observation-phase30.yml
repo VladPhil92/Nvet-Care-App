@@ -1,0 +1,84 @@
+name: Nvet Cartagena Beta Observation Closure Phase 30
+
+on:
+  pull_request:
+    paths:
+      - 'docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.json'
+      - 'docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.md'
+      - 'docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/PHASE_25_CARTAGENA_LAUNCH_OPERATIONS.md'
+      - 'docs/production/PHASE_26_SERVICE_QUALITY_TELEMETRY.md'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'scripts/verify-cartagena-beta-observation-phase30.mjs'
+      - 'scripts/verify-cartagena-beta-activation-phase29.mjs'
+      - 'scripts/verify-cartagena-launch-operations.mjs'
+      - 'scripts/verify-service-quality-telemetry.mjs'
+      - '.github/workflows/cartagena-beta-observation-phase30.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.json'
+      - 'docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.md'
+      - 'docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/PHASE_25_CARTAGENA_LAUNCH_OPERATIONS.md'
+      - 'docs/production/PHASE_26_SERVICE_QUALITY_TELEMETRY.md'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'scripts/verify-cartagena-beta-observation-phase30.mjs'
+      - 'scripts/verify-cartagena-beta-activation-phase29.mjs'
+      - 'scripts/verify-cartagena-launch-operations.mjs'
+      - 'scripts/verify-service-quality-telemetry.mjs'
+      - '.github/workflows/cartagena-beta-observation-phase30.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase30-cartagena-beta-observation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase30-contract:
+    name: Phase 30 observation closure contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full repository history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+
+      - name: Validate Phase 29 prerequisite contract
+        run: node scripts/verify-cartagena-beta-activation-phase29.mjs --contract-only
+
+      - name: Validate Phase 25 observation ledger contract
+        run: node scripts/verify-cartagena-launch-operations.mjs
+
+      - name: Validate Phase 26 service-quality contract
+        run: node scripts/verify-service-quality-telemetry.mjs
+
+      - name: Validate Phase 30 contract
+        run: node scripts/verify-cartagena-beta-observation-phase30.mjs --contract-only
+
+      - name: Assess static Phase 30 readiness
+        run: node scripts/verify-cartagena-beta-observation-phase30.mjs
+
+      - name: Upload observation-closure readiness artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase30-cartagena-beta-observation-closure-readiness
+          path: .artifacts/phase30-cartagena-beta-observation-closure.json
+          if-no-files-found: warn
+          retention-days: 30

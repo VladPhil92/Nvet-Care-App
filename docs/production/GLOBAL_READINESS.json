@@ -61,6 +61,18 @@
       ]
     },
     {
+      "id": "cartagena-beta-observation-closure-contract",
+      "status": "verified",
+      "owner": "release-operations",
+      "blocking": true,
+      "evidencePaths": [
+        "docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.json",
+        "docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.md",
+        "scripts/verify-cartagena-beta-observation-phase30.mjs",
+        ".github/workflows/cartagena-beta-observation-phase30.yml"
+      ]
+    },
+    {
       "id": "backend-production-contract",
       "status": "verified",
       "owner": "engineering",
