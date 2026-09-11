@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "program": "global-release-closure",
   "candidate": "1.0.0-rc.2",
-  "auditBaselineSha": "0789ac8d405405b04372fc1ec92e749f7f6a29aa",
+  "auditBaselineSha": "7a9126b71efbd85f6db5d1b7e43173cd663aacb6",
   "scorePolicy": {
     "engineeringWeight": 0.7,
     "machineRuntimeWeight": 0.15,
@@ -61,6 +61,18 @@
       ]
     },
     {
+      "id": "cartagena-beta-observation-closure-contract",
+      "status": "verified",
+      "owner": "release-operations",
+      "blocking": true,
+      "evidencePaths": [
+        "docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.json",
+        "docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.md",
+        "scripts/verify-cartagena-beta-observation-phase30.mjs",
+        ".github/workflows/cartagena-beta-observation-phase30.yml"
+      ]
+    },
+    {
       "id": "backend-production-contract",
       "status": "verified",
       "owner": "engineering",
@@ -92,7 +104,7 @@
     {
       "id": "recovery-automation",
       "status": "verified",
-      "owner": "engineering",
+      "owner": "release-engineering",
       "blocking": true,
       "evidencePaths": [
         "scripts/database-recovery-convergence-gate.mjs",
