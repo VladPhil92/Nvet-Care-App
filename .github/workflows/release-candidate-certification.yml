@@ -1,0 +1,275 @@
+name: Release Candidate Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/PHASE_27_RELEASE_CANDIDATE_FREEZE.md'
+      - 'scripts/verify-release-candidate-freeze.mjs'
+      - 'scripts/verify-release-build-budgets.mjs'
+      - 'scripts/security-convergence-gate.mjs'
+      - '.github/workflows/release-candidate-certification.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'backend/package.json'
+      - 'backend/src/**'
+      - 'backend/prisma/**'
+      - 'mobile/package.json'
+      - 'mobile/App.tsx'
+      - 'mobile/index.js'
+      - 'mobile/app.json'
+      - 'mobile/babel.config.js'
+      - 'mobile/metro.config.js'
+      - 'mobile/src/**'
+      - 'mobile/android/**'
+      - 'mobile/ios/**'
+      - 'dashboard/package.json'
+      - 'dashboard/src/**'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/RC_READINESS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/PHASE_27_RELEASE_CANDIDATE_FREEZE.md'
+      - 'scripts/verify-release-candidate-freeze.mjs'
+      - 'scripts/verify-release-build-budgets.mjs'
+      - 'scripts/security-convergence-gate.mjs'
+      - '.github/workflows/release-candidate-certification.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'backend/package.json'
+      - 'backend/src/**'
+      - 'backend/prisma/**'
+      - 'mobile/package.json'
+      - 'mobile/App.tsx'
+      - 'mobile/index.js'
+      - 'mobile/app.json'
+      - 'mobile/babel.config.js'
+      - 'mobile/metro.config.js'
+      - 'mobile/src/**'
+      - 'mobile/android/**'
+      - 'mobile/ios/**'
+      - 'dashboard/package.json'
+      - 'dashboard/src/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nvet-release-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  freeze-contract:
+    name: Phase 27 freeze contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout full candidate history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enforce release candidate freeze
+        run: node scripts/verify-release-candidate-freeze.mjs
+
+  convergence:
+    name: Release convergence contracts
+    needs: freeze-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout full candidate history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Security and privacy convergence
+        run: node scripts/security-convergence-gate.mjs
+
+      - name: Database recovery convergence
+        run: node scripts/database-recovery-convergence-gate.mjs
+
+      - name: Veterinary trust convergence
+        run: node scripts/veterinary-trust-convergence-gate.mjs
+
+      - name: Financial production convergence
+        run: node scripts/financial-production-convergence-gate.mjs
+
+      - name: Service quality telemetry contract
+        run: node scripts/verify-service-quality-telemetry.mjs
+
+      - name: Cartagena launch readiness contract
+        run: node scripts/verify-cartagena-launch-readiness.mjs
+
+      - name: Cartagena launch operations contract
+        run: node scripts/verify-cartagena-launch-operations.mjs
+
+      - name: Global readiness contract
+        run: node scripts/verify-global-readiness.mjs --contract-only
+
+      - name: Android production readiness contract
+        run: node scripts/verify-android-production-readiness.mjs --contract-only
+
+  build-performance:
+    name: RC build performance budgets
+    needs: freeze-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install exact dependencies
+        run: npm ci --include=dev --legacy-peer-deps
+
+      - name: Generate Prisma client
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://stub:stub@localhost:5432/stub?schema=public
+        run: npx prisma generate
+
+      - name: Build backend candidate
+        working-directory: backend
+        run: npm run build
+
+      - name: Build dashboard candidate
+        working-directory: dashboard
+        run: npm run build
+
+      - name: Enforce build performance budgets
+        run: node scripts/verify-release-build-budgets.mjs
+
+      - name: Upload build budget evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase27-release-build-budgets
+          path: .artifacts/release-build-budgets.json
+          if-no-files-found: error
+          retention-days: 30
+
+  android-release-package:
+    name: Android RC package
+    needs: freeze-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            mobile/android/.gradle
+          key: ${{ runner.os }}-phase27-gradle-${{ hashFiles('mobile/android/**/*.gradle*', 'mobile/android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-phase27-gradle-
+            ${{ runner.os }}-gradle-
+
+      - name: Install exact dependencies
+        run: npm ci --include=dev --legacy-peer-deps
+
+      - name: Verify native dependency pin
+        working-directory: mobile
+        run: |
+          REANIMATED_VERSION="$(node -p "require('react-native-reanimated/package.json').version")"
+          echo "Resolved react-native-reanimated: $REANIMATED_VERSION"
+          test "$REANIMATED_VERSION" = "3.15.5"
+
+      - name: Verify Gradle wrapper integrity
+        working-directory: mobile
+        run: |
+          test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
+          ./android/gradlew --version
+
+      - name: Load frozen Android package identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(node -p "require('./docs/production/RELEASE_CANDIDATE_FREEZE.json').packageIdentity.androidVersionName")"
+          VERSION_CODE="$(node -p "require('./docs/production/RELEASE_CANDIDATE_FREEZE.json').packageIdentity.androidVersionCode")"
+          CANDIDATE="$(node -p "require('./docs/production/RELEASE_CANDIDATE_FREEZE.json').candidate")"
+          test "$VERSION_NAME" = "$CANDIDATE"
+          test "$VERSION_CODE" -gt 1
+          echo "NVET_ANDROID_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "NVET_ANDROID_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "Android RC identity: $VERSION_NAME ($VERSION_CODE)"
+
+      - name: Build unsigned Android release candidate
+        working-directory: mobile/android
+        env:
+          GOOGLE_MAPS_ANDROID_API_KEY: phase27-ci-placeholder
+          NVET_API_URL: https://phase27.invalid/api
+        run: ./gradlew bundleRelease --no-daemon --stacktrace
+
+      - name: Verify release bundle exists
+        run: test -s mobile/android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload unsigned RC bundle evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase27-android-release-unsigned-aab-${{ env.NVET_ANDROID_VERSION_NAME }}-${{ env.NVET_ANDROID_VERSION_CODE }}
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+  certification-success:
+    name: Release Candidate Certification Success
+    if: always()
+    needs: [freeze-contract, convergence, build-performance, android-release-package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all Phase 27 jobs passed
+        run: |
+          test "${{ needs.freeze-contract.result }}" = "success"
+          test "${{ needs.convergence.result }}" = "success"
+          test "${{ needs.build-performance.result }}" = "success"
+          test "${{ needs.android-release-package.result }}" = "success"
+          echo "Phase 27 release candidate certification passed."
+          echo "This certifies an RC engineering baseline only; commercial launch remains unauthorized."

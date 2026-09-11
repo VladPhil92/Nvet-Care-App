@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "program": "rc-evidence-closure-phase-vi",
-  "candidate": "1.0.0-rc.1",
+  "candidate": "1.0.0-rc.2",
   "mainBranch": "main",
   "policy": {
     "failClosed": true,
@@ -62,7 +62,7 @@
     }
   ],
   "promotion": {
-    "candidateTag": "1.0.0-rc.1",
+    "candidateTag": "1.0.0-rc.2",
     "requiredGateIds": [
       "production-backup-configured",
       "provider-restore-drill",

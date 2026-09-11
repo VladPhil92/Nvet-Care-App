@@ -25,6 +25,23 @@ function sourceAddress(sourceManifest, sourceKey) {
   return `${sourceManifest}#${sourceKey}`;
 }
 
+function acceptedHistoricalCandidates(control) {
+  return new Set(control.policy?.acceptedHistoricalCandidates ?? []);
+}
+
+function reusableAcrossCandidates(control) {
+  return new Set(control.policy?.reusableAcrossCandidates ?? []);
+}
+
+function candidateAccepted(candidate, control) {
+  return candidate === control.candidate || acceptedHistoricalCandidates(control).has(candidate);
+}
+
+function candidateUsableForGate(candidate, control, gateId) {
+  if (candidate === control.candidate) return true;
+  return acceptedHistoricalCandidates(control).has(candidate) && reusableAcrossCandidates(control).has(gateId);
+}
+
 function containsSecretLikeContent(value) {
   const text = String(value ?? '');
   return [
@@ -71,6 +88,21 @@ export async function loadOperatorEvidenceControl() {
   if (!Number.isInteger(control.policy?.approvalMaxAgeHours) || control.policy.approvalMaxAgeHours <= 0) {
     fail('approvalMaxAgeHours must be a positive integer');
   }
+
+  const historical = control.policy?.acceptedHistoricalCandidates;
+  if (!Array.isArray(historical)) fail('acceptedHistoricalCandidates must be an array');
+  if (new Set(historical).size !== historical.length) fail('acceptedHistoricalCandidates must be unique');
+  for (const candidate of historical) {
+    if (!/^1\.0\.0-rc\.\d+$/.test(candidate ?? '')) fail(`invalid historical candidate '${candidate ?? ''}'`);
+    if (candidate === control.candidate) fail('current candidate cannot also be historical');
+  }
+  if (historical.length > 0 && control.policy?.historicalCandidateRecordsReadOnly !== true) {
+    fail('historical candidate records must remain read-only');
+  }
+  const reusable = control.policy?.reusableAcrossCandidates;
+  if (!Array.isArray(reusable)) fail('reusableAcrossCandidates must be an array');
+  if (new Set(reusable).size !== reusable.length) fail('reusableAcrossCandidates must be unique');
+
   if (!Array.isArray(control.gates) || control.gates.length === 0) fail('gates must be non-empty');
 
   const ids = new Set();
@@ -97,6 +129,9 @@ export async function loadOperatorEvidenceControl() {
       }
     }
   }
+  for (const gateId of reusable) {
+    if (!ids.has(gateId)) fail(`reusableAcrossCandidates references unknown gate '${gateId}'`);
+  }
   return control;
 }
 
@@ -104,7 +139,10 @@ function validateSharedRecord(record, control, gate) {
   if (record.schemaVersion !== 1) fail(`record ${record.id ?? '<missing>'} schemaVersion must be 1`);
   if (!['submission', 'approval'].includes(record.type)) fail(`record ${record.id ?? '<missing>'} has invalid type`);
   if (record.gateId !== gate.id) fail(`record ${record.id ?? '<missing>'} gate mismatch`);
-  if (record.candidate !== control.candidate) fail(`record ${record.id ?? '<missing>'} candidate mismatch`);
+  if (!candidateAccepted(record.candidate, control)) fail(`record ${record.id ?? '<missing>'} candidate mismatch`);
+  if (record.candidate !== control.candidate && !reusableAcrossCandidates(control).has(gate.id)) {
+    fail(`historical record ${record.id ?? '<missing>'} belongs to non-reusable gate ${gate.id}`);
+  }
   if (!/^[0-9a-f]{40}$/i.test(record.candidateSha ?? '')) fail(`record ${record.id ?? '<missing>'} requires full candidateSha`);
   if (typeof record.id !== 'string' || !/^[a-z0-9-]+:[A-Za-z0-9_.-]+$/.test(record.id)) fail('record id must be gateId:opaque-id');
   if (containsSecretLikeContent(JSON.stringify(record))) fail(`record ${record.id} contains secret-like content`);
@@ -145,7 +183,11 @@ export async function loadOperatorEvidenceRecords(control = null) {
     ids.add(record.id);
     if (record.type === 'submission') validateSubmission(record, control, gate);
     else validateApproval(record, control, gate);
-    records.push({ ...record, __path: path.relative(ROOT, file) });
+    records.push({
+      ...record,
+      __path: path.relative(ROOT, file),
+      __historical: record.candidate !== control.candidate,
+    });
   }
   return records;
 }
@@ -155,20 +197,29 @@ export async function buildOperatorEvidenceStatus() {
   const records = await loadOperatorEvidenceRecords(control);
   const submissions = new Map(records.filter((record) => record.type === 'submission').map((record) => [record.id, record]));
   const promotedRcApproval = records
-    .filter((record) => record.type === 'approval' && record.gateId === 'rc-promoted')
+    .filter((record) => record.type === 'approval' && record.gateId === 'rc-promoted' && record.candidate === control.candidate)
     .sort((a, b) => Date.parse(b.approvedAt) - Date.parse(a.approvedAt))[0];
-  const promotedRcSubmission = promotedRcApproval ? submissions.get(promotedRcApproval.submissionId) : null;
+  const promotedCandidateSubmission = promotedRcApproval ? submissions.get(promotedRcApproval.submissionId) : null;
+  const promotedRcSubmission = promotedCandidateSubmission?.candidate === control.candidate
+    ? promotedCandidateSubmission
+    : null;
 
   const byGate = {};
   const bySource = {};
   for (const gate of control.gates) {
     const approvals = records
-      .filter((record) => record.type === 'approval' && record.gateId === gate.id)
+      .filter((record) =>
+        record.type === 'approval' &&
+        record.gateId === gate.id &&
+        candidateUsableForGate(record.candidate, control, gate.id),
+      )
       .sort((a, b) => Date.parse(b.approvedAt) - Date.parse(a.approvedAt));
     let resolved = null;
     for (const approval of approvals) {
       const submission = submissions.get(approval.submissionId);
       if (!submission) continue;
+      if (submission.candidate !== approval.candidate) continue;
+      if (!candidateUsableForGate(submission.candidate, control, gate.id)) continue;
       if (hoursSince(approval.approvedAt) > control.policy.approvalMaxAgeHours) continue;
       if (submission.gateId !== gate.id || submission.candidateSha !== approval.candidateSha) continue;
       if (gate.requireDistinctApprover && submission.submitter === approval.approver) continue;
@@ -184,6 +235,8 @@ export async function buildOperatorEvidenceStatus() {
         evidence: `${submission.evidence.kind}: ${submission.evidence.reference}`,
         observedAt: submission.observedAt,
         candidateSha: submission.candidateSha,
+        candidate: submission.candidate,
+        evidenceReusedAcrossCandidates: submission.candidate !== control.candidate,
         submissionId: submission.id,
         approvalId: approval.id,
         submitter: submission.submitter,
@@ -249,6 +302,9 @@ export async function writeApprovalFromEnv() {
   const records = await loadOperatorEvidenceRecords(control);
   const submission = records.find((record) => record.type === 'submission' && record.id === process.env.EVIDENCE_SUBMISSION_ID);
   if (!submission) fail(`submission '${process.env.EVIDENCE_SUBMISSION_ID ?? ''}' does not exist on this branch`);
+  if (submission.candidate !== control.candidate) {
+    fail(`historical submission '${submission.id}' for ${submission.candidate} is read-only; submit fresh evidence for ${control.candidate}`);
+  }
   const gate = control.gates.find((item) => item.id === submission.gateId);
   const runId = process.env.GITHUB_RUN_ID || `local-${Date.now()}`;
   const record = {

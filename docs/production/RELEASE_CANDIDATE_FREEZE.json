@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "phase": 27,
+  "program": "release-candidate-freeze-and-production-closure",
+  "candidate": "1.0.0-rc.2",
+  "state": "FROZEN",
+  "baseline": {
+    "mainCommitSha": "0789ac8d405405b04372fc1ec92e749f7f6a29aa",
+    "phase26CertifiedHeadSha": "99ee55f4a1dea82fac54c167fb156a76a00b90f7",
+    "phase26CiRunId": 34514988100,
+    "phase26RailwayRunId": 34514988022,
+    "productCodeMustMatchBaselineUntilReleaseBlockerApproved": true
+  },
+  "scope": {
+    "market": "Cartagena de Indias",
+    "marketDaneCode": "13001",
+    "channel": "closed-beta",
+    "platformPriority": "android",
+    "commercialLaunchAuthorized": false,
+    "publicStoreReleaseAuthorized": false
+  },
+  "packageIdentity": {
+    "androidApplicationId": "com.nvetcare",
+    "androidVersionName": "1.0.0-rc.2",
+    "androidVersionCode": 10002
+  },
+  "governance": {
+    "featureFreezeActive": true,
+    "releaseBlockerLabel": "release-blocker",
+    "releaseBlockerRegistry": "docs/production/RELEASE_BLOCKERS.json",
+    "releaseBlockerMergeMethod": "merge-commit",
+    "protectedProductPaths": [
+      "package.json",
+      "package-lock.json",
+      "backend/package.json",
+      "backend/src/",
+      "backend/prisma/",
+      "backend/Dockerfile",
+      "mobile/package.json",
+      "mobile/App.tsx",
+      "mobile/index.js",
+      "mobile/app.json",
+      "mobile/babel.config.js",
+      "mobile/metro.config.js",
+      "mobile/src/",
+      "mobile/android/",
+      "mobile/ios/",
+      "dashboard/package.json",
+      "dashboard/src/"
+    ],
+    "releaseBlockerRequirements": {
+      "labelRequired": true,
+      "registryEntryRequired": true,
+      "severity": "release-blocking",
+      "status": "open",
+      "prNumberMustMatch": true,
+      "mergeCommitRequired": true
+    }
+  },
+  "certification": {
+    "requiredWorkflowFiles": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/railway-contract.yml",
+      ".github/workflows/staging-e2e.yml",
+      ".github/workflows/recovery-readiness.yml",
+      ".github/workflows/payment-rail-certification.yml",
+      ".github/workflows/production-deployment-attestation.yml",
+      ".github/workflows/web-production-convergence.yml",
+      ".github/workflows/service-quality-telemetry.yml",
+      ".github/workflows/cartagena-launch-readiness.yml",
+      ".github/workflows/cartagena-launch-operations.yml",
+      ".github/workflows/android-production-readiness.yml",
+      ".github/workflows/ai-safety-privacy-certification.yml"
+    ],
+    "requiredContractPaths": [
+      "scripts/security-convergence-gate.mjs",
+      "scripts/database-recovery-convergence-gate.mjs",
+      "scripts/veterinary-trust-convergence-gate.mjs",
+      "scripts/financial-production-convergence-gate.mjs",
+      "scripts/verify-service-quality-telemetry.mjs",
+      "scripts/verify-cartagena-launch-readiness.mjs",
+      "scripts/verify-cartagena-launch-operations.mjs",
+      "docs/production/PHASE_26_SERVICE_QUALITY_TELEMETRY.md"
+    ],
+    "requiredReleaseDomains": [
+      "repository-ci",
+      "security",
+      "database-recovery",
+      "veterinary-trust",
+      "financial-integrity",
+      "railway-runtime-contract",
+      "staging-e2e",
+      "service-quality",
+      "cartagena-launch-readiness",
+      "cartagena-launch-operations",
+      "android-release-package",
+      "ai-safety-privacy"
+    ]
+  },
+  "buildPerformanceBudgets": {
+    "backendDistMaxBytes": 12582912,
+    "dashboardDistMaxBytes": 5242880,
+    "dashboardLargestAssetMaxBytes": 2621440,
+    "policy": "conservative-regression-budget",
+    "note": "Artifact-size budgets detect material release regressions. Runtime service quality remains governed by Phase 26 SLO telemetry and staging/runtime evidence."
+  },
+  "boundaries": {
+    "automaticProductionPromotion": false,
+    "automaticCommercialLaunchAuthorization": false,
+    "automaticPlayStorePublication": false,
+    "automaticProviderConfigurationMutation": false,
+    "manualExternalEvidenceStillRequired": true,
+    "releaseCandidateStatusIsNotCommercialLaunch": true
+  }
+}

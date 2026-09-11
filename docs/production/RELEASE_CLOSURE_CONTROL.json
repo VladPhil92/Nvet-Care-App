@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "program": "release-closure-control",
-  "candidate": "1.0.0-rc.1",
+  "candidate": "1.0.0-rc.2",
   "stages": {
     "rc": {
       "description": "Release Candidate promotion gate. Requires Phase 11 external evidence plus repository governance; Android/Play evidence is intentionally excluded to avoid circular promotion dependencies.",

@@ -3,7 +3,7 @@
   "phase": 12,
   "program": "closed-beta-cartagena",
   "targetMarket": "Cartagena de Indias",
-  "prerequisiteRcTag": "1.0.0-rc.1",
+  "prerequisiteRcTag": "1.0.0-rc.2",
   "policy": {
     "maxInitialClients": 50,
     "minVerifiedVets": 3,
@@ -66,7 +66,7 @@
     "rcPromoted": {
       "status": "pending",
       "evidence": null,
-      "note": "Phase 11 must promote the exact 1.0.0-rc.1 candidate before beta activation."
+      "note": "Phase 27 must explicitly promote the exact 1.0.0-rc.2 candidate before beta activation."
     },
     "productionBackupConfigured": {
       "status": "verified",
