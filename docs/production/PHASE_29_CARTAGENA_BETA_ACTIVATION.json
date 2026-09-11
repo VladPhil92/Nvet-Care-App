@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "phase": 29,
+  "program": "cartagena-beta-activation",
+  "candidate": "1.0.0-rc.2",
+  "targetMarket": {
+    "city": "Cartagena de Indias",
+    "daneCode": "13001"
+  },
+  "prerequisitePhase": 28,
+  "prerequisiteManifest": "docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json",
+  "policy": {
+    "failClosed": true,
+    "requireExactRcPromotion": true,
+    "requireAllBetaEvidence": true,
+    "requireZeroEvidenceConflicts": true,
+    "requirePhase24GoBeforeEnablement": true,
+    "requireActiveBoundedAuthorization": true,
+    "requireSupportLeaseForObservation": true,
+    "requireMinimumVerifiedVets": 3,
+    "requireClientCohort": true,
+    "requirePrivacyReview": true,
+    "requireRollbackDrill": true,
+    "activationNeverAuthorizesCommercialLaunch": true,
+    "activationNeverPublishesToStore": true,
+    "activationNeverMutatesProviderConfigurationAutomatically": true,
+    "activationNeverAutoApprovesEvidence": true,
+    "activationNeverCreatesSyntheticParticipants": true,
+    "observationRemainsOperatorControlled": true
+  },
+  "authoritativeInputs": {
+    "phase28": "docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json",
+    "freeze": "docs/production/RELEASE_CANDIDATE_FREEZE.json",
+    "blockers": "docs/production/RELEASE_BLOCKERS.json",
+    "betaReadiness": "docs/production/BETA_CARTAGENA_READINESS.json",
+    "operatorClosure": "docs/production/BETA_OPERATOR_ACTIVATION_CLOSURE.json",
+    "globalReadiness": "docs/production/GLOBAL_READINESS.json"
+  },
+  "requiredBetaEvidence": [
+    "rcPromoted",
+    "productionBackupConfigured",
+    "restoreDrillVerified",
+    "productionAlertingVerified",
+    "paymentRailVerified",
+    "cartagenaVetCoverageVerified",
+    "clientCohortConfigured",
+    "supportOwnerConfirmed",
+    "privacyAndTermsReviewed",
+    "rollbackDrillVerified"
+  ],
+  "machineContracts": [
+    "scripts/verify-cartagena-beta-readiness.mjs",
+    "scripts/verify-beta-operational-activation-readiness.mjs",
+    "scripts/verify-beta-operator-activation-closure.mjs",
+    "scripts/verify-cartagena-launch-readiness.mjs",
+    "scripts/verify-cartagena-launch-operations.mjs",
+    "scripts/verify-service-quality-telemetry.mjs"
+  ],
+  "runtimeDecisionSurfaces": [
+    "GET /api/beta/readiness",
+    "GET /api/beta/evidence/summary",
+    "GET /api/beta/launch-readiness",
+    "GET /api/beta/launch-operations",
+    "GET /api/coverage/cartagena-activation"
+  ],
+  "operatorActivation": {
+    "authorizationEndpoint": "POST /api/beta/activation/authorize",
+    "providerGate": "NVET_CLOSED_BETA_ENABLED=true",
+    "bookingGate": "NVET_BOOKING_ENABLED=true",
+    "requiredPreEnablementDecision": "GO",
+    "minimumSupportAndAuthorizationHoursBeforeObservation": 169,
+    "maximumAuthorizationHours": 192,
+    "commercialLaunchAuthorized": false
+  },
+  "manualEvidenceBoundaries": {
+    "cartagenaVetCoverageVerified": "At least three real Cartagena veterinarians must satisfy strict operational verification and coverage requirements.",
+    "clientCohortConfigured": "Real verified CLIENT accounts must be invited through the append-only cohort control plane.",
+    "supportOwnerConfirmed": "A real monitored support route, accountable owner role, approver and confirmation date must exist.",
+    "privacyAndTermsReviewed": "Responsible legal/privacy review must be documented by an accountable reviewer.",
+    "rollbackDrillVerified": "A real provider-level booking kill-switch drill must prove new bookings stop while account/history access remains available and recovery succeeds."
+  },
+  "reporting": {
+    "artifact": ".artifacts/phase29-cartagena-beta-activation.json",
+    "readyState": "READY_FOR_OPERATOR_ACTIVATION",
+    "blockedState": "BLOCKED",
+    "activeState": "ACTIVE_BETA_REQUIRES_OBSERVATION"
+  },
+  "nextStage": {
+    "phase": 30,
+    "program": "cartagena-beta-observation-closure",
+    "requiresActiveBeta": true,
+    "requiresSevenDayObservation": true
+  }
+}
