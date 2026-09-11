@@ -1,0 +1,81 @@
+name: Nvet Cartagena Beta Activation Phase 29
+
+on:
+  pull_request:
+    paths:
+      - 'docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/BETA_OPERATOR_ACTIVATION_CLOSURE.json'
+      - 'docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'scripts/verify-cartagena-beta-activation-phase29.mjs'
+      - 'scripts/verify-beta-operator-activation-closure.mjs'
+      - '.github/workflows/cartagena-beta-activation-phase29.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.json'
+      - 'docs/production/BETA_CARTAGENA_READINESS.json'
+      - 'docs/production/BETA_OPERATOR_ACTIVATION_CLOSURE.json'
+      - 'docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'scripts/verify-cartagena-beta-activation-phase29.mjs'
+      - 'scripts/verify-beta-operator-activation-closure.mjs'
+      - '.github/workflows/cartagena-beta-activation-phase29.yml'
+  workflow_dispatch:
+    inputs:
+      enforce_ready:
+        description: 'Fail unless all Phase 29 versioned beta evidence is verified'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase29-cartagena-beta-activation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase29-readiness:
+    name: Phase 29 activation readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full repository history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+
+      - name: Validate Phase 28 prerequisite contract
+        run: node scripts/verify-controlled-rc-promotion.mjs --contract-only
+
+      - name: Validate beta operator closure invariants
+        run: node scripts/verify-beta-operator-activation-closure.mjs
+
+      - name: Assess Phase 29 Cartagena beta activation
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.enforce_ready != true }}
+        run: node scripts/verify-cartagena-beta-activation-phase29.mjs
+
+      - name: Enforce Phase 29 ready state
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.enforce_ready == true }}
+        run: node scripts/verify-cartagena-beta-activation-phase29.mjs --enforce-ready
+
+      - name: Upload activation readiness artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase29-cartagena-beta-activation-readiness
+          path: .artifacts/phase29-cartagena-beta-activation.json
+          if-no-files-found: warn
+          retention-days: 30
