@@ -78,6 +78,7 @@
   "classification": {
     "engineeringReadyExternalBlocked": "ENGINEERING_READY_EXTERNAL_BLOCKED",
     "readyForOperatorBuildAndUpload": "READY_FOR_OPERATOR_BUILD_AND_UPLOAD",
+    "internalDraftObserving": "INTERNAL_DRAFT_OBSERVING",
     "internalDraftUploadedAwaitingDeviceSmoke": "INTERNAL_DRAFT_UPLOADED_AWAITING_DEVICE_SMOKE",
     "internalReleaseValidated": "INTERNAL_RELEASE_VALIDATED"
   },
@@ -89,6 +90,7 @@
     "playConsole": "Application creation, Play App Signing, account permissions and provider-side configuration are operator/provider evidence.",
     "signingSecrets": "Keystore material and Play service-account credentials must remain protected secrets outside Git.",
     "playUpload": "The repository may automate only a draft Internal Testing upload after external provider setup exists.",
+    "internalObservation": "The minimum Internal Testing observation window is measured from the real internalTrackUploaded.observedAt timestamp and cannot be bypassed by early smoke evidence.",
     "deviceSmoke": "Physical installation and smoke validation require real Android devices and accountable operator evidence.",
     "publicRelease": "Phase 31 never authorizes production-track rollout, public store release or commercial launch."
   }
