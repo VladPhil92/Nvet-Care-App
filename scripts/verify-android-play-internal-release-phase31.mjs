@@ -46,6 +46,13 @@ function requireNoMatch(text, pattern, label) {
   if (pattern.test(text)) fail(label);
 }
 
+function parseObservedAt(value, label) {
+  if (typeof value !== 'string' || value.trim().length < 20) fail(`${label} must include an ISO-8601 observedAt timestamp`);
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) fail(`${label} observedAt is not a valid timestamp`);
+  return timestamp;
+}
+
 async function validateContract() {
   const control = await readJson(CONTROL_PATH);
   if (control.schemaVersion !== 1 || control.phase !== 31 || control.program !== 'android-play-internal-release') {
@@ -77,6 +84,9 @@ async function validateContract() {
   }
   if (policy.minimumInternalTrackObservationHours !== 24 || policy.minimumPhysicalDevices !== 2) {
     fail('Internal observation/device minimums drifted');
+  }
+  if (control.classification?.internalDraftObserving !== 'INTERNAL_DRAFT_OBSERVING') {
+    fail('internal observation classification is required');
   }
 
   const inputs = control.authoritativeInputs ?? {};
@@ -111,6 +121,12 @@ async function validateContract() {
     fail('Android identity/target API drifted');
   }
   if (android.prerequisiteRcTag !== control.candidate) fail('Android prerequisite RC diverged');
+  if (android.policy?.minInternalTrackObservationHours !== policy.minimumInternalTrackObservationHours) {
+    fail('Android and Phase 31 internal observation policies diverged');
+  }
+  if (android.requiredEvidence?.internalTrackUploaded?.status === 'verified') {
+    parseObservedAt(android.requiredEvidence.internalTrackUploaded.observedAt, 'internalTrackUploaded');
+  }
 
   if (preflight.phase !== '13E' || preflight.program !== 'android-google-play-release-preflight') {
     fail('Android release preflight contract is invalid');
@@ -181,22 +197,43 @@ async function phase30Outcome(control) {
   if (report.phase !== 30 || report.program !== 'cartagena-beta-observation-closure') fail('provided Phase 30 report is invalid');
   if (report.candidate !== control.candidate) fail('provided Phase 30 report candidate diverged');
   const accepted = control.acceptedPhase30Outcomes.includes(report.state);
-  return { provided: true, accepted, state: report.state };
+  return { provided: true, accepted, state: report.state, observedAt: report.observedAt ?? null };
 }
 
 function pendingFrom(android, gateIds) {
   return gateIds.filter((gateId) => android.requiredEvidence?.[gateId]?.status !== 'verified');
 }
 
+function internalObservation(control, android, observedNow) {
+  const entry = android.requiredEvidence?.internalTrackUploaded;
+  const requiredHours = control.policy.minimumInternalTrackObservationHours;
+  if (entry?.status !== 'verified') {
+    return { startedAt: null, requiredHours, elapsedHours: 0, satisfied: false };
+  }
+  const startedMs = parseObservedAt(entry.observedAt, 'internalTrackUploaded');
+  const nowMs = Date.parse(observedNow);
+  if (startedMs > nowMs + 5 * 60 * 1000) fail('internalTrackUploaded observedAt cannot be in the future');
+  const elapsedHours = Math.max(0, (nowMs - startedMs) / 3_600_000);
+  return {
+    startedAt: new Date(startedMs).toISOString(),
+    requiredHours,
+    elapsedHours: Number(elapsedHours.toFixed(2)),
+    satisfied: elapsedHours >= requiredHours,
+  };
+}
+
 async function buildReport({ control, android }) {
+  const observedAt = new Date().toISOString();
   const observedPhase30 = await phase30Outcome(control);
   const preBuildPending = pendingFrom(android, control.operatorGateGroups.preBuildAndUpload);
   const artifactPending = pendingFrom(android, control.operatorGateGroups.artifactAndTrack);
   const smokePending = pendingFrom(android, control.operatorGateGroups.postInstallValidation);
+  const observation = internalObservation(control, android, observedAt);
 
   let state = control.classification.engineeringReadyExternalBlocked;
   if (observedPhase30.accepted && preBuildPending.length === 0) {
     if (artifactPending.length > 0) state = control.classification.readyForOperatorBuildAndUpload;
+    else if (!observation.satisfied) state = control.classification.internalDraftObserving;
     else if (smokePending.length > 0) state = control.classification.internalDraftUploadedAwaitingDeviceSmoke;
     else state = control.classification.internalReleaseValidated;
   }
@@ -207,10 +244,11 @@ async function buildReport({ control, android }) {
     program: control.program,
     candidate: control.candidate,
     applicationId: control.applicationId,
-    observedAt: new Date().toISOString(),
+    observedAt,
     state,
     engineeringContract: 'READY',
     phase30Outcome: observedPhase30,
+    internalTrackObservation: observation,
     pendingExternalEvidence: {
       preBuildAndUpload: preBuildPending,
       artifactAndTrack: artifactPending,
@@ -220,7 +258,7 @@ async function buildReport({ control, android }) {
     playAutomationMaximumStatus: control.policy.playAutomationMaximumStatus,
     publicStoreReleaseAuthorized: false,
     commercialLaunchAuthorized: false,
-    safetyBoundary: 'Engineering readiness is complete independently; real payment, RC promotion, Play provider setup, signing evidence, upload evidence and physical-device evidence are never fabricated by CI.',
+    safetyBoundary: 'Engineering readiness is complete independently; real payment, RC promotion, Play provider setup, signing evidence, upload evidence, elapsed observation time and physical-device evidence are never fabricated by CI.',
   };
 }
 
@@ -231,10 +269,14 @@ async function writeReport(report) {
   console.log(`Candidate: ${report.candidate}`);
   console.log(`Engineering contract: ${report.engineeringContract}`);
   console.log(`State: ${report.state}`);
+  console.log(`Internal observation: ${report.internalTrackObservation.elapsedHours}/${report.internalTrackObservation.requiredHours}h`);
   for (const [group, gates] of Object.entries(report.pendingExternalEvidence)) {
     for (const gate of gates) console.log(`BLOCKED_EXTERNAL | ${group}.${gate}`);
   }
   if (!report.phase30Outcome.provided) console.log('BLOCKED_EXTERNAL | Phase 30 real observation outcome not provided');
+  if (report.pendingExternalEvidence.artifactAndTrack.length === 0 && !report.internalTrackObservation.satisfied) {
+    console.log('BLOCKED_TIME | minimum Internal Testing observation window has not elapsed');
+  }
 
   if (process.env.GITHUB_STEP_SUMMARY) {
     const pending = Object.entries(report.pendingExternalEvidence)
@@ -246,6 +288,7 @@ async function writeReport(report) {
       `State: **${report.state}**`,
       `Engineering contract: **${report.engineeringContract}**`,
       `Phase 30 runtime outcome supplied: **${report.phase30Outcome.provided}**`,
+      `Internal observation: **${report.internalTrackObservation.elapsedHours}/${report.internalTrackObservation.requiredHours}h**`,
       '',
       ...(pending.length ? ['## Pending external/operator evidence', '', ...pending, ''] : []),
       '> Phase 31 stops at Google Play Internal Testing draft automation and never authorizes production-track or commercial release.',
