@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "program": "global-release-closure",
   "candidate": "1.0.0-rc.2",
-  "auditBaselineSha": "eb38976b8e423415dafa5bc93fec3f0db598e484",
+  "auditBaselineSha": "0789ac8d405405b04372fc1ec92e749f7f6a29aa",
   "scorePolicy": {
     "engineeringWeight": 0.7,
     "machineRuntimeWeight": 0.15,
