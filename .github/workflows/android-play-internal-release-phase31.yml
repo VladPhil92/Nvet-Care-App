@@ -42,6 +42,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: phase31-android-play-internal-${{ github.ref }}
@@ -72,8 +73,54 @@ jobs:
       - name: Validate Phase 31 contract
         run: node scripts/verify-android-play-internal-release-phase31.mjs --contract-only
 
+      - name: Fetch latest successful Phase 30 runtime report
+        id: phase30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/phase30-runtime
+          RUN_ID="$(gh api --method GET \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/cartagena-beta-observation-phase30.yml/runs?branch=main&status=completed&per_page=50" \
+            --jq '.workflow_runs[] | select(.conclusion == "success") | .id' | head -n 1 || true)"
+
+          if [ -z "$RUN_ID" ]; then
+            echo 'No successful Phase 30 run is available on main; remaining fail-closed.'
+            echo 'report=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name phase30-cartagena-beta-observation-closure-readiness \
+            --dir .artifacts/phase30-runtime; then
+            echo "Phase 30 run $RUN_ID has no downloadable readiness artifact; remaining fail-closed."
+            echo 'report=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          REPORT="$(find .artifacts/phase30-runtime -type f -name 'phase30-cartagena-beta-observation-closure.json' -print -quit)"
+          if [ -z "$REPORT" ]; then
+            echo 'Downloaded Phase 30 artifact did not contain the canonical report; remaining fail-closed.'
+            echo 'report=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Using Phase 30 runtime report from run $RUN_ID: $REPORT"
+          echo "report=$REPORT" >> "$GITHUB_OUTPUT"
+
       - name: Assess current Phase 31 state
-        run: node scripts/verify-android-play-internal-release-phase31.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT='${{ steps.phase30.outputs.report }}'
+          if [ -n "$REPORT" ]; then
+            node scripts/verify-android-play-internal-release-phase31.mjs --phase30-report "$REPORT"
+          else
+            node scripts/verify-android-play-internal-release-phase31.mjs
+          fi
 
       - name: Upload Phase 31 readiness artifact
         if: always()
