@@ -10,6 +10,8 @@ Dejar el repositorio completamente preparado para construir, verificar y entrega
 
 La preparación de ingeniería puede desplegarse antes de cerrar la evidencia externa de Phase 28–30. El verificador debe permanecer verde cuando el contrato técnico sea correcto aunque existan gates externos pendientes; esos pendientes se reflejan en el reporte como `ENGINEERING_READY_EXTERNAL_BLOCKED` y nunca se auto-verifican.
 
+El workflow de Phase 31 consulta el último run exitoso de `cartagena-beta-observation-phase30.yml` sobre `main`, descarga su artifact canónico cuando existe y pasa ese JSON al verificador mediante `--phase30-report`. Si no existe un reporte real descargable, Phase 31 permanece fail-closed y no avanza por inferencia.
+
 Para ejecutar realmente build + upload de Internal Testing se requiere, como mínimo:
 
 - promoción controlada del candidato exacto `1.0.0-rc.2`;
@@ -37,6 +39,12 @@ El contrato reutiliza la infraestructura ya desplegada:
 - `ANDROID_PLAY_INTERNAL_RUNBOOK.md`;
 - `.github/workflows/release-android.yml`.
 
+## Ventana mínima de observación interna
+
+Cuando `internalTrackUploaded` se marque como `verified`, debe registrar el campo `observedAt` con el timestamp ISO-8601 real de la carga completada al track interno. El verificador calcula el tiempo transcurrido y exige **24 horas reales** antes de permitir el estado `INTERNAL_RELEASE_VALIDATED`.
+
+La existencia anticipada de smoke evidence no reduce ni elimina esta ventana. Un timestamp futuro, inválido o ausente en evidencia marcada como verificada provoca fallo del contrato.
+
 ## Estados
 
 ### `ENGINEERING_READY_EXTERNAL_BLOCKED`
@@ -47,13 +55,17 @@ El repositorio y sus contratos técnicos están listos, pero uno o más gates de
 
 Los gates previos al build/upload están verificados, pero todavía no existe evidencia del AAB firmado y/o de su carga al track interno.
 
+### `INTERNAL_DRAFT_OBSERVING`
+
+El AAB y la carga al track interno están verificados, pero todavía no han transcurrido las 24 horas mínimas desde `internalTrackUploaded.observedAt`.
+
 ### `INTERNAL_DRAFT_UPLOADED_AWAITING_DEVICE_SMOKE`
 
-Existe evidencia verificada de AAB firmado y upload al track `internal`, pero faltan las pruebas físicas obligatorias.
+La ventana de observación ya se cumplió, pero faltan las pruebas físicas obligatorias.
 
 ### `INTERNAL_RELEASE_VALIDATED`
 
-Todos los gates de Phase 31 están verificados, incluido smoke test físico. Este estado sigue sin autorizar rollout al track `production`.
+Todos los gates de Phase 31 están verificados, han transcurrido las 24 horas mínimas y existe smoke test físico válido. Este estado sigue sin autorizar rollout al track `production`.
 
 ## Límites de seguridad y gobernanza
 
@@ -66,4 +78,4 @@ Phase 31 mantiene de forma obligatoria:
 - evidencia externa fabricada o sintética: prohibida;
 - lanzamiento comercial/público automático: prohibido.
 
-La transferencia bancaria real, la activación/observación de beta, la configuración de Play Console, la custodia de credenciales y los dispositivos físicos permanecen fuera del alcance automático del repositorio.
+La transferencia bancaria real, la activación/observación de beta, la configuración de Play Console, la custodia de credenciales, el tiempo real transcurrido y los dispositivos físicos permanecen fuera del alcance automático del repositorio.
