@@ -1,19 +1,20 @@
 # Nvet Care — Production Roadmap v1.0
 
-**Baseline auditado:** `main` @ `7a9126b71efbd85f6db5d1b7e43173cd663aacb6`  
-**Revisión:** 2026-09-10  
-**Programa activo:** Phase 30 — Cartagena Beta Observation Closure  
-**Candidato congelado:** `1.0.0-rc.2`
+**Baseline auditado:** `main` @ `eb38976b8e423415dafa5bc93fec3f0db598e484`  
+**Revisión:** 2026-09-12  
+**Programa activo de ingeniería:** Phase 31 — Android Play Internal Release  
+**Candidato congelado:** `1.0.0-rc.2`  
+**Modo operativo actual:** engineering-forward / external-evidence deferred
 
-Este documento describe la ruta operativa vigente hacia Nvet Care 1.0. La fuente canónica para medir el estado global es `docs/production/GLOBAL_READINESS.json`, validada por `scripts/verify-global-readiness.mjs` y por el workflow `Nvet Global Release Readiness`.
+La fuente canónica para medir el estado global es `docs/production/GLOBAL_READINESS.json`, validada por `scripts/verify-global-readiness.mjs` y por el workflow `Nvet Global Release Readiness`.
 
-La regla principal del cierre 1.0 es separar tres dimensiones:
+La ruta 1.0 separa estrictamente tres dimensiones:
 
 1. **engineering completion:** software, contratos, CI, seguridad, recovery y release tooling implementados en el repositorio;
-2. **machine runtime evidence:** workflows y verificaciones ejecutadas con éxito sobre el SHA auditado;
+2. **machine runtime evidence:** workflows y verificaciones ejecutadas con éxito sobre un SHA auditado;
 3. **external/operator evidence:** hechos que requieren proveedor, cuenta administrativa, dispositivo físico, banco, participantes reales, tiempo real transcurrido, revisión jurídica o decisión operacional.
 
-Un pendiente externo bloquea la promoción, activación u observación correspondiente, pero no puede representarse como una funcionalidad de software inexistente.
+Un pendiente externo puede bloquear promoción, beta o publicación, pero nunca debe representarse como funcionalidad de software inexistente.
 
 ## Arquitectura canónica
 
@@ -27,7 +28,7 @@ Web y móvil consumen el mismo backend y deben respetar los mismos contratos de 
 
 ## Estado ejecutivo por fase
 
-| Fase | Objetivo | Estado 2026-09-10 |
+| Fase | Objetivo | Estado 2026-09-12 |
 |---|---|---|
 | 0 | Consolidación del repositorio | COMPLETA |
 | 1 | Baseline técnico + CI reproducible | COMPLETA |
@@ -42,89 +43,56 @@ Web y móvil consumen el mismo backend y deben respetar los mismos contratos de 
 | 10 | Observabilidad/backups | BACKUP, RESTORE Y ALERTING VERIFIED EN READINESS CANÓNICO |
 | 11 | Release Candidate | SUPERADA POR PHASE 27/28; candidato vigente `1.0.0-rc.2` |
 | 12 | Beta cerrada Cartagena | INFRAESTRUCTURA COMPLETA; evidencia humana/operativa pendiente |
-| 13 | Android Production | PREFLIGHT TÉCNICO AVANZADO; Play/signing/internal track/device smoke pendientes |
+| 13 | Android Production | PREFLIGHT TÉCNICO COMPLETO; provider/signing/internal track/device evidence pendiente |
 | 14 | iOS Production | POST-RC / NO BLOQUEA ANDROID 1.0 |
 | 15–23 | Cobertura, supply VET, recruitment, invitations y SLA | IMPLEMENTADAS |
 | 24 | Cartagena Launch Readiness | IMPLEMENTADA |
 | 25 | Cartagena Launch Operations | IMPLEMENTADA |
 | 26 | Service Quality Telemetry | IMPLEMENTADA |
 | 27 | Release Candidate Freeze & Production Closure | COMPLETA; `1.0.0-rc.2` FROZEN |
-| 28 | External Evidence Closure & Controlled RC Promotion | INFRAESTRUCTURA COMPLETA; promoción real aún bloqueada por evidencia bancaria |
-| 29 | Cartagena Beta Activation | INFRAESTRUCTURA COMPLETA; activación real bloqueada por evidencia externa |
-| 30 | Cartagena Beta Observation Closure | EN DESPLIEGUE; requiere beta activa + 168 horas reales |
-| 31 | Android Play Internal Release | SIGUIENTE DESPUÉS DEL CIERRE/REVISIÓN DE BETA |
+| 28 | External Evidence Closure & Controlled RC Promotion | INGENIERÍA COMPLETA; promoción real bloqueada por evidencia bancaria |
+| 29 | Cartagena Beta Activation | INGENIERÍA COMPLETA; activación real bloqueada por evidencia externa |
+| 30 | Cartagena Beta Observation Closure | INGENIERÍA COMPLETA; requiere beta activa + 168 horas reales |
+| 31 | Android Play Internal Release | INGENIERÍA EN DESPLIEGUE; external/operator evidence deliberadamente aplazada |
 
-## Estado de Phase 27
+## Estado de Phase 27–30
 
-Phase 27 congeló el producto en `1.0.0-rc.2` y activó un feature freeze fail-closed. Las rutas de producto protegidas solo pueden cambiar mediante un `release-blocker` auditable. `RELEASE_BLOCKERS.json` debe permanecer vacío en estado estable.
+Phase 27 congeló el producto en `1.0.0-rc.2` y mantiene un feature freeze fail-closed. Las rutas de producto protegidas solo pueden cambiar mediante un `release-blocker` auditable.
 
-El candidato congelado usa:
+Phase 28 implementó la infraestructura de promoción controlada del RC. El único blocker RC pre-promoción vigente continúa siendo `paymentRailVerified`: una transferencia bancaria real controlada y evidencia privada/redactada del movimiento efectivo.
 
-- `applicationId`: `com.nvetcare`;
-- Android `versionName`: `1.0.0-rc.2`;
-- Android `versionCode`: `10002`;
-- mercado inicial: Cartagena de Indias, DANE `13001`;
-- canal: closed beta;
-- `commercialLaunchAuthorized=false`;
-- `publicStoreReleaseAuthorized=false`.
+Phase 29 conecta la promoción real del RC con los diez gates de `BETA_CARTAGENA_READINESS.json`, Phase 24 y Phase 25. Su infraestructura está completa, pero no crea VET, CLIENT, soporte, revisión jurídica, rollback drill ni autorización operacional sintéticos.
 
-## Phase 28 — Controlled RC Promotion
+Phase 30 formaliza el cierre técnico de una beta ya activada. Requiere 168 horas reales de observación y clasifica el resultado como `PASSED_TECHNICAL_BETA`, `REVIEW_REQUIRED`, `FAILED_TECHNICAL_BETA`, `OBSERVING` o `BLOCKED`. El tiempo real, los participantes y la telemetría de producción no pueden ser fabricados por CI.
 
-Phase 28 no agrega funcionalidades de producto. Su infraestructura está implementada y establece una promoción auditable del RC sin conceder autoridad automática de lanzamiento.
+## Phase 31 — Android Play Internal Release
 
-Fuentes:
+Phase 31 avanza ahora porque su **ingeniería puede cerrarse sin ejecutar los hechos externos**. La fuente canónica es:
 
-- `docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json`;
-- `docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.md`;
-- `scripts/verify-controlled-rc-promotion.mjs`;
-- `.github/workflows/controlled-rc-promotion.yml`.
+- `docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.json`;
+- `docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.md`;
+- `scripts/verify-android-play-internal-release-phase31.mjs`;
+- `.github/workflows/android-play-internal-release-phase31.yml`.
 
-La promoción real se ejecuta después de que todos los gates RC estén `verified`, no existan blockers abiertos y el producto no haya derivado desde el candidato congelado. El blocker vigente pre-promoción continúa siendo `paymentRailVerified`: transferencia bancaria real controlada con evidencia privada/redactada del movimiento efectivo.
+La fase reutiliza `ANDROID_PRODUCTION_READINESS.json`, `ANDROID_RELEASE_PREFLIGHT.json`, `ANDROID_PLAY_COMPLIANCE.json`, `ANDROID_PLAY_INTERNAL_RUNBOOK.md` y `.github/workflows/release-android.yml`.
 
-## Phase 29 — Cartagena Beta Activation
+La automatización valida:
 
-Phase 29 conecta la promoción real del RC con los diez gates de `BETA_CARTAGENA_READINESS.json`, Phase 24 y Phase 25.
+- identidad `com.nvetcare` y target API 36;
+- firma fail-closed;
+- pinning del upload certificate;
+- build desde tag inmutable;
+- verificación criptográfica del AAB;
+- checksums y metadata de release;
+- compliance Play, account deletion y Android 16;
+- upload automatizado limitado al track `internal` y status `draft`;
+- prohibición de promoción automática a producción.
 
-Fuentes:
-
-- `docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.json`;
-- `docs/production/PHASE_29_CARTAGENA_BETA_ACTIVATION.md`;
-- `scripts/verify-cartagena-beta-activation-phase29.mjs`;
-- `.github/workflows/cartagena-beta-activation-phase29.yml`.
-
-Phase 29 exige promoción exacta del RC, los diez beta evidence gates, al menos tres veterinarios reales operational-ready, cohorte CLIENT real, soporte, revisión legal/privacy, rollback drill, Phase 24 `GO` y autorización bounded. La habilitación efectiva de `NVET_CLOSED_BETA_ENABLED=true` permanece como acción operacional deliberada.
-
-## Phase 30 — Cartagena Beta Observation Closure
-
-Phase 30 formaliza el cierre técnico de una beta ya activada. Reutiliza:
-
-- el ledger append-only de Phase 25;
-- `GET /api/beta/launch-readiness`;
-- `GET /api/beta/launch-operations`;
-- `GET /api/operations/service-quality?windowHours=168&marketDaneCode=13001` de Phase 26.
-
-Fuentes:
-
-- `docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.json`;
-- `docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.md`;
-- `scripts/verify-cartagena-beta-observation-phase30.mjs`;
-- `.github/workflows/cartagena-beta-observation-phase30.yml`.
-
-Phase 30 no declara éxito por el simple paso del tiempo. Produce cinco estados:
-
-- `BLOCKED`: prerequisitos reales incompletos;
-- `OBSERVING`: beta activa pero ventana aún no cerrada;
-- `PASSED_TECHNICAL_BETA`: 168 horas cerradas y seis métricas SLO requeridas en `PASS` con muestra suficiente;
-- `REVIEW_REQUIRED`: ventana cerrada pero existe `WATCH` o `INSUFFICIENT_DATA`;
-- `FAILED_TECHNICAL_BETA`: observación abortada o métrica requerida en `BREACHED`.
-
-El snapshot runtime usado para el cierre debe ser agregado y redactado. El verificador rechaza PII, identificadores de usuarios/VET/mascotas, direcciones y coordenadas. El tiempo de observación no puede ser acelerado, simulado o rellenado retroactivamente por CI.
-
-Ningún resultado de Phase 30 autoriza automáticamente lanzamiento comercial, expansión nacional o publicación en stores.
+Mientras la evidencia externa esté pendiente, el estado correcto de Phase 31 es `ENGINEERING_READY_EXTERNAL_BLOCKED`. Esto significa que la ingeniería está lista y que el bloqueo restante pertenece a operador/proveedor, no al código.
 
 ## Engineering completion
 
-`GLOBAL_READINESS.json -> engineeringGates` es la fuente de verdad de esta dimensión. El baseline incluye CI, backend, Android nativo/E2E, seguridad, recovery, finanzas, Railway, convergencia web, Play compliance, account deletion, Android 16, Phase 27 freeze, Phase 28 controlled promotion, Phase 29 beta activation y Phase 30 observation closure.
+`GLOBAL_READINESS.json -> engineeringGates` es la fuente de verdad de esta dimensión. El baseline incluye CI, backend, Android nativo/E2E, seguridad, recovery, finanzas, Railway, convergencia web, Play compliance, account deletion, Android 16, Phase 27 freeze, Phase 28 controlled promotion, Phase 29 beta activation, Phase 30 observation closure y Phase 31 Android Play internal release.
 
 Un gate `verified` debe apuntar a evidencia versionada existente. El verificador falla cerrado si la evidencia desaparece o un source gate deriva.
 
@@ -140,68 +108,32 @@ Un gate `verified` debe apuntar a evidencia versionada existente. El verificador
 - `production-deployment-attestation.yml`;
 - `web-production-convergence.yml`.
 
-Los reportes de cierre, promoción, activación y observación consumen estos contratos pero no sustituyen evidencia externa.
+Los reportes de cierre, promoción, activación, observación y Play Internal Release consumen estos contratos pero no sustituyen evidencia externa.
 
-## RC external/operator evidence
+## Cola externa aplazada
 
-En el estado vigente:
+Los siguientes pasos se mantienen explícitamente pendientes y **no deben bloquear el trabajo de ingeniería automatizable actual**:
 
-- `productionBackupConfigured`: `verified`;
-- `restoreDrillVerified`: `verified`;
-- `productionAlertingVerified`: `verified`;
-- `main-branch-protection`: `verified`;
-- `paymentRailVerified`: `pending`.
+1. transferencia bancaria real y cierre de `paymentRailVerified`;
+2. promoción controlada del RC exacto `1.0.0-rc.2`;
+3. incorporación/verificación de VET reales de Cartagena y cohorte CLIENT real;
+4. soporte operativo, revisión legal/privacy y rollback drill;
+5. activación deliberada de la beta;
+6. 168 horas reales de observación;
+7. creación/configuración final de `com.nvetcare` en Play Console;
+8. Play App Signing, upload certificate y secretos protegidos;
+9. publicación final de privacy policy y Data Safety review;
+10. AAB firmado, upload real a Internal Testing y smoke test en al menos dos dispositivos físicos.
 
-Por tanto, el **primer blocker externo pre-promoción del RC** continúa siendo la transferencia bancaria real controlada.
+## Trabajo automatizable todavía disponible
 
-## Beta external/operator evidence
+Sin romper el feature freeze ni tocar producción, el repositorio puede seguir avanzando en:
 
-Los gates humanos principales antes de activar Cartagena son:
+- endurecimiento de Phase 31 y evidencia de provenance de artifacts;
+- auditorías de dependencias, supply-chain y reproducibilidad;
+- cobertura de tests unitarios/integración/E2E que no requieran proveedores reales;
+- validadores de configuración y contratos de deployment;
+- documentación y runbooks de incident response/release;
+- preparación técnica iOS no bloqueante, siempre que no introduzca cambios funcionales en el candidato Android congelado.
 
-- `cartagenaVetCoverageVerified`;
-- `clientCohortConfigured`;
-- `supportOwnerConfirmed`;
-- `privacyAndTermsReviewed`;
-- `rollbackDrillVerified`.
-
-`rcPromoted` y `paymentRailVerified` también permanecen blocking mientras Phase 28 no cierre la cadena RC.
-
-## Frontera manual obligatoria
-
-La automatización del repositorio puede preparar y verificar contratos, pero no puede crear hechos reales para satisfacer release evidence. El orden de intervención humana es:
-
-1. ejecutar una transferencia bancaria real controlada y conservar evidencia redactada;
-2. cerrar `paymentRailVerified` y promover el RC exacto;
-3. incorporar/verificar al menos tres VET reales de Cartagena;
-4. configurar una cohorte CLIENT real;
-5. confirmar soporte operativo y revisión legal/privacy;
-6. ejecutar un rollback drill real;
-7. habilitar deliberadamente la beta después de Phase 24 `GO`;
-8. iniciar y dejar transcurrir 168 horas reales de observación.
-
-Desde el punto 8, la recolección y clasificación técnica puede volver a automatizarse sobre evidencia agregada.
-
-## Android Production
-
-Baseline técnico:
-
-- `applicationId`: `com.nvetcare`;
-- target API 36;
-- Android 16 behavior contract verificado;
-- account deletion lifecycle verificado;
-- Play compliance contract verificado;
-- unsigned reproducible RC AAB disponible desde Phase 27 certification.
-
-La ruta Android sigue bloqueada por Play Console, Play App Signing, upload certificate, política pública, Data Safety, reviewer access, AAB firmado, internal track y pruebas físicas en al menos dos dispositivos.
-
-## Prioridad vigente
-
-1. **P0 externo RC:** completar `paymentRailVerified` con transferencia real y evidencia redactada.
-2. **P0 release:** ejecutar Phase 28 controlled promotion y aprobar `rc-promoted`.
-3. **P0 beta:** cerrar VET supply, cohort, soporte, legal/privacy y rollback.
-4. **P0 activation:** Phase 24 `GO`, autorización bounded y habilitación deliberada.
-5. **P1 observation:** completar 168 horas reales y ejecutar Phase 30 sobre telemetría agregada.
-6. **P1 Android:** Phase 31 Play internal release, signing y device smoke.
-7. **P2:** iOS y nuevas features para 1.1/2.0.
-
-Hasta la estabilización de la beta no deben abrirse features grandes o migraciones arquitectónicas que incrementen innecesariamente la superficie de riesgo.
+No se deben abrir features grandes, migraciones arquitectónicas ni cambios destructivos de base de datos mientras el candidato `1.0.0-rc.2` permanezca congelado.
