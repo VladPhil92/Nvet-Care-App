@@ -1,0 +1,125 @@
+name: Nvet Software Supply Chain Phase 32
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'docs/production/PHASE_32_SOFTWARE_SUPPLY_CHAIN.json'
+      - 'docs/production/PHASE_32_SOFTWARE_SUPPLY_CHAIN.md'
+      - 'docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/ANDROID_PLAY_COMPLIANCE.json'
+      - 'scripts/verify-software-supply-chain-phase32.mjs'
+      - '.github/workflows/software-supply-chain-phase32.yml'
+      - '.github/workflows/release-android.yml'
+      - 'mobile/android/build.gradle'
+      - 'mobile/android/app/build.gradle'
+      - 'mobile/android/gradle/wrapper/gradle-wrapper.properties'
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'docs/production/PHASE_32_SOFTWARE_SUPPLY_CHAIN.json'
+      - 'docs/production/PHASE_32_SOFTWARE_SUPPLY_CHAIN.md'
+      - 'docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.json'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'docs/production/ANDROID_PLAY_COMPLIANCE.json'
+      - 'scripts/verify-software-supply-chain-phase32.mjs'
+      - '.github/workflows/software-supply-chain-phase32.yml'
+      - '.github/workflows/release-android.yml'
+      - 'mobile/android/build.gradle'
+      - 'mobile/android/app/build.gradle'
+      - 'mobile/android/gradle/wrapper/gradle-wrapper.properties'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: phase32-supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  supply-chain:
+    name: Phase 32 SBOM and provenance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Validate Phase 32 static contract
+        run: node scripts/verify-software-supply-chain-phase32.mjs --contract-only
+
+      - name: Install canonical dependency tree without lifecycle scripts
+        run: npm ci --ignore-scripts --include=dev --legacy-peer-deps
+
+      - name: Generate canonical SPDX SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/phase32
+          npm sbom --sbom-format=spdx --sbom-type=application > .artifacts/phase32/npm-sbom.spdx.json
+          test -s .artifacts/phase32/npm-sbom.spdx.json
+
+      - name: Verify lockfile, SBOM and release-critical hashes
+        run: node scripts/verify-software-supply-chain-phase32.mjs --sbom .artifacts/phase32/npm-sbom.spdx.json
+
+      - name: Upload Phase 32 evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase32-software-supply-chain-evidence
+          path: |
+            .artifacts/phase32/npm-sbom.spdx.json
+            .artifacts/phase32/release-inputs.sha256
+            .artifacts/phase32/supply-chain-report.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attest Phase 32 evidence provenance
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            .artifacts/phase32/npm-sbom.spdx.json
+            .artifacts/phase32/release-inputs.sha256
+            .artifacts/phase32/supply-chain-report.json
+
+      - name: Attest dependency SBOM against canonical lockfile
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: package-lock.json
+          sbom-path: .artifacts/phase32/npm-sbom.spdx.json
+
+      - name: Supply-chain summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Nvet Care — Phase 32 Supply Chain'
+            echo '- Lockfile: package-lock.json v3'
+            echo '- SBOM: SPDX application'
+            echo '- Release-critical inputs: SHA-256 manifest'
+            if [ '${{ github.event_name }}' = 'pull_request' ]; then
+              echo '- Artifact attestations: intentionally skipped on PR; enabled after merge/manual trusted run'
+            else
+              echo '- Artifact attestations: requested through GitHub OIDC/Sigstore'
+            fi
+            echo '- Runtime feature changes: none'
+          } >> "$GITHUB_STEP_SUMMARY"
