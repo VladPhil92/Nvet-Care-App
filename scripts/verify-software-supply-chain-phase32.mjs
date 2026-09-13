@@ -78,11 +78,11 @@ function validateLockfile(lock, control) {
 }
 
 function validateSbom(sbom) {
-  if (typeof sbom.spdxVersion !== 'string' || !sbom.spdxVersion.startsWith('SPDX-')) {
-    fail('SBOM is not SPDX JSON');
-  }
+  if (sbom.spdxVersion !== 'SPDX-2.3') fail('SBOM must be SPDX-2.3 JSON');
+  if (sbom.dataLicense !== 'CC0-1.0') fail('SBOM dataLicense must be CC0-1.0');
   if (!Array.isArray(sbom.packages) || sbom.packages.length === 0) fail('SBOM contains no packages');
-  if (typeof sbom.SPDXID !== 'string') fail('SBOM root SPDXID is missing');
+  if (sbom.SPDXID !== 'SPDXRef-DOCUMENT') fail('SBOM root SPDXID is invalid');
+  if (!Array.isArray(sbom.relationships) || sbom.relationships.length === 0) fail('SBOM relationships are missing');
   return { spdxVersion: sbom.spdxVersion, packageCount: sbom.packages.length };
 }
 
@@ -105,8 +105,9 @@ async function validateContract() {
   if (
     policy.requiredLockfileVersion !== 3 ||
     policy.sbomFormat !== 'spdx' ||
+    policy.sbomVersion !== 'SPDX-2.3' ||
     policy.sbomType !== 'application' ||
-    policy.sbomSource !== 'package-lock-only'
+    policy.sbomSource !== 'package-lock-v3-deterministic-generator'
   ) {
     fail('lockfile/SBOM policy drifted');
   }
@@ -171,11 +172,11 @@ async function validateContract() {
   ]) {
     requireIncludes(releaseWorkflow, `@${sha}`, `Android release workflow must pin ${label} to ${sha}`);
   }
-  const canonicalSbomCommand = 'npm sbom --sbom-format=spdx --sbom-type=application --package-lock-only';
-  requireIncludes(phase32Workflow, canonicalSbomCommand, 'Phase 32 workflow must generate the canonical lockfile-only SPDX SBOM');
+  const generatorCommand = 'node scripts/generate-lockfile-spdx-sbom.mjs';
+  requireIncludes(phase32Workflow, generatorCommand, 'Phase 32 workflow must generate SPDX from the canonical lockfile generator');
   requireIncludes(phase32Workflow, 'id-token: write', 'Phase 32 workflow must grant OIDC permission for attestations');
   requireIncludes(phase32Workflow, 'attestations: write', 'Phase 32 workflow must grant attestation permission');
-  requireIncludes(releaseWorkflow, canonicalSbomCommand, 'Android release must generate the lockfile-only SPDX SBOM');
+  requireIncludes(releaseWorkflow, generatorCommand, 'Android release must generate SPDX from the canonical lockfile generator');
   requireIncludes(releaseWorkflow, 'sbom-path:', 'Android release must generate an SBOM attestation');
   requireIncludes(releaseWorkflow, 'subject-path:', 'Android release must generate build provenance');
 
