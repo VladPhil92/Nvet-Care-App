@@ -55,6 +55,7 @@ Phase 32 fortalece el origen e integridad del release sin cambiar backend, mobil
 
 - `docs/production/PHASE_32_SOFTWARE_SUPPLY_CHAIN.json`;
 - `docs/production/PHASE_32_SOFTWARE_SUPPLY_CHAIN.md`;
+- `scripts/generate-lockfile-spdx-sbom.mjs`;
 - `scripts/verify-software-supply-chain-phase32.mjs`;
 - `.github/workflows/software-supply-chain-phase32.yml`;
 - `.github/workflows/release-android.yml`.
@@ -62,10 +63,10 @@ Phase 32 fortalece el origen e integridad del release sin cambiar backend, mobil
 La fase implementa:
 
 - validación fail-closed de `package-lock.json` v3;
-- rechazo de URLs de resolución inseguras;
-- exigencia de integridad criptográfica para dependencias remotas;
-- SBOM SPDX generado con `npm sbom`;
-- manifiesto SHA-256 de entradas críticas del release;
+- rechazo de transportes de resolución inseguros, incluidas variantes `git+http`/`git+ftp`;
+- exigencia de integridad criptográfica para dependencias remotas HTTPS;
+- SBOM SPDX 2.3 generado determinísticamente por código versionado directamente desde `package-lock.json`, sin instalar dependencias;
+- manifiesto SHA-256 de entradas críticas del release, incluido el propio generador SPDX;
 - Artifact Attestations de GitHub mediante OIDC/Sigstore;
 - provenance del AAB firmado;
 - SBOM attestation vinculada al AAB;
