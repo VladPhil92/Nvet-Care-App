@@ -18,7 +18,9 @@ on:
         type: string
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # v2 migrates away from a stale pre-Phase-32 concurrency generation while
+  # preserving one active CI run per ref and cancel-in-progress semantics.
+  group: ci-v2-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -104,6 +106,7 @@ jobs:
   database-recovery-convergence:
     name: Database Recovery Convergence
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
