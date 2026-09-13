@@ -58,8 +58,8 @@ function validateLockfile(lock, control) {
     const resolved = entry.resolved;
     if (typeof resolved !== 'string' || resolved.length === 0) continue;
 
-    if (/^(?:http|git):\/\//i.test(resolved)) {
-      fail(`insecure resolved URL at ${packagePath}: ${resolved}`);
+    if (/^(?:http|git|ftp|git\+http|git\+ftp):/i.test(resolved)) {
+      fail(`insecure dependency transport at ${packagePath}: ${resolved}`);
     }
 
     if (/^https:\/\//i.test(resolved)) {
