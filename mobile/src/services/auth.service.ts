@@ -61,6 +61,15 @@ export interface AuthResponse {
 
 export type LoginResponse = AuthResponse
 
+export interface CtgIdentityLinkResponse {
+  linked: true
+  userId: string
+  email: string
+  role: AuthUser['role']
+  ctgUserId: string
+  rolePreserved: true
+}
+
 export interface TwoFactorEnrollResponse {
   secret: string
   otpauthUrl: string
@@ -178,6 +187,34 @@ class AuthService {
       }
       throw error
     }
+  }
+
+  /**
+   * Exchange a CTG One Supabase session for a normal Nvet session. The backend
+   * verifies the Supabase JWT and remains the only authority for the Nvet role.
+   * This is the native equivalent of the CTG One web BFF token exchange.
+   */
+  async loginWithCtgIdentity(
+    supabaseAccessToken: string,
+    twoFactorCode?: string,
+  ): Promise<AuthResponse> {
+    const response = await apiClient.post<AuthResponse>('/auth/ctg-identity-exchange', {
+      supabaseAccessToken,
+      ...(twoFactorCode ? { twoFactorCode } : {}),
+    })
+    await this.persistSession(response.data)
+    return response.data
+  }
+
+  /**
+   * Link an already authenticated Nvet account to the CTG One identity proven
+   * by the supplied Supabase token. This endpoint never changes the Nvet role.
+   */
+  async linkCtgIdentity(supabaseAccessToken: string): Promise<CtgIdentityLinkResponse> {
+    const response = await apiClient.post<CtgIdentityLinkResponse>('/auth/ctg-identity/link', {
+      supabaseAccessToken,
+    })
+    return response.data
   }
 
   async loginWithRecoveryCode(payload: {
