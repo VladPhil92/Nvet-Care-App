@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "phase": 32,
+  "program": "software-supply-chain-artifact-provenance",
+  "candidate": "1.0.0-rc.2",
+  "prerequisitePhase": 31,
+  "policy": {
+    "failClosed": true,
+    "runtimeCodeChangesAllowed": false,
+    "packageLockRequired": true,
+    "requiredLockfileVersion": 3,
+    "rejectInsecureResolvedUrls": true,
+    "requireIntegrityForRegistryDependencies": true,
+    "sbomRequired": true,
+    "sbomFormat": "spdx",
+    "sbomType": "application",
+    "sbomSource": "package-lock-only",
+    "sha256ManifestRequired": true,
+    "buildProvenanceRequired": true,
+    "sbomAttestationRequired": true,
+    "releaseArtifactAttestationRequired": true,
+    "secretsNeverCommitted": true,
+    "attestAction": "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
+    "publicStoreReleaseAuthorized": false,
+    "commercialLaunchAuthorized": false
+  },
+  "authoritativeInputs": {
+    "phase31": "docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.json",
+    "freeze": "docs/production/RELEASE_CANDIDATE_FREEZE.json",
+    "blockers": "docs/production/RELEASE_BLOCKERS.json",
+    "globalReadiness": "docs/production/GLOBAL_READINESS.json",
+    "rootPackage": "package.json",
+    "rootLockfile": "package-lock.json",
+    "releaseWorkflow": ".github/workflows/release-android.yml",
+    "phase32Workflow": ".github/workflows/software-supply-chain-phase32.yml"
+  },
+  "releaseCriticalInputs": [
+    "package.json",
+    "package-lock.json",
+    "mobile/android/build.gradle",
+    "mobile/android/app/build.gradle",
+    "mobile/android/gradle/wrapper/gradle-wrapper.properties",
+    ".github/workflows/release-android.yml",
+    "docs/production/ANDROID_PLAY_COMPLIANCE.json",
+    "docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.json"
+  ],
+  "requiredWorkflowControls": {
+    "checkoutPinnedSha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "setupNodePinnedSha": "820762786026740c76f36085b0efc47a31fe5020",
+    "setupJavaPinnedSha": "de7274f081f381c8f8158605e0321c36c376e2e6",
+    "uploadArtifactPinnedSha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    "attestPinnedSha": "1e69f48acb82d1966a394da916b4c1698aa569d6"
+  },
+  "reporting": {
+    "directory": ".artifacts/phase32",
+    "report": ".artifacts/phase32/supply-chain-report.json",
+    "checksums": ".artifacts/phase32/release-inputs.sha256",
+    "sbom": ".artifacts/phase32/npm-sbom.spdx.json"
+  },
+  "classification": {
+    "contractReady": "SUPPLY_CHAIN_CONTRACT_READY",
+    "evidenceReady": "SUPPLY_CHAIN_EVIDENCE_READY"
+  },
+  "boundaries": {
+    "noRuntimeMutation": "Phase 32 changes release engineering, evidence and CI only; it must not modify backend, mobile or dashboard runtime behavior.",
+    "noSyntheticExternalEvidence": "Supply-chain evidence proves repository and build provenance only; it does not satisfy payment, beta, Play Console, device or operator gates.",
+    "releaseAuthority": "Attestation does not authorize Google Play production rollout or commercial launch."
+  }
+}

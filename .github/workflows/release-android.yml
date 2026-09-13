@@ -2,7 +2,7 @@
 #
 # Construye un Android App Bundle (.aab) de producción desde un tag inmutable,
 # valida la upload key esperada, verifica criptográficamente la firma y publica
-# un artifact trazable con checksum + metadata + evidencia de compliance. Opcionalmente
+# un artifact trazable con checksum + metadata + SBOM + provenance. Opcionalmente
 # puede subir el bundle como draft al track Internal de Google Play cuando la cuenta
 # ya esté conectada; nunca promueve automáticamente a producción.
 name: Release Android
@@ -36,6 +36,9 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 env:
   NODE_VERSION: '22.x'
@@ -66,7 +69,7 @@ jobs:
           fi
 
       - name: Checkout release tag
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.inputs.release_ref }}
           fetch-depth: 1
@@ -82,14 +85,14 @@ jobs:
           echo "Release ref: $RELEASE_REF"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
       - name: Setup Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '17'
@@ -199,11 +202,16 @@ jobs:
           AAB=mobile/android/app/build/outputs/bundle/release/app-release.aab
           test -s "$AAB"
           unzip -Z1 "$AAB" | grep -Eq '^META-INF/[^/]+\.(RSA|DSA|EC)$'
-          # Upload keys are commonly self-signed. Plain jarsigner verification
-          # proves the AAB signature without rejecting the expected self-signed
-          # certificate chain; the pinned SHA-256 fingerprint above proves that
-          # the approved Nvet upload certificate is the signer.
           jarsigner -verify "$AAB"
+
+      - name: Generate release SPDX SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=mobile/android/app/build/outputs/bundle/release
+          mkdir -p "$OUT"
+          npm sbom --sbom-format=spdx --sbom-type=application > "$OUT/npm-sbom.spdx.json"
+          test -s "$OUT/npm-sbom.spdx.json"
 
       - name: Generate release evidence
         env:
@@ -218,15 +226,18 @@ jobs:
           cp .artifacts/android-play-compliance.json "$OUT/android-play-compliance.json"
           sha256sum "$AAB" > "$OUT/app-release.aab.sha256"
           sha256sum "$OUT/android-play-compliance.json" > "$OUT/android-play-compliance.json.sha256"
+          sha256sum "$OUT/npm-sbom.spdx.json" > "$OUT/npm-sbom.spdx.json.sha256"
           node - <<'NODE'
           const crypto = require('crypto');
           const fs = require('fs');
           const { execFileSync } = require('child_process');
           const releaseGitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
           const compliancePath = 'mobile/android/app/build/outputs/bundle/release/android-play-compliance.json';
+          const sbomPath = 'mobile/android/app/build/outputs/bundle/release/npm-sbom.spdx.json';
           const complianceBytes = fs.readFileSync(compliancePath);
+          const sbomBytes = fs.readFileSync(sbomPath);
           const metadata = {
-            schemaVersion: 2,
+            schemaVersion: 3,
             applicationId: 'com.nvetcare',
             versionName: process.env.VERSION_NAME,
             versionCode: Number(process.env.VERSION_CODE),
@@ -235,6 +246,9 @@ jobs:
             targetSdk: 36,
             apiUrl: process.env.NVET_API_URL,
             playComplianceEvidenceSha256: crypto.createHash('sha256').update(complianceBytes).digest('hex'),
+            sbomFormat: 'SPDX',
+            sbomSha256: crypto.createHash('sha256').update(sbomBytes).digest('hex'),
+            provenanceProvider: 'GitHub Artifact Attestations / Sigstore',
             privacyPolicySource: 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md',
             dataSafetySource: 'docs/production/GOOGLE_PLAY_DATA_SAFETY.md',
             generatedAt: new Date().toISOString(),
@@ -253,7 +267,7 @@ jobs:
           fi
 
       - name: Upload signed AAB and evidence
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nvetcare-${{ github.event.inputs.version_name }}-${{ github.run_number }}
           path: |
@@ -262,8 +276,21 @@ jobs:
             mobile/android/app/build/outputs/bundle/release/release-metadata.json
             mobile/android/app/build/outputs/bundle/release/android-play-compliance.json
             mobile/android/app/build/outputs/bundle/release/android-play-compliance.json.sha256
+            mobile/android/app/build/outputs/bundle/release/npm-sbom.spdx.json
+            mobile/android/app/build/outputs/bundle/release/npm-sbom.spdx.json.sha256
           if-no-files-found: error
           retention-days: 30
+
+      - name: Attest signed AAB build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Attest signed AAB SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          sbom-path: mobile/android/app/build/outputs/bundle/release/npm-sbom.spdx.json
 
       - name: Upload signed AAB as Google Play Internal draft
         id: play_upload
@@ -287,6 +314,8 @@ jobs:
             echo "- Version: ${{ github.event.inputs.version_name }}"
             echo "- Signed AAB build requested: yes"
             echo '- Phase 13C Play compliance evidence: attached to release artifact'
+            echo '- Phase 32 SPDX SBOM: attached and checksummed'
+            echo '- AAB provenance + SBOM attestations: GitHub Artifact Attestations/Sigstore'
             if [ '${{ inputs.publish_internal }}' = 'true' ]; then
               echo "- Google Play Internal draft: ${{ steps.play_upload.outcome }}"
               echo '- Promotion remains manual; this workflow does not release to production.'
