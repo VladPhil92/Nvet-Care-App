@@ -14,6 +14,7 @@
     "sbomRequired": true,
     "sbomFormat": "spdx",
     "sbomType": "application",
+    "sbomSource": "package-lock-only",
     "sha256ManifestRequired": true,
     "buildProvenanceRequired": true,
     "sbomAttestationRequired": true,
