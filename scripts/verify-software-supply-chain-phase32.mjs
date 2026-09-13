@@ -102,7 +102,12 @@ async function validateContract() {
     if (policy[key] !== true) fail(`policy '${key}' must remain enabled`);
   }
   if (policy.runtimeCodeChangesAllowed !== false) fail('Phase 32 must not authorize runtime code changes');
-  if (policy.requiredLockfileVersion !== 3 || policy.sbomFormat !== 'spdx' || policy.sbomType !== 'application') {
+  if (
+    policy.requiredLockfileVersion !== 3 ||
+    policy.sbomFormat !== 'spdx' ||
+    policy.sbomType !== 'application' ||
+    policy.sbomSource !== 'package-lock-only'
+  ) {
     fail('lockfile/SBOM policy drifted');
   }
   if (policy.publicStoreReleaseAuthorized !== false || policy.commercialLaunchAuthorized !== false) {
@@ -166,10 +171,11 @@ async function validateContract() {
   ]) {
     requireIncludes(releaseWorkflow, `@${sha}`, `Android release workflow must pin ${label} to ${sha}`);
   }
-  requireIncludes(phase32Workflow, 'npm sbom --sbom-format=spdx --sbom-type=application', 'Phase 32 workflow must generate the canonical SPDX SBOM');
+  const canonicalSbomCommand = 'npm sbom --sbom-format=spdx --sbom-type=application --package-lock-only';
+  requireIncludes(phase32Workflow, canonicalSbomCommand, 'Phase 32 workflow must generate the canonical lockfile-only SPDX SBOM');
   requireIncludes(phase32Workflow, 'id-token: write', 'Phase 32 workflow must grant OIDC permission for attestations');
   requireIncludes(phase32Workflow, 'attestations: write', 'Phase 32 workflow must grant attestation permission');
-  requireIncludes(releaseWorkflow, 'npm sbom --sbom-format=spdx --sbom-type=application', 'Android release must generate an SPDX SBOM');
+  requireIncludes(releaseWorkflow, canonicalSbomCommand, 'Android release must generate the lockfile-only SPDX SBOM');
   requireIncludes(releaseWorkflow, 'sbom-path:', 'Android release must generate an SBOM attestation');
   requireIncludes(releaseWorkflow, 'subject-path:', 'Android release must generate build provenance');
 
@@ -203,7 +209,7 @@ async function writeEvidence(control, lockMetrics) {
       version: control.policy.requiredLockfileVersion,
       ...lockMetrics,
     },
-    sbom,
+    sbom: sbom ? { ...sbom, source: control.policy.sbomSource } : null,
     releaseCriticalInputs: inputHashes,
     attestationPolicy: {
       action: control.policy.attestAction,
@@ -224,4 +230,4 @@ const report = await writeEvidence(control, lockMetrics);
 console.log('Nvet Care — Phase 32 Software Supply Chain & Artifact Provenance');
 console.log(`State: ${report.state}`);
 console.log(`Remote lockfile dependencies protected: ${lockMetrics.integrityProtected}/${lockMetrics.remotePackages}`);
-if (report.sbom) console.log(`SPDX packages: ${report.sbom.packageCount}`);
+if (report.sbom) console.log(`SPDX packages: ${report.sbom.packageCount} (${report.sbom.source})`);
