@@ -4,7 +4,12 @@ import { Dimensions, Platform } from 'react-native'
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
 /**
- * Typography Scale
+ * Typography families.
+ *
+ * Web source-of-truth: Inter → DM Sans → Nunito Sans → sans-serif.
+ * Native keeps platform-safe fallbacks until the Inter binary is bundled in
+ * the application package; all size/weight tokens below already mirror the
+ * web responsive scale exactly.
  */
 export const Typography = {
   serif: Platform.select({
@@ -13,7 +18,7 @@ export const Typography = {
   }),
   sans: Platform.select({
     ios: 'System',
-    android: 'Roboto',
+    android: 'sans-serif',
   }),
   mono: Platform.select({
     ios: 'Courier',
@@ -47,39 +52,28 @@ export const BorderRadius = {
 } as const
 
 /**
- * Font Sizes - Responsive
+ * Font sizes mirror dashboard/src/theme/tokens.ts.
+ * Phones use the web "mobile" scale; tablets use the web "tablet" scale.
  */
 const getResponsiveFontSize = () => {
-  if (SCREEN_WIDTH < 375) {
-    // iPhone SE
-    return {
-      h1: 24,
-      h2: 20,
-      h3: 16,
-      body: 14,
-      small: 12,
-      tiny: 10,
-    }
-  } else if (SCREEN_WIDTH < 414) {
-    // iPhone Standard
+  if (SCREEN_WIDTH >= 768) {
     return {
       h1: 28,
       h2: 22,
-      h3: 17,
+      h3: 18,
       body: 15,
       small: 13,
       tiny: 11,
     }
-  } else {
-    // iPhone Pro Max / iPad
-    return {
-      h1: 32,
-      h2: 24,
-      h3: 18,
-      body: 16,
-      small: 14,
-      tiny: 12,
-    }
+  }
+
+  return {
+    h1: 24,
+    h2: 20,
+    h3: 16,
+    body: 14,
+    small: 12,
+    tiny: 10,
   }
 }
 
