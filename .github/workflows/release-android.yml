@@ -204,13 +204,15 @@ jobs:
           unzip -Z1 "$AAB" | grep -Eq '^META-INF/[^/]+\.(RSA|DSA|EC)$'
           jarsigner -verify "$AAB"
 
-      - name: Generate release SPDX SBOM from canonical lockfile
+      - name: Generate deterministic release SPDX 2.3 SBOM from canonical lockfile
         shell: bash
         run: |
           set -euo pipefail
           OUT=mobile/android/app/build/outputs/bundle/release
           mkdir -p "$OUT"
-          npm sbom --sbom-format=spdx --sbom-type=application --package-lock-only > "$OUT/npm-sbom.spdx.json"
+          node scripts/generate-lockfile-spdx-sbom.mjs \
+            --lockfile package-lock.json \
+            --output "$OUT/npm-sbom.spdx.json"
           test -s "$OUT/npm-sbom.spdx.json"
 
       - name: Generate release evidence
@@ -246,8 +248,8 @@ jobs:
             targetSdk: 36,
             apiUrl: process.env.NVET_API_URL,
             playComplianceEvidenceSha256: crypto.createHash('sha256').update(complianceBytes).digest('hex'),
-            sbomFormat: 'SPDX',
-            sbomSource: 'package-lock-only',
+            sbomFormat: 'SPDX-2.3',
+            sbomSource: 'package-lock-v3-deterministic-generator',
             sbomSha256: crypto.createHash('sha256').update(sbomBytes).digest('hex'),
             provenanceProvider: 'GitHub Artifact Attestations / Sigstore',
             privacyPolicySource: 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md',
@@ -315,7 +317,7 @@ jobs:
             echo "- Version: ${{ github.event.inputs.version_name }}"
             echo "- Signed AAB build requested: yes"
             echo '- Phase 13C Play compliance evidence: attached to release artifact'
-            echo '- Phase 32 SPDX SBOM: generated from package-lock.json, attached and checksummed'
+            echo '- Phase 32 SPDX 2.3 SBOM: generated deterministically from package-lock.json, attached and checksummed'
             echo '- AAB provenance + SBOM attestations: GitHub Artifact Attestations/Sigstore'
             if [ '${{ inputs.publish_internal }}' = 'true' ]; then
               echo "- Google Play Internal draft: ${{ steps.play_upload.outcome }}"
