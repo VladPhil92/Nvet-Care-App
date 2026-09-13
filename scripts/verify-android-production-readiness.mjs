@@ -167,10 +167,10 @@ async function validateRepositoryContract() {
     ['Google Play package identity', /packageName:\s*com\.nvetcare/],
     ['Google Play internal track', /track:\s*internal/],
     ['Google Play draft status', /status:\s*draft/],
-    ['Node 24-compatible checkout action', /actions\/checkout@v7/],
-    ['Node 24-compatible setup-node action', /actions\/setup-node@v7/],
-    ['Node 24-compatible setup-java action', /actions\/setup-java@v5/],
-    ['Node 24-compatible artifact action', /actions\/upload-artifact@v7/],
+    ['Node 24-compatible checkout action', /actions\/checkout@(?:v7|3d3c42e5aac5ba805825da76410c181273ba90b1)/],
+    ['Node 24-compatible setup-node action', /actions\/setup-node@(?:v7|820762786026740c76f36085b0efc47a31fe5020)/],
+    ['Node 24-compatible setup-java action', /actions\/setup-java@(?:v5|v6|de7274f081f381c8f8158605e0321c36c376e2e6)/],
+    ['Node 24-compatible artifact action', /actions\/upload-artifact@(?:v7|043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)/],
   ]) {
     requireMatch(releaseWorkflow, contract[1], contract[0]);
   }
