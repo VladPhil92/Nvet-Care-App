@@ -6,6 +6,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 
 import { AuthController } from "./auth.controller";
 import { AccountLifecycleController } from "./account-lifecycle.controller";
+import { CtgIdentityLinkController } from "./ctg-identity-link.controller";
 import { AuthService } from "./auth.service";
 import { AccountLifecycleService } from "./account-lifecycle.service";
 import { PasswordService } from "./services/password.service";
@@ -14,6 +15,7 @@ import { EmailVerificationService } from "./services/email-verification.service"
 import { TokenBlacklistService } from "./services/token-blacklist.service";
 import { TwoFactorService } from "./services/two-factor.service";
 import { CtgIdentityService } from "./services/ctg-identity.service";
+import { CtgIdentityLinkService } from "./services/ctg-identity-link.service";
 import { JwtStrategy } from "./strategies/jwt.strategy";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { EmailVerifiedGuard } from "./guards/email-verified.guard";
@@ -42,7 +44,11 @@ import { WsJwtGuard, WsEmailVerifiedGuard } from "./guards/ws-jwt.guard";
       }),
     }),
   ],
-  controllers: [AuthController, AccountLifecycleController],
+  controllers: [
+    AuthController,
+    AccountLifecycleController,
+    CtgIdentityLinkController,
+  ],
   providers: [
     AuthService,
     AccountLifecycleService,
@@ -52,6 +58,7 @@ import { WsJwtGuard, WsEmailVerifiedGuard } from "./guards/ws-jwt.guard";
     TokenBlacklistService,
     TwoFactorService,
     CtgIdentityService,
+    CtgIdentityLinkService,
     JwtStrategy,
     JwtAuthGuard,
     EmailVerifiedGuard,
