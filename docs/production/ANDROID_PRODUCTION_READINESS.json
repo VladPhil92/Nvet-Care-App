@@ -65,7 +65,8 @@
     "internalTrackUploaded": {
       "status": "pending",
       "evidence": null,
-      "note": "The signed candidate must be uploaded to a non-production Play track before production rollout."
+      "observedAt": null,
+      "note": "The signed candidate must be uploaded to a non-production Play track before production rollout. When verified, observedAt must contain the real ISO-8601 timestamp of the completed internal-track upload so the minimum observation window can be enforced."
     },
     "physicalDeviceSmokeVerified": {
       "status": "pending",

@@ -73,6 +73,18 @@
       ]
     },
     {
+      "id": "android-play-internal-release-contract",
+      "status": "verified",
+      "owner": "release-engineering",
+      "blocking": true,
+      "evidencePaths": [
+        "docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.json",
+        "docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.md",
+        "scripts/verify-android-play-internal-release-phase31.mjs",
+        ".github/workflows/android-play-internal-release-phase31.yml"
+      ]
+    },
+    {
       "id": "backend-production-contract",
       "status": "verified",
       "owner": "engineering",

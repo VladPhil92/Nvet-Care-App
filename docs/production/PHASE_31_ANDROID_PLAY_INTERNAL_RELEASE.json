@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "phase": 31,
+  "program": "android-play-internal-release",
+  "candidate": "1.0.0-rc.2",
+  "applicationId": "com.nvetcare",
+  "targetSdk": 36,
+  "prerequisitePhase": 30,
+  "prerequisiteManifest": "docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.json",
+  "acceptedPhase30Outcomes": [
+    "PASSED_TECHNICAL_BETA",
+    "REVIEW_REQUIRED"
+  ],
+  "policy": {
+    "failClosed": true,
+    "engineeringPreparationMayProceedBeforeExternalClosure": true,
+    "externalEvidenceNeverAutoVerified": true,
+    "secretsNeverCommitted": true,
+    "requireImmutableReleaseTag": true,
+    "requireSignedAabForPlayUpload": true,
+    "requirePinnedUploadCertificate": true,
+    "requirePlayComplianceContract": true,
+    "requireAccountDeletionLifecycle": true,
+    "requireAndroid16Compatibility": true,
+    "playTrack": "internal",
+    "playAutomationMaximumStatus": "draft",
+    "automaticProductionPromotion": false,
+    "minimumInternalTrackObservationHours": 24,
+    "minimumPhysicalDevices": 2,
+    "publicStoreReleaseAuthorized": false,
+    "commercialLaunchAuthorized": false
+  },
+  "authoritativeInputs": {
+    "phase30": "docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.json",
+    "androidReadiness": "docs/production/ANDROID_PRODUCTION_READINESS.json",
+    "androidPreflight": "docs/production/ANDROID_RELEASE_PREFLIGHT.json",
+    "playCompliance": "docs/production/ANDROID_PLAY_COMPLIANCE.json",
+    "freeze": "docs/production/RELEASE_CANDIDATE_FREEZE.json",
+    "blockers": "docs/production/RELEASE_BLOCKERS.json",
+    "globalReadiness": "docs/production/GLOBAL_READINESS.json",
+    "releaseWorkflow": ".github/workflows/release-android.yml",
+    "internalRunbook": "docs/production/ANDROID_PLAY_INTERNAL_RUNBOOK.md"
+  },
+  "engineeringRequirements": [
+    "packageIdentityPinned",
+    "apiLevelPinned",
+    "releaseSigningFailClosed",
+    "uploadCertificatePinning",
+    "immutableTagBuild",
+    "aabSignatureVerification",
+    "artifactChecksums",
+    "draftOnlyInternalUpload",
+    "automaticProductionPromotionDisabled",
+    "privacyPolicySourcePrepared",
+    "dataSafetySourcePrepared",
+    "reviewerAccessRunbookPrepared",
+    "accountDeletionContractPrepared",
+    "android16CompatibilityPrepared"
+  ],
+  "operatorGateGroups": {
+    "preBuildAndUpload": [
+      "rcPromoted",
+      "playConsoleAppCreated",
+      "playAppSigningEnabled",
+      "uploadCertificatePinned",
+      "privacyPolicyPublished",
+      "dataSafetyReviewed",
+      "playReviewerAccessConfigured"
+    ],
+    "artifactAndTrack": [
+      "signedAabVerified",
+      "internalTrackUploaded"
+    ],
+    "postInstallValidation": [
+      "physicalDeviceSmokeVerified"
+    ]
+  },
+  "classification": {
+    "engineeringReadyExternalBlocked": "ENGINEERING_READY_EXTERNAL_BLOCKED",
+    "readyForOperatorBuildAndUpload": "READY_FOR_OPERATOR_BUILD_AND_UPLOAD",
+    "internalDraftObserving": "INTERNAL_DRAFT_OBSERVING",
+    "internalDraftUploadedAwaitingDeviceSmoke": "INTERNAL_DRAFT_UPLOADED_AWAITING_DEVICE_SMOKE",
+    "internalReleaseValidated": "INTERNAL_RELEASE_VALIDATED"
+  },
+  "reporting": {
+    "artifact": ".artifacts/phase31-android-play-internal-release.json"
+  },
+  "manualEvidenceBoundaries": {
+    "paymentAndRcPromotion": "Real payment evidence and controlled RC promotion remain external prerequisites and are never synthesized by Phase 31.",
+    "playConsole": "Application creation, Play App Signing, account permissions and provider-side configuration are operator/provider evidence.",
+    "signingSecrets": "Keystore material and Play service-account credentials must remain protected secrets outside Git.",
+    "playUpload": "The repository may automate only a draft Internal Testing upload after external provider setup exists.",
+    "internalObservation": "The minimum Internal Testing observation window is measured from the real internalTrackUploaded.observedAt timestamp and cannot be bypassed by early smoke evidence.",
+    "deviceSmoke": "Physical installation and smoke validation require real Android devices and accountable operator evidence.",
+    "publicRelease": "Phase 31 never authorizes production-track rollout, public store release or commercial launch."
+  }
+}

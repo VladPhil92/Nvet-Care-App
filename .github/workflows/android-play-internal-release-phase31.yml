@@ -1,0 +1,132 @@
+name: Nvet Android Play Internal Release Phase 31
+
+on:
+  pull_request:
+    paths:
+      - 'docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.json'
+      - 'docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.md'
+      - 'docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/ANDROID_RELEASE_PREFLIGHT.json'
+      - 'docs/production/ANDROID_PLAY_COMPLIANCE.json'
+      - 'docs/production/ANDROID_PLAY_INTERNAL_RUNBOOK.md'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'scripts/verify-android-play-internal-release-phase31.mjs'
+      - 'scripts/verify-android-production-readiness.mjs'
+      - 'scripts/verify-android-release-preflight.mjs'
+      - 'scripts/verify-cartagena-beta-observation-phase30.mjs'
+      - '.github/workflows/android-play-internal-release-phase31.yml'
+      - '.github/workflows/release-android.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.json'
+      - 'docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.md'
+      - 'docs/production/PHASE_30_CARTAGENA_BETA_OBSERVATION_CLOSURE.json'
+      - 'docs/production/ANDROID_PRODUCTION_READINESS.json'
+      - 'docs/production/ANDROID_RELEASE_PREFLIGHT.json'
+      - 'docs/production/ANDROID_PLAY_COMPLIANCE.json'
+      - 'docs/production/ANDROID_PLAY_INTERNAL_RUNBOOK.md'
+      - 'docs/production/GLOBAL_READINESS.json'
+      - 'docs/production/RELEASE_CANDIDATE_FREEZE.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'scripts/verify-android-play-internal-release-phase31.mjs'
+      - 'scripts/verify-android-production-readiness.mjs'
+      - 'scripts/verify-android-release-preflight.mjs'
+      - 'scripts/verify-cartagena-beta-observation-phase30.mjs'
+      - '.github/workflows/android-play-internal-release-phase31.yml'
+      - '.github/workflows/release-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: phase31-android-play-internal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase31-contract:
+    name: Phase 31 Android internal release contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+
+      - name: Validate Phase 30 prerequisite contract
+        run: node scripts/verify-cartagena-beta-observation-phase30.mjs --contract-only
+
+      - name: Validate Android production contract
+        run: node scripts/verify-android-production-readiness.mjs --contract-only
+
+      - name: Validate Android release preflight
+        run: node scripts/verify-android-release-preflight.mjs
+
+      - name: Validate Phase 31 contract
+        run: node scripts/verify-android-play-internal-release-phase31.mjs --contract-only
+
+      - name: Fetch latest successful Phase 30 runtime report
+        id: phase30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/phase30-runtime
+          RUN_ID="$(gh api --method GET \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/cartagena-beta-observation-phase30.yml/runs?branch=main&status=completed&per_page=50" \
+            --jq '.workflow_runs[] | select(.conclusion == "success") | .id' | head -n 1 || true)"
+
+          if [ -z "$RUN_ID" ]; then
+            echo 'No successful Phase 30 run is available on main; remaining fail-closed.'
+            echo 'report=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name phase30-cartagena-beta-observation-closure-readiness \
+            --dir .artifacts/phase30-runtime; then
+            echo "Phase 30 run $RUN_ID has no downloadable readiness artifact; remaining fail-closed."
+            echo 'report=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          REPORT="$(find .artifacts/phase30-runtime -type f -name 'phase30-cartagena-beta-observation-closure.json' -print -quit)"
+          if [ -z "$REPORT" ]; then
+            echo 'Downloaded Phase 30 artifact did not contain the canonical report; remaining fail-closed.'
+            echo 'report=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Using Phase 30 runtime report from run $RUN_ID: $REPORT"
+          echo "report=$REPORT" >> "$GITHUB_OUTPUT"
+
+      - name: Assess current Phase 31 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT='${{ steps.phase30.outputs.report }}'
+          if [ -n "$REPORT" ]; then
+            node scripts/verify-android-play-internal-release-phase31.mjs --phase30-report "$REPORT"
+          else
+            node scripts/verify-android-play-internal-release-phase31.mjs
+          fi
+
+      - name: Upload Phase 31 readiness artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: phase31-android-play-internal-release-readiness
+          path: .artifacts/phase31-android-play-internal-release.json
+          if-no-files-found: warn
+          retention-days: 30
