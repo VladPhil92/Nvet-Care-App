@@ -14,36 +14,26 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
+import NvetLogo from '../../components/brand/NvetLogo'
 import type { LoginScreenProps } from '../../navigation/types'
 import { useLoginMutation } from '../../hooks/queries/useMobileMutations'
 import { getErrorMessage } from '../../services/api'
+import {
+  BorderRadius,
+  Colors,
+  FontSize,
+  Spacing,
+  Typography,
+} from '../../theme/tokens'
 
 /**
  * LoginScreen — pantalla de acceso production-grade.
  *
- * Características:
- *  - Validación client-side antes de submit (UX rápida)
- *  - Server-side validation via mutation (la fuente de verdad)
- *  - `KeyboardAvoidingView` para que el form no quede tapado por el teclado
- *  - `secureTextEntry` con toggle ojo
- *  - `autoComplete` y `textContentType` para que iOS sugiera passwords del Keychain
- *  - `accessibilityLabel` en todos los Pressables
- *  - Indicador de loading inline + botón disabled durante submit
- *  - El RootNavigator detecta auth exitoso vía `useCurrentUserQuery` invalidation
- *    y nos redirige automáticamente al ClientStack o VetStack
+ * La marca, paleta y escala tipográfica provienen de los mismos tokens que la
+ * experiencia web. El login por correo/contraseña usa el mismo backend Nvet,
+ * por lo que una cuenta creada en web y una cuenta usada en Android son la
+ * misma identidad, siempre que el build de producción apunte al API canónico.
  */
-
-const COLORS = {
-  sage: '#5B7553',
-  gold: '#C9A961',
-  bg: '#FAFAF7',
-  text: '#1F2A1B',
-  muted: '#5F6B5A',
-  border: '#E5E2D8',
-  error: '#C53030',
-  inputBg: '#FFFFFF',
-} as const
-
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const { t } = useI18n()
   const [email, setEmail] = useState('')
@@ -65,8 +55,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     }
     if (!password) {
       errors.password = 'La contraseña es obligatoria'
-    } else if (password.length < 8) {
-      errors.password = 'Mínimo 8 caracteres'
     }
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
@@ -80,8 +68,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         onError: (error) => {
           Alert.alert(t('auth.login.errorInvalid'), getErrorMessage(error))
         },
-        // En éxito, RootNavigator detecta el cambio en useCurrentUserQuery
-        // y redirige automáticamente; no necesitamos navegar explícitamente.
       },
     )
   }, [validate, email, password, loginMutation, t])
@@ -98,33 +84,28 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Brand */}
           <View style={styles.brandContainer}>
-            <View style={styles.brandMark} accessibilityElementsHidden>
-              <Text style={styles.brandMarkText}>N</Text>
-            </View>
+            <NvetLogo width={150} height={75} />
             <Text style={styles.brand}>Nvet Care</Text>
             <Text style={styles.tagline}>Atención veterinaria a domicilio</Text>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             <Text style={styles.heading}>{t('auth.login.title')}</Text>
-            <Text style={styles.subheading}>
-              {t('auth.login.subtitle')}
-            </Text>
+            <Text style={styles.subheading}>{t('auth.login.subtitle')}</Text>
 
-            {/* Email */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>{t('auth.login.emailLabel')}</Text>
               <TextInput
                 value={email}
-                onChangeText={(t) => {
-                  setEmail(t)
-                  if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined }))
+                onChangeText={(value) => {
+                  setEmail(value)
+                  if (fieldErrors.email) {
+                    setFieldErrors((previous) => ({ ...previous, email: undefined }))
+                  }
                 }}
                 placeholder="tunombre@ejemplo.com"
-                placeholderTextColor={COLORS.muted}
+                placeholderTextColor={Colors.inkMuted}
                 style={[styles.input, fieldErrors.email && styles.inputError]}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -140,19 +121,28 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               )}
             </View>
 
-            {/* Password */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>{t('auth.login.passwordLabel')}</Text>
-              <View style={[styles.input, styles.inputRow, fieldErrors.password && styles.inputError]}>
+              <View
+                style={[
+                  styles.input,
+                  styles.inputRow,
+                  fieldErrors.password && styles.inputError,
+                ]}
+              >
                 <TextInput
                   value={password}
-                  onChangeText={(t) => {
-                    setPassword(t)
-                    if (fieldErrors.password)
-                      setFieldErrors((p) => ({ ...p, password: undefined }))
+                  onChangeText={(value) => {
+                    setPassword(value)
+                    if (fieldErrors.password) {
+                      setFieldErrors((previous) => ({
+                        ...previous,
+                        password: undefined,
+                      }))
+                    }
                   }}
                   placeholder="••••••••"
-                  placeholderTextColor={COLORS.muted}
+                  placeholderTextColor={Colors.inkMuted}
                   style={styles.inputBare}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
@@ -164,16 +154,14 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                   accessibilityLabel="Contraseña"
                 />
                 <Pressable
-                  onPress={() => setShowPassword((s) => !s)}
+                  onPress={() => setShowPassword((value) => !value)}
                   hitSlop={12}
                   accessibilityLabel={
                     showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'
                   }
                   accessibilityRole="button"
                 >
-                  <Text style={styles.showToggle}>
-                    {showPassword ? '🙈' : '👁'}
-                  </Text>
+                  <Text style={styles.showToggle}>{showPassword ? 'Ocultar' : 'Ver'}</Text>
                 </Pressable>
               </View>
               {fieldErrors.password && (
@@ -181,7 +169,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               )}
             </View>
 
-            {/* Forgot password */}
             <Pressable
               onPress={() => navigation.navigate('ForgotPassword')}
               hitSlop={8}
@@ -192,7 +179,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               <Text style={styles.forgotText}>{t('auth.login.forgotPassword')}</Text>
             </Pressable>
 
-            {/* Submit */}
             <Pressable
               testID="login-submit"
               onPress={handleSubmit}
@@ -207,13 +193,12 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
             >
               {isSubmitting ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={Colors.inkInv} />
               ) : (
                 <Text style={styles.submitText}>{t('auth.login.submit')}</Text>
               )}
             </Pressable>
 
-            {/* Register link */}
             <View style={styles.registerRow}>
               <Text style={styles.registerText}>{t('auth.login.noAccount')}</Text>
               <Pressable
@@ -234,75 +219,68 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: COLORS.bg },
+  safe: { flex: 1, backgroundColor: Colors.canvas },
   scroll: {
     flexGrow: 1,
-    padding: 24,
+    padding: Spacing.xxl,
     justifyContent: 'center',
   },
   brandContainer: {
     alignItems: 'center',
-    marginBottom: 40,
-  },
-  brandMark: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: COLORS.sage,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  brandMarkText: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '700',
+    marginBottom: Spacing.xxxl,
   },
   brand: {
-    fontSize: 28,
+    fontFamily: Typography.sans,
+    fontSize: FontSize.h1,
     fontWeight: '700',
-    color: COLORS.sage,
-    letterSpacing: 0.5,
+    color: Colors.dark,
+    letterSpacing: 0.2,
+    marginTop: -Spacing.sm,
   },
   tagline: {
-    fontSize: 13,
-    color: COLORS.muted,
-    marginTop: 4,
+    fontFamily: Typography.sans,
+    fontSize: FontSize.small,
+    color: Colors.inkMuted,
+    marginTop: Spacing.xs,
   },
   form: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xxl,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: Colors.line,
   },
   heading: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 4,
+    fontFamily: Typography.sans,
+    fontSize: FontSize.h2,
+    fontWeight: '700',
+    color: Colors.ink,
+    marginBottom: Spacing.xs,
   },
   subheading: {
-    fontSize: 14,
-    color: COLORS.muted,
-    marginBottom: 24,
+    fontFamily: Typography.sans,
+    fontSize: FontSize.body,
+    color: Colors.inkMuted,
+    marginBottom: Spacing.xxl,
   },
-  fieldGroup: { marginBottom: 16 },
+  fieldGroup: { marginBottom: Spacing.lg },
   label: {
-    fontSize: 13,
+    fontFamily: Typography.sans,
+    fontSize: FontSize.small,
     fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 6,
+    color: Colors.ink,
+    marginBottom: Spacing.sm,
   },
   input: {
     minHeight: 48,
     paddingHorizontal: 14,
-    borderRadius: 10,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.inputBg,
-    fontSize: 15,
-    color: COLORS.text,
+    borderColor: Colors.lineHi,
+    backgroundColor: Colors.surfaceAlt,
+    fontFamily: Typography.sans,
+    fontSize: FontSize.body,
+    color: Colors.ink,
   },
   inputRow: {
     flexDirection: 'row',
@@ -311,36 +289,42 @@ const styles = StyleSheet.create({
   },
   inputBare: {
     flex: 1,
-    fontSize: 15,
-    color: COLORS.text,
+    fontFamily: Typography.sans,
+    fontSize: FontSize.body,
+    color: Colors.ink,
     paddingVertical: 12,
   },
   inputError: {
-    borderColor: COLORS.error,
+    borderColor: Colors.err,
   },
   showToggle: {
-    fontSize: 18,
-    paddingLeft: 8,
+    fontFamily: Typography.sans,
+    color: Colors.sageText,
+    fontSize: FontSize.small,
+    fontWeight: '700',
+    paddingLeft: Spacing.sm,
   },
   errorText: {
-    color: COLORS.error,
-    fontSize: 12,
-    marginTop: 4,
+    fontFamily: Typography.sans,
+    color: Colors.err,
+    fontSize: FontSize.small,
+    marginTop: Spacing.xs,
   },
   forgotPress: {
     alignSelf: 'flex-end',
-    paddingVertical: 4,
-    marginBottom: 20,
+    paddingVertical: Spacing.xs,
+    marginBottom: Spacing.xl,
   },
   forgotText: {
-    color: COLORS.sage,
-    fontSize: 13,
+    fontFamily: Typography.sans,
+    color: Colors.sageText,
+    fontSize: FontSize.small,
     fontWeight: '600',
   },
   submitBtn: {
     minHeight: 48,
-    borderRadius: 10,
-    backgroundColor: COLORS.sage,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.sage,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -348,26 +332,29 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitBtnPressed: {
-    opacity: 0.85,
+    backgroundColor: Colors.sageDark,
   },
   submitText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
+    fontFamily: Typography.sans,
+    color: Colors.inkInv,
+    fontSize: FontSize.body,
+    fontWeight: '700',
   },
   registerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 20,
+    marginTop: Spacing.xl,
   },
   registerText: {
-    color: COLORS.muted,
-    fontSize: 14,
+    fontFamily: Typography.sans,
+    color: Colors.inkMuted,
+    fontSize: FontSize.body,
   },
   registerLink: {
-    color: COLORS.sage,
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Typography.sans,
+    color: Colors.sageText,
+    fontSize: FontSize.body,
+    fontWeight: '700',
   },
 })
