@@ -1,8 +1,11 @@
 <resources>
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#F5F1E8</item>
-        <item name="android:navigationBarColor">#F5F1E8</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">@color/nvet_canvas</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/nvet_blue_deep</item>
+        <item name="android:navigationBarColor">@color/nvet_blue_deep</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>
