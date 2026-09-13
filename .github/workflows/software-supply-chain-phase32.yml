@@ -66,15 +66,12 @@ jobs:
       - name: Validate Phase 32 static contract
         run: node scripts/verify-software-supply-chain-phase32.mjs --contract-only
 
-      - name: Install canonical dependency tree without lifecycle scripts
-        run: npm ci --ignore-scripts --include=dev --legacy-peer-deps
-
-      - name: Generate canonical SPDX SBOM
+      - name: Generate canonical SPDX SBOM from package-lock.json
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .artifacts/phase32
-          npm sbom --sbom-format=spdx --sbom-type=application > .artifacts/phase32/npm-sbom.spdx.json
+          npm sbom --sbom-format=spdx --sbom-type=application --package-lock-only > .artifacts/phase32/npm-sbom.spdx.json
           test -s .artifacts/phase32/npm-sbom.spdx.json
 
       - name: Verify lockfile, SBOM and release-critical hashes
@@ -114,7 +111,7 @@ jobs:
           {
             echo '## Nvet Care — Phase 32 Supply Chain'
             echo '- Lockfile: package-lock.json v3'
-            echo '- SBOM: SPDX application'
+            echo '- SBOM: SPDX application generated directly from canonical lockfile'
             echo '- Release-critical inputs: SHA-256 manifest'
             if [ '${{ github.event_name }}' = 'pull_request' ]; then
               echo '- Artifact attestations: intentionally skipped on PR; enabled after merge/manual trusted run'
