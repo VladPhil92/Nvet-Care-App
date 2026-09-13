@@ -6,22 +6,39 @@ Phase 32 endurece la cadena de suministro de Nvet Care sin alterar la lógica fu
 
 Cada release debe poder responder de forma verificable a cuatro preguntas: **qué dependencias contiene, qué entradas exactas lo produjeron, qué hash identifica cada evidencia y qué workflow/commit produjo el artefacto**.
 
-La fase incorpora un SBOM SPDX, un manifiesto SHA-256 de entradas críticas, validación del `package-lock.json`, provenance firmada mediante GitHub Artifact Attestations/Sigstore y una attestation que vincula el AAB Android con su SBOM.
+La fase incorpora un SBOM SPDX 2.3, un manifiesto SHA-256 de entradas críticas, validación del `package-lock.json`, provenance firmada mediante GitHub Artifact Attestations/Sigstore y una attestation que vincula el AAB Android con su SBOM.
 
 ## Alcance automatizable
 
 Phase 32 valida y produce:
 
 - `package-lock.json` v3 como fuente canónica del árbol npm;
-- rechazo de dependencias resueltas mediante transportes inseguros;
-- integridad criptográfica para dependencias descargadas desde registries HTTPS;
-- SBOM SPDX generado con `npm sbom`;
+- rechazo de dependencias resueltas mediante transportes inseguros, incluidos `http`, `git`, `ftp`, `git+http` y `git+ftp`;
+- integridad criptográfica para dependencias descargadas mediante HTTPS;
+- SBOM SPDX 2.3 generado determinísticamente por `scripts/generate-lockfile-spdx-sbom.mjs` directamente desde el lockfile;
 - SHA-256 de entradas críticas de release;
 - reporte canónico de supply chain;
 - provenance del paquete de evidencia Phase 32;
 - provenance del AAB Android cuando el workflow real de release sea ejecutado;
 - SBOM attestation vinculada al AAB;
 - acciones críticas de GitHub fijadas a SHA inmutable en los workflows de Phase 32 y Android release.
+
+## Generador SPDX determinista
+
+`npm sbom` valida el árbol npm y falla sobre peer-dependency debt heredada aun cuando se solicita `--package-lock-only`. Phase 32 no modifica el candidato congelado para satisfacer esa limitación del CLI.
+
+En su lugar, el repositorio contiene un generador versionado que:
+
+- lee únicamente `package-lock.json` v3;
+- inventaría el paquete raíz y todas las entradas del mapa `packages`;
+- convierte hashes SRI `sha256`, `sha384` y `sha512` a checksums SPDX;
+- produce identificadores SPDX estables a partir de las rutas del lockfile;
+- genera relaciones `DESCRIBES` y `CONTAINS`;
+- usa el SHA-256 del lockfile como namespace documental;
+- usa `SOURCE_DATE_EPOCH` o el timestamp del commit como fecha reproducible de creación;
+- no instala paquetes ni ejecuta lifecycle scripts.
+
+El generador forma parte de las entradas críticas que se hashean, por lo que un cambio en su lógica modifica explícitamente la evidencia de release.
 
 ## Acciones fijadas
 
@@ -49,7 +66,7 @@ En `main` o mediante `workflow_dispatch`, GitHub firma attestations usando OIDC/
 
 `release-android.yml` conserva todos sus límites existentes y añade:
 
-1. generación del SBOM SPDX desde el lockfile del tag inmutable;
+1. generación determinista del SBOM SPDX 2.3 desde el lockfile del tag inmutable;
 2. checksum del SBOM dentro del artifact de release;
 3. provenance attestation del AAB firmado;
 4. SBOM attestation del mismo AAB;
@@ -62,6 +79,7 @@ La attestation ocurre después de verificar la firma del AAB. No sustituye Play 
 Phase 32 **no**:
 
 - modifica comportamiento de backend, mobile o dashboard;
+- modifica el árbol de dependencias del candidato congelado;
 - instala secretos en el repositorio;
 - crea evidencia bancaria, beta o de dispositivo;
 - configura Google Play Console;
