@@ -11,8 +11,8 @@ html {
 }
 
 body {
-  background: #F8F6F2;
-  color: #1A1915;
+  background: #F2F4F7;
+  color: #0D1B2A;
   font-family: 'DM Sans', 'Nunito Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -33,7 +33,7 @@ input, select, textarea, button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #CCC8BF;
+  background: #D5D9E0;
   border-radius: 2px;
 }
 
@@ -115,7 +115,7 @@ table {
 
 select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B6560' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23454D54' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 32px !important;
