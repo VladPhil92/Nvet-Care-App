@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "phase": "13D",
   "convergencePhase": 35,
+  "observabilityPhase": 36,
   "program": "google-play-compliance",
   "applicationId": "com.nvetcare",
   "scope": "android-mobile-client",
@@ -25,6 +26,7 @@
   "sdkInventory": {
     "advertisingSdkObserved": false,
     "mobileAnalyticsSdkObserved": false,
+    "firstPartyRuntimeTelemetry": true,
     "geolocation": "@react-native-community/geolocation",
     "maps": "react-native-maps",
     "userSelectedMedia": "react-native-image-picker",
@@ -62,6 +64,23 @@
       "purpose": ["authentication", "account linking", "fraud and account security"],
       "source": "mobile/src/services/ctg-federation.service.ts",
       "externalProcessorReviewRequired": true
+    },
+    {
+      "id": "runtime-diagnostics",
+      "category": "app-activity-and-diagnostics",
+      "examples": ["allow-listed runtime event name", "operation duration", "normalized outcome code", "app version", "version code"],
+      "purpose": ["app functionality", "security", "diagnostics", "performance monitoring", "release safety"],
+      "source": "mobile/src/services/runtime-telemetry.service.ts",
+      "privacyBoundary": {
+        "userIdentifiers": false,
+        "tokens": false,
+        "passwords": false,
+        "twoFactorCodes": false,
+        "clinicalFreeText": false,
+        "paymentCredentials": false,
+        "rawClientStackTraces": false,
+        "persistentClientTelemetryQueue": false
+      }
     },
     {
       "id": "vet-professional-profile",
@@ -161,6 +180,7 @@
     "aiProviderDataHandlingReview": "pending",
     "paymentProviderDataHandlingReview": "pending",
     "ctgOneFederationDataHandlingReview": "pending",
+    "playRuntimeDiagnosticsDeclarationReview": "pending",
     "accountDeletionProductionRoute": "pending",
     "accountDeletionProviderPurgeReview": "pending"
   },
@@ -174,6 +194,8 @@
     "mobile/package.json",
     "mobile/src/services/auth.service.ts",
     "mobile/src/services/ctg-federation.service.ts",
+    "mobile/src/services/runtime-telemetry.service.ts",
+    "mobile/src/services/api.ts",
     "mobile/src/lib/secureStorage.ts",
     "mobile/src/services/pet.service.ts",
     "mobile/src/services/appointment.service.ts",
@@ -183,6 +205,9 @@
     "mobile/src/services/ai.service.ts",
     "mobile/src/services/notification.service.ts",
     "mobile/src/screens/shared/DeleteAccountScreen.tsx",
+    "backend/src/operations/runtime-telemetry.controller.ts",
+    "backend/src/operations/runtime-telemetry.service.ts",
+    "backend/src/operations/release-health.service.ts",
     "backend/src/auth/account-lifecycle.controller.ts",
     "backend/src/auth/account-lifecycle.service.ts",
     "backend/src/auth/dto/delete-account.dto.ts",
