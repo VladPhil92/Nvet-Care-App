@@ -77,6 +77,25 @@ function validateLockfile(lock, control) {
   return { remotePackages, integrityProtected };
 }
 
+function validateReleaseBlockerRegistry(registry, candidate) {
+  if (registry.schemaVersion !== 1 || !Array.isArray(registry.blockers)) {
+    fail('release blocker registry schema is invalid');
+  }
+
+  const openBlockers = registry.blockers.filter((entry) => entry?.status === 'open');
+  for (const entry of openBlockers) {
+    if (entry.candidate !== candidate) fail(`open release blocker PR #${entry.prNumber ?? 'unknown'} targets another candidate`);
+    if (entry.severity !== 'release-blocking') fail(`open release blocker PR #${entry.prNumber ?? 'unknown'} has invalid severity`);
+    if (!Number.isInteger(entry.prNumber) || entry.prNumber < 1) fail('open release blocker is missing a valid prNumber');
+    if (typeof entry.owner !== 'string' || entry.owner.trim().length === 0) fail(`open release blocker PR #${entry.prNumber} is missing an owner`);
+    if (typeof entry.justification !== 'string' || entry.justification.trim().length < 20) {
+      fail(`open release blocker PR #${entry.prNumber} is missing an auditable justification`);
+    }
+  }
+
+  return { auditedOpenBlockers: openBlockers.length };
+}
+
 function validateSbom(sbom) {
   if (sbom.spdxVersion !== 'SPDX-2.3') fail('SBOM must be SPDX-2.3 JSON');
   if (sbom.dataLicense !== 'CC0-1.0') fail('SBOM dataLicense must be CC0-1.0');
@@ -139,7 +158,7 @@ async function validateContract() {
   if (freeze.phase !== 27 || freeze.state !== 'FROZEN' || freeze.candidate !== control.candidate) {
     fail('frozen release-candidate contract is not intact');
   }
-  if ((blockers.blockers ?? []).some((entry) => entry.status === 'open')) fail('release blocker registry contains an open blocker');
+  const releaseGovernance = validateReleaseBlockerRegistry(blockers, control.candidate);
   if (rootPackage.name !== 'nvet-care-platform' || rootPackage.private !== true) fail('root package identity drifted');
 
   const lockMetrics = validateLockfile(lock, control);
@@ -180,10 +199,10 @@ async function validateContract() {
   requireIncludes(releaseWorkflow, 'sbom-path:', 'Android release must generate an SBOM attestation');
   requireIncludes(releaseWorkflow, 'subject-path:', 'Android release must generate build provenance');
 
-  return { control, lockMetrics };
+  return { control, lockMetrics, releaseGovernance };
 }
 
-async function writeEvidence(control, lockMetrics) {
+async function writeEvidence(control, lockMetrics, releaseGovernance) {
   const outDir = path.join(ROOT, control.reporting.directory);
   await fs.mkdir(outDir, { recursive: true });
 
@@ -210,6 +229,7 @@ async function writeEvidence(control, lockMetrics) {
       version: control.policy.requiredLockfileVersion,
       ...lockMetrics,
     },
+    releaseGovernance,
     sbom: sbom ? { ...sbom, source: control.policy.sbomSource } : null,
     releaseCriticalInputs: inputHashes,
     attestationPolicy: {
@@ -226,9 +246,10 @@ async function writeEvidence(control, lockMetrics) {
   return report;
 }
 
-const { control, lockMetrics } = await validateContract();
-const report = await writeEvidence(control, lockMetrics);
+const { control, lockMetrics, releaseGovernance } = await validateContract();
+const report = await writeEvidence(control, lockMetrics, releaseGovernance);
 console.log('Nvet Care — Phase 32 Software Supply Chain & Artifact Provenance');
 console.log(`State: ${report.state}`);
+console.log(`Audited open release blockers: ${releaseGovernance.auditedOpenBlockers}`);
 console.log(`Remote lockfile dependencies protected: ${lockMetrics.integrityProtected}/${lockMetrics.remotePackages}`);
 if (report.sbom) console.log(`SPDX packages: ${report.sbom.packageCount} (${report.sbom.source})`);
