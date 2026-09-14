@@ -10,9 +10,8 @@ import { NativeModules, Platform } from 'react-native'
  * runtime: si el vault seguro no está disponible, la autenticación falla
  * cerrada en vez de degradar silenciosamente la seguridad.
  *
- * iOS no tiene proyecto nativo certificado todavía (track phase-14). Cuando
- * exista, deberá implementar la misma interfaz usando Keychain antes de
- * habilitar un release iOS.
+ * El mismo vault genera y conserva state + verifier PKCE para la federación
+ * CTG One. El verifier nunca se persiste en JavaScript ni AsyncStorage.
  */
 
 type TokenBundle = {
@@ -20,17 +19,31 @@ type TokenBundle = {
   refreshToken: string
 }
 
+export type CtgFederationRequest = {
+  state: string
+  codeChallenge: string
+  codeChallengeMethod: 'S256'
+}
+
 type NativeSecureStorage = {
   setTokens(accessToken: string, refreshToken: string): Promise<void>
   getTokens(): Promise<TokenBundle | null>
   clearTokens(): Promise<void>
+  createCtgFederationRequest(): Promise<CtgFederationRequest>
+  consumeCtgFederationRequest(callbackState: string): Promise<string>
+  clearCtgFederationRequest(): Promise<void>
 }
 
 const nativeVault = NativeModules.NvetSecureStorage as NativeSecureStorage | undefined
 let testTokens: TokenBundle | null = null
+let testFederation: { state: string; verifier: string } | null = null
 
 function isTestEnvironment(): boolean {
   return typeof process !== 'undefined' && process.env.NODE_ENV === 'test'
+}
+
+function testBase64Url(bytes: number[]): string {
+  return bytes.map((value) => value.toString(16).padStart(2, '0')).join('')
 }
 
 function requireNativeVault(): NativeSecureStorage {
@@ -46,6 +59,30 @@ function requireNativeVault(): NativeSecureStorage {
       },
       async clearTokens() {
         testTokens = null
+      },
+      async createCtgFederationRequest() {
+        const nonce = Date.now().toString(36)
+        const state = `test-state-${nonce}`
+        const verifier = `test-verifier-${nonce}-${testBase64Url([1, 2, 3, 4])}`
+        testFederation = { state, verifier }
+        return {
+          state,
+          codeChallenge: `test-challenge-${nonce}`,
+          codeChallengeMethod: 'S256' as const,
+        }
+      },
+      async consumeCtgFederationRequest(callbackState: string) {
+        if (!testFederation) throw new Error('FEDERATION_REQUEST_MISSING')
+        if (testFederation.state !== callbackState) {
+          testFederation = null
+          throw new Error('FEDERATION_STATE_MISMATCH')
+        }
+        const verifier = testFederation.verifier
+        testFederation = null
+        return verifier
+      },
+      async clearCtgFederationRequest() {
+        testFederation = null
       },
     }
   }
@@ -66,6 +103,18 @@ export const secureStorage = {
 
   async clearTokens(): Promise<void> {
     await requireNativeVault().clearTokens()
+  },
+
+  async createCtgFederationRequest(): Promise<CtgFederationRequest> {
+    return requireNativeVault().createCtgFederationRequest()
+  },
+
+  async consumeCtgFederationRequest(callbackState: string): Promise<string> {
+    return requireNativeVault().consumeCtgFederationRequest(callbackState)
+  },
+
+  async clearCtgFederationRequest(): Promise<void> {
+    await requireNativeVault().clearCtgFederationRequest()
   },
 
   async getAccessToken(): Promise<string | null> {

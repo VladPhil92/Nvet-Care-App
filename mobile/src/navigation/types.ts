@@ -3,9 +3,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs'
 import type { CompositeScreenProps } from '@react-navigation/native'
 
-// ============================================================
-// AUTH STACK (público)
-// ============================================================
 export type AuthStackParamList = {
   Login: undefined
   Register: { role?: 'CLIENT' | 'VET' } | undefined
@@ -14,11 +11,9 @@ export type AuthStackParamList = {
   TwoFactorRecovery: { email: string; password: string }
   ResetPassword: { token: string }
   VerifyEmail: { token: string }
+  CtgFederationCallback: { code: string; state: string }
 }
 
-// ============================================================
-// CLIENT TAB
-// ============================================================
 export type ClientTabParamList = {
   ClientHome: undefined
   ClientSearch: NavigatorScreenParams<ClientSearchStackParamList> | undefined
@@ -53,9 +48,6 @@ export type ClientAppointmentsStackParamList = {
   ChatScreen: { appointmentId: string }
 }
 
-// ============================================================
-// VET TAB
-// ============================================================
 export type VetProfileStackParamList = {
   ProfileMain: undefined
   Wallet: undefined
@@ -97,9 +89,6 @@ export type VetEarningsStackParamList = {
   RequestWithdrawal: undefined
 }
 
-// ============================================================
-// SHARED
-// ============================================================
 export type SharedStackParamList = {
   ProfileMain: undefined
   EditProfile: undefined
@@ -119,9 +108,6 @@ export type SharedStackParamList = {
   ChangePassword: undefined
 }
 
-// ============================================================
-// ROOT
-// ============================================================
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>
   Client: NavigatorScreenParams<ClientTabParamList>
@@ -129,9 +115,6 @@ export type RootStackParamList = {
   ChatModal: { appointmentId: string }
 }
 
-// ============================================================
-// HELPERS
-// ============================================================
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>
 export type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'>
 export type ForgotPasswordScreenProps = NativeStackScreenProps<
@@ -149,6 +132,10 @@ export type ResetPasswordScreenProps = NativeStackScreenProps<
 export type VerifyEmailScreenProps = NativeStackScreenProps<
   AuthStackParamList,
   'VerifyEmail'
+>
+export type CtgFederationCallbackScreenProps = NativeStackScreenProps<
+  AuthStackParamList,
+  'CtgFederationCallback'
 >
 
 export type TwoFactorEnrollmentScreenProps = NativeStackScreenProps<
