@@ -1,0 +1,91 @@
+name: Nvet Phase 39 Dependency Refresh
+
+on:
+  push:
+    branches:
+      - feat/dependency-vulnerability-remediation-phase39
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'backend/package.json'
+      - 'mobile/package.json'
+      - 'dashboard/package.json'
+      - '.github/workflows/phase39-dependency-refresh.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase39-dependency-refresh
+  cancel-in-progress: true
+
+jobs:
+  refresh-lockfile:
+    name: Regenerate reviewed lockfile and audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout remediation branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/dependency-vulnerability-remediation-phase39
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.x
+
+      - name: Regenerate canonical lockfile without lifecycle scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep Phase 39 manifest-driven. A broad `npm update` re-resolves
+          # unrelated workspace peers and can turn a targeted security fix into
+          # an accidental framework migration.
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Verify canonical lockfile installs cleanly
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Show dependency diff summary
+        run: git diff --stat -- package-lock.json
+
+      - name: Commit deterministic lockfile refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json; then
+            echo 'Canonical lockfile already converged.'
+            exit 0
+          fi
+          git config user.name 'nvet-release-bot'
+          git config user.email '125180580+VladPhil92@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'chore(deps): regenerate Phase 39 lockfile'
+          git push origin HEAD:feat/dependency-vulnerability-remediation-phase39
+
+      - name: Capture Phase 39 production audit
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p .artifacts/phase39
+          set +e
+          npm audit --omit=dev --json > .artifacts/phase39/npm-audit-production.json
+          audit_exit=$?
+          set -e
+          echo "npm audit exit code: ${audit_exit}"
+          test -s .artifacts/phase39/npm-audit-production.json
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase39-dependency-refresh-audit
+          path: .artifacts/phase39/npm-audit-production.json
+          if-no-files-found: warn
+          retention-days: 14

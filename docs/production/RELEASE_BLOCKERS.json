@@ -48,6 +48,14 @@
       "status": "open",
       "owner": "VladPhil92",
       "justification": "Phase 37 closes release-blocking dashboard authority and role-convergence defects: ADMIN/SUPERADMIN mobile sessions must not fall through CLIENT navigation, SUPERADMIN must inherit ADMIN capabilities consistently beyond RolesGuard, and the canonical beta control plane must expose the Phase 36 observation-evidence boundary. The phase adds regression certification without authorizing commercial launch, mutating production data, or weakening external payment and operator evidence gates."
+    },
+    {
+      "prNumber": 253,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Phase 39 remediates the critical/high production dependency findings surfaced by Phase 38, starting with the vulnerable bcrypt/node-pre-gyp/tar installation chain and compatible transitive refreshes. Dependency and lockfile mutations are intentionally isolated behind this audited release-blocker PR, with full backend/mobile/Android/RC regression gates and no authorization of commercial launch, Play publication, provider configuration changes or production database mutation."
     }
   ]
 }
