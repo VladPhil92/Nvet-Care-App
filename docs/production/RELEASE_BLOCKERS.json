@@ -56,6 +56,14 @@
       "status": "open",
       "owner": "VladPhil92",
       "justification": "Phase 39 remediates the critical/high production dependency findings surfaced by Phase 38, starting with the vulnerable bcrypt/node-pre-gyp/tar installation chain and compatible transitive refreshes. Dependency and lockfile mutations are intentionally isolated behind this audited release-blocker PR, with full backend/mobile/Android/RC regression gates and no authorization of commercial launch, Play publication, provider configuration changes or production database mutation."
+    },
+    {
+      "prNumber": 254,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Phase 44 closes a release-blocking durability gap in mobile appointment booking: an idempotent reservation paused by loss of connectivity can now be reconstructed after process restart only when its idempotency key and service coordinates are safely captured. The allowlist deliberately excludes payments, uploads, authentication and other replay-sensitive mutations, preserving the frozen financial and production-launch boundaries while preventing silent loss of a user booking during the closed beta."
     }
   ]
 }
