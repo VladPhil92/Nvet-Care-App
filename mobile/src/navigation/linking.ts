@@ -8,17 +8,10 @@ import type { RootStackParamList } from './types'
  *  - `nvetcare://` (custom scheme; clientes que ya tienen la app instalada)
  *  - `https://app.nvetcare.co` (universal links iOS / app links Android)
  *
- * Ejemplos:
- *  - nvetcare://login                              → AuthStack > Login
- *  - nvetcare://appointment/abc-123                → ClientStack > AppointmentDetail
- *  - nvetcare://chat/abc-123                       → ChatModal
- *  - https://app.nvetcare.co/vet/uuid              → ClientStack > Search > VetDetail
- *
- * Para activar Universal Links / App Links en producción:
- *  - iOS: configurar `apple-app-site-association` en el dominio
- *  - Android: configurar `assetlinks.json` y `<intent-filter>` en AndroidManifest
+ * La federación CTG One usa exclusivamente un authorization code efímero:
+ * `nvetcare://auth/ctgone/callback?code=...&state=...`
+ * Nunca se aceptan bearer tokens en la URL.
  */
-
 export const linking: LinkingOptions<RootStackParamList> = {
   prefixes: [
     'nvetcare://',
@@ -33,6 +26,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
           Login: 'login',
           Register: 'register',
           ForgotPassword: 'forgot-password',
+          CtgFederationCallback: 'auth/ctgone/callback',
         },
       },
       Client: {
@@ -64,15 +58,5 @@ export const linking: LinkingOptions<RootStackParamList> = {
         },
       },
     },
-  },
-
-  /**
-   * Hook para procesar la URL inicial al abrir la app.
-   * Permite custom logic antes de delegar a React Navigation.
-   */
-  async getInitialURL() {
-    // En producción, podríamos chequear notificaciones push pendientes
-    // que tengan deep link asociado. Por ahora, comportamiento default.
-    return null
   },
 }
