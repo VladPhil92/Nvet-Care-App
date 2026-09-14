@@ -9,6 +9,9 @@ import {
 } from 'react-native'
 
 import NvetLogo from '../../components/brand/NvetLogo'
+import { qk } from '../../lib/queryKeys'
+import { queryClient } from '../../lib/queryClient'
+import authService from '../../services/auth.service'
 import { Colors, FontSize, Spacing, Typography } from '../../theme/tokens'
 
 const CANONICAL_ADMIN_URL = 'https://ctgone.com/nvetcareapp/dashboard'
@@ -22,6 +25,7 @@ const CANONICAL_ADMIN_URL = 'https://ctgone.com/nvetcareapp/dashboard'
  */
 export default function AdminPortalScreen() {
   const [error, setError] = useState<string | null>(null)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   async function openAdminDashboard() {
     setError(null)
@@ -29,6 +33,25 @@ export default function AdminPortalScreen() {
       await Linking.openURL(CANONICAL_ADMIN_URL)
     } catch {
       setError('No se pudo abrir el dashboard web. Verifica tu conexión e inténtalo nuevamente.')
+    }
+  }
+
+  async function logout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    setError(null)
+    try {
+      await authService.logout()
+    } catch {
+      // AuthService clears the encrypted local session in `finally`, even when
+      // the server cannot be reached. The user must never be trapped in an
+      // administrative session because logout networking failed.
+    } finally {
+      queryClient.setQueryData(qk.auth.me(), null)
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== 'auth',
+      })
+      setLoggingOut(false)
     }
   }
 
@@ -60,6 +83,23 @@ export default function AdminPortalScreen() {
           testID="open-admin-web-dashboard"
         >
           <Text style={styles.buttonText}>Abrir dashboard administrativo</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar sesión administrativa"
+          disabled={loggingOut}
+          onPress={logout}
+          style={({ pressed }) => [
+            styles.logoutButton,
+            pressed && styles.buttonPressed,
+            loggingOut && styles.disabledButton,
+          ]}
+          testID="admin-logout"
+        >
+          <Text style={styles.logoutButtonText}>
+            {loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
+          </Text>
         </Pressable>
 
         <Text style={styles.url}>ctgone.com/nvetcareapp/dashboard</Text>
@@ -141,14 +181,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     backgroundColor: Colors.dark,
   },
+  logoutButton: {
+    width: '100%',
+    maxWidth: 520,
+    minHeight: 48,
+    marginTop: Spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.lineHi,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+    backgroundColor: Colors.surface,
+  },
   buttonPressed: {
     opacity: 0.88,
+  },
+  disabledButton: {
+    opacity: 0.55,
   },
   buttonText: {
     fontFamily: Typography.sans,
     fontSize: FontSize.body,
     fontWeight: '800',
     color: Colors.inkInv,
+  },
+  logoutButtonText: {
+    fontFamily: Typography.sans,
+    fontSize: FontSize.body,
+    fontWeight: '800',
+    color: Colors.ink,
   },
   url: {
     marginTop: Spacing.md,
