@@ -212,6 +212,12 @@ export class BetaController {
     return this.evidence.getPromotionSummary();
   }
 
+  @Get("evidence/observation-summary")
+  @Roles(UserRole.ADMIN)
+  getObservationEvidenceSummary() {
+    return this.evidence.getObservationSummary();
+  }
+
   @Get("evidence/history")
   @Roles(UserRole.ADMIN)
   getEvidenceHistory() {
