@@ -13,10 +13,12 @@ import {
   BETA_EVIDENCE_PROGRAM,
   BETA_EVIDENCE_TARGET_TYPE,
   PHASE_36_OBSERVATION_EVIDENCE_GATES,
+  PHASE_36_OBSERVATION_EVIDENCE_POLICY,
   BetaEvidenceEventType,
   BetaEvidenceGate,
   BetaEvidenceStatus,
   BetaGateStatus,
+  isPhase36ObservationEvidenceGate,
 } from "./beta-evidence.constants";
 import {
   DecideBetaEvidenceDto,
@@ -25,6 +27,7 @@ import {
 
 const MAX_EVENT_ROWS = 2000;
 const FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 const SENSITIVE_REFERENCE_PATTERN =
   /(authorization|bearer\s|api[_-]?key|password|secret|token)\s*[:=]/i;
 
@@ -83,11 +86,29 @@ export class BetaEvidenceService {
     const gate = dto.gate as BetaEvidenceGate;
     const reference = this.normalizeReference(dto.reference);
     const observedAt = this.parseObservedAt(dto.observedAt);
-    const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
+    const observationPolicy = isPhase36ObservationEvidenceGate(gate)
+      ? PHASE_36_OBSERVATION_EVIDENCE_POLICY[gate]
+      : null;
+    const policyExpiresAt = observationPolicy
+      ? new Date(observedAt.getTime() + observationPolicy.maxAgeHours * HOUR_MS)
+      : null;
+    const expiresAt = dto.expiresAt
+      ? this.parseExpiresAt(dto.expiresAt)
+      : policyExpiresAt;
 
     if (expiresAt && expiresAt <= observedAt) {
       throw new BadRequestException(
         "Evidence expiry must be after the observation timestamp.",
+      );
+    }
+    if (
+      observationPolicy &&
+      expiresAt &&
+      policyExpiresAt &&
+      expiresAt.getTime() > policyExpiresAt.getTime()
+    ) {
+      throw new BadRequestException(
+        `Observation evidence expiry cannot exceed ${observationPolicy.maxAgeHours} hours from observation.`,
       );
     }
 
@@ -272,7 +293,11 @@ export class BetaEvidenceService {
     dto: DecideBetaEvidenceDto,
     actor: BetaEvidenceActor,
   ) {
-    const current = await this.getEvidence(evidenceId);
+    const events = await this.getEvents(evidenceId);
+    if (events.length === 0) {
+      throw new NotFoundException("Beta evidence record not found.");
+    }
+    const current = this.deriveEvidence(events);
     if (current.status === "CONFLICTED") {
       throw new ConflictException(
         "Evidence stream is conflicted and requires forensic reconciliation.",
@@ -292,6 +317,20 @@ export class BetaEvidenceService {
       throw new ConflictException(
         `Invalid beta evidence transition: ${current.status} -> ${eventType}.`,
       );
+    }
+
+    if (
+      eventType === "APPROVED" &&
+      isPhase36ObservationEvidenceGate(current.gate)
+    ) {
+      const submission = events.find(
+        (event) => event.metadata.eventType === "SUBMITTED",
+      );
+      if (!submission?.actorId || submission.actorId === actor.id) {
+        throw new ConflictException(
+          "Phase 36 observation evidence requires an independent approver.",
+        );
+      }
     }
 
     const metadata: EvidenceMetadata = {
@@ -483,6 +522,14 @@ export class BetaEvidenceService {
       );
     }
     return observedAt;
+  }
+
+  private parseExpiresAt(value: string): Date {
+    const expiresAt = new Date(value);
+    if (!Number.isFinite(expiresAt.getTime())) {
+      throw new BadRequestException("Invalid evidence expiry timestamp.");
+    }
+    return expiresAt;
   }
 
   private normalizeReference(value: string): string {
