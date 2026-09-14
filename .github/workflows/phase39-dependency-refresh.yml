@@ -40,6 +40,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Keep Phase 39 manifest-driven. A broad `npm update` re-resolves
+          # unrelated workspace peers and can turn a targeted security fix into
+          # an accidental framework migration.
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 
       - name: Verify canonical lockfile installs cleanly
