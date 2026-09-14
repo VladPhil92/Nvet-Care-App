@@ -17,6 +17,7 @@ const TARGETS = {
   authenticatedSessionSuccessRatePct: 98,
   ctgFederationExchangeSuccessRatePct: 95,
   apiFailureRatePct: 2,
+  authLatencyP95Ms: 3000,
   ctgFederationLatencyP95Ms: 5000,
 } as const;
 
@@ -122,6 +123,13 @@ export class ReleaseHealthService {
         source: "mobile-runtime-telemetry",
       }),
       this.upperBoundMetric({
+        id: "mobile-auth-client-latency-p95",
+        value: runtime.authClient.latencyP95Ms,
+        target: TARGETS.authLatencyP95Ms,
+        sampleSize: runtime.authClient.sampleSize,
+        source: "mobile-runtime-telemetry",
+      }),
+      this.upperBoundMetric({
         id: "ctg-federation-client-latency-p95",
         value: runtime.ctgFederationClient.latencyP95Ms,
         target: TARGETS.ctgFederationLatencyP95Ms,
@@ -130,18 +138,22 @@ export class ReleaseHealthService {
       }),
     ];
 
-    const breachedMetrics = metrics.filter((metric) => metric.state === "BREACHED");
+    const breachedMetrics = metrics.filter(
+      (metric) => metric.state === "BREACHED",
+    );
     const insufficientMetrics = metrics.filter(
       (metric) => metric.state === "INSUFFICIENT_DATA",
     );
     const serviceQualityBreached = serviceQuality.slo.overall === "BREACHED";
     const backendDown = readiness.status === "down";
 
-    const decision = backendDown || serviceQualityBreached || breachedMetrics.length > 0
-      ? "BLOCKED"
-      : insufficientMetrics.length > 0 || !betaEvidence.eligibleForOperatorActivation
-        ? "OBSERVING"
-        : "READY_FOR_OPERATOR_BETA_REVIEW";
+    const decision =
+      backendDown || serviceQualityBreached || breachedMetrics.length > 0
+        ? "BLOCKED"
+        : insufficientMetrics.length > 0 ||
+            !betaEvidence.eligibleForOperatorActivation
+          ? "OBSERVING"
+          : "READY_FOR_OPERATOR_BETA_REVIEW";
 
     return {
       phase: 36,
@@ -186,7 +198,8 @@ export class ReleaseHealthService {
         metrics,
         breachedMetricIds: breachedMetrics.map((metric) => metric.id),
         insufficientMetricIds: insufficientMetrics.map((metric) => metric.id),
-        releasePromotionEligible: decision === "READY_FOR_OPERATOR_BETA_REVIEW",
+        releasePromotionEligible:
+          decision === "READY_FOR_OPERATOR_BETA_REVIEW",
       },
       externalEvidence: {
         playVitalsCrashAndAnr: "operator-required",
