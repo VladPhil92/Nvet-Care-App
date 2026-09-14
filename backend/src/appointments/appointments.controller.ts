@@ -21,6 +21,7 @@ import { RolesGuard } from "../auth/guards/roles.guard";
 import { EmailVerifiedGuard } from "../auth/guards/email-verified.guard";
 import { VerifiedVetGuard } from "../auth/guards/verified-vet.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
+import { hasAdminAuthority } from "../auth/security/role-authority";
 import { IdempotencyService } from "../common/security/idempotency.service";
 import { UserRole } from "@prisma/client";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
@@ -68,7 +69,7 @@ export class AppointmentsController {
     const isOwner =
       appointment.clientId === userId || appointment.vet.userId === userId;
 
-    if (!isOwner && req.user.role !== UserRole.ADMIN) {
+    if (!isOwner && !hasAdminAuthority(req.user.role)) {
       throw new ForbiddenException(
         "You do not have access to this appointment",
       );
@@ -128,7 +129,7 @@ export class AppointmentsController {
     const appointment = await this.appointmentsService.getAppointmentById(id);
     if (
       appointment.clientId !== req.user.id &&
-      req.user.role !== UserRole.ADMIN
+      !hasAdminAuthority(req.user.role)
     ) {
       throw new ForbiddenException("You can only update your own appointments");
     }
@@ -148,7 +149,7 @@ export class AppointmentsController {
     const isOwner =
       appointment.clientId === userId || appointment.vet.userId === userId;
 
-    if (!isOwner && req.user.role !== UserRole.ADMIN) {
+    if (!isOwner && !hasAdminAuthority(req.user.role)) {
       throw new ForbiddenException("You can only cancel your own appointments");
     }
 
@@ -163,7 +164,7 @@ export class AppointmentsController {
     const isOwner =
       appointment.clientId === userId || appointment.vet.userId === userId;
 
-    if (!isOwner && req.user.role !== UserRole.ADMIN) {
+    if (!isOwner && !hasAdminAuthority(req.user.role)) {
       throw new ForbiddenException("You do not have access to this tracking");
     }
 

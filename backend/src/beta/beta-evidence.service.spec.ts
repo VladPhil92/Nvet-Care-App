@@ -35,6 +35,10 @@ describe("BetaEvidenceService", () => {
     ip: "127.0.0.1",
     userAgent: "jest",
   };
+  const reviewer = {
+    ...actor,
+    id: "independent-reviewer-id",
+  };
 
   let service: BetaEvidenceService;
 
@@ -68,6 +72,63 @@ describe("BetaEvidenceService", () => {
     expect(summary.requiredEnvironment).toBe("production");
     expect(summary.verifiedGates).toBe(1);
     expect(summary.eligibleForOperatorActivation).toBe(false);
+  });
+
+  it("time-bounds Phase 36 observation evidence and requires an independent approver", async () => {
+    const observedAt = new Date(Date.now() - 60_000);
+    const submitted = await service.submit(
+      {
+        gate: "play-vitals-crash-free",
+        environment: "production",
+        reference: "play-vitals-closed-beta-2026-09-14",
+        observedAt: observedAt.toISOString(),
+      },
+      actor,
+    );
+
+    expect(submitted.expiresAt).not.toBeNull();
+    expect(Date.parse(submitted.expiresAt!) - observedAt.getTime()).toBe(
+      168 * 60 * 60 * 1000,
+    );
+    await expect(
+      service.approve(submitted.evidenceId, {}, actor),
+    ).rejects.toThrow("independent approver");
+
+    await service.approve(submitted.evidenceId, {}, reviewer);
+
+    const activation = await service.getPromotionSummary();
+    const observation = await service.getObservationSummary();
+
+    expect(activation.totalGates).toBe(10);
+    expect(activation.verifiedGates).toBe(0);
+    expect(activation.observationEvidenceExcludedFromActivation).toBe(true);
+    expect(observation.totalGates).toBe(4);
+    expect(observation.verifiedGates).toBe(1);
+    expect(observation.gates[0].gate).toBe("play-vitals-crash-free");
+    expect(observation.gates[0].status).toBe("VERIFIED");
+    expect(observation.requiredForInitialBetaActivation).toBe(false);
+    expect(observation.eligibleForPostBetaReview).toBe(false);
+  });
+
+  it("rejects observation evidence expiry beyond the gate freshness window", async () => {
+    const observedAt = new Date(Date.now() - 60_000);
+    const expiresAt = new Date(
+      observedAt.getTime() + 169 * 60 * 60 * 1000,
+    );
+
+    await expect(
+      service.submit(
+        {
+          gate: "physical-device-matrix",
+          environment: "production",
+          reference: "device-matrix-run-2026-09-14",
+          observedAt: observedAt.toISOString(),
+          expiresAt: expiresAt.toISOString(),
+        },
+        actor,
+      ),
+    ).rejects.toThrow("cannot exceed 168 hours");
+    expect(rows).toHaveLength(0);
   });
 
   it("never lets staging-only evidence satisfy a production activation gate", async () => {

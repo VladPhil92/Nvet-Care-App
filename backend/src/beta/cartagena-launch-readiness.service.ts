@@ -31,6 +31,10 @@ const GATE_CATEGORY: Record<BetaEvidenceGate, LaunchGateCategory> = {
   supportOwnerConfirmed: "OPERATIONS",
   privacyAndTermsReviewed: "LEGAL",
   rollbackDrillVerified: "OPERATIONS",
+  "play-vitals-crash-free": "OPERATIONS",
+  "physical-device-matrix": "OPERATIONS",
+  "real-beta-cohort": "OPERATIONS",
+  "observation-window": "OPERATIONS",
 };
 
 const CATEGORY_ORDER: LaunchGateCategory[] = [

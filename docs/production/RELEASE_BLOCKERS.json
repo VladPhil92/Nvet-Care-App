@@ -40,6 +40,14 @@
       "status": "open",
       "owner": "VladPhil92",
       "justification": "Phase 36 adds privacy-minimized mobile runtime and CTG One federation observability, release-health SLO evaluation, and explicit integration with the existing append-only beta evidence boundary. These protected changes are required to detect operational regressions before real beta activation while keeping Play Vitals, physical-device evidence, real user cohorts and elapsed observation windows operator-owned and fail-closed."
+    },
+    {
+      "prNumber": 250,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Phase 37 closes release-blocking dashboard authority and role-convergence defects: ADMIN/SUPERADMIN mobile sessions must not fall through CLIENT navigation, SUPERADMIN must inherit ADMIN capabilities consistently beyond RolesGuard, and the canonical beta control plane must expose the Phase 36 observation-evidence boundary. The phase adds regression certification without authorizing commercial launch, mutating production data, or weakening external payment and operator evidence gates."
     }
   ]
 }

@@ -48,21 +48,25 @@
   "externalEvidence": [
     {
       "id": "play-vitals-crash-free",
+      "ledgerGate": "play-vitals-crash-free",
       "status": "operator-required",
       "reason": "Crash-free and ANR evidence must come from the actual distributed Android build or equivalent provider evidence."
     },
     {
       "id": "physical-device-matrix",
+      "ledgerGate": "physical-device-matrix",
       "status": "operator-required",
       "reason": "Real-device coverage requires dated evidence from actual devices and Android versions."
     },
     {
       "id": "real-beta-cohort",
+      "ledgerGate": "real-beta-cohort",
       "status": "operator-required",
       "reason": "A real CLIENT/VET beta cohort cannot be inferred from CI or synthetic tests."
     },
     {
       "id": "observation-window",
+      "ledgerGate": "observation-window",
       "status": "operator-required",
       "reason": "A real observation period must elapse and be recorded in the append-only beta evidence ledger."
     }
@@ -70,12 +74,17 @@
   "betaEvidence": {
     "ledger": "audit_logs",
     "appendOnly": true,
+    "activationGateCount": 10,
+    "observationGateCount": 4,
+    "observationEvidenceRequiredForInitialActivation": false,
     "automaticTelemetryDoesNotEqualHumanEvidence": true,
     "operatorApprovalRequired": true
   },
   "policy": {
     "failClosed": true,
     "releaseHealthCanBlockPromotion": true,
+    "releaseHealthPromotionScope": "post-beta-public-or-commercial",
+    "phase28RcPromotionPrecedesPhase36Observation": true,
     "automaticPublicRollout": false,
     "externalEvidenceNeverAutoVerified": true,
     "paymentRailIndependent": true

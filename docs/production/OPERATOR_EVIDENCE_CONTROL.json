@@ -78,6 +78,10 @@
     {"id":"support-owner-confirmed","sourceManifest":"beta","sourceKey":"requiredEvidence.supportOwnerConfirmed","owner":"operations-operator","evidenceKinds":["runtime-snapshot","redacted-document"],"maxAgeHours":168,"requireDistinctApprover":false},
     {"id":"privacy-terms-reviewed","sourceManifest":"beta","sourceKey":"requiredEvidence.privacyAndTermsReviewed","owner":"legal-product-operator","evidenceKinds":["redacted-document","github-issue"],"maxAgeHours":720,"requireDistinctApprover":false},
     {"id":"rollback-drill","sourceManifest":"beta","sourceKey":"requiredEvidence.rollbackDrillVerified","owner":"operations-operator","evidenceKinds":["provider-console","runtime-snapshot","redacted-document"],"maxAgeHours":168,"requireDistinctApprover":true},
-    {"id":"main-branch-protection","sourceManifest":"global","sourceKey":"operatorGates.main-branch-protection","owner":"repository-admin","evidenceKinds":["github-settings","github-ruleset","redacted-document"],"maxAgeHours":720,"requireDistinctApprover":false}
+    {"id":"main-branch-protection","sourceManifest":"global","sourceKey":"operatorGates.main-branch-protection","owner":"repository-admin","evidenceKinds":["github-settings","github-ruleset","redacted-document"],"maxAgeHours":720,"requireDistinctApprover":false},
+    {"id":"play-vitals-crash-free","sourceManifest":"beta","sourceKey":"observationEvidence.playVitalsCrashFree","owner":"qa-operator","evidenceKinds":["play-console","runtime-snapshot","redacted-document"],"maxAgeHours":168,"requireDistinctApprover":true},
+    {"id":"physical-device-matrix","sourceManifest":"beta","sourceKey":"observationEvidence.physicalDeviceMatrix","owner":"qa-operator","evidenceKinds":["device-test","redacted-document","github-issue"],"maxAgeHours":168,"requireDistinctApprover":true},
+    {"id":"real-beta-cohort","sourceManifest":"beta","sourceKey":"observationEvidence.realBetaCohort","owner":"beta-operator","evidenceKinds":["runtime-snapshot","redacted-document","github-issue"],"maxAgeHours":168,"requireDistinctApprover":true},
+    {"id":"observation-window","sourceManifest":"beta","sourceKey":"observationEvidence.observationWindow","owner":"operations-operator","evidenceKinds":["runtime-snapshot","redacted-document","github-issue"],"maxAgeHours":336,"requireDistinctApprover":true}
   ]
 }

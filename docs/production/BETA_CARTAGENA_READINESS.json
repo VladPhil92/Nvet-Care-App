@@ -59,6 +59,7 @@
     "productionEvidenceRequiredForActivation": true,
     "bookingRequiresActiveAuthorization": true,
     "operatorActivationRequiresAllEvidenceGates": true,
+    "phase36ObservationEvidenceRequiredForInitialActivation": false,
     "authorizationDoesNotMutateProviderConfig": true,
     "manifestEvidenceNeverAutoMutated": true
   },
@@ -112,6 +113,32 @@
       "status": "pending",
       "evidence": null,
       "note": "The kill-switch contract is implemented and documented. Keep pending until a provider-level drill proves NVET_BOOKING_ENABLED=false stops new bookings while authentication and history remain available, then restores normal beta gating."
+    }
+  },
+  "observationEvidence": {
+    "playVitalsCrashFree": {
+      "status": "pending",
+      "evidence": null,
+      "blocksInitialActivation": false,
+      "note": "Phase 36 post-distribution evidence: Play Vitals crash/ANR health from the actual beta artifact. It cannot be inferred from CI and does not gate initial beta activation."
+    },
+    "physicalDeviceMatrix": {
+      "status": "pending",
+      "evidence": null,
+      "blocksInitialActivation": false,
+      "note": "Phase 36 post-distribution evidence: dated real-device validation across the approved Android matrix. It does not gate initial beta activation."
+    },
+    "realBetaCohort": {
+      "status": "pending",
+      "evidence": null,
+      "blocksInitialActivation": false,
+      "note": "Phase 36 observation evidence from actual CLIENT/VET beta participants. Synthetic users and CI fixtures do not satisfy this gate."
+    },
+    "observationWindow": {
+      "status": "pending",
+      "evidence": null,
+      "blocksInitialActivation": false,
+      "note": "Phase 36 evidence that the real observation window elapsed and was reviewed. This evidence is downstream of beta activation."
     }
   }
 }

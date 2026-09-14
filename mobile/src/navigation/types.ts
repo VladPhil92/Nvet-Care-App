@@ -112,6 +112,7 @@ export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>
   Client: NavigatorScreenParams<ClientTabParamList>
   Vet: NavigatorScreenParams<VetTabParamList>
+  Admin: undefined
   ChatModal: { appointmentId: string }
 }
 

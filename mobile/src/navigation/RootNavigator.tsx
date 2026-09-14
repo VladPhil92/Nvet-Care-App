@@ -10,6 +10,7 @@ import { Colors, FontSize, Spacing, Typography } from '../theme/tokens'
 import AuthNavigator from './AuthNavigator'
 import ClientNavigator from './ClientNavigator'
 import VetNavigator from './VetNavigator'
+import AdminPortalScreen from '../screens/shared/AdminPortalScreen'
 import ChatModalScreen from '../screens/shared/ChatScreen'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -22,8 +23,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>()
  *  2. No autenticado: AuthStack (Login/Register)
  *  3. Autenticado como CLIENT: ClientNavigator
  *  4. Autenticado como VET: VetNavigator
- *  5. Autenticado como ADMIN/SUPERADMIN: ClientNavigator por ahora
- *     (la operación administrativa vive en el dashboard web).
+ *  5. Autenticado como ADMIN/SUPERADMIN: handoff explícito al dashboard web
+ *     canónico, sin exponer acciones CLIENT que el backend debe rechazar.
  *
  * El rol persistido por el backend es la única autoridad para decidir el
  * dashboard. El cliente móvil no remapea ni degrada privilegios.
@@ -48,6 +49,14 @@ export default function RootNavigator() {
 
   const isAuthenticated = !!user && !isError
   const isVet = user?.role === 'VET'
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN'
+  const flowKey = !isAuthenticated
+    ? 'auth-flow'
+    : isVet
+      ? 'vet-flow'
+      : isAdmin
+        ? 'admin-flow'
+        : 'client-flow'
 
   return (
     <Stack.Navigator
@@ -55,7 +64,7 @@ export default function RootNavigator() {
         headerShown: false,
         animation: 'fade',
       }}
-      key={isAuthenticated ? (isVet ? 'vet-flow' : 'client-flow') : 'auth-flow'}
+      key={flowKey}
     >
       {!isAuthenticated ? (
         <Stack.Screen name="Auth" component={AuthNavigator} />
@@ -71,6 +80,8 @@ export default function RootNavigator() {
             }}
           />
         </>
+      ) : isAdmin ? (
+        <Stack.Screen name="Admin" component={AdminPortalScreen} />
       ) : (
         <>
           <Stack.Screen name="Client" component={ClientNavigator} />

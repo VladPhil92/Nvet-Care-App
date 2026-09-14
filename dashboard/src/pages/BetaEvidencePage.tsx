@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient, getErrorMessage } from '../services/api'
 import { F, T } from '../theme/tokens'
 
-const GATES = [
+const ACTIVATION_GATES = [
   'rcPromoted',
   'productionBackupConfigured',
   'restoreDrillVerified',
@@ -14,6 +14,15 @@ const GATES = [
   'privacyAndTermsReviewed',
   'rollbackDrillVerified',
 ] as const
+
+const OBSERVATION_GATES = [
+  'play-vitals-crash-free',
+  'physical-device-matrix',
+  'real-beta-cohort',
+  'observation-window',
+] as const
+
+const GATES = [...ACTIVATION_GATES, ...OBSERVATION_GATES] as const
 
 type Gate = (typeof GATES)[number]
 type EvidenceStatus =
@@ -32,6 +41,7 @@ type GateSummary = {
   stagingApprovedEvidenceCount: number
   conflictCount: number
   expiredCount: number
+  latestApprovedEvidenceId?: string | null
 }
 
 type PromotionSummary = {
@@ -41,6 +51,22 @@ type PromotionSummary = {
   conflictedGates: number
   requiredEnvironment: 'production'
   eligibleForOperatorActivation: boolean
+  observationEvidenceExcludedFromActivation?: true
+  commercialLaunchAuthorized: false
+  gates: GateSummary[]
+}
+
+type ObservationSummary = {
+  phase: 36
+  program: 'production-observability-real-beta-validation'
+  totalGates: number
+  verifiedGates: number
+  pendingGates: number
+  conflictedGates: number
+  requiredEnvironment: 'production'
+  eligibleForPostBetaReview: boolean
+  requiredForInitialBetaActivation: false
+  automaticTelemetryDoesNotApproveEvidence: true
   commercialLaunchAuthorized: false
   gates: GateSummary[]
 }
@@ -114,8 +140,25 @@ function statusColor(status: string) {
   return T.pending
 }
 
+function GateCards({ gates }: { gates: GateSummary[] }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
+      {gates.map((gate) => (
+        <div key={gate.gate} style={{ padding: 12, border: `1px solid ${T.line}`, borderRadius: 8, background: T.surfaceAlt }}>
+          <div style={{ fontFamily: F.mono, fontSize: 12, color: T.ink }}>{gate.gate}</div>
+          <div style={{ marginTop: 6, color: statusColor(gate.status), fontWeight: 800 }}>{gate.status}</div>
+          <div style={{ marginTop: 4, color: T.inkMuted, fontSize: 12 }}>
+            production approved {gate.approvedEvidenceCount} · staging approved {gate.stagingApprovedEvidenceCount} · expired {gate.expiredCount} · conflicts {gate.conflictCount}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function BetaEvidencePage() {
   const [summary, setSummary] = useState<PromotionSummary | null>(null)
+  const [observationSummary, setObservationSummary] = useState<ObservationSummary | null>(null)
   const [history, setHistory] = useState<EvidenceItem[]>([])
   const [readiness, setReadiness] = useState<Readiness | null>(null)
   const [activation, setActivation] = useState<ActivationSnapshot | null>(null)
@@ -136,14 +179,21 @@ export default function BetaEvidencePage() {
   const refresh = useCallback(async () => {
     setError('')
     try {
-      const [summaryResponse, historyResponse, readinessResponse, activationResponse] =
-        await Promise.all([
-          apiClient.get<PromotionSummary>('/beta/evidence/summary'),
-          apiClient.get<{ evidence: EvidenceItem[] }>('/beta/evidence/history'),
-          apiClient.get<Readiness>('/beta/readiness'),
-          apiClient.get<ActivationSnapshot>('/beta/activation'),
-        ])
+      const [
+        summaryResponse,
+        observationResponse,
+        historyResponse,
+        readinessResponse,
+        activationResponse,
+      ] = await Promise.all([
+        apiClient.get<PromotionSummary>('/beta/evidence/summary'),
+        apiClient.get<ObservationSummary>('/beta/evidence/observation-summary'),
+        apiClient.get<{ evidence: EvidenceItem[] }>('/beta/evidence/history'),
+        apiClient.get<Readiness>('/beta/readiness'),
+        apiClient.get<ActivationSnapshot>('/beta/activation'),
+      ])
       setSummary(summaryResponse.data)
+      setObservationSummary(observationResponse.data)
       setHistory(historyResponse.data.evidence)
       setReadiness(readinessResponse.data)
       setActivation(activationResponse.data)
@@ -158,10 +208,17 @@ export default function BetaEvidencePage() {
     void refresh()
   }, [refresh])
 
-  const progress = useMemo(() => {
+  const activationProgress = useMemo(() => {
     if (!summary || summary.totalGates === 0) return 0
     return Math.round((summary.verifiedGates / summary.totalGates) * 100)
   }, [summary])
+
+  const observationProgress = useMemo(() => {
+    if (!observationSummary || observationSummary.totalGates === 0) return 0
+    return Math.round((observationSummary.verifiedGates / observationSummary.totalGates) * 100)
+  }, [observationSummary])
+
+  const selectedObservationGate = (OBSERVATION_GATES as readonly string[]).includes(form.gate)
 
   const submitEvidence = async () => {
     if (!form.reference.trim()) return
@@ -258,13 +315,13 @@ export default function BetaEvidencePage() {
       <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gap: 20 }}>
         <header>
           <div style={{ color: T.sageText, fontWeight: 800, fontSize: 12, letterSpacing: 1.2 }}>
-            PHASE 12 · CARTAGENA CLOSED BETA
+            CARTAGENA CLOSED BETA · PHASE 12 + PHASE 36
           </div>
           <h1 style={{ margin: '6px 0 8px', color: T.ink, fontFamily: F.serif, fontSize: 34 }}>
             Evidence & Activation Control Plane
           </h1>
-          <p style={{ margin: 0, color: T.inkMuted, maxWidth: 760, lineHeight: 1.6 }}>
-            Evidencia de producción y autorización operacional append-only. Ningún control de esta pantalla autoriza un lanzamiento comercial público.
+          <p style={{ margin: 0, color: T.inkMuted, maxWidth: 820, lineHeight: 1.6 }}>
+            Evidencia de activación y observación post-beta en ledger append-only. Los cuatro gates de Fase 36 no habilitan la beta inicial ni autorizan un lanzamiento comercial.
           </p>
         </header>
 
@@ -277,9 +334,9 @@ export default function BetaEvidencePage() {
         <section style={{ ...card, display: 'grid', gap: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div>
-              <strong style={{ color: T.ink, fontSize: 20 }}>Elegibilidad operacional</strong>
+              <strong style={{ color: T.ink, fontSize: 20 }}>Elegibilidad de activación</strong>
               <div style={{ color: T.inkMuted, marginTop: 4 }}>
-                Runtime: {readiness?.activation.state ?? 'unknown'} · Gates de producción verificados: {summary?.verifiedGates ?? 0}/{summary?.totalGates ?? 0}
+                Runtime: {readiness?.activation.state ?? 'unknown'} · Gates verificados: {summary?.verifiedGates ?? 0}/{summary?.totalGates ?? 0}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -290,9 +347,30 @@ export default function BetaEvidencePage() {
             </div>
           </div>
           <div style={{ height: 10, borderRadius: 999, background: T.line, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${progress}%`, background: T.sage, transition: 'width .2s' }} />
+            <div style={{ height: '100%', width: `${activationProgress}%`, background: T.sage, transition: 'width .2s' }} />
           </div>
-          <div style={{ color: T.inkMuted, fontSize: 13 }}>{progress}% de evidencia de producción aprobada y vigente</div>
+          <div style={{ color: T.inkMuted, fontSize: 13 }}>{activationProgress}% de evidencia de activación aprobada y vigente</div>
+        </section>
+
+        <section style={{ ...card, display: 'grid', gap: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <strong style={{ color: T.ink, fontSize: 20 }}>Fase 36 · Observación post-beta</strong>
+              <div style={{ color: T.inkMuted, marginTop: 4 }}>
+                Play Vitals, dispositivos físicos, cohorte real y ventana observada. Requieren evidencia fresca y aprobador distinto del remitente.
+              </div>
+            </div>
+            <strong style={{ color: observationSummary?.eligibleForPostBetaReview ? T.ok : T.warn }}>
+              {observationSummary?.eligibleForPostBetaReview ? 'READY FOR POST-BETA REVIEW' : 'OBSERVATION EVIDENCE PENDING'}
+            </strong>
+          </div>
+          <div style={{ height: 10, borderRadius: 999, background: T.line, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${observationProgress}%`, background: T.gold, transition: 'width .2s' }} />
+          </div>
+          <div style={{ color: T.inkMuted, fontSize: 13 }}>
+            {observationProgress}% · no forma parte de los prerrequisitos de activación inicial
+          </div>
+          <GateCards gates={observationSummary?.gates ?? []} />
         </section>
 
         <section style={{ ...card, display: 'grid', gap: 14 }}>
@@ -389,7 +467,12 @@ export default function BetaEvidencePage() {
                 onChange={(event) => setForm((current) => ({ ...current, gate: event.target.value as Gate }))}
                 style={{ padding: 10, border: `1px solid ${T.lineHi}`, borderRadius: 8, background: T.surface }}
               >
-                {GATES.map((gate) => <option key={gate} value={gate}>{gate}</option>)}
+                <optgroup label="Activación inicial">
+                  {ACTIVATION_GATES.map((gate) => <option key={gate} value={gate}>{gate}</option>)}
+                </optgroup>
+                <optgroup label="Fase 36 · observación post-beta">
+                  {OBSERVATION_GATES.map((gate) => <option key={gate} value={gate}>{gate}</option>)}
+                </optgroup>
               </select>
             </label>
             <label style={{ display: 'grid', gap: 6, color: T.inkSec, fontSize: 13 }}>
@@ -399,7 +482,7 @@ export default function BetaEvidencePage() {
                 onChange={(event) => setForm((current) => ({ ...current, environment: event.target.value as 'production' | 'staging' }))}
                 style={{ padding: 10, border: `1px solid ${T.lineHi}`, borderRadius: 8, background: T.surface }}
               >
-                <option value="production">production · cuenta para activación</option>
+                <option value="production">production · elegible según el gate</option>
                 <option value="staging">staging · solo informativa</option>
               </select>
             </label>
@@ -413,7 +496,7 @@ export default function BetaEvidencePage() {
               />
             </label>
             <label style={{ display: 'grid', gap: 6, color: T.inkSec, fontSize: 13 }}>
-              Expira (opcional)
+              Expira {selectedObservationGate ? '(automática si se omite)' : '(opcional)'}
               <input
                 type="datetime-local"
                 value={form.expiresAt}
@@ -422,6 +505,11 @@ export default function BetaEvidencePage() {
               />
             </label>
           </div>
+          {selectedObservationGate && (
+            <div style={{ color: T.inkMuted, fontSize: 12 }}>
+              Los gates de observación reciben una vigencia máxima automática de 168 h; observation-window usa 336 h. La aprobación debe realizarla otro operador.
+            </div>
+          )}
           <label style={{ display: 'grid', gap: 6, color: T.inkSec, fontSize: 13 }}>
             Referencia de evidencia
             <input
@@ -455,18 +543,8 @@ export default function BetaEvidencePage() {
         </section>
 
         <section style={{ ...card, display: 'grid', gap: 12 }}>
-          <h2 style={{ margin: 0, color: T.ink, fontSize: 20 }}>Estado por gate</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
-            {summary?.gates.map((gate) => (
-              <div key={gate.gate} style={{ padding: 12, border: `1px solid ${T.line}`, borderRadius: 8, background: T.surfaceAlt }}>
-                <div style={{ fontFamily: F.mono, fontSize: 12, color: T.ink }}>{gate.gate}</div>
-                <div style={{ marginTop: 6, color: statusColor(gate.status), fontWeight: 800 }}>{gate.status}</div>
-                <div style={{ marginTop: 4, color: T.inkMuted, fontSize: 12 }}>
-                  production approved {gate.approvedEvidenceCount} · staging approved {gate.stagingApprovedEvidenceCount} · expired {gate.expiredCount} · conflicts {gate.conflictCount}
-                </div>
-              </div>
-            ))}
-          </div>
+          <h2 style={{ margin: 0, color: T.ink, fontSize: 20 }}>Gates de activación inicial</h2>
+          <GateCards gates={summary?.gates ?? []} />
         </section>
 
         <section style={{ ...card, display: 'grid', gap: 12 }}>

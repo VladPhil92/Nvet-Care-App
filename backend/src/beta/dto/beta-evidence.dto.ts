@@ -6,10 +6,10 @@ import {
   Length,
   MaxLength,
 } from "class-validator";
-import { BETA_EVIDENCE_GATES } from "../beta-evidence.constants";
+import { ALL_BETA_EVIDENCE_GATES } from "../beta-evidence.constants";
 
 export class SubmitBetaEvidenceDto {
-  @IsIn(BETA_EVIDENCE_GATES)
+  @IsIn(ALL_BETA_EVIDENCE_GATES)
   gate: string;
 
   @IsIn(["production", "staging"])
