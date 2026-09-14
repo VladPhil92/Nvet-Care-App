@@ -198,8 +198,7 @@ export class ReleaseHealthService {
         metrics,
         breachedMetricIds: breachedMetrics.map((metric) => metric.id),
         insufficientMetricIds: insufficientMetrics.map((metric) => metric.id),
-        releasePromotionEligible:
-          decision === "READY_FOR_OPERATOR_BETA_REVIEW",
+        releasePromotionEligible: decision === "READY_FOR_OPERATOR_BETA_REVIEW",
       },
       externalEvidence: {
         playVitalsCrashAndAnr: "operator-required",
