@@ -51,3 +51,23 @@ export type BetaEvidenceStatus =
   | "CONFLICTED";
 
 export type BetaGateStatus = "PENDING" | "VERIFIED" | "CONFLICTED";
+
+// Mirror the operator-control policy in executable code. Observation evidence
+// is always time-bounded and always needs an independent human approver.
+export const PHASE_36_OBSERVATION_EVIDENCE_POLICY: Record<
+  Phase36ObservationEvidenceGate,
+  { maxAgeHours: number; requireDistinctApprover: true }
+> = {
+  "play-vitals-crash-free": { maxAgeHours: 168, requireDistinctApprover: true },
+  "physical-device-matrix": { maxAgeHours: 168, requireDistinctApprover: true },
+  "real-beta-cohort": { maxAgeHours: 168, requireDistinctApprover: true },
+  "observation-window": { maxAgeHours: 336, requireDistinctApprover: true },
+};
+
+export function isPhase36ObservationEvidenceGate(
+  gate: BetaEvidenceGate,
+): gate is Phase36ObservationEvidenceGate {
+  return PHASE_36_OBSERVATION_EVIDENCE_GATES.includes(
+    gate as Phase36ObservationEvidenceGate,
+  );
+}
