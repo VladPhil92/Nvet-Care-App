@@ -17,7 +17,9 @@ react {
     autolinkLibrariesWithApp()
 }
 
-def enableProguardInReleaseBuilds = false
+// Google Play release bundles are minified with R8. Debug/Detox builds remain
+// unminified for deterministic development and instrumentation behavior.
+def enableProguardInReleaseBuilds = true
 def jscFlavor = 'org.webkit:android-jsc:+'
 def releaseStoreFile = System.getenv("NVET_ANDROID_KEYSTORE_FILE")
 def releaseStorePassword = System.getenv("NVET_ANDROID_KEYSTORE_PASSWORD")
