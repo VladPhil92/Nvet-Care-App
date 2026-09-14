@@ -30,7 +30,9 @@ export class RuntimeTelemetryService {
       receivedAtMs: Date.now(),
       ...(dto.durationMs !== undefined ? { durationMs: dto.durationMs } : {}),
       ...(dto.appVersion ? { appVersion: dto.appVersion } : {}),
-      ...(dto.versionCode !== undefined ? { versionCode: dto.versionCode } : {}),
+      ...(dto.versionCode !== undefined
+        ? { versionCode: dto.versionCode }
+        : {}),
       ...(dto.outcomeCode ? { outcomeCode: dto.outcomeCode } : {}),
     };
 
