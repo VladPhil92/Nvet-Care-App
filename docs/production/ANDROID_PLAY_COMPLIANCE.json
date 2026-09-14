@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "phase": "13D",
+  "convergencePhase": 35,
   "program": "google-play-compliance",
   "applicationId": "com.nvetcare",
   "scope": "android-mobile-client",
@@ -31,7 +32,13 @@
     "transport": [
       "axios",
       "socket.io-client"
-    ]
+    ],
+    "identityFederation": {
+      "provider": "CTG One",
+      "authorizeOrigin": "https://ctgone.com",
+      "protocol": "authorization-code + PKCE S256",
+      "bearerTokenInRedirect": false
+    }
   },
   "dataInventory": [
     {
@@ -47,6 +54,14 @@
       "examples": ["access token", "refresh token", "2FA state", "device label", "session metadata"],
       "purpose": ["authentication", "fraud and account security"],
       "source": "mobile/src/services/auth.service.ts"
+    },
+    {
+      "id": "federated-auth",
+      "category": "security-and-session-data",
+      "examples": ["authorization code", "PKCE verifier", "state", "2FA code when required", "CTG One identity linkage"],
+      "purpose": ["authentication", "account linking", "fraud and account security"],
+      "source": "mobile/src/services/ctg-federation.service.ts",
+      "externalProcessorReviewRequired": true
     },
     {
       "id": "vet-professional-profile",
@@ -145,6 +160,7 @@
     "physicalDeviceValidation": "pending",
     "aiProviderDataHandlingReview": "pending",
     "paymentProviderDataHandlingReview": "pending",
+    "ctgOneFederationDataHandlingReview": "pending",
     "accountDeletionProductionRoute": "pending",
     "accountDeletionProviderPurgeReview": "pending"
   },
@@ -157,6 +173,8 @@
     "mobile/android/app/src/main/AndroidManifest.xml",
     "mobile/package.json",
     "mobile/src/services/auth.service.ts",
+    "mobile/src/services/ctg-federation.service.ts",
+    "mobile/src/lib/secureStorage.ts",
     "mobile/src/services/pet.service.ts",
     "mobile/src/services/appointment.service.ts",
     "mobile/src/services/live-location.service.ts",
