@@ -5,6 +5,7 @@ import {
   purgeLegacyPlaintextSession,
   type CachedProfile,
 } from '../lib/secureStorage'
+import runtimeTelemetry from './runtime-telemetry.service'
 
 export interface LoginCredentials {
   email: string
@@ -136,6 +137,16 @@ export class TwoFactorRequiredError extends Error {
   }
 }
 
+function authOutcomeCode(error: any): string {
+  if (typeof error?.response?.data?.error === 'string') {
+    return error.response.data.error
+  }
+  if (typeof error?.response?.status === 'number') {
+    return `HTTP_${error.response.status}`
+  }
+  return 'AUTH_FAILED'
+}
+
 class AuthService {
   private legacyPurged = false
 
@@ -156,6 +167,7 @@ class AuthService {
       refreshToken: data.refreshToken,
     })
     await profileCache.set(data.user as CachedProfile)
+    void runtimeTelemetry.flush()
   }
 
   private async clearSession(): Promise<void> {
@@ -176,15 +188,23 @@ class AuthService {
       typeof credentialsOrEmail === 'string'
         ? { email: credentialsOrEmail, password: password ?? '' }
         : credentialsOrEmail
+    const startedAt = Date.now()
 
     try {
       const response = await apiClient.post<AuthResponse>('/auth/login', credentials)
       await this.persistSession(response.data)
+      runtimeTelemetry.emit('AUTH_LOGIN_SUCCESS', {
+        durationMs: Date.now() - startedAt,
+      })
       return response.data
     } catch (error: any) {
       if (error?.response?.data?.error === 'TWO_FACTOR_REQUIRED') {
         throw new TwoFactorRequiredError(credentials.email, credentials.password)
       }
+      runtimeTelemetry.emit('AUTH_LOGIN_FAILURE', {
+        durationMs: Date.now() - startedAt,
+        outcomeCode: authOutcomeCode(error),
+      })
       throw error
     }
   }
@@ -232,9 +252,22 @@ class AuthService {
     password: string
     recoveryCode: string
   }): Promise<AuthResponse> {
-    const response = await apiClient.post<AuthResponse>('/auth/login/recovery', payload)
-    await this.persistSession(response.data)
-    return response.data
+    const startedAt = Date.now()
+    try {
+      const response = await apiClient.post<AuthResponse>('/auth/login/recovery', payload)
+      await this.persistSession(response.data)
+      runtimeTelemetry.emit('AUTH_LOGIN_SUCCESS', {
+        durationMs: Date.now() - startedAt,
+        outcomeCode: 'RECOVERY_CODE',
+      })
+      return response.data
+    } catch (error) {
+      runtimeTelemetry.emit('AUTH_LOGIN_FAILURE', {
+        durationMs: Date.now() - startedAt,
+        outcomeCode: authOutcomeCode(error),
+      })
+      throw error
+    }
   }
 
   async register(data: RegisterData): Promise<AuthResponse> {
@@ -274,16 +307,28 @@ class AuthService {
   }
 
   async refresh(): Promise<{ accessToken: string; refreshToken: string }> {
-    const refreshToken = await secureStorage.getRefreshToken()
-    if (!refreshToken) throw new Error('No refresh token available')
+    const startedAt = Date.now()
+    try {
+      const refreshToken = await secureStorage.getRefreshToken()
+      if (!refreshToken) throw new Error('No refresh token available')
 
-    const response = await apiClient.post<{
-      accessToken: string
-      refreshToken: string
-    }>('/auth/refresh', { refreshToken })
+      const response = await apiClient.post<{
+        accessToken: string
+        refreshToken: string
+      }>('/auth/refresh', { refreshToken })
 
-    await secureStorage.setTokens(response.data)
-    return response.data
+      await secureStorage.setTokens(response.data)
+      runtimeTelemetry.emit('SESSION_REFRESH_SUCCESS', {
+        durationMs: Date.now() - startedAt,
+      })
+      return response.data
+    } catch (error) {
+      runtimeTelemetry.emit('SESSION_REFRESH_FAILURE', {
+        durationMs: Date.now() - startedAt,
+        outcomeCode: authOutcomeCode(error),
+      })
+      throw error
+    }
   }
 
   async refreshToken(): Promise<string> {
