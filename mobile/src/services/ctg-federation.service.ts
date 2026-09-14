@@ -39,15 +39,19 @@ class CtgFederationService {
       `&state=${encode(request.state)}` +
       `&redirect_uri=${encode(CTG_FEDERATION_REDIRECT_URI)}`
 
-    const supported = await Linking.canOpenURL(url)
-    if (!supported) {
+    // Do not probe HTTPS handlers with Linking.canOpenURL(). On Android 11+
+    // package visibility can make that probe return false even when the system
+    // browser can open the URL. openURL() delegates directly to the OS; a real
+    // launch failure is handled below and the pending PKCE request is erased.
+    try {
+      await Linking.openURL(url)
+    } catch {
       await secureStorage.clearCtgFederationRequest().catch(() => undefined)
       throw new CtgFederationError(
         'CTG_ONE_BROWSER_UNAVAILABLE',
         'No se pudo abrir CTG One en el navegador del dispositivo.',
       )
     }
-    await Linking.openURL(url)
   }
 
   async consumeCallback(code: string, state: string): Promise<PendingCtgFederationExchange> {
