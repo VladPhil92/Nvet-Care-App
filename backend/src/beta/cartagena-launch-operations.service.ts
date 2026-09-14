@@ -788,6 +788,10 @@ export class CartagenaLaunchOperationsService {
       supportOwnerConfirmed: "Support owner evidence",
       privacyAndTermsReviewed: "Privacy and terms review evidence",
       rollbackDrillVerified: "Rollback drill evidence",
+      "play-vitals-crash-free": "Google Play Vitals crash-free evidence",
+      "physical-device-matrix": "Physical device matrix evidence",
+      "real-beta-cohort": "Real beta cohort evidence",
+      "observation-window": "Real beta observation window evidence",
     };
     return labels[gate];
   }
