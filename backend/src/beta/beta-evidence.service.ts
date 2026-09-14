@@ -439,7 +439,9 @@ export class BetaEvidenceService {
           } else {
             if (
               isPhase36ObservationEvidenceGate(gate) &&
-              (!submission.actorId || !event.actorId || event.actorId === submission.actorId)
+              (!submission.actorId ||
+                !event.actorId ||
+                event.actorId === submission.actorId)
             ) {
               conflictReasons.push("OBSERVATION_APPROVER_NOT_DISTINCT");
             }
