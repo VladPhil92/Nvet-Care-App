@@ -21,12 +21,7 @@ export class RuntimeTelemetryController {
   constructor(private readonly telemetry: RuntimeTelemetryService) {}
 
   @Post("events")
-  @Roles(
-    UserRole.CLIENT,
-    UserRole.VET,
-    UserRole.ADMIN,
-    UserRole.SUPERADMIN,
-  )
+  @Roles(UserRole.CLIENT, UserRole.VET, UserRole.ADMIN, UserRole.SUPERADMIN)
   record(@Body() dto: RuntimeTelemetryEventDto) {
     return this.telemetry.record(dto);
   }
