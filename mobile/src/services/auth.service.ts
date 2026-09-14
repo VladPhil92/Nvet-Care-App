@@ -192,7 +192,8 @@ class AuthService {
   /**
    * Exchange a CTG One Supabase session for a normal Nvet session. The backend
    * verifies the Supabase JWT and remains the only authority for the Nvet role.
-   * This is the native equivalent of the CTG One web BFF token exchange.
+   * This method is retained for trusted server/native bridges; browser handoff
+   * must never place the Supabase bearer token in a deep link.
    */
   async loginWithCtgIdentity(
     supabaseAccessToken: string,
@@ -204,6 +205,15 @@ class AuthService {
     })
     await this.persistSession(response.data)
     return response.data
+  }
+
+  /**
+   * Persist a session that was returned by the trusted CTG One mobile PKCE
+   * exchange. This keeps all login modes on the same secure-storage path.
+   */
+  async acceptFederatedSession(data: AuthResponse): Promise<AuthResponse> {
+    await this.persistSession(data)
+    return data
   }
 
   /**
