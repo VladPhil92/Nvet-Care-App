@@ -8,7 +8,6 @@ const execFileAsync = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONTROL_PATH = 'docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json';
 const OUTPUT_PATH = '.artifacts/phase28-controlled-rc-promotion.json';
-
 const args = new Set(process.argv.slice(2));
 const contractOnly = args.has('--contract-only');
 const enforceReady = args.has('--enforce-ready');
@@ -19,6 +18,14 @@ function fail(message) {
 
 async function readJson(relativePath) {
   return JSON.parse(await fs.readFile(path.join(ROOT, relativePath), 'utf8'));
+}
+
+async function git(argsList) {
+  const { stdout = '' } = await execFileAsync('git', argsList, {
+    cwd: ROOT,
+    maxBuffer: 1024 * 1024 * 10,
+  });
+  return stdout.trim();
 }
 
 function hasEvidence(entry) {
@@ -34,13 +41,18 @@ function requireGate(label, entry) {
   }
 }
 
-async function git(argsList, options = {}) {
-  const { stdout = '' } = await execFileAsync('git', argsList, {
-    cwd: ROOT,
-    maxBuffer: 1024 * 1024 * 10,
-    ...options,
-  });
-  return stdout.trim();
+async function readGithubEvent() {
+  const eventName = process.env.GITHUB_EVENT_NAME?.trim() ?? '';
+  const eventPath = process.env.GITHUB_EVENT_PATH?.trim();
+  if (!eventPath) return { eventName, payload: null };
+  try {
+    return {
+      eventName,
+      payload: JSON.parse(await fs.readFile(eventPath, 'utf8')),
+    };
+  } catch {
+    return { eventName, payload: null };
+  }
 }
 
 function prNumberFromMergeMessage(message) {
@@ -50,41 +62,48 @@ function prNumberFromMergeMessage(message) {
   return Number.isInteger(value) && value > 0 ? value : null;
 }
 
-async function currentAuthorizedReleaseBlocker(blockers, candidate) {
-  const eventName = process.env.GITHUB_EVENT_NAME?.trim();
-  const eventPath = process.env.GITHUB_EVENT_PATH?.trim();
-  if (!eventName || !eventPath) return null;
+async function diffProtected(fromSha, toSha, protectedPaths) {
+  if (!fromSha || !toSha || fromSha === '0000000000000000000000000000000000000000') return [];
+  const raw = await git(['diff', '--name-only', fromSha, toSha, '--', ...protectedPaths]);
+  return raw ? raw.split('\n').filter(Boolean) : [];
+}
 
-  let payload;
-  try {
-    payload = JSON.parse(await fs.readFile(eventPath, 'utf8'));
-  } catch {
-    return null;
+async function currentChangeContext(protectedPaths) {
+  const { eventName, payload } = await readGithubEvent();
+  if (!payload) {
+    return { eventName, prNumber: null, labels: [], protectedProductDrift: [] };
   }
 
-  let prNumber = null;
   if (eventName === 'pull_request') {
-    const labels = new Set(
-      (payload.pull_request?.labels ?? [])
-        .map((label) => label?.name)
-        .filter(Boolean),
-    );
-    if (!labels.has('release-blocker')) return null;
-    prNumber = Number(payload.pull_request?.number ?? payload.number) || null;
-  } else if (eventName === 'push') {
-    prNumber = prNumberFromMergeMessage(payload.head_commit?.message ?? '');
-    if (!prNumber) return null;
-    const ancestry = await git(['rev-list', '--parents', '-n', '1', 'HEAD']);
-    if (ancestry.split(/\s+/).length < 3) return null;
-  } else {
-    return null;
+    const pr = payload.pull_request ?? {};
+    const labels = (pr.labels ?? []).map((label) => label?.name).filter(Boolean);
+    return {
+      eventName,
+      prNumber: Number(pr.number ?? payload.number) || null,
+      labels,
+      protectedProductDrift: await diffProtected(pr.base?.sha, pr.head?.sha, protectedPaths),
+    };
   }
 
-  if (!Number.isInteger(prNumber) || prNumber <= 0) return null;
+  if (eventName === 'push') {
+    return {
+      eventName,
+      prNumber: prNumberFromMergeMessage(payload.head_commit?.message ?? ''),
+      labels: [],
+      protectedProductDrift: await diffProtected(payload.before, payload.after ?? 'HEAD', protectedPaths),
+    };
+  }
+
+  return { eventName, prNumber: null, labels: [], protectedProductDrift: [] };
+}
+
+function authorizedCurrentReleaseBlocker(blockers, candidate, change) {
+  if (!Number.isInteger(change.prNumber) || change.prNumber <= 0) return null;
+  if (change.eventName === 'pull_request' && !change.labels.includes('release-blocker')) return null;
   return (
     (blockers.blockers ?? []).find(
       (entry) =>
-        entry.prNumber === prNumber &&
+        entry.prNumber === change.prNumber &&
         entry.candidate === candidate &&
         entry.status === 'open' &&
         entry.severity === 'release-blocking',
@@ -92,20 +111,14 @@ async function currentAuthorizedReleaseBlocker(blockers, candidate) {
   );
 }
 
-async function candidateRelationship(control, freeze) {
+async function candidateRelationship(control, freeze, blockers) {
   const candidateSha = control.candidateCommitSha;
   if (!/^[0-9a-f]{40}$/i.test(candidateSha)) fail('candidateCommitSha must be a full git SHA');
-
   try {
     await git(['cat-file', '-e', `${candidateSha}^{commit}`]);
-  } catch {
-    fail(`candidate commit ${candidateSha} is not available in git history`);
-  }
-
-  try {
     await git(['merge-base', '--is-ancestor', candidateSha, 'HEAD']);
   } catch {
-    fail(`candidate commit ${candidateSha} must be an ancestor of HEAD`);
+    fail(`candidate commit ${candidateSha} must exist and be an ancestor of HEAD`);
   }
 
   const protectedPaths = freeze.governance?.protectedProductPaths ?? [];
@@ -113,10 +126,29 @@ async function candidateRelationship(control, freeze) {
     fail('Phase 27 protectedProductPaths must remain non-empty');
   }
 
-  const drift = await git(['diff', '--name-only', candidateSha, 'HEAD', '--', ...protectedPaths]);
+  const cumulativeRaw = await git(['diff', '--name-only', candidateSha, 'HEAD', '--', ...protectedPaths]);
+  const productDrift = cumulativeRaw ? cumulativeRaw.split('\n').filter(Boolean) : [];
+  const currentChange = await currentChangeContext(protectedPaths);
+  const authorized = currentChange.protectedProductDrift.length > 0
+    ? authorizedCurrentReleaseBlocker(blockers, control.candidate, currentChange)
+    : null;
+
+  if (
+    control.prePromotionRequirements?.requiredProductDriftFromCandidate === false &&
+    currentChange.protectedProductDrift.length > 0 &&
+    !authorized
+  ) {
+    fail(
+      `current change introduces protected product drift without an authorized release-blocker: ${currentChange.protectedProductDrift.join(', ')}`,
+    );
+  }
+
   return {
     candidateSha,
-    productDrift: drift ? drift.split('\n').filter(Boolean) : [],
+    productDrift,
+    currentProtectedProductDrift: currentChange.protectedProductDrift,
+    currentChangePrNumber: currentChange.prNumber,
+    authorizedReleaseBlockerPr: authorized?.prNumber ?? null,
   };
 }
 
@@ -138,79 +170,59 @@ async function validateContract() {
 
   const inputs = control.authoritativeInputs ?? {};
   const requiredInputKeys = [
-    'freeze',
-    'blockers',
-    'rcReadiness',
-    'globalReadiness',
-    'releaseClosure',
-    'rcEvidenceClosure',
-    'operatorEvidence',
-    'androidReadiness',
-    'betaReadiness',
+    'freeze', 'blockers', 'rcReadiness', 'globalReadiness', 'releaseClosure',
+    'rcEvidenceClosure', 'operatorEvidence', 'androidReadiness', 'betaReadiness',
   ];
   for (const key of requiredInputKeys) {
     if (typeof inputs[key] !== 'string' || !inputs[key]) fail(`missing authoritative input '${key}'`);
   }
 
-  const [freeze, blockers, rc, globalManifest, releaseClosure, rcEvidenceClosure, operatorEvidence, android, beta] =
-    await Promise.all(requiredInputKeys.map((key) => readJson(inputs[key])));
-
+  const values = await Promise.all(requiredInputKeys.map((key) => readJson(inputs[key])));
+  const [freeze, blockers, rc, globalManifest, releaseClosure, rcEvidenceClosure, operatorEvidence, android, beta] = values;
   const candidate = control.candidate;
-  const candidateClaims = [
-    ['freeze', freeze.candidate],
-    ['blockers', blockers.candidate],
-    ['rc', rc.candidate],
-    ['global', globalManifest.candidate],
-    ['releaseClosure', releaseClosure.candidate],
-    ['rcEvidenceClosure', rcEvidenceClosure.candidate],
-    ['operatorEvidence', operatorEvidence.candidate],
-    ['androidPrerequisite', android.prerequisiteRcTag],
-    ['betaPrerequisite', beta.prerequisiteRcTag],
-  ];
-  for (const [label, value] of candidateClaims) {
+  for (const [label, value] of [
+    ['freeze', freeze.candidate], ['blockers', blockers.candidate], ['rc', rc.candidate],
+    ['global', globalManifest.candidate], ['releaseClosure', releaseClosure.candidate],
+    ['rcEvidenceClosure', rcEvidenceClosure.candidate], ['operatorEvidence', operatorEvidence.candidate],
+    ['androidPrerequisite', android.prerequisiteRcTag], ['betaPrerequisite', beta.prerequisiteRcTag],
+  ]) {
     if (value !== candidate) fail(`${label} candidate '${value}' diverges from '${candidate}'`);
   }
 
-  if (freeze.phase !== 27 || freeze.state !== 'FROZEN') fail('Phase 27 must remain FROZEN');
-  if (freeze.governance?.featureFreezeActive !== true) fail('Phase 27 feature freeze must remain active');
+  if (freeze.phase !== 27 || freeze.state !== 'FROZEN' || freeze.governance?.featureFreezeActive !== true) {
+    fail('Phase 27 must remain FROZEN with feature freeze active');
+  }
   if (freeze.scope?.commercialLaunchAuthorized !== false || freeze.scope?.publicStoreReleaseAuthorized !== false) {
     fail('Phase 27 commercial/store launch must remain unauthorized');
   }
   if (freeze.packageIdentity?.androidVersionName !== candidate) fail('Android frozen versionName must match candidate');
-
-  if (control.promotion?.tag !== candidate) fail('promotion tag must equal candidate');
-  if (control.promotion?.targetSha !== control.candidateCommitSha) fail('promotion targetSha must equal candidateCommitSha');
-  if (control.promotion?.postPromotionEvidenceGate !== 'rc-promoted') fail('post-promotion evidence gate must be rc-promoted');
-  if (control.promotion?.postPromotionEvidenceKind !== 'git-tag') fail('post-promotion evidence kind must be git-tag');
+  if (control.promotion?.tag !== candidate || control.promotion?.targetSha !== control.candidateCommitSha) {
+    fail('promotion tag/target must remain bound to candidate');
+  }
+  if (control.promotion?.postPromotionEvidenceGate !== 'rc-promoted' || control.promotion?.postPromotionEvidenceKind !== 'git-tag') {
+    fail('post-promotion evidence contract drifted');
+  }
 
   const operatorGate = (operatorEvidence.gates ?? []).find((gate) => gate.id === 'rc-promoted');
-  if (!operatorGate) fail('Operator Evidence Control must register rc-promoted');
-  if (!operatorGate.evidenceKinds?.includes('git-tag')) fail('rc-promoted must accept git-tag evidence');
+  if (!operatorGate || !operatorGate.evidenceKinds?.includes('git-tag')) fail('Operator Evidence Control must register rc-promoted/git-tag');
   if (operatorGate.sourceManifest !== 'android' || operatorGate.sourceKey !== 'requiredEvidence.rcPromoted') {
     fail('rc-promoted must project to Android readiness');
   }
-  const betaMirror = (operatorGate.mirrors ?? []).some(
-    (mirror) => mirror.sourceManifest === 'beta' && mirror.sourceKey === 'requiredEvidence.rcPromoted',
-  );
-  if (!betaMirror) fail('rc-promoted must mirror to beta readiness');
+  if (!(operatorGate.mirrors ?? []).some((mirror) => mirror.sourceManifest === 'beta' && mirror.sourceKey === 'requiredEvidence.rcPromoted')) {
+    fail('rc-promoted must mirror to beta readiness');
+  }
 
-  const requiredRcEvidence = control.prePromotionRequirements?.requiredRcEvidence ?? [];
-  for (const key of requiredRcEvidence) {
+  for (const key of control.prePromotionRequirements?.requiredRcEvidence ?? []) {
     requireGate(`rc.requiredExternalEvidence.${key}`, rc.requiredExternalEvidence?.[key]);
   }
-
   for (const id of control.prePromotionRequirements?.requiredOperatorGates ?? []) {
-    const gate = (globalManifest.operatorGates ?? []).find((entry) => entry.id === id);
-    requireGate(`global.operatorGates.${id}`, gate);
+    requireGate(`global.operatorGates.${id}`, (globalManifest.operatorGates ?? []).find((entry) => entry.id === id));
   }
-
   requireGate('android.requiredEvidence.rcPromoted', android.requiredEvidence?.rcPromoted);
   requireGate('beta.requiredEvidence.rcPromoted', beta.requiredEvidence?.rcPromoted);
-  if (android.requiredEvidence.rcPromoted.status !== beta.requiredEvidence.rcPromoted.status) {
-    fail('Android and beta rcPromoted status must remain converged');
-  }
-  if ((android.requiredEvidence.rcPromoted.evidence ?? null) !== (beta.requiredEvidence.rcPromoted.evidence ?? null)) {
-    fail('Android and beta rcPromoted evidence must remain converged');
+  if (android.requiredEvidence.rcPromoted.status !== beta.requiredEvidence.rcPromoted.status ||
+      (android.requiredEvidence.rcPromoted.evidence ?? null) !== (beta.requiredEvidence.rcPromoted.evidence ?? null)) {
+    fail('Android and beta rcPromoted projection must remain converged');
   }
 
   if (releaseClosure.stages?.rc?.source !== inputs.rcReadiness) fail('release closure RC stage must source RC_READINESS');
@@ -219,61 +231,27 @@ async function validateContract() {
     if (!promotionRequired.has(id)) fail(`RC evidence closure must require '${id}'`);
   }
 
-  const relation = await candidateRelationship(control, freeze);
-  const authorizedReleaseBlocker =
-    relation.productDrift.length > 0
-      ? await currentAuthorizedReleaseBlocker(blockers, candidate)
-      : null;
-  relation.authorizedReleaseBlockerPr = authorizedReleaseBlocker?.prNumber ?? null;
-
-  if (
-    control.prePromotionRequirements?.requiredProductDriftFromCandidate === false &&
-    relation.productDrift.length > 0 &&
-    !authorizedReleaseBlocker
-  ) {
-    fail(`protected product drift detected after candidate freeze: ${relation.productDrift.join(', ')}`);
-  }
-
-  return {
-    control,
-    freeze,
-    blockers,
-    rc,
-    globalManifest,
-    releaseClosure,
-    rcEvidenceClosure,
-    operatorEvidence,
-    android,
-    beta,
-    relation,
-  };
+  const relation = await candidateRelationship(control, freeze, blockers);
+  return { control, blockers, rc, globalManifest, android, beta, relation };
 }
 
-function buildReport(contract) {
-  const { control, blockers, rc, globalManifest, android, beta, relation } = contract;
+function buildReport({ control, blockers, rc, globalManifest, android, beta, relation }) {
   const reasons = [];
-
   const openBlockers = (blockers.blockers ?? []).filter((entry) => entry.status === 'open');
   if (control.prePromotionRequirements?.requiredEmptyBlockerRegistry && openBlockers.length > 0) {
     reasons.push(...openBlockers.map((entry) => `release-blocker:${entry.id ?? entry.prNumber ?? 'unknown'}`));
   }
-
   for (const key of control.prePromotionRequirements.requiredRcEvidence) {
-    const entry = rc.requiredExternalEvidence[key];
-    if (entry.status !== 'verified') reasons.push(`rc.requiredExternalEvidence.${key}`);
+    if (rc.requiredExternalEvidence[key].status !== 'verified') reasons.push(`rc.requiredExternalEvidence.${key}`);
   }
-
   for (const id of control.prePromotionRequirements.requiredOperatorGates) {
     const entry = globalManifest.operatorGates.find((gate) => gate.id === id);
     if (entry.status !== 'verified') reasons.push(`global.operatorGates.${id}`);
   }
-
   if (relation.productDrift.length > 0) reasons.push('protected-product-drift');
 
-  const projectedStatus = android.requiredEvidence.rcPromoted.status;
-  const alreadyPromoted = projectedStatus === 'verified' && beta.requiredEvidence.rcPromoted.status === 'verified';
+  const alreadyPromoted = android.requiredEvidence.rcPromoted.status === 'verified' && beta.requiredEvidence.rcPromoted.status === 'verified';
   const promotionEligible = reasons.length === 0 && !alreadyPromoted;
-
   return {
     schemaVersion: 1,
     phase: 28,
@@ -292,24 +270,19 @@ function buildReport(contract) {
     productFreeze: {
       active: true,
       protectedProductDrift: relation.productDrift,
+      currentProtectedProductDrift: relation.currentProtectedProductDrift,
+      currentChangePrNumber: relation.currentChangePrNumber,
       authorizedReleaseBlockerPr: relation.authorizedReleaseBlockerPr,
       openReleaseBlockers: openBlockers.length,
     },
-    rcEvidence: Object.fromEntries(
-      control.prePromotionRequirements.requiredRcEvidence.map((key) => [
-        key,
-        {
-          status: rc.requiredExternalEvidence[key].status,
-          evidence: rc.requiredExternalEvidence[key].evidence ?? null,
-        },
-      ]),
-    ),
-    repositoryGovernance: Object.fromEntries(
-      control.prePromotionRequirements.requiredOperatorGates.map((id) => {
-        const gate = globalManifest.operatorGates.find((entry) => entry.id === id);
-        return [id, { status: gate.status, evidence: gate.evidence ?? null }];
-      }),
-    ),
+    rcEvidence: Object.fromEntries(control.prePromotionRequirements.requiredRcEvidence.map((key) => [key, {
+      status: rc.requiredExternalEvidence[key].status,
+      evidence: rc.requiredExternalEvidence[key].evidence ?? null,
+    }])),
+    repositoryGovernance: Object.fromEntries(control.prePromotionRequirements.requiredOperatorGates.map((id) => {
+      const gate = globalManifest.operatorGates.find((entry) => entry.id === id);
+      return [id, { status: gate.status, evidence: gate.evidence ?? null }];
+    })),
     postPromotionProjection: {
       gate: control.promotion.postPromotionEvidenceGate,
       androidStatus: android.requiredEvidence.rcPromoted.status,
@@ -317,50 +290,39 @@ function buildReport(contract) {
       authority: 'Operator Evidence Control',
       automaticApproval: false,
     },
-    manualBoundary:
-      reasons.length === 1 && reasons[0] === 'rc.requiredExternalEvidence.paymentRailVerified'
-        ? control.manualBoundary
-        : null,
-    safetyBoundary:
-      'Phase 28 may create the immutable RC tag only after all pre-promotion evidence is verified. It never authorizes commercial launch, publishes to a store, mutates provider configuration, or auto-approves operator evidence.',
+    manualBoundary: reasons.length === 1 && reasons[0] === 'rc.requiredExternalEvidence.paymentRailVerified'
+      ? control.manualBoundary
+      : null,
+    safetyBoundary: 'Cumulative protected drift and open release blockers remain promotion blockers. Only current-change drift is used to decide whether the present PR itself violates the freeze.',
   };
 }
 
 async function writeReport(report) {
   await fs.mkdir(path.join(ROOT, '.artifacts'), { recursive: true });
   await fs.writeFile(path.join(ROOT, OUTPUT_PATH), `${JSON.stringify(report, null, 2)}\n`);
-
   console.log('Nvet Care — Phase 28 Controlled RC Promotion');
   console.log(`Candidate: ${report.candidate}`);
   console.log(`State: ${report.state}`);
-  console.log(`Target: ${report.promotion.targetSha}`);
+  console.log(`Cumulative protected drift: ${report.productFreeze.protectedProductDrift.length}`);
+  console.log(`Current-change protected drift: ${report.productFreeze.currentProtectedProductDrift.length}`);
   for (const blocker of report.promotion.blockers) console.log(`BLOCKED | ${blocker}`);
 
   if (process.env.GITHUB_STEP_SUMMARY) {
-    const evidenceRows = Object.entries(report.rcEvidence).map(
-      ([id, entry]) => `| ${id} | ${entry.status} | ${entry.evidence ? 'present' : 'none'} |`,
-    );
     const lines = [
       '# Nvet Care — Phase 28 Controlled RC Promotion',
       '',
       `Candidate: \`${report.candidate}\``,
-      `Target SHA: \`${report.candidateCommitSha}\``,
       `State: **${report.state}**`,
-      '',
-      '## RC external evidence',
-      '',
-      '| Gate | Status | Evidence |',
-      '|---|---|---|',
-      ...evidenceRows,
-      '',
       `Open release blockers: **${report.productFreeze.openReleaseBlockers}**`,
-      `Protected product drift: **${report.productFreeze.protectedProductDrift.length}**`,
-      `Authorized release-blocker PR: **${report.productFreeze.authorizedReleaseBlockerPr ?? 'none'}**`,
+      `Cumulative protected drift: **${report.productFreeze.protectedProductDrift.length}**`,
+      `Current-change protected drift: **${report.productFreeze.currentProtectedProductDrift.length}**`,
+      `Authorized current release-blocker PR: **${report.productFreeze.authorizedReleaseBlockerPr ?? 'none'}**`,
       '',
       ...(report.promotion.blockers.length
-        ? ['## Promotion blockers', '', ...report.promotion.blockers.map((item) => `- \`${item}\``), '']
-        : ['No pre-promotion blockers remain.', '']),
-      '> Promotion is not commercial launch. Post-promotion readiness is still projected only through approved Operator Evidence Control records.',
+        ? ['## Promotion blockers', '', ...report.promotion.blockers.map((item) => `- \`${item}\``)]
+        : ['No pre-promotion blockers remain.']),
+      '',
+      '> Promotion is not commercial launch; external/operator evidence remains authoritative.',
     ];
     await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
   }
