@@ -75,6 +75,9 @@ export class RuntimeTelemetryService {
     const apiSuccess = counts.API_REQUEST_SUCCESS ?? 0;
     const apiFailure = counts.API_REQUEST_FAILURE ?? 0;
     const apiTotal = apiSuccess + apiFailure;
+    const authSuccess = counts.AUTH_LOGIN_SUCCESS ?? 0;
+    const authFailure = counts.AUTH_LOGIN_FAILURE ?? 0;
+    const authTotal = authSuccess + authFailure;
     const ctgSuccess = counts.CTG_FEDERATION_EXCHANGE_SUCCESS ?? 0;
     const ctgFailure = counts.CTG_FEDERATION_EXCHANGE_FAILURE ?? 0;
     const ctgTotal = ctgSuccess + ctgFailure;
@@ -105,6 +108,22 @@ export class RuntimeTelemetryService {
               (event) =>
                 (event.event === "API_REQUEST_SUCCESS" ||
                   event.event === "API_REQUEST_FAILURE") &&
+                event.durationMs !== undefined,
+            )
+            .map((event) => event.durationMs as number),
+        ),
+      },
+      authClient: {
+        sampleSize: authTotal,
+        success: authSuccess,
+        failure: authFailure,
+        successRatePct: this.percent(authSuccess, authTotal),
+        latencyP95Ms: this.p95(
+          rows
+            .filter(
+              (event) =>
+                (event.event === "AUTH_LOGIN_SUCCESS" ||
+                  event.event === "AUTH_LOGIN_FAILURE") &&
                 event.durationMs !== undefined,
             )
             .map((event) => event.durationMs as number),
