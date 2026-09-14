@@ -22,7 +22,11 @@
     "dataSafetySourcePrepared": "verified",
     "reviewerAccessRunbookPrepared": "verified",
     "accountDeletionContractPrepared": "verified",
-    "android16CompatibilityPrepared": "verified"
+    "android16CompatibilityPrepared": "verified",
+    "releaseR8MinificationEnabled": "verified",
+    "releaseCleartextTrafficDisabled": "verified",
+    "debugCleartextIsolated": "verified",
+    "ctgFederationDataSafetyReconciled": "verified"
   },
   "operatorHandoff": [
     {
@@ -59,7 +63,7 @@
       "id": "data-safety-play-review",
       "status": "operator-required",
       "owner": "play-product-operator",
-      "reason": "The final Play Console declaration must be reconciled with active production processors."
+      "reason": "The final Play Console declaration must be reconciled with active production processors, including CTG One identity federation."
     },
     {
       "id": "reviewer-access",
