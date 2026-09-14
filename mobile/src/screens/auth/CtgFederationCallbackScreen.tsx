@@ -27,6 +27,8 @@ export default function CtgFederationCallbackScreen({
   const [status, setStatus] = useState<'working' | 'two-factor' | 'error'>('working')
   const [message, setMessage] = useState('Validando tu cuenta CTG One…')
   const [twoFactorCode, setTwoFactorCode] = useState('')
+  const callbackCode = route.params?.code ?? ''
+  const callbackState = route.params?.state ?? ''
 
   const establishSession = useCallback(
     async (pending: PendingCtgFederationExchange, code?: string) => {
@@ -55,10 +57,7 @@ export default function CtgFederationCallbackScreen({
 
     void (async () => {
       try {
-        const pending = await ctgFederationService.consumeCallback(
-          route.params.code,
-          route.params.state,
-        )
+        const pending = await ctgFederationService.consumeCallback(callbackCode, callbackState)
         pendingRef.current = pending
         await establishSession(pending)
       } catch (error) {
@@ -66,7 +65,7 @@ export default function CtgFederationCallbackScreen({
         setMessage(error instanceof Error ? error.message : 'No se pudo validar la respuesta de CTG One.')
       }
     })()
-  }, [establishSession, route.params.code, route.params.state])
+  }, [callbackCode, callbackState, establishSession])
 
   const submitTwoFactor = useCallback(() => {
     const pending = pendingRef.current
