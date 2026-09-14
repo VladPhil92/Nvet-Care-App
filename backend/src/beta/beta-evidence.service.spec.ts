@@ -70,6 +70,32 @@ describe("BetaEvidenceService", () => {
     expect(summary.eligibleForOperatorActivation).toBe(false);
   });
 
+  it("accepts Phase 36 observation evidence without making it an activation prerequisite", async () => {
+    const submitted = await service.submit(
+      {
+        gate: "play-vitals-crash-free",
+        environment: "production",
+        reference: "play-vitals-closed-beta-2026-09-14",
+        observedAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+      actor,
+    );
+    await service.approve(submitted.evidenceId, {}, actor);
+
+    const activation = await service.getPromotionSummary();
+    const observation = await service.getObservationSummary();
+
+    expect(activation.totalGates).toBe(10);
+    expect(activation.verifiedGates).toBe(0);
+    expect(activation.observationEvidenceExcludedFromActivation).toBe(true);
+    expect(observation.totalGates).toBe(4);
+    expect(observation.verifiedGates).toBe(1);
+    expect(observation.gates[0].gate).toBe("play-vitals-crash-free");
+    expect(observation.gates[0].status).toBe("VERIFIED");
+    expect(observation.requiredForInitialBetaActivation).toBe(false);
+    expect(observation.eligibleForPostBetaReview).toBe(false);
+  });
+
   it("never lets staging-only evidence satisfy a production activation gate", async () => {
     const submitted = await service.submit(
       {

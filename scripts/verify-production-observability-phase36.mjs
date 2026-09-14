@@ -9,6 +9,10 @@ const paths = {
   compliance: 'docs/production/ANDROID_PLAY_COMPLIANCE.json',
   dataSafety: 'docs/production/GOOGLE_PLAY_DATA_SAFETY.md',
   privacy: 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md',
+  betaManifest: 'docs/production/BETA_CARTAGENA_READINESS.json',
+  operatorEvidence: 'docs/production/OPERATOR_EVIDENCE_CONTROL.json',
+  betaConstants: 'backend/src/beta/beta-evidence.constants.ts',
+  betaDto: 'backend/src/beta/dto/beta-evidence.dto.ts',
   betaEvidence: 'backend/src/beta/beta-evidence.service.ts',
   prisma: 'backend/prisma/schema.prisma',
   runtimeDto: 'backend/src/operations/dto/runtime-telemetry-event.dto.ts',
@@ -43,15 +47,21 @@ const entries = await Promise.all(Object.values(paths).map(read));
 const source = Object.fromEntries(Object.keys(paths).map((key, index) => [key, entries[index]]));
 const contract = JSON.parse(source.contract);
 const compliance = JSON.parse(source.compliance);
+const betaManifest = JSON.parse(source.betaManifest);
+const operatorEvidence = JSON.parse(source.operatorEvidence);
 
 if (contract.schemaVersion !== 1 || contract.phase !== 36) fail('contract must remain Phase 36 schema v1');
 if (contract.program !== 'production-observability-real-beta-validation') fail('unexpected Phase 36 program');
 if (contract.scope?.productionDatabaseSchemaMutationAuthorized !== false) fail('production schema mutation must remain unauthorized');
 if (contract.scope?.commercialLaunchAuthorized !== false) fail('commercial launch must remain unauthorized');
 if (contract.policy?.failClosed !== true || contract.policy?.releaseHealthCanBlockPromotion !== true) fail('release health must remain fail-closed');
+if (contract.policy?.releaseHealthPromotionScope !== 'post-beta-public-or-commercial') fail('release health promotion scope must remain post-beta/public-commercial');
+if (contract.policy?.phase28RcPromotionPrecedesPhase36Observation !== true) fail('Phase 36 observation must remain downstream of RC promotion');
 if (contract.policy?.automaticPublicRollout !== false) fail('automatic public rollout must remain disabled');
 if (contract.policy?.externalEvidenceNeverAutoVerified !== true) fail('external evidence must never auto-verify');
 if (contract.betaEvidence?.ledger !== 'audit_logs' || contract.betaEvidence?.appendOnly !== true) fail('beta evidence must remain append-only audit_logs');
+if (contract.betaEvidence?.activationGateCount !== 10 || contract.betaEvidence?.observationGateCount !== 4) fail('Phase 36 must preserve 10 activation gates and four observation gates');
+if (contract.betaEvidence?.observationEvidenceRequiredForInitialActivation !== false) fail('Phase 36 observation evidence must not block initial beta activation');
 if (contract.betaEvidence?.automaticTelemetryDoesNotEqualHumanEvidence !== true) fail('automatic telemetry must not equal human beta evidence');
 
 for (const key of [
@@ -86,8 +96,48 @@ for (const event of requiredEvents) {
   requireMatch(source.mobileRuntime, new RegExp(`["']${event}["']`), `mobile allow-list missing ${event}`);
 }
 
+const observationGateIds = [
+  'play-vitals-crash-free',
+  'physical-device-matrix',
+  'real-beta-cohort',
+  'observation-window',
+];
 for (const item of contract.externalEvidence ?? []) {
   if (item.status !== 'operator-required') fail(`external evidence ${item.id} must remain operator-required`);
+  if (item.ledgerGate !== item.id) fail(`external evidence ${item.id} must map to its append-only ledger gate`);
+}
+if (JSON.stringify((contract.externalEvidence ?? []).map((item) => item.id)) !== JSON.stringify(observationGateIds)) {
+  fail('Phase 36 external evidence IDs drifted from the canonical observation gates');
+}
+
+requireMatch(source.betaConstants, /PHASE_36_OBSERVATION_EVIDENCE_GATES/, 'Phase 36 observation gate registry missing');
+requireMatch(source.betaConstants, /ALL_BETA_EVIDENCE_GATES/, 'combined evidence gate registry missing');
+requireMatch(source.betaDto, /@IsIn\(ALL_BETA_EVIDENCE_GATES\)/, 'evidence DTO must accept activation and observation gates');
+requireMatch(source.betaEvidence, /getObservationSummary\(\)/, 'Phase 36 observation evidence summary missing');
+requireMatch(source.betaEvidence, /observationEvidenceExcludedFromActivation: true/, 'activation summary must exclude observation evidence');
+requireMatch(source.betaEvidence, /requiredForInitialBetaActivation: false/, 'observation summary must remain downstream of activation');
+requireMatch(source.betaEvidence, /ALL_BETA_EVIDENCE_GATES\.includes/, 'evidence parser must accept Phase 36 observation gates');
+
+if (betaManifest.policy?.phase36ObservationEvidenceRequiredForInitialActivation !== false) {
+  fail('beta manifest must keep Phase 36 observation evidence outside initial activation');
+}
+const expectedObservationSources = {
+  'play-vitals-crash-free': 'observationEvidence.playVitalsCrashFree',
+  'physical-device-matrix': 'observationEvidence.physicalDeviceMatrix',
+  'real-beta-cohort': 'observationEvidence.realBetaCohort',
+  'observation-window': 'observationEvidence.observationWindow',
+};
+for (const [gateId, sourceKey] of Object.entries(expectedObservationSources)) {
+  const gate = operatorEvidence.gates?.find((item) => item.id === gateId);
+  if (!gate) fail(`operator evidence control missing ${gateId}`);
+  if (gate.sourceManifest !== 'beta' || gate.sourceKey !== sourceKey) {
+    fail(`operator evidence control source mismatch for ${gateId}`);
+  }
+  const manifestKey = sourceKey.split('.')[1];
+  const entry = betaManifest.observationEvidence?.[manifestKey];
+  if (!entry || entry.status !== 'pending' || entry.evidence !== null || entry.blocksInitialActivation !== false) {
+    fail(`beta observation manifest entry invalid for ${gateId}`);
+  }
 }
 
 if (compliance.observabilityPhase !== 36) fail('Play compliance must declare observabilityPhase 36');
@@ -145,5 +195,6 @@ requireMatch(source.module, /ReleaseHealthService/, 'release health service not 
 console.log('PASS | Phase 36 production observability contract');
 console.log('PASS | Privacy-minimized allow-listed mobile telemetry');
 console.log('PASS | AuditLog + runtime + service-quality release health convergence');
-console.log('PASS | Existing append-only beta evidence remains operator-controlled');
+console.log('PASS | Activation evidence remains separate from four post-beta observation gates');
+console.log('PASS | Phase 36 external evidence is registered in API and operator control planes');
 console.log('INFO | Real devices, Play Vitals, real cohort and elapsed observation remain operator-required');
