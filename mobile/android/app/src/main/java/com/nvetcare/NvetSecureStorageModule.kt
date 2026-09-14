@@ -10,17 +10,20 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Native session vault backed by Android Keystore.
+ * Native session/federation vault backed by Android Keystore.
  *
- * Tokens never touch AsyncStorage/SharedPreferences in plaintext. SharedPreferences
- * only stores AES-GCM ciphertext while the AES key is non-exportable inside
- * AndroidKeyStore. There is intentionally no insecure runtime fallback.
+ * Access and refresh tokens never touch AsyncStorage/SharedPreferences in
+ * plaintext. PKCE verifier/state are also generated natively and stored only
+ * as AES-GCM ciphertext for the short federation round trip. There is
+ * intentionally no insecure runtime fallback.
  */
 class NvetSecureStorageModule(
   reactContext: ReactApplicationContext,
@@ -32,10 +35,13 @@ class NvetSecureStorageModule(
     private const val PREFS_NAME = "nvet_secure_session_v1"
     private const val ACCESS_KEY = "access_token"
     private const val REFRESH_KEY = "refresh_token"
+    private const val FEDERATION_STATE_KEY = "ctgone_federation_state"
+    private const val FEDERATION_VERIFIER_KEY = "ctgone_federation_verifier"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
   }
 
   private val prefs = reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+  private val secureRandom = SecureRandom()
 
   override fun getName(): String = MODULE_NAME
 
@@ -69,7 +75,7 @@ class NvetSecureStorageModule(
       promise.resolve(result)
     } catch (error: Exception) {
       // Corrupted/undecryptable session material is never reused.
-      prefs.edit().clear().apply()
+      clearSessionMaterial()
       promise.reject("SECURE_STORAGE_READ_FAILED", "La sesión protegida no pudo recuperarse", error)
     }
   }
@@ -77,12 +83,110 @@ class NvetSecureStorageModule(
   @ReactMethod
   fun clearTokens(promise: Promise) {
     try {
-      prefs.edit().clear().apply()
+      clearSessionMaterial()
       promise.resolve(null)
     } catch (error: Exception) {
       promise.reject("SECURE_STORAGE_CLEAR_FAILED", "No se pudo limpiar la sesión", error)
     }
   }
+
+  /**
+   * Generates state + PKCE verifier with SecureRandom and persists both only
+   * as encrypted values. JavaScript receives state and S256 challenge, never
+   * the verifier. This keeps the PKCE secret out of AsyncStorage/logs.
+   */
+  @ReactMethod
+  fun createCtgFederationRequest(promise: Promise) {
+    try {
+      val state = randomBase64Url(32)
+      val verifier = randomBase64Url(64)
+      val challenge = base64Url(
+        MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)),
+      )
+
+      prefs.edit()
+        .putString(FEDERATION_STATE_KEY, encrypt(state))
+        .putString(FEDERATION_VERIFIER_KEY, encrypt(verifier))
+        .apply()
+
+      promise.resolve(
+        Arguments.createMap().apply {
+          putString("state", state)
+          putString("codeChallenge", challenge)
+          putString("codeChallengeMethod", "S256")
+        },
+      )
+    } catch (error: Exception) {
+      clearFederationMaterial()
+      promise.reject("FEDERATION_REQUEST_FAILED", "No se pudo iniciar el acceso con CTG One", error)
+    }
+  }
+
+  /**
+   * Validates callback state in native code, atomically consumes the pending
+   * request, and returns the verifier once. A replay cannot recover it again.
+   */
+  @ReactMethod
+  fun consumeCtgFederationRequest(callbackState: String, promise: Promise) {
+    try {
+      val encryptedState = prefs.getString(FEDERATION_STATE_KEY, null)
+      val encryptedVerifier = prefs.getString(FEDERATION_VERIFIER_KEY, null)
+      if (encryptedState.isNullOrBlank() || encryptedVerifier.isNullOrBlank()) {
+        promise.reject("FEDERATION_REQUEST_MISSING", "No existe una solicitud CTG One pendiente")
+        return
+      }
+
+      val expectedState = decrypt(encryptedState)
+      if (!constantTimeEquals(expectedState, callbackState)) {
+        clearFederationMaterial()
+        promise.reject("FEDERATION_STATE_MISMATCH", "La respuesta de CTG One no coincide con la solicitud iniciada")
+        return
+      }
+
+      val verifier = decrypt(encryptedVerifier)
+      clearFederationMaterial()
+      promise.resolve(verifier)
+    } catch (error: Exception) {
+      clearFederationMaterial()
+      promise.reject("FEDERATION_CONSUME_FAILED", "No se pudo validar la respuesta de CTG One", error)
+    }
+  }
+
+  @ReactMethod
+  fun clearCtgFederationRequest(promise: Promise) {
+    try {
+      clearFederationMaterial()
+      promise.resolve(null)
+    } catch (error: Exception) {
+      promise.reject("FEDERATION_CLEAR_FAILED", "No se pudo limpiar la solicitud CTG One", error)
+    }
+  }
+
+  private fun clearSessionMaterial() {
+    prefs.edit()
+      .remove(ACCESS_KEY)
+      .remove(REFRESH_KEY)
+      .apply()
+  }
+
+  private fun clearFederationMaterial() {
+    prefs.edit()
+      .remove(FEDERATION_STATE_KEY)
+      .remove(FEDERATION_VERIFIER_KEY)
+      .apply()
+  }
+
+  private fun randomBase64Url(byteCount: Int): String {
+    val bytes = ByteArray(byteCount)
+    secureRandom.nextBytes(bytes)
+    return base64Url(bytes)
+  }
+
+  private fun base64Url(bytes: ByteArray): String =
+    Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+
+  private fun constantTimeEquals(left: String, right: String): Boolean =
+    MessageDigest.isEqual(left.toByteArray(Charsets.UTF_8), right.toByteArray(Charsets.UTF_8))
 
   private fun getOrCreateKey(): SecretKey {
     val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
