@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { StatusBar } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -9,6 +9,7 @@ import { UserModeProvider } from './src/contexts/UserModeContext'
 import { I18nProvider } from './src/i18n/I18nProvider'
 import RootNavigator from './src/navigation/RootNavigator'
 import { linking } from './src/navigation/linking'
+import runtimeTelemetry from './src/services/runtime-telemetry.service'
 
 /**
  * App raíz — orden de providers (de afuera hacia adentro):
@@ -30,6 +31,10 @@ import { linking } from './src/navigation/linking'
  */
 
 export default function App() {
+  useEffect(() => {
+    runtimeTelemetry.emit('APP_STARTED')
+  }, [])
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

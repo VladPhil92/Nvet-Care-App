@@ -1,6 +1,6 @@
 # Nvet Care — Privacy Policy publication source
 
-**Phase:** 13D / Phase 35 convergence  
+**Phase:** 13D / Phase 35 convergence / Phase 36 observability  
 **Publication status:** `PENDING`  
 **Play evidence status:** this file is source material only and MUST NOT be cited as a public privacy-policy URL.
 
@@ -54,9 +54,13 @@ Algunas funciones pueden utilizar preguntas del usuario y contexto relacionado c
 
 Antes de publicar esta política, el operador debe verificar y describir de forma consistente el proveedor de IA activo, las reglas de almacenamiento/retención aplicables y cualquier transferencia de datos asociada.
 
-### 8. Información técnica y seguridad
+### 8. Información técnica, diagnósticos y seguridad
 
 El servicio puede tratar tokens de sesión, información necesaria para autenticación multifactor, códigos temporales de federación de identidad, verificadores PKCE, etiquetas de dispositivo y metadatos de sesión con fines de autenticación, prevención de abuso, protección de cuentas y trazabilidad operativa.
+
+La aplicación puede además enviar al backend de Nvet eventos técnicos limitados para medir estabilidad, desempeño y salud de una versión. Estos eventos utilizan nombres previamente autorizados y pueden incluir duración de una operación, un código normalizado de resultado y datos de versión de la aplicación. Se utilizan para detectar fallos de autenticación, renovación de sesión, intercambio federado, conectividad/API y degradaciones que puedan bloquear una versión antes de ampliar una beta o lanzamiento.
+
+El contrato de telemetría de referencia prohíbe incluir identificadores de usuario, correos electrónicos, tokens, contraseñas, códigos 2FA, códigos de autorización, valores PKCE `state`/`verifier`, textos clínicos libres, credenciales de pago, cuerpos de solicitudes/respuestas, URLs de endpoints o stack traces crudos del cliente. La cola móvil de telemetría es acotada y se mantiene únicamente en memoria; la telemetría automática no constituye por sí misma aprobación de una evidencia beta ni autorización de lanzamiento.
 
 La aplicación puede conservar localmente información de sesión y perfil necesaria para mantener una experiencia autenticada. En Android, las credenciales de sesión y el estado/verificador temporal del flujo CTG One utilizan almacenamiento nativo protegido; el perfil no secreto puede utilizar caché local. Al eliminar una cuenta, las sesiones Nvet se eliminan y el perfil operativo deja de ser utilizable para autenticación.
 
@@ -69,6 +73,8 @@ Nvet Care puede mantener un buzón de notificaciones relacionado con citas, pago
 ### 10. Proveedores y encargados de tratamiento
 
 El servicio puede utilizar proveedores o componentes de infraestructura, almacenamiento, mapas, comunicaciones, pagos, monitoreo, inteligencia artificial e identidad. CTG One participa en el flujo opcional de federación de identidad cuando el usuario elige ese método de acceso. La clasificación jurídica y de Google Play de ese procesamiento debe corresponder con la relación real de producción y no se presume como “sharing” o “no sharing” únicamente a partir del código fuente.
+
+La telemetría de Fase 36 es generada por Nvet en el cliente y enviada al backend de Nvet; los logs estructurados o la infraestructura donde se procesen deben revisarse contra los proveedores efectivamente activos en producción antes de publicar una afirmación final sobre encargados, transferencias o conservación.
 
 La lista y función de los proveedores activos debe corresponder con la configuración real de producción y con la declaración vigente de Google Play.
 

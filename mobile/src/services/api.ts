@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { secureStorage } from '../lib/secureStorage'
+import runtimeTelemetry from './runtime-telemetry.service'
 
 // ============================================================
 // CONFIGURACIÓN
@@ -19,6 +20,13 @@ const UPLOAD_TIMEOUT_MS = 60000
 const MAX_RETRIES = 3
 const RETRY_BASE_DELAY_MS = 300
 const RETRYABLE_STATUS = [408, 425, 429, 500, 502, 503, 504]
+const TELEMETRY_PATH = '/operations/runtime-telemetry/events'
+
+type TelemetryRequestConfig = InternalAxiosRequestConfig & {
+  _retry?: boolean
+  _retryCount?: number
+  _telemetryStartedAt?: number
+}
 
 // ============================================================
 // HELPERS
@@ -36,6 +44,22 @@ function backoffDelay(attempt: number): Promise<void> {
   const exp = RETRY_BASE_DELAY_MS * Math.pow(2, attempt)
   const jitter = Math.random() * RETRY_BASE_DELAY_MS
   return new Promise((resolve) => setTimeout(resolve, exp + jitter))
+}
+
+function requestDuration(config?: TelemetryRequestConfig): number | undefined {
+  return config?._telemetryStartedAt !== undefined
+    ? Math.max(0, Date.now() - config._telemetryStartedAt)
+    : undefined
+}
+
+function isTelemetryRequest(config?: TelemetryRequestConfig): boolean {
+  return typeof config?.url === 'string' && config.url.includes(TELEMETRY_PATH)
+}
+
+function outcomeCodeForError(error: AxiosError): string {
+  if (error.code === 'ECONNABORTED') return 'TIMEOUT'
+  if (!error.response) return 'NETWORK_ERROR'
+  return `HTTP_${error.response.status}`
 }
 
 export function getErrorMessage(error: unknown): string {
@@ -60,6 +84,7 @@ async function performTokenRefresh(): Promise<string> {
   if (refreshTokenPromise) return refreshTokenPromise
 
   refreshTokenPromise = (async () => {
+    const startedAt = Date.now()
     try {
       const refreshToken = await secureStorage.getRefreshToken()
       if (!refreshToken) throw new Error('No refresh token available')
@@ -79,7 +104,17 @@ async function performTokenRefresh(): Promise<string> {
         accessToken,
         refreshToken: newRefreshToken,
       })
+      runtimeTelemetry.emit('SESSION_REFRESH_SUCCESS', {
+        durationMs: Date.now() - startedAt,
+      })
       return accessToken
+    } catch (error) {
+      runtimeTelemetry.emit('SESSION_REFRESH_FAILURE', {
+        durationMs: Date.now() - startedAt,
+        outcomeCode:
+          error instanceof AxiosError ? outcomeCodeForError(error) : 'REFRESH_FAILED',
+      })
+      throw error
     } finally {
       refreshTokenPromise = null
     }
@@ -106,6 +141,9 @@ class ApiClient {
   private setupInterceptors() {
     this.client.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
+        const telemetryConfig = config as TelemetryRequestConfig
+        telemetryConfig._telemetryStartedAt ??= Date.now()
+
         const token = await secureStorage.getAccessToken()
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`
@@ -128,11 +166,17 @@ class ApiClient {
     )
 
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        const config = response.config as TelemetryRequestConfig
+        if (!isTelemetryRequest(config)) {
+          runtimeTelemetry.emit('API_REQUEST_SUCCESS', {
+            durationMs: requestDuration(config),
+          })
+        }
+        return response
+      },
       async (error: AxiosError) => {
-        const originalRequest = error.config as
-          | (InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number })
-          | undefined
+        const originalRequest = error.config as TelemetryRequestConfig | undefined
 
         if (!originalRequest) return Promise.reject(error)
 
@@ -146,6 +190,12 @@ class ApiClient {
             return this.client(originalRequest)
           } catch (refreshError) {
             await secureStorage.clearTokens().catch(() => undefined)
+            if (!isTelemetryRequest(originalRequest)) {
+              runtimeTelemetry.emit('API_REQUEST_FAILURE', {
+                durationMs: requestDuration(originalRequest),
+                outcomeCode: 'SESSION_REFRESH_FAILED',
+              })
+            }
             return Promise.reject(refreshError)
           }
         }
@@ -165,6 +215,12 @@ class ApiClient {
           }
         }
 
+        if (!isTelemetryRequest(originalRequest)) {
+          runtimeTelemetry.emit('API_REQUEST_FAILURE', {
+            durationMs: requestDuration(originalRequest),
+            outcomeCode: outcomeCodeForError(error),
+          })
+        }
         return Promise.reject(error)
       },
     )

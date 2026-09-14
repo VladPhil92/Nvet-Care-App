@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "phase": 36,
+  "program": "production-observability-real-beta-validation",
+  "candidate": "1.0.0-rc.2",
+  "prerequisitePhase": 35,
+  "scope": {
+    "backendHealth": true,
+    "mobileRuntimeTelemetry": true,
+    "ctgOneFederationTelemetry": true,
+    "releaseHealth": true,
+    "betaEvidenceIntegration": true,
+    "productionDatabaseSchemaMutationAuthorized": false,
+    "commercialLaunchAuthorized": false
+  },
+  "privacy": {
+    "piiInTelemetryForbidden": true,
+    "tokensInTelemetryForbidden": true,
+    "passwordsInTelemetryForbidden": true,
+    "twoFactorCodesInTelemetryForbidden": true,
+    "clinicalFreeTextInTelemetryForbidden": true,
+    "paymentCredentialsInTelemetryForbidden": true,
+    "rawStackTracesFromClientsForbidden": true,
+    "telemetryEventNamesAllowListed": true
+  },
+  "runtimeEvents": [
+    "APP_STARTED",
+    "AUTH_LOGIN_SUCCESS",
+    "AUTH_LOGIN_FAILURE",
+    "SESSION_REFRESH_SUCCESS",
+    "SESSION_REFRESH_FAILURE",
+    "CTG_FEDERATION_STARTED",
+    "CTG_FEDERATION_CALLBACK_RECEIVED",
+    "CTG_FEDERATION_EXCHANGE_SUCCESS",
+    "CTG_FEDERATION_EXCHANGE_FAILURE",
+    "API_REQUEST_SUCCESS",
+    "API_REQUEST_FAILURE",
+    "UNHANDLED_JS_ERROR"
+  ],
+  "internalSlo": {
+    "minimumSampleSize": 20,
+    "authenticatedSessionSuccessRatePct": 98,
+    "ctgFederationExchangeSuccessRatePct": 95,
+    "apiFailureRatePct": 2,
+    "authLatencyP95Ms": 3000,
+    "ctgFederationLatencyP95Ms": 5000
+  },
+  "externalEvidence": [
+    {
+      "id": "play-vitals-crash-free",
+      "status": "operator-required",
+      "reason": "Crash-free and ANR evidence must come from the actual distributed Android build or equivalent provider evidence."
+    },
+    {
+      "id": "physical-device-matrix",
+      "status": "operator-required",
+      "reason": "Real-device coverage requires dated evidence from actual devices and Android versions."
+    },
+    {
+      "id": "real-beta-cohort",
+      "status": "operator-required",
+      "reason": "A real CLIENT/VET beta cohort cannot be inferred from CI or synthetic tests."
+    },
+    {
+      "id": "observation-window",
+      "status": "operator-required",
+      "reason": "A real observation period must elapse and be recorded in the append-only beta evidence ledger."
+    }
+  ],
+  "betaEvidence": {
+    "ledger": "audit_logs",
+    "appendOnly": true,
+    "automaticTelemetryDoesNotEqualHumanEvidence": true,
+    "operatorApprovalRequired": true
+  },
+  "policy": {
+    "failClosed": true,
+    "releaseHealthCanBlockPromotion": true,
+    "automaticPublicRollout": false,
+    "externalEvidenceNeverAutoVerified": true,
+    "paymentRailIndependent": true
+  }
+}

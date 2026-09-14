@@ -32,6 +32,14 @@
       "status": "open",
       "owner": "VladPhil92",
       "justification": "Phase 35 hardens the Android artifact that will be evaluated by Google Play: release cleartext transport is denied while emulator-only HTTP remains isolated to debug, R8/minification becomes a tested release invariant, and CTG One federation is incorporated into the Play Data Safety and automated compliance contracts. The phase preserves draft-only Play automation, manual production promotion, operator-owned signing/console evidence, and the independent payment-provider gate."
+    },
+    {
+      "prNumber": 249,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Phase 36 adds privacy-minimized mobile runtime and CTG One federation observability, release-health SLO evaluation, and explicit integration with the existing append-only beta evidence boundary. These protected changes are required to detect operational regressions before real beta activation while keeping Play Vitals, physical-device evidence, real user cohorts and elapsed observation windows operator-owned and fail-closed."
     }
   ]
 }
