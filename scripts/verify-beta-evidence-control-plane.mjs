@@ -64,7 +64,14 @@ includes(service, '"REVOKED"', 'Evidence service')
 includes(service, 'item.environment === "production"', 'Evidence service')
 includes(service, 'requiredEnvironment: "production"', 'Evidence service')
 includes(service, 'eligibleForOperatorActivation', 'Evidence service')
+includes(service, 'eligibleForPostBetaReview', 'Observation evidence service')
+includes(service, 'independent approver', 'Observation evidence service')
+includes(service, 'PHASE_36_OBSERVATION_EVIDENCE_POLICY', 'Observation evidence service')
 includes(service, 'SENSITIVE_REFERENCE_PATTERN', 'Evidence service')
+includes(constants, '"play-vitals-crash-free": { maxAgeHours: 168', 'Observation evidence policy')
+includes(constants, '"physical-device-matrix": { maxAgeHours: 168', 'Observation evidence policy')
+includes(constants, '"real-beta-cohort": { maxAgeHours: 168', 'Observation evidence policy')
+includes(constants, '"observation-window": { maxAgeHours: 336', 'Observation evidence policy')
 if (/auditLog\.(update|delete|deleteMany|updateMany)\s*\(/.test(service)) {
   fail('Evidence ledger must remain append-only; mutable auditLog operation detected.')
 }
@@ -127,6 +134,7 @@ for (const route of [
   '@Post("activation/authorize")',
   '@Post("activation/revoke")',
   '@Get("evidence/summary")',
+  '@Get("evidence/observation-summary")',
   '@Get("evidence/history")',
   '@Post("evidence")',
   '@Post("evidence/:evidenceId/approve")',
@@ -163,14 +171,20 @@ includes(app, '<BetaCohortPage />', 'Dashboard routing')
 includes(sidebar, "id: 'evidence'", 'Dashboard sidebar')
 includes(sidebar, "id: 'cohort'", 'Dashboard sidebar')
 includes(evidencePage, "'/beta/evidence/summary'", 'Evidence dashboard')
+includes(evidencePage, "'/beta/evidence/observation-summary'", 'Observation evidence dashboard')
 includes(evidencePage, "'/beta/evidence/history'", 'Evidence dashboard')
 includes(evidencePage, "'/beta/evidence'", 'Evidence dashboard')
 includes(evidencePage, "'/beta/activation'", 'Activation dashboard')
 includes(evidencePage, "'/beta/activation/authorize'", 'Activation dashboard')
 includes(evidencePage, "'/beta/activation/revoke'", 'Activation dashboard')
 includes(evidencePage, 'Autorizar beta controlada', 'Activation dashboard')
-includes(evidencePage, 'production · cuenta para activación', 'Activation dashboard')
+includes(evidencePage, 'production · elegible según el gate', 'Evidence dashboard')
 includes(evidencePage, 'staging · solo informativa', 'Activation dashboard')
+includes(evidencePage, 'play-vitals-crash-free', 'Observation evidence dashboard')
+includes(evidencePage, 'physical-device-matrix', 'Observation evidence dashboard')
+includes(evidencePage, 'real-beta-cohort', 'Observation evidence dashboard')
+includes(evidencePage, 'observation-window', 'Observation evidence dashboard')
+includes(evidencePage, 'requieren evidencia fresca y aprobador distinto', 'Observation evidence dashboard')
 includes(cohortPage, "'/beta/cohort'", 'Cohort dashboard')
 includes(cohortPage, "'/beta/cohort/invite'", 'Cohort dashboard')
 includes(cohortPage, '/revoke', 'Cohort dashboard')
@@ -241,5 +255,5 @@ if (manifest.policy?.manifestEvidenceNeverAutoMutated !== true) {
 }
 
 console.log(
-  `Beta control plane valid: ${codeGates.length} production gates, Phase 18 strict veterinarian supply, append-only evidence + cohort + authorization ledgers, booking fail-closed, admin control UI wired.`,
+  `Beta control plane valid: ${codeGates.length} activation gates plus Phase 36 observation gates, Phase 18 strict veterinarian supply, append-only evidence + cohort + authorization ledgers, booking fail-closed, admin control UI wired.`,
 )
