@@ -145,7 +145,7 @@ async function validateContract() {
   if (freeze.phase !== 27 || freeze.state !== 'FROZEN' || freeze.candidate !== control.candidate) {
     fail('Phase 27 frozen candidate contract is not intact');
   }
-  if ((blockers.blockers ?? []).some((entry) => entry.status === 'open')) fail('release blocker registry contains an open blocker');
+  const openReleaseBlockers = (blockers.blockers ?? []).filter((entry) => entry.status === 'open');
 
   const phase31Gate = (global.engineeringGates ?? []).find((gate) => gate.id === 'android-play-internal-release-contract');
   if (!phase31Gate || phase31Gate.status !== 'verified') fail('GLOBAL_READINESS must register Phase 31 as verified engineering');
@@ -188,7 +188,7 @@ async function validateContract() {
     }
   }
 
-  return { control, android };
+  return { control, android, openReleaseBlockers };
 }
 
 async function phase30Outcome(control) {
@@ -222,16 +222,17 @@ function internalObservation(control, android, observedNow) {
   };
 }
 
-async function buildReport({ control, android }) {
+async function buildReport({ control, android, openReleaseBlockers }) {
   const observedAt = new Date().toISOString();
   const observedPhase30 = await phase30Outcome(control);
   const preBuildPending = pendingFrom(android, control.operatorGateGroups.preBuildAndUpload);
   const artifactPending = pendingFrom(android, control.operatorGateGroups.artifactAndTrack);
   const smokePending = pendingFrom(android, control.operatorGateGroups.postInstallValidation);
   const observation = internalObservation(control, android, observedAt);
+  const releaseBlockerIds = openReleaseBlockers.map((entry) => entry.prNumber ?? 'unknown');
 
   let state = control.classification.engineeringReadyExternalBlocked;
-  if (observedPhase30.accepted && preBuildPending.length === 0) {
+  if (releaseBlockerIds.length === 0 && observedPhase30.accepted && preBuildPending.length === 0) {
     if (artifactPending.length > 0) state = control.classification.readyForOperatorBuildAndUpload;
     else if (!observation.satisfied) state = control.classification.internalDraftObserving;
     else if (smokePending.length > 0) state = control.classification.internalDraftUploadedAwaitingDeviceSmoke;
@@ -248,6 +249,7 @@ async function buildReport({ control, android }) {
     state,
     engineeringContract: 'READY',
     phase30Outcome: observedPhase30,
+    releaseBlockers: releaseBlockerIds,
     internalTrackObservation: observation,
     pendingExternalEvidence: {
       preBuildAndUpload: preBuildPending,
@@ -258,7 +260,7 @@ async function buildReport({ control, android }) {
     playAutomationMaximumStatus: control.policy.playAutomationMaximumStatus,
     publicStoreReleaseAuthorized: false,
     commercialLaunchAuthorized: false,
-    safetyBoundary: 'Engineering readiness is complete independently; real payment, RC promotion, Play provider setup, signing evidence, upload evidence, elapsed observation time and physical-device evidence are never fabricated by CI.',
+    safetyBoundary: 'Engineering readiness is complete independently; real payment, RC promotion, release-blocker closure, Play provider setup, signing evidence, upload evidence, elapsed observation time and physical-device evidence are never fabricated by CI.',
   };
 }
 
@@ -270,6 +272,7 @@ async function writeReport(report) {
   console.log(`Engineering contract: ${report.engineeringContract}`);
   console.log(`State: ${report.state}`);
   console.log(`Internal observation: ${report.internalTrackObservation.elapsedHours}/${report.internalTrackObservation.requiredHours}h`);
+  for (const blocker of report.releaseBlockers) console.log(`BLOCKED_EXTERNAL | release-blocker:${blocker}`);
   for (const [group, gates] of Object.entries(report.pendingExternalEvidence)) {
     for (const gate of gates) console.log(`BLOCKED_EXTERNAL | ${group}.${gate}`);
   }
@@ -281,6 +284,7 @@ async function writeReport(report) {
   if (process.env.GITHUB_STEP_SUMMARY) {
     const pending = Object.entries(report.pendingExternalEvidence)
       .flatMap(([group, gates]) => gates.map((gate) => `- ${group}: \`${gate}\``));
+    const releaseBlockers = report.releaseBlockers.map((prNumber) => `- release blocker: \`PR #${prNumber}\``);
     const lines = [
       '# Nvet Care — Phase 31 Android Play Internal Release',
       '',
@@ -290,7 +294,9 @@ async function writeReport(report) {
       `Phase 30 runtime outcome supplied: **${report.phase30Outcome.provided}**`,
       `Internal observation: **${report.internalTrackObservation.elapsedHours}/${report.internalTrackObservation.requiredHours}h**`,
       '',
-      ...(pending.length ? ['## Pending external/operator evidence', '', ...pending, ''] : []),
+      ...(releaseBlockers.length || pending.length
+        ? ['## Pending external/operator evidence', '', ...releaseBlockers, ...pending, '']
+        : []),
       '> Phase 31 stops at Google Play Internal Testing draft automation and never authorizes production-track or commercial release.',
     ];
     await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
