@@ -8,5 +8,14 @@
     "allowedOpenStatus": "open",
     "note": "During the Phase 27 freeze, product-code changes require an auditable blocker entry tied to the pull request. Empty is the expected steady state."
   },
-  "blockers": []
+  "blockers": [
+    {
+      "prNumber": 245,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Phase 33 corrects cross-surface identity continuity, preserves existing Nvet roles during CTG One linking, hardens signed Android releases to the canonical production API, and removes legacy mobile branding before Play distribution. These protected product changes address release-blocking account divergence and mobile release consistency defects without authorizing commercial launch."
+    }
+  ]
 }
