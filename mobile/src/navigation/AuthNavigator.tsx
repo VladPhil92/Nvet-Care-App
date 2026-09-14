@@ -9,18 +9,10 @@ import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen'
 import TwoFactorVerifyScreen from '../screens/auth/TwoFactorVerifyScreen'
 import TwoFactorRecoveryScreen from '../screens/auth/TwoFactorRecoveryScreen'
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen'
+import CtgFederationCallbackScreen from '../screens/auth/CtgFederationCallbackScreen'
 
 const Stack = createNativeStackNavigator<AuthStackParamList>()
 
-/**
- * AuthNavigator — flujo de autenticación.
- *
- * Decisiones:
- *  - `headerShown: false` por defecto: cada screen renderiza su propio header
- *    custom con la marca Nvet Care.
- *  - Animación de transición nativa para feel premium.
- *  - `gestureEnabled` solo en iOS (Android usa el botón back).
- */
 export default function AuthNavigator() {
   return (
     <Stack.Navigator
@@ -39,11 +31,6 @@ export default function AuthNavigator() {
         component={ForgotPasswordScreen}
         options={{ animation: 'slide_from_bottom' }}
       />
-      {/*
-        TwoFactorVerify: navegado automáticamente cuando login retorna
-        TWO_FACTOR_REQUIRED. Bloquea gestos para evitar swipe-back accidental
-        que dejaría el flujo de login a medio camino.
-      */}
       <Stack.Screen
         name="TwoFactorVerify"
         component={TwoFactorVerifyScreen}
@@ -54,14 +41,15 @@ export default function AuthNavigator() {
         component={TwoFactorRecoveryScreen}
         options={{ gestureEnabled: false }}
       />
-      {/*
-        ResetPassword: alcanzable vía deep link `nvetcare://reset-password?token=...`
-        configurado en linking.ts. Animación bottom para distinguir del flujo normal.
-      */}
       <Stack.Screen
         name="ResetPassword"
         component={ResetPasswordScreen}
         options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="CtgFederationCallback"
+        component={CtgFederationCallbackScreen}
+        options={{ gestureEnabled: false, animation: 'fade' }}
       />
     </Stack.Navigator>
   )
