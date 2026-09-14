@@ -16,6 +16,14 @@
       "status": "open",
       "owner": "VladPhil92",
       "justification": "Phase 33 corrects cross-surface identity continuity, preserves existing Nvet roles during CTG One linking, hardens signed Android releases to the canonical production API, and removes legacy mobile branding before Play distribution. These protected product changes address release-blocking account divergence and mobile release consistency defects without authorizing commercial launch."
+    },
+    {
+      "prNumber": 247,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Phase 34 closes the release-blocking Android identity gap by adding CTG One authorization-code plus PKCE federation, encrypted native verifier/state handling, reliable cold-start callbacks, canonical Nvet session persistence, and exact preservation of Nvet role authority including SUPERADMIN. It also converges the web/mobile visual source of truth without authorizing commercial launch or weakening the frozen payment and external-evidence gates."
     }
   ]
 }
