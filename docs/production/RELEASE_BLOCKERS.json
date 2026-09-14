@@ -24,6 +24,14 @@
       "status": "open",
       "owner": "VladPhil92",
       "justification": "Phase 34 closes the release-blocking Android identity gap by adding CTG One authorization-code plus PKCE federation, encrypted native verifier/state handling, reliable cold-start callbacks, canonical Nvet session persistence, and exact preservation of Nvet role authority including SUPERADMIN. It also converges the web/mobile visual source of truth without authorizing commercial launch or weakening the frozen payment and external-evidence gates."
+    },
+    {
+      "prNumber": 248,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Phase 35 hardens the Android artifact that will be evaluated by Google Play: release cleartext transport is denied while emulator-only HTTP remains isolated to debug, R8/minification becomes a tested release invariant, and CTG One federation is incorporated into the Play Data Safety and automated compliance contracts. The phase preserves draft-only Play automation, manual production promotion, operator-owned signing/console evidence, and the independent payment-provider gate."
     }
   ]
 }
