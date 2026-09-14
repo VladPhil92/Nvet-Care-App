@@ -10,6 +10,7 @@ import TwoFactorVerifyScreen from '../screens/auth/TwoFactorVerifyScreen'
 import TwoFactorRecoveryScreen from '../screens/auth/TwoFactorRecoveryScreen'
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen'
 import CtgFederationCallbackScreen from '../screens/auth/CtgFederationCallbackScreen'
+import { Colors } from '../theme/tokens'
 
 const Stack = createNativeStackNavigator<AuthStackParamList>()
 
@@ -21,7 +22,7 @@ export default function AuthNavigator() {
         headerShown: false,
         animation: 'slide_from_right',
         gestureEnabled: Platform.OS === 'ios',
-        contentStyle: { backgroundColor: '#FAFAF7' },
+        contentStyle: { backgroundColor: Colors.canvas },
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />
