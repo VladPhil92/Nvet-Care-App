@@ -184,7 +184,7 @@ includes(evidencePage, 'play-vitals-crash-free', 'Observation evidence dashboard
 includes(evidencePage, 'physical-device-matrix', 'Observation evidence dashboard')
 includes(evidencePage, 'real-beta-cohort', 'Observation evidence dashboard')
 includes(evidencePage, 'observation-window', 'Observation evidence dashboard')
-includes(evidencePage, 'requieren evidencia fresca y aprobador distinto', 'Observation evidence dashboard')
+includes(evidencePage, 'Requieren evidencia fresca y aprobador distinto', 'Observation evidence dashboard')
 includes(cohortPage, "'/beta/cohort'", 'Cohort dashboard')
 includes(cohortPage, "'/beta/cohort/invite'", 'Cohort dashboard')
 includes(cohortPage, '/revoke', 'Cohort dashboard')
