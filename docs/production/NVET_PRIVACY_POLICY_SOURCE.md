@@ -1,6 +1,6 @@
 # Nvet Care — Privacy Policy publication source
 
-**Phase:** 13D  
+**Phase:** 13D / Phase 35 convergence  
 **Publication status:** `PENDING`  
 **Play evidence status:** this file is source material only and MUST NOT be cited as a public privacy-policy URL.
 
@@ -17,6 +17,8 @@ Nvet Care es una plataforma para coordinar servicios veterinarios, gestionar mas
 Para crear y operar una cuenta, Nvet Care puede tratar datos como correo electrónico, nombre, apellido, teléfono, imagen de perfil, rol de usuario y estados de seguridad de la cuenta. En perfiles veterinarios también pueden tratarse datos profesionales como número de licencia, especialidades, estado de verificación y calificaciones.
 
 Estos datos se utilizan para autenticación, administración de cuenta, seguridad, verificación profesional, soporte y prestación del servicio.
+
+Cuando el usuario elige **Continuar con CTG One**, la aplicación utiliza un flujo de federación de identidad basado en código de autorización, estado y PKCE S256. Durante ese proceso pueden tratarse el código temporal de autorización, el verificador PKCE y, cuando la cuenta Nvet lo exige, un código de autenticación de dos factores. El callback móvil no debe contener tokens bearer de CTG One ni tokens de acceso o refresco de Nvet.
 
 ### 2. Información sobre mascotas y atención veterinaria
 
@@ -54,9 +56,11 @@ Antes de publicar esta política, el operador debe verificar y describir de form
 
 ### 8. Información técnica y seguridad
 
-El servicio puede tratar tokens de sesión, información necesaria para autenticación multifactor, etiquetas de dispositivo y metadatos de sesión con fines de autenticación, prevención de abuso, protección de cuentas y trazabilidad operativa.
+El servicio puede tratar tokens de sesión, información necesaria para autenticación multifactor, códigos temporales de federación de identidad, verificadores PKCE, etiquetas de dispositivo y metadatos de sesión con fines de autenticación, prevención de abuso, protección de cuentas y trazabilidad operativa.
 
-La aplicación puede conservar localmente información de sesión y perfil necesaria para mantener una experiencia autenticada. Al eliminar una cuenta, las sesiones Nvet se eliminan y el perfil operativo deja de ser utilizable para autenticación.
+La aplicación puede conservar localmente información de sesión y perfil necesaria para mantener una experiencia autenticada. En Android, las credenciales de sesión y el estado/verificador temporal del flujo CTG One utilizan almacenamiento nativo protegido; el perfil no secreto puede utilizar caché local. Al eliminar una cuenta, las sesiones Nvet se eliminan y el perfil operativo deja de ser utilizable para autenticación.
+
+La configuración Android de producción/release se mantiene con tráfico cleartext deshabilitado. Las excepciones HTTP para emulador se limitan al source set de depuración y no forman parte del bundle de publicación.
 
 ### 9. Notificaciones y actividad del servicio
 
@@ -64,7 +68,9 @@ Nvet Care puede mantener un buzón de notificaciones relacionado con citas, pago
 
 ### 10. Proveedores y encargados de tratamiento
 
-El servicio puede utilizar proveedores de infraestructura, almacenamiento, mapas, comunicaciones, pagos, monitoreo o inteligencia artificial. La lista y función de los proveedores activos debe corresponder con la configuración real de producción y con la declaración vigente de Google Play.
+El servicio puede utilizar proveedores o componentes de infraestructura, almacenamiento, mapas, comunicaciones, pagos, monitoreo, inteligencia artificial e identidad. CTG One participa en el flujo opcional de federación de identidad cuando el usuario elige ese método de acceso. La clasificación jurídica y de Google Play de ese procesamiento debe corresponder con la relación real de producción y no se presume como “sharing” o “no sharing” únicamente a partir del código fuente.
+
+La lista y función de los proveedores activos debe corresponder con la configuración real de producción y con la declaración vigente de Google Play.
 
 La eliminación del perfil Nvet no debe describirse como prueba de borrado inmediato en todos los proveedores externos mientras no se haya verificado el ciclo de vida de los objetos y datos procesados por cada proveedor. Esa revisión permanece como evidencia externa de producción.
 
