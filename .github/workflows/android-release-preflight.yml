@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'mobile/android/**'
+      - 'mobile/src/services/ctg-federation.service.ts'
+      - 'mobile/src/lib/secureStorage.ts'
       - '.github/workflows/release-android.yml'
       - '.github/workflows/android-release-preflight.yml'
       - 'docs/production/ANDROID_RELEASE_PREFLIGHT.json'
@@ -15,12 +17,15 @@ on:
       - 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md'
       - 'docs/production/GOOGLE_PLAY_DATA_SAFETY.md'
       - 'scripts/verify-android-release-preflight.mjs'
+      - 'scripts/verify-google-play-launch-readiness-phase35.mjs'
       - 'scripts/verify-android-production-readiness.mjs'
       - 'package.json'
   push:
     branches: [main]
     paths:
       - 'mobile/android/**'
+      - 'mobile/src/services/ctg-federation.service.ts'
+      - 'mobile/src/lib/secureStorage.ts'
       - '.github/workflows/release-android.yml'
       - '.github/workflows/android-release-preflight.yml'
       - 'docs/production/ANDROID_RELEASE_PREFLIGHT.json'
@@ -31,6 +36,7 @@ on:
       - 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md'
       - 'docs/production/GOOGLE_PLAY_DATA_SAFETY.md'
       - 'scripts/verify-android-release-preflight.mjs'
+      - 'scripts/verify-google-play-launch-readiness-phase35.mjs'
       - 'scripts/verify-android-production-readiness.mjs'
       - 'package.json'
   workflow_dispatch:
@@ -56,8 +62,10 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: Syntax-check preflight verifier
-        run: node --check scripts/verify-android-release-preflight.mjs
+      - name: Syntax-check preflight verifiers
+        run: |
+          node --check scripts/verify-android-release-preflight.mjs
+          node --check scripts/verify-google-play-launch-readiness-phase35.mjs
 
       - name: Validate existing Android production contract
         run: node scripts/verify-android-production-readiness.mjs --contract-only
@@ -65,10 +73,15 @@ jobs:
       - name: Verify Google Play release preflight
         run: node scripts/verify-android-release-preflight.mjs --write-evidence
 
+      - name: Verify Phase 35 Google Play launch convergence
+        run: node scripts/verify-google-play-launch-readiness-phase35.mjs --write-evidence
+
       - name: Upload machine-readable preflight evidence
         uses: actions/upload-artifact@v7
         with:
           name: android-release-preflight
-          path: .artifacts/android-release-preflight.json
+          path: |
+            .artifacts/android-release-preflight.json
+            .artifacts/google-play-launch-readiness-phase35.json
           if-no-files-found: error
           retention-days: 30
