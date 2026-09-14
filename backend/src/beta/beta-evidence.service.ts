@@ -437,6 +437,12 @@ export class BetaEvidenceService {
           if (state !== "PENDING") {
             conflictReasons.push(`INVALID_TRANSITION_${state}_TO_APPROVED`);
           } else {
+            if (
+              isPhase36ObservationEvidenceGate(gate) &&
+              (!submission.actorId || !event.actorId || event.actorId === submission.actorId)
+            ) {
+              conflictReasons.push("OBSERVATION_APPROVER_NOT_DISTINCT");
+            }
             state = "APPROVED";
           }
           break;
@@ -457,7 +463,17 @@ export class BetaEvidenceService {
       }
     }
 
-    const expiresAt = submission.metadata.expiresAt ?? null;
+    const observationPolicy = isPhase36ObservationEvidenceGate(gate)
+      ? PHASE_36_OBSERVATION_EVIDENCE_POLICY[gate]
+      : null;
+    const observedAtMs = observedAt ? Date.parse(observedAt) : Number.NaN;
+    const derivedPolicyExpiry =
+      observationPolicy && Number.isFinite(observedAtMs)
+        ? new Date(
+            observedAtMs + observationPolicy.maxAgeHours * HOUR_MS,
+          ).toISOString()
+        : null;
+    const expiresAt = submission.metadata.expiresAt ?? derivedPolicyExpiry;
     if (
       conflictReasons.length === 0 &&
       expiresAt &&
