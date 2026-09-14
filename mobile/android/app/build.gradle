@@ -28,6 +28,7 @@ def requireReleaseSigning = (System.getenv("NVET_ANDROID_REQUIRE_SIGNING") ?: "f
 
 def mapsApiKey = System.getenv("GOOGLE_MAPS_ANDROID_API_KEY") ?: ""
 def nvetApiUrl = System.getenv("NVET_API_URL") ?: ""
+def canonicalProductionApiUrl = "https://backend-production-a476.up.railway.app/api"
 def androidVersionCodeRaw = System.getenv("NVET_ANDROID_VERSION_CODE") ?: "1"
 def androidVersionName = System.getenv("NVET_ANDROID_VERSION_NAME") ?: "1.0.0"
 def androidVersionCode
@@ -44,6 +45,18 @@ if (releaseTaskRequested) {
         }
     } catch (Exception ignored) {
         throw new GradleException("NVET_API_URL must be an absolute HTTPS non-local URL for Android release builds")
+    }
+
+    // A publishable/signed Google Play bundle must always authenticate against
+    // the exact same canonical production backend used by the web product.
+    // Unsigned CI release bundles may still target isolated test/staging APIs.
+    if (requireReleaseSigning) {
+        def normalizedApiUrl = nvetApiUrl.replaceAll('/+$', '')
+        if (normalizedApiUrl != canonicalProductionApiUrl) {
+            throw new GradleException(
+                "Publishable Android builds must use the canonical Nvet production API: ${canonicalProductionApiUrl}"
+            )
+        }
     }
 
     if (requireReleaseSigning && !hasReleaseSigning) {

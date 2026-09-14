@@ -102,7 +102,7 @@ async function validateContract() {
   if (freeze.phase !== 27 || freeze.state !== 'FROZEN' || freeze.governance?.featureFreezeActive !== true) {
     fail('Phase 27 release candidate freeze must remain active');
   }
-  if ((blockers.blockers ?? []).some((entry) => entry.status === 'open')) fail('release blocker registry contains an open blocker');
+  const openReleaseBlockers = (blockers.blockers ?? []).filter((entry) => entry.status === 'open');
 
   const requiredMetrics = control.requiredServiceQualityMetrics ?? [];
   if (requiredMetrics.length !== 6 || new Set(requiredMetrics).size !== 6) fail('exactly six unique service-quality metrics are required');
@@ -111,7 +111,16 @@ async function validateContract() {
     .filter(([, entry]) => entry?.status !== 'verified')
     .map(([key]) => key);
 
-  return { control, phase29, beta, freeze, blockers, global, staticBetaBlockers };
+  return {
+    control,
+    phase29,
+    beta,
+    freeze,
+    blockers,
+    global,
+    staticBetaBlockers,
+    openReleaseBlockers,
+  };
 }
 
 function validateSnapshot(snapshot, control) {
@@ -167,7 +176,8 @@ function classify(snapshot, control, elapsedHours) {
 }
 
 async function buildReport(ctx) {
-  const { control, staticBetaBlockers } = ctx;
+  const { control, staticBetaBlockers, openReleaseBlockers } = ctx;
+  const releaseBlockerIds = openReleaseBlockers.map((entry) => entry.prNumber ?? 'unknown');
   if (!snapshotArg) {
     return {
       schemaVersion: 1,
@@ -177,11 +187,12 @@ async function buildReport(ctx) {
       observedAt: new Date().toISOString(),
       state: control.classification.blocked,
       staticPrerequisites: {
-        phase29EvidenceClosed: staticBetaBlockers.length === 0,
+        phase29EvidenceClosed: staticBetaBlockers.length === 0 && releaseBlockerIds.length === 0,
         betaEvidenceBlockers: staticBetaBlockers,
+        releaseBlockers: releaseBlockerIds,
       },
       runtimeEvidencePresent: false,
-      operatorActionRequired: staticBetaBlockers.length > 0,
+      operatorActionRequired: staticBetaBlockers.length > 0 || releaseBlockerIds.length > 0,
       nextStage: control.nextStage,
       safetyBoundary: 'Phase 30 contract is installed, but no real observation or runtime evidence is fabricated by CI.',
     };
@@ -189,7 +200,8 @@ async function buildReport(ctx) {
 
   const snapshot = await readJson(snapshotArg);
   const elapsedHours = validateSnapshot(snapshot, control);
-  const state = classify(snapshot, control, elapsedHours);
+  const classifiedState = classify(snapshot, control, elapsedHours);
+  const state = releaseBlockerIds.length > 0 ? control.classification.blocked : classifiedState;
   return {
     schemaVersion: 1,
     phase: 30,
@@ -198,6 +210,7 @@ async function buildReport(ctx) {
     observedAt: new Date().toISOString(),
     state,
     runtimeEvidencePresent: true,
+    releaseBlockers: releaseBlockerIds,
     observation: {
       status: snapshot.observation.status,
       authorizationBound: snapshot.authorizationId === snapshot.observation.authorizationId,
@@ -223,6 +236,9 @@ async function writeReport(report) {
   console.log(`State: ${report.state}`);
   if (report.staticPrerequisites?.betaEvidenceBlockers?.length) {
     for (const blocker of report.staticPrerequisites.betaEvidenceBlockers) console.log(`BLOCKED | beta.requiredEvidence.${blocker}`);
+  }
+  for (const blocker of report.staticPrerequisites?.releaseBlockers ?? report.releaseBlockers ?? []) {
+    console.log(`BLOCKED | release-blocker:${blocker}`);
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const lines = [

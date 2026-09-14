@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nvet_blue_deep">#0D1B2A</color>
+    <color name="nvet_green_primary">#34B27A</color>
+    <color name="nvet_orange_accent">#FF8A3D</color>
+    <color name="nvet_canvas">#F2F4F7</color>
+    <color name="nvet_surface">#FFFFFF</color>
+</resources>

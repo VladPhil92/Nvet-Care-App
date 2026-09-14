@@ -43,6 +43,55 @@ async function git(argsList, options = {}) {
   return stdout.trim();
 }
 
+function prNumberFromMergeMessage(message) {
+  if (typeof message !== 'string') return null;
+  const match = message.match(/Merge pull request #(\d+)\b|\(#(\d+)\)\s*$/m);
+  const value = Number(match?.[1] ?? match?.[2]);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+async function currentAuthorizedReleaseBlocker(blockers, candidate) {
+  const eventName = process.env.GITHUB_EVENT_NAME?.trim();
+  const eventPath = process.env.GITHUB_EVENT_PATH?.trim();
+  if (!eventName || !eventPath) return null;
+
+  let payload;
+  try {
+    payload = JSON.parse(await fs.readFile(eventPath, 'utf8'));
+  } catch {
+    return null;
+  }
+
+  let prNumber = null;
+  if (eventName === 'pull_request') {
+    const labels = new Set(
+      (payload.pull_request?.labels ?? [])
+        .map((label) => label?.name)
+        .filter(Boolean),
+    );
+    if (!labels.has('release-blocker')) return null;
+    prNumber = Number(payload.pull_request?.number ?? payload.number) || null;
+  } else if (eventName === 'push') {
+    prNumber = prNumberFromMergeMessage(payload.head_commit?.message ?? '');
+    if (!prNumber) return null;
+    const ancestry = await git(['rev-list', '--parents', '-n', '1', 'HEAD']);
+    if (ancestry.split(/\s+/).length < 3) return null;
+  } else {
+    return null;
+  }
+
+  if (!Number.isInteger(prNumber) || prNumber <= 0) return null;
+  return (
+    (blockers.blockers ?? []).find(
+      (entry) =>
+        entry.prNumber === prNumber &&
+        entry.candidate === candidate &&
+        entry.status === 'open' &&
+        entry.severity === 'release-blocking',
+    ) ?? null
+  );
+}
+
 async function candidateRelationship(control, freeze) {
   const candidateSha = control.candidateCommitSha;
   if (!/^[0-9a-f]{40}$/i.test(candidateSha)) fail('candidateCommitSha must be a full git SHA');
@@ -171,7 +220,17 @@ async function validateContract() {
   }
 
   const relation = await candidateRelationship(control, freeze);
-  if (control.prePromotionRequirements?.requiredProductDriftFromCandidate === false && relation.productDrift.length > 0) {
+  const authorizedReleaseBlocker =
+    relation.productDrift.length > 0
+      ? await currentAuthorizedReleaseBlocker(blockers, candidate)
+      : null;
+  relation.authorizedReleaseBlockerPr = authorizedReleaseBlocker?.prNumber ?? null;
+
+  if (
+    control.prePromotionRequirements?.requiredProductDriftFromCandidate === false &&
+    relation.productDrift.length > 0 &&
+    !authorizedReleaseBlocker
+  ) {
     fail(`protected product drift detected after candidate freeze: ${relation.productDrift.join(', ')}`);
   }
 
@@ -233,6 +292,7 @@ function buildReport(contract) {
     productFreeze: {
       active: true,
       protectedProductDrift: relation.productDrift,
+      authorizedReleaseBlockerPr: relation.authorizedReleaseBlockerPr,
       openReleaseBlockers: openBlockers.length,
     },
     rcEvidence: Object.fromEntries(
@@ -295,6 +355,7 @@ async function writeReport(report) {
       '',
       `Open release blockers: **${report.productFreeze.openReleaseBlockers}**`,
       `Protected product drift: **${report.productFreeze.protectedProductDrift.length}**`,
+      `Authorized release-blocker PR: **${report.productFreeze.authorizedReleaseBlockerPr ?? 'none'}**`,
       '',
       ...(report.promotion.blockers.length
         ? ['## Promotion blockers', '', ...report.promotion.blockers.map((item) => `- \`${item}\``), '']

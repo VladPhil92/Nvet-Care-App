@@ -130,12 +130,11 @@ jobs:
 
           echo 'RC_STAGING_PREFLIGHT_CURRENT=true' >> "$GITHUB_ENV"
 
-      - name: Enforce machine-verifiable RC gates
+      - name: Enforce provider-independent technical RC gates
         id: machine
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          RC_ENFORCE: 'true'
-        run: node scripts/verify-release-candidate-readiness.mjs --runtime --machine-only
+        run: node scripts/verify-technical-readiness.mjs
 
       - name: Publish full RC report without masking operator blockers
         id: report
@@ -166,8 +165,8 @@ jobs:
             echo "- ctgone.com → Nvet backend connectivity: $(outcome_label '${{ steps.ctg.outcome }}')"
             echo "- Railway staging session: $(outcome_label '${{ steps.staging_inputs.outcome }}')"
             echo "- Isolated staging candidate/identity/discovery: $(outcome_label '${{ steps.staging.outcome }}')"
-            echo "- Machine-verifiable RC gates: $(outcome_label '${{ steps.machine.outcome }}')"
+            echo "- Provider-independent technical gates: $(outcome_label '${{ steps.machine.outcome }}')"
             echo "- Full RC evidence report: $(outcome_label '${{ steps.report.outcome }}')"
             echo ''
-            echo '> Automatic chain: CI → {isolated staging, exact-candidate recovery rehearsal} → TRANSFER application certification → convergence. Production convergence now also requires Railway provider metadata to match the revision actually served by the public backend. External provider backup/restore and real-funds evidence remain separate promotion gates.'
+            echo '> Engineering convergence is independent from Bold/TRANSFER operator evidence. Payment-provider evidence remains visible and fail-closed for release promotion, but does not turn a healthy technical build red while contracting/onboarding is pending.'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -2,8 +2,10 @@ import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { ActivityIndicator, View, StyleSheet, Text } from 'react-native'
 
+import NvetLogo from '../components/brand/NvetLogo'
 import type { RootStackParamList } from './types'
 import { useCurrentUserQuery } from '../hooks/queries/useMobileQueries'
+import { Colors, FontSize, Spacing, Typography } from '../theme/tokens'
 
 import AuthNavigator from './AuthNavigator'
 import ClientNavigator from './ClientNavigator'
@@ -16,30 +18,22 @@ const Stack = createNativeStackNavigator<RootStackParamList>()
  * RootNavigator — máquina de estados de navegación principal.
  *
  * Estados posibles:
- *  1. Cargando (`isPending` && primera query): splash con spinner
+ *  1. Cargando (`isPending` && primera query): splash canónico de Nvet Care
  *  2. No autenticado: AuthStack (Login/Register)
- *  3. Autenticado como CLIENT: ClientNavigator (bottom tabs Sage)
- *  4. Autenticado como VET: VetNavigator (bottom tabs Gold)
+ *  3. Autenticado como CLIENT: ClientNavigator
+ *  4. Autenticado como VET: VetNavigator
  *  5. Autenticado como ADMIN/SUPERADMIN: ClientNavigator por ahora
  *     (la operación administrativa vive en el dashboard web).
  *
  * El rol persistido por el backend es la única autoridad para decidir el
- * dashboard. Un VET ya no puede caer accidentalmente en la interfaz CLIENT
- * por un estado local de "modo".
+ * dashboard. El cliente móvil no remapea ni degrada privilegios.
  */
-
-const COLORS = {
-  sage: '#5B7553',
-  bg: '#FAFAF7',
-  text: '#1F2A1B',
-  muted: '#5F6B5A',
-} as const
-
 function SplashScreen() {
   return (
     <View style={styles.splash}>
+      <NvetLogo width={170} height={85} />
       <Text style={styles.brand}>Nvet Care</Text>
-      <ActivityIndicator size="large" color={COLORS.sage} style={styles.spinner} />
+      <ActivityIndicator size="large" color={Colors.sage} style={styles.spinner} />
       <Text style={styles.subtitle}>Cargando…</Text>
     </View>
   )
@@ -99,20 +93,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bg,
+    backgroundColor: Colors.canvas,
   },
   brand: {
-    fontSize: 32,
+    fontFamily: Typography.sans,
+    fontSize: FontSize.h1,
     fontWeight: '700',
-    color: COLORS.sage,
-    letterSpacing: 1,
-    marginBottom: 24,
+    color: Colors.dark,
+    letterSpacing: 0.2,
+    marginTop: -Spacing.sm,
+    marginBottom: Spacing.xxl,
   },
   spinner: {
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   subtitle: {
-    color: COLORS.muted,
-    fontSize: 14,
+    fontFamily: Typography.sans,
+    color: Colors.inkMuted,
+    fontSize: FontSize.body,
   },
 })
