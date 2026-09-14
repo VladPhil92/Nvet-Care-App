@@ -127,9 +127,6 @@ async function validateContract() {
   }
 
   const openReleaseBlockers = (blockers.blockers ?? []).filter((entry) => entry.status === 'open');
-  if (openReleaseBlockers.length > 0) {
-    fail(`release blocker registry contains ${openReleaseBlockers.length} open blocker(s)`);
-  }
 
   const candidateSha = phase28.candidateCommitSha;
   if (!/^[0-9a-f]{40}$/i.test(candidateSha)) fail('Phase 28 candidate SHA must be a full git SHA');
@@ -141,7 +138,6 @@ async function validateContract() {
     ? await git(['diff', '--name-only', candidateSha, 'HEAD', '--', ...protectedPaths])
     : '';
   const productDrift = drift ? drift.split('\n').filter(Boolean) : [];
-  if (productDrift.length > 0) fail(`protected product drift detected: ${productDrift.join(', ')}`);
 
   let tagTarget = null;
   try {
@@ -156,11 +152,23 @@ async function validateContract() {
     if (tagTarget !== candidateSha) fail(`candidate tag targets ${tagTarget}, expected ${candidateSha}`);
   }
 
-  return { control, phase28, freeze, blockers, beta, operatorClosure, globalReadiness, candidateSha, tagTarget };
+  return {
+    control,
+    phase28,
+    freeze,
+    blockers,
+    beta,
+    operatorClosure,
+    globalReadiness,
+    candidateSha,
+    tagTarget,
+    openReleaseBlockers,
+    productDrift,
+  };
 }
 
 function buildReport(ctx) {
-  const { control, beta, candidateSha, tagTarget } = ctx;
+  const { control, beta, candidateSha, tagTarget, openReleaseBlockers, productDrift } = ctx;
   const blockers = [];
   const evidence = {};
 
@@ -169,6 +177,11 @@ function buildReport(ctx) {
     evidence[key] = { status: entry.status, evidence: entry.evidence ?? null };
     if (entry.status !== 'verified') blockers.push(`beta.requiredEvidence.${key}`);
   }
+
+  for (const entry of openReleaseBlockers) {
+    blockers.push(`release-blocker:${entry.prNumber ?? 'unknown'}`);
+  }
+  if (productDrift.length > 0) blockers.push('protected-product-drift');
 
   const allEvidenceVerified = blockers.length === 0;
   const rcPromoted = beta.requiredEvidence.rcPromoted.status === 'verified';
@@ -189,6 +202,10 @@ function buildReport(ctx) {
       providerGate: control.operatorActivation.providerGate,
       bookingGate: control.operatorActivation.bookingGate,
       blockers,
+    },
+    productFreeze: {
+      openReleaseBlockers: openReleaseBlockers.map((entry) => entry.prNumber),
+      protectedProductDrift: productDrift,
     },
     rcPromotion: {
       projectedVerified: rcPromoted,
