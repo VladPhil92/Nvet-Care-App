@@ -6,6 +6,7 @@ on:
       - feat/dependency-vulnerability-remediation-phase39
     paths:
       - 'package.json'
+      - 'package-lock.json'
       - 'backend/package.json'
       - 'mobile/package.json'
       - 'dashboard/package.json'
@@ -40,7 +41,12 @@ jobs:
         run: |
           set -euo pipefail
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          npm update --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Verify canonical lockfile installs cleanly
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Show dependency diff summary
         run: git diff --stat -- package-lock.json
