@@ -1,0 +1,67 @@
+name: Nvet Production Observability Phase 36
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/src/operations/**'
+      - 'backend/src/health/**'
+      - 'backend/src/beta/beta-evidence.service.ts'
+      - 'backend/prisma/schema.prisma'
+      - 'mobile/App.tsx'
+      - 'mobile/src/services/api.ts'
+      - 'mobile/src/services/auth.service.ts'
+      - 'mobile/src/services/ctg-federation.service.ts'
+      - 'mobile/src/services/runtime-telemetry.service.ts'
+      - 'docs/production/PHASE_36_PRODUCTION_OBSERVABILITY_REAL_BETA.json'
+      - 'docs/production/ANDROID_PLAY_COMPLIANCE.json'
+      - 'docs/production/GOOGLE_PLAY_DATA_SAFETY.md'
+      - 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md'
+      - 'scripts/verify-production-observability-phase36.mjs'
+      - '.github/workflows/production-observability-phase36.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/operations/**'
+      - 'backend/src/health/**'
+      - 'backend/src/beta/beta-evidence.service.ts'
+      - 'backend/prisma/schema.prisma'
+      - 'mobile/App.tsx'
+      - 'mobile/src/services/api.ts'
+      - 'mobile/src/services/auth.service.ts'
+      - 'mobile/src/services/ctg-federation.service.ts'
+      - 'mobile/src/services/runtime-telemetry.service.ts'
+      - 'docs/production/PHASE_36_PRODUCTION_OBSERVABILITY_REAL_BETA.json'
+      - 'docs/production/ANDROID_PLAY_COMPLIANCE.json'
+      - 'docs/production/GOOGLE_PLAY_DATA_SAFETY.md'
+      - 'docs/production/NVET_PRIVACY_POLICY_SOURCE.md'
+      - 'scripts/verify-production-observability-phase36.mjs'
+      - '.github/workflows/production-observability-phase36.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-observability-phase36-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify Phase 36 observability contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+
+      - name: Syntax-check verifier
+        run: node --check scripts/verify-production-observability-phase36.mjs
+
+      - name: Verify production observability and real-beta boundaries
+        run: node scripts/verify-production-observability-phase36.mjs
