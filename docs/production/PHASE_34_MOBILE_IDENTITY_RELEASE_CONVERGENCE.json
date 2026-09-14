@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "phase": 34,
+  "program": "mobile-identity-release-convergence",
+  "candidate": "1.0.0-rc.2",
+  "prerequisitePhase": 33,
+  "policy": {
+    "failClosed": true,
+    "runtimeCodeChangesAllowed": true,
+    "productionDatabaseMutationAuthorized": false,
+    "paymentsAreEngineeringBlocker": false,
+    "paymentsRemainCommercialReleaseGate": true,
+    "publicStoreReleaseAuthorized": false,
+    "commercialLaunchAuthorized": false
+  },
+  "android": {
+    "applicationId": "com.nvetcare",
+    "canonicalProductionApi": "https://backend-production-a476.up.railway.app/api",
+    "cleartextTrafficAllowed": false,
+    "applicationBackupAllowed": false,
+    "federationCallbackScheme": "nvetcare",
+    "federationCallbackHost": "auth",
+    "federationCallbackPath": "/ctgone/callback"
+  },
+  "identity": {
+    "nvetIsRoleAuthority": true,
+    "sameNvetUserAcrossWebAndMobile": true,
+    "preserveExistingRole": true,
+    "preserveSuperadmin": true,
+    "roleMayBeDerivedFromEmail": false,
+    "roleMayBeDerivedFromCtgIdentity": false,
+    "ctgUserIdMustRemainUnique": true,
+    "nativeFederation": {
+      "authorizationCodeRequired": true,
+      "pkceRequired": true,
+      "pkceMethod": "S256",
+      "stateRequired": true,
+      "oneTimeCodeRequired": true,
+      "maxAuthorizationCodeTtlSeconds": 300,
+      "tokensInRedirectForbidden": true,
+      "passwordsInRedirectForbidden": true,
+      "serverToServerExchangeRequired": true
+    }
+  },
+  "brand": {
+    "fontFamily": "DM Sans",
+    "colors": {
+      "blueDeep": "#0D1B2A",
+      "greenPrimary": "#34B27A",
+      "orangeAccent": "#FF8A3D",
+      "canvas": "#F2F4F7",
+      "surface": "#FFFFFF"
+    },
+    "legacyColorsForbiddenInPrimaryAuthSurfaces": [
+      "#5B7553",
+      "#C9A961",
+      "#F5F1E8",
+      "#1F2A1B"
+    ]
+  },
+  "identityMatrix": [
+    "web-account-mobile-login-same-user-id",
+    "mobile-account-web-login-same-user-id",
+    "ctg-new-user-single-nvet-provision",
+    "ctg-existing-plus-nvet-existing-link-no-duplicate",
+    "superadmin-role-preserved",
+    "normal-user-cannot-elevate-via-ctg",
+    "email-mismatch-rejected",
+    "ctg-user-id-collision-rejected"
+  ],
+  "authoritativeInputs": [
+    "mobile/android/app/build.gradle",
+    "mobile/android/app/src/main/AndroidManifest.xml",
+    "mobile/src/services/auth.service.ts",
+    "mobile/src/theme/tokens.ts",
+    "dashboard/src/index.css",
+    "dashboard/src/theme/tokens.ts",
+    "backend/src/auth/services/ctg-identity-link.service.ts",
+    "docs/production/RELEASE_BLOCKERS.json"
+  ],
+  "classification": {
+    "engineeringReady": "ENGINEERING_READY",
+    "externalCommercialBlocked": "BLOCKED_EXTERNAL_COMMERCIAL",
+    "technicalFailure": "TECHNICAL_FAILURE"
+  }
+}
