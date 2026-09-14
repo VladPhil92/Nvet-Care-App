@@ -61,7 +61,9 @@ export class CtgIdentityLinkService {
     }
 
     if (!claims.email) {
-      throw new UnauthorizedException("La identidad CTG One no contiene un correo verificable");
+      throw new UnauthorizedException(
+        "La identidad CTG One no contiene un correo verificable",
+      );
     }
 
     const user = await this.prisma.user.findUnique({
@@ -79,7 +81,9 @@ export class CtgIdentityLinkService {
       throw new UnauthorizedException("Sesión Nvet inválida");
     }
     if (!user.isActive) {
-      throw new ForbiddenException("Esta cuenta está desactivada. Contacta soporte.");
+      throw new ForbiddenException(
+        "Esta cuenta está desactivada. Contacta soporte.",
+      );
     }
 
     const nvetEmail = user.email.trim().toLowerCase();
@@ -107,7 +111,8 @@ export class CtgIdentityLinkService {
 
     if (user.ctgUserId && user.ctgUserId !== claims.sub) {
       throw new ConflictException({
-        message: "Esta cuenta Nvet Care ya está vinculada a otra identidad CTG One.",
+        message:
+          "Esta cuenta Nvet Care ya está vinculada a otra identidad CTG One.",
         error: "NVET_ACCOUNT_ALREADY_LINKED",
       });
     }
@@ -118,7 +123,8 @@ export class CtgIdentityLinkService {
     });
     if (existingOwner && existingOwner.id !== user.id) {
       throw new ConflictException({
-        message: "Esta identidad CTG One ya está vinculada a otra cuenta Nvet Care.",
+        message:
+          "Esta identidad CTG One ya está vinculada a otra cuenta Nvet Care.",
         error: "CTG_IDENTITY_ALREADY_LINKED",
       });
     }
@@ -135,7 +141,8 @@ export class CtgIdentityLinkService {
           error.code === "P2002"
         ) {
           throw new ConflictException({
-            message: "Esta identidad CTG One ya está vinculada a otra cuenta Nvet Care.",
+            message:
+              "Esta identidad CTG One ya está vinculada a otra cuenta Nvet Care.",
             error: "CTG_IDENTITY_ALREADY_LINKED",
           });
         }
@@ -154,7 +161,9 @@ export class CtgIdentityLinkService {
       severity: AuditSeverity.INFO,
       targetType: "User",
       targetId: user.id,
-      reason: user.ctgUserId ? "ctg_identity_link_confirmed" : "ctg_identity_linked",
+      reason: user.ctgUserId
+        ? "ctg_identity_link_confirmed"
+        : "ctg_identity_linked",
       metadata: {
         identityProvider: "ctg_one_supabase",
         ctgUserId: claims.sub,
