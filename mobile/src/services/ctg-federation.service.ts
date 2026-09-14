@@ -1,6 +1,7 @@
 import { Linking } from 'react-native'
 import { secureStorage } from '../lib/secureStorage'
 import authService, { type AuthResponse } from './auth.service'
+import runtimeTelemetry from './runtime-telemetry.service'
 
 const CTG_ONE_ORIGIN = 'https://ctgone.com'
 const AUTHORIZE_URL = `${CTG_ONE_ORIGIN}/api/nvetcareapp/mobile/authorize`
@@ -39,6 +40,8 @@ class CtgFederationService {
       `&state=${encode(request.state)}` +
       `&redirect_uri=${encode(CTG_FEDERATION_REDIRECT_URI)}`
 
+    runtimeTelemetry.emit('CTG_FEDERATION_STARTED')
+
     // Do not probe HTTPS handlers with Linking.canOpenURL(). On Android 11+
     // package visibility can make that probe return false even when the system
     // browser can open the URL. openURL() delegates directly to the OS; a real
@@ -64,6 +67,7 @@ class CtgFederationService {
     }
 
     const verifier = await secureStorage.consumeCtgFederationRequest(state)
+    runtimeTelemetry.emit('CTG_FEDERATION_CALLBACK_RECEIVED')
     return { code, verifier }
   }
 
@@ -71,40 +75,73 @@ class CtgFederationService {
     pending: PendingCtgFederationExchange,
     twoFactorCode?: string,
   ): Promise<AuthResponse> {
-    const response = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'Cache-Control': 'no-store',
-      },
-      body: JSON.stringify({
-        code: pending.code,
-        codeVerifier: pending.verifier,
-        redirectUri: CTG_FEDERATION_REDIRECT_URI,
-        twoFactorCode: twoFactorCode?.trim() || undefined,
-      }),
-    })
+    const startedAt = Date.now()
 
-    const data = await response.json().catch(() => null)
-    if (!response.ok) {
-      const serverCode = typeof data?.error === 'string' ? data.error : 'FEDERATION_EXCHANGE_FAILED'
-      const message =
-        typeof data?.message === 'string'
-          ? data.message
-          : 'No se pudo completar el acceso con CTG One.'
-      throw new CtgFederationError(serverCode, message, response.status)
-    }
+    try {
+      const response = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'Cache-Control': 'no-store',
+        },
+        body: JSON.stringify({
+          code: pending.code,
+          codeVerifier: pending.verifier,
+          redirectUri: CTG_FEDERATION_REDIRECT_URI,
+          twoFactorCode: twoFactorCode?.trim() || undefined,
+        }),
+      })
 
-    if (!data?.accessToken || !data?.refreshToken || !data?.user?.id) {
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        const serverCode =
+          typeof data?.error === 'string' ? data.error : 'FEDERATION_EXCHANGE_FAILED'
+        const message =
+          typeof data?.message === 'string'
+            ? data.message
+            : 'No se pudo completar el acceso con CTG One.'
+
+        // A TOTP challenge is a continuation of the same valid PKCE exchange,
+        // not a failed federation attempt. The server reservation is released
+        // specifically for this retry path.
+        if (serverCode !== 'TWO_FACTOR_REQUIRED') {
+          runtimeTelemetry.emit('CTG_FEDERATION_EXCHANGE_FAILURE', {
+            durationMs: Date.now() - startedAt,
+            outcomeCode: serverCode,
+          })
+        }
+        throw new CtgFederationError(serverCode, message, response.status)
+      }
+
+      if (!data?.accessToken || !data?.refreshToken || !data?.user?.id) {
+        runtimeTelemetry.emit('CTG_FEDERATION_EXCHANGE_FAILURE', {
+          durationMs: Date.now() - startedAt,
+          outcomeCode: 'INCOMPLETE_FEDERATED_SESSION',
+        })
+        throw new CtgFederationError(
+          'INCOMPLETE_FEDERATED_SESSION',
+          'CTG One devolvió una sesión incompleta.',
+          502,
+        )
+      }
+
+      const session = await authService.acceptFederatedSession(data as AuthResponse)
+      runtimeTelemetry.emit('CTG_FEDERATION_EXCHANGE_SUCCESS', {
+        durationMs: Date.now() - startedAt,
+      })
+      return session
+    } catch (error) {
+      if (error instanceof CtgFederationError) throw error
+      runtimeTelemetry.emit('CTG_FEDERATION_EXCHANGE_FAILURE', {
+        durationMs: Date.now() - startedAt,
+        outcomeCode: 'NETWORK_ERROR',
+      })
       throw new CtgFederationError(
-        'INCOMPLETE_FEDERATED_SESSION',
-        'CTG One devolvió una sesión incompleta.',
-        502,
+        'FEDERATION_NETWORK_ERROR',
+        'No se pudo contactar a CTG One para completar el acceso.',
       )
     }
-
-    return authService.acceptFederatedSession(data as AuthResponse)
   }
 }
 
