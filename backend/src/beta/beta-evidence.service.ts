@@ -8,9 +8,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { AuditAction, AuditSeverity, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import {
+  ALL_BETA_EVIDENCE_GATES,
   BETA_EVIDENCE_GATES,
   BETA_EVIDENCE_PROGRAM,
   BETA_EVIDENCE_TARGET_TYPE,
+  PHASE_36_OBSERVATION_EVIDENCE_GATES,
   BetaEvidenceEventType,
   BetaEvidenceGate,
   BetaEvidenceStatus,
@@ -151,42 +153,9 @@ export class BetaEvidenceService {
 
   async getPromotionSummary() {
     const history = await this.getHistory();
-    const gates = BETA_EVIDENCE_GATES.map((gate) => {
-      const items = history.evidence.filter((item) => item.gate === gate);
-      const productionItems = items.filter(
-        (item) => item.environment === "production",
-      );
-      const conflictCount = productionItems.filter(
-        (item) => item.status === "CONFLICTED",
-      ).length;
-      const expiredCount = productionItems.filter(
-        (item) => item.status === "EXPIRED",
-      ).length;
-      const approved = productionItems.filter(
-        (item) => item.status === "APPROVED",
-      );
-      const stagingApprovedEvidenceCount = items.filter(
-        (item) => item.environment === "staging" && item.status === "APPROVED",
-      ).length;
-      const status: BetaGateStatus =
-        conflictCount > 0
-          ? "CONFLICTED"
-          : approved.length > 0
-            ? "VERIFIED"
-            : "PENDING";
-
-      return {
-        gate,
-        status,
-        requiredEnvironment: "production" as const,
-        approvedEvidenceCount: approved.length,
-        stagingApprovedEvidenceCount,
-        conflictCount,
-        expiredCount,
-        latestApprovedEvidenceId: approved.at(-1)?.evidenceId ?? null,
-      } as const;
-    });
-
+    const gates = BETA_EVIDENCE_GATES.map((gate) =>
+      this.summarizeGate(history.evidence, gate),
+    );
     const verifiedGates = gates.filter(
       (gate) => gate.status === "VERIFIED",
     ).length;
@@ -207,6 +176,43 @@ export class BetaEvidenceService {
         BETA_EVIDENCE_GATES.length - verifiedGates - conflictedGates,
       conflictedGates,
       eligibleForOperatorActivation,
+      observationEvidenceExcludedFromActivation: true,
+      commercialLaunchAuthorized: false,
+      gates,
+      generatedAt: new Date().toISOString(),
+    } as const;
+  }
+
+  async getObservationSummary() {
+    const history = await this.getHistory();
+    const gates = PHASE_36_OBSERVATION_EVIDENCE_GATES.map((gate) =>
+      this.summarizeGate(history.evidence, gate),
+    );
+    const verifiedGates = gates.filter(
+      (gate) => gate.status === "VERIFIED",
+    ).length;
+    const conflictedGates = gates.filter(
+      (gate) => gate.status === "CONFLICTED",
+    ).length;
+
+    return {
+      phase: 36,
+      program: "production-observability-real-beta-validation",
+      ledger: "audit_logs",
+      appendOnly: true,
+      requiredEnvironment: "production" as const,
+      totalGates: PHASE_36_OBSERVATION_EVIDENCE_GATES.length,
+      verifiedGates,
+      pendingGates:
+        PHASE_36_OBSERVATION_EVIDENCE_GATES.length -
+        verifiedGates -
+        conflictedGates,
+      conflictedGates,
+      eligibleForPostBetaReview:
+        verifiedGates === PHASE_36_OBSERVATION_EVIDENCE_GATES.length &&
+        conflictedGates === 0,
+      requiredForInitialBetaActivation: false,
+      automaticTelemetryDoesNotApproveEvidence: true,
       commercialLaunchAuthorized: false,
       gates,
       generatedAt: new Date().toISOString(),
@@ -219,6 +225,45 @@ export class BetaEvidenceService {
       throw new NotFoundException("Beta evidence record not found.");
     }
     return this.deriveEvidence(events);
+  }
+
+  private summarizeGate(
+    evidence: DerivedBetaEvidence[],
+    gate: BetaEvidenceGate,
+  ) {
+    const items = evidence.filter((item) => item.gate === gate);
+    const productionItems = items.filter(
+      (item) => item.environment === "production",
+    );
+    const conflictCount = productionItems.filter(
+      (item) => item.status === "CONFLICTED",
+    ).length;
+    const expiredCount = productionItems.filter(
+      (item) => item.status === "EXPIRED",
+    ).length;
+    const approved = productionItems.filter(
+      (item) => item.status === "APPROVED",
+    );
+    const stagingApprovedEvidenceCount = items.filter(
+      (item) => item.environment === "staging" && item.status === "APPROVED",
+    ).length;
+    const status: BetaGateStatus =
+      conflictCount > 0
+        ? "CONFLICTED"
+        : approved.length > 0
+          ? "VERIFIED"
+          : "PENDING";
+
+    return {
+      gate,
+      status,
+      requiredEnvironment: "production" as const,
+      approvedEvidenceCount: approved.length,
+      stagingApprovedEvidenceCount,
+      conflictCount,
+      expiredCount,
+      latestApprovedEvidenceId: approved.at(-1)?.evidenceId ?? null,
+    } as const;
   }
 
   private async decide(
@@ -414,7 +459,7 @@ export class BetaEvidenceService {
     if (raw.schemaVersion !== 1 || raw.program !== BETA_EVIDENCE_PROGRAM) {
       return null;
     }
-    if (!BETA_EVIDENCE_GATES.includes(raw.gate as BetaEvidenceGate)) {
+    if (!ALL_BETA_EVIDENCE_GATES.includes(raw.gate as BetaEvidenceGate)) {
       return null;
     }
     if (
