@@ -18,6 +18,7 @@ import NvetLogo from '../../components/brand/NvetLogo'
 import type { LoginScreenProps } from '../../navigation/types'
 import { useLoginMutation } from '../../hooks/queries/useMobileMutations'
 import { getErrorMessage } from '../../services/api'
+import ctgFederationService from '../../services/ctg-federation.service'
 import {
   BorderRadius,
   Colors,
@@ -29,16 +30,16 @@ import {
 /**
  * LoginScreen — pantalla de acceso production-grade.
  *
- * La marca, paleta y escala tipográfica provienen de los mismos tokens que la
- * experiencia web. El login por correo/contraseña usa el mismo backend Nvet,
- * por lo que una cuenta creada en web y una cuenta usada en Android son la
- * misma identidad, siempre que el build de producción apunte al API canónico.
+ * Correo/contraseña usa el backend canónico de Nvet. "Continuar con CTG One"
+ * abre un authorization-code + PKCE flow; ningún bearer token viaja en el
+ * deep link y la sesión resultante termina en el mismo Keystore nativo.
  */
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const { t } = useI18n()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [ctgSubmitting, setCtgSubmitting] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<{
     email?: string
     password?: string
@@ -72,7 +73,24 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     )
   }, [validate, email, password, loginMutation, t])
 
+  const handleCtgOne = useCallback(async () => {
+    setCtgSubmitting(true)
+    try {
+      await ctgFederationService.start()
+    } catch (error) {
+      Alert.alert(
+        'CTG One',
+        error instanceof Error
+          ? error.message
+          : 'No se pudo iniciar el acceso con CTG One.',
+      )
+    } finally {
+      setCtgSubmitting(false)
+    }
+  }, [])
+
   const isSubmitting = loginMutation.isPending
+  const busy = isSubmitting || ctgSubmitting
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -112,7 +130,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 autoComplete="email"
                 textContentType="emailAddress"
                 returnKeyType="next"
-                editable={!isSubmitting}
+                editable={!busy}
                 accessibilityLabel="Correo electrónico"
                 accessibilityHint="Ingresa tu correo registrado"
               />
@@ -150,7 +168,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                   textContentType="password"
                   returnKeyType="done"
                   onSubmitEditing={handleSubmit}
-                  editable={!isSubmitting}
+                  editable={!busy}
                   accessibilityLabel="Contraseña"
                 />
                 <Pressable
@@ -182,20 +200,47 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             <Pressable
               testID="login-submit"
               onPress={handleSubmit}
-              disabled={isSubmitting}
+              disabled={busy}
               style={({ pressed }) => [
                 styles.submitBtn,
-                isSubmitting && styles.submitBtnDisabled,
-                pressed && !isSubmitting && styles.submitBtnPressed,
+                busy && styles.submitBtnDisabled,
+                pressed && !busy && styles.submitBtnPressed,
               ]}
               accessibilityRole="button"
               accessibilityLabel={t('auth.login.submit')}
-              accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
+              accessibilityState={{ disabled: busy, busy: isSubmitting }}
             >
               {isSubmitting ? (
                 <ActivityIndicator color={Colors.inkInv} />
               ) : (
                 <Text style={styles.submitText}>{t('auth.login.submit')}</Text>
+              )}
+            </Pressable>
+
+            <View style={styles.dividerRow} accessibilityElementsHidden>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>o</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Pressable
+              testID="ctg-one-login"
+              onPress={() => void handleCtgOne()}
+              disabled={busy}
+              style={({ pressed }) => [
+                styles.ctgBtn,
+                busy && styles.submitBtnDisabled,
+                pressed && !busy && styles.ctgBtnPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Continuar con CTG One"
+              accessibilityHint="Abre CTG One para validar tu identidad y volver a Nvet Care"
+              accessibilityState={{ disabled: busy, busy: ctgSubmitting }}
+            >
+              {ctgSubmitting ? (
+                <ActivityIndicator color={Colors.dark} />
+              ) : (
+                <Text style={styles.ctgText}>Continuar con CTG One</Text>
               )}
             </Pressable>
 
@@ -294,9 +339,7 @@ const styles = StyleSheet.create({
     color: Colors.ink,
     paddingVertical: 12,
   },
-  inputError: {
-    borderColor: Colors.err,
-  },
+  inputError: { borderColor: Colors.err },
   showToggle: {
     fontFamily: Typography.sans,
     color: Colors.sageText,
@@ -328,15 +371,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  submitBtnDisabled: {
-    opacity: 0.6,
-  },
-  submitBtnPressed: {
-    backgroundColor: Colors.sageDark,
-  },
+  submitBtnDisabled: { opacity: 0.6 },
+  submitBtnPressed: { backgroundColor: Colors.sageDark },
   submitText: {
     fontFamily: Typography.sans,
     color: Colors.inkInv,
+    fontSize: FontSize.body,
+    fontWeight: '700',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginVertical: Spacing.lg,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.line },
+  dividerText: {
+    fontFamily: Typography.sans,
+    fontSize: FontSize.small,
+    color: Colors.inkMuted,
+  },
+  ctgBtn: {
+    minHeight: 48,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.lineHi,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctgBtnPressed: { backgroundColor: Colors.canvas },
+  ctgText: {
+    fontFamily: Typography.sans,
+    color: Colors.dark,
     fontSize: FontSize.body,
     fontWeight: '700',
   },
