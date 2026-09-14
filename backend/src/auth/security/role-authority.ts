@@ -7,6 +7,8 @@ import { UserRole } from "@prisma/client";
  * cannot diverge depending on whether an endpoint uses a decorator or an
  * inline ownership predicate.
  */
-export function hasAdminAuthority(role: UserRole | string | undefined): boolean {
+export function hasAdminAuthority(
+  role: UserRole | string | undefined,
+): boolean {
   return role === UserRole.ADMIN || role === UserRole.SUPERADMIN;
 }
