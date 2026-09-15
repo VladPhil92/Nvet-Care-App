@@ -5,6 +5,7 @@ import appointmentService, {
   type CreateAppointmentData,
 } from '../services/appointment.service'
 import liveLocationService from '../services/live-location.service'
+import { savePendingPaymentRecovery } from './bookingPaymentRecovery'
 import { invalidateAfterBooking, qk } from './queryKeys'
 import {
   BOOK_APPOINTMENT_MUTATION_KEY,
@@ -63,12 +64,30 @@ export function registerDurableMutationDefaults(queryClient: QueryClient): void 
       return appointmentService.createAppointment(variables)
     },
 
-    onSuccess: async (appointment: Appointment) => {
+    onSuccess: async (
+      appointment: Appointment,
+      variables: CreateAppointmentData,
+    ) => {
       queryClient.setQueryData(
         qk.appointments.detail(appointment.id),
         appointment,
       )
       await invalidateAfterBooking(queryClient, appointment.id)
+
+      // A hydrated mutation no longer has the BookAppointmentScreen promise
+      // continuation that normally starts payment. Persist the financial
+      // handoff instead of charging in the background: the user must explicitly
+      // resume payment from the appointment detail screen.
+      if (variables.idempotencyKey) {
+        await savePendingPaymentRecovery({
+          appointmentId: appointment.id,
+          paymentMethod: variables.paymentMethod,
+          amountCop: variables.amount,
+          amountCtg: variables.amountCtg,
+          idempotencyKey: variables.idempotencyKey,
+          createdAt: new Date().toISOString(),
+        })
+      }
     },
   })
 }
