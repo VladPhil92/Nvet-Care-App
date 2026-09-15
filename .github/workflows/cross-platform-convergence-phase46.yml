@@ -50,7 +50,7 @@ jobs:
         run: npm --workspace mobile run typecheck
 
       - name: Mobile unit tests
-        run: npm --workspace mobile run test:ci -- --runInBand
+        run: npm --workspace mobile run test:ci
 
       - name: Dashboard production build
         run: npm --workspace dashboard run build
