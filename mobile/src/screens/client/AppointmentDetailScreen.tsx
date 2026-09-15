@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -20,7 +20,13 @@ import {
   useUpdateAppointmentStatusMutation,
   useAddClinicalNotesMutation,
   useCreateReviewMutation,
+  useProcessPaymentMutation,
 } from '../../hooks/queries/useMobileMutations'
+import {
+  clearPendingPaymentRecovery,
+  getPendingPaymentRecovery,
+  type PendingPaymentRecovery,
+} from '../../lib/bookingPaymentRecovery'
 import { useAuthStore } from '../../stores/useAuthStore'
 import {
   formatAppointmentDate,
@@ -67,6 +73,7 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
   const updateStatusMutation = useUpdateAppointmentStatusMutation()
   const clinicalNotesMutation = useAddClinicalNotesMutation()
   const createReviewMutation = useCreateReviewMutation()
+  const payMutation = useProcessPaymentMutation()
 
   const [diagnosis, setDiagnosis] = useState('')
   const [treatment, setTreatment] = useState('')
@@ -75,9 +82,36 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
   const [comment, setComment] = useState('')
   const [showNotes, setShowNotes] = useState(false)
   const [showReview, setShowReview] = useState(false)
+  const [paymentRecovery, setPaymentRecovery] =
+    useState<PendingPaymentRecovery | null>(null)
 
   const apt = query.data
   const status: AppointmentStatus = apt?.status ?? 'PENDING'
+
+  useEffect(() => {
+    let active = true
+
+    getPendingPaymentRecovery(appointmentId)
+      .then((recovery) => {
+        if (active) setPaymentRecovery(recovery)
+      })
+      .catch(() => {
+        if (active) setPaymentRecovery(null)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [appointmentId])
+
+  useEffect(() => {
+    if (!apt || !paymentRecovery) return
+
+    if (status !== 'PENDING' || Boolean(apt.transaction)) {
+      setPaymentRecovery(null)
+      void clearPendingPaymentRecovery(appointmentId).catch(() => undefined)
+    }
+  }, [apt, appointmentId, paymentRecovery, status])
 
   const handleCancel = () => {
     Alert.alert(
@@ -93,6 +127,51 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
               { id: appointmentId },
               { onSuccess: () => navigation.goBack() },
             ),
+        },
+      ],
+    )
+  }
+
+  const handleResumePayment = () => {
+    if (!paymentRecovery) return
+
+    Alert.alert(
+      'Completar pago',
+      `La reserva se recuperó después de la desconexión. ¿Deseas continuar ahora con el pago de ${formatCOP(paymentRecovery.amountCop)} mediante ${paymentRecovery.paymentMethod}?`,
+      [
+        { text: 'Ahora no', style: 'cancel' },
+        {
+          text: 'Continuar pago',
+          onPress: async () => {
+            const recovery = paymentRecovery
+            if (!recovery) return
+
+            try {
+              await payMutation.mutateAsync({
+                appointmentId: recovery.appointmentId,
+                paymentMethod: recovery.paymentMethod,
+                amountCop: recovery.amountCop,
+                amountCtg: recovery.amountCtg,
+                idempotencyKey: recovery.idempotencyKey,
+              })
+
+              await clearPendingPaymentRecovery(appointmentId).catch(
+                () => undefined,
+              )
+              setPaymentRecovery(null)
+              Alert.alert(
+                'Pago reanudado',
+                'La operación de pago fue iniciada correctamente. Consulta el estado de la cita para seguir su confirmación.',
+              )
+            } catch (error: any) {
+              Alert.alert(
+                'No pudimos continuar el pago',
+                error?.response?.data?.message ||
+                  error?.message ||
+                  'La reserva sigue guardada. Puedes volver a intentar el pago desde esta pantalla.',
+              )
+            }
+          },
         },
       ],
     )
@@ -129,7 +208,6 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable
           onPress={() => navigation.goBack()}
@@ -156,7 +234,6 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
           </Text>
         ) : apt ? (
           <>
-            {/* Info card */}
             <Card>
               <Text style={styles.serviceName}>{apt.serviceType}</Text>
               <Text style={styles.subtle}>
@@ -198,7 +275,6 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
               ) : null}
             </Card>
 
-            {/* Clinical notes (if already saved) */}
             {(apt.diagnosis || apt.treatment) ? (
               <Card style={{ marginTop: 14 }}>
                 <Text style={styles.sectionTitle}>Notas clínicas</Text>
@@ -217,7 +293,6 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
               </Card>
             ) : null}
 
-            {/* Status timeline */}
             <Card style={{ marginTop: 14 }}>
               <Text style={styles.sectionTitle}>Estado del servicio</Text>
               <View style={{ marginTop: 8 }}>
@@ -225,7 +300,6 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
               </View>
             </Card>
 
-            {/* VET actions */}
             {isVet ? (
               <Card style={{ marginTop: 14 }}>
                 <Text style={styles.sectionTitle}>Acciones</Text>
@@ -304,8 +378,23 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
                 ) : null}
               </Card>
             ) : (
-              /* CLIENT actions */
               <>
+                {status === 'PENDING' && paymentRecovery ? (
+                  <Card style={{ marginTop: 14 }}>
+                    <Text style={styles.sectionTitle}>Pago pendiente</Text>
+                    <Text style={[styles.subtle, { marginTop: 6, marginBottom: 12 }]}>
+                      Recuperamos esta reserva después de una interrupción de red. El pago no se ejecutó en segundo plano y requiere tu confirmación.
+                    </Text>
+                    <Button
+                      label="Completar pago"
+                      variant="primary"
+                      fullWidth
+                      loading={payMutation.isPending}
+                      onPress={handleResumePayment}
+                    />
+                  </Card>
+                ) : null}
+
                 {status === 'PENDING' ? (
                   <View style={{ marginTop: 14 }}>
                     <Button
