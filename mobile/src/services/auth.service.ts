@@ -5,6 +5,7 @@ import {
   purgeLegacyPlaintextSession,
   type CachedProfile,
 } from '../lib/secureStorage'
+import { adoptAuthenticatedUser, clearSessionCache } from '../lib/sessionCache'
 import runtimeTelemetry from './runtime-telemetry.service'
 
 export interface LoginCredentials {
@@ -167,6 +168,7 @@ class AuthService {
       refreshToken: data.refreshToken,
     })
     await profileCache.set(data.user as CachedProfile)
+    await adoptAuthenticatedUser(data.user)
     void runtimeTelemetry.flush()
   }
 
@@ -176,6 +178,7 @@ class AuthService {
       profileCache.clear(),
       purgeLegacyPlaintextSession(),
     ])
+    await clearSessionCache()
   }
 
   async login(credentials: LoginCredentials): Promise<AuthResponse>
