@@ -64,6 +64,21 @@ requireText(
   'mobile payment-recovery purge',
 )
 requireText(
+  'mobile/src/lib/sessionCache.ts',
+  'adoptAuthenticatedUser',
+  'canonical authenticated-user adoption helper',
+)
+requireText(
+  'mobile/src/services/auth.service.ts',
+  'await adoptAuthenticatedUser(data.user)',
+  'all successful mobile auth flows adopting canonical client session',
+)
+requireText(
+  'mobile/src/services/auth.service.ts',
+  'await clearSessionCache()',
+  'all mobile auth termination flows clearing client session state',
+)
+requireText(
   'mobile/src/lib/bookingPaymentRecovery.ts',
   'clearAllPendingPaymentRecovery',
   'payment recovery session-boundary API',
@@ -108,6 +123,9 @@ const report = {
   sharedCanonicalQueryRoots: manifest.sharedCanonicalQueryRoots,
   checks: {
     sessionCacheOwnership: failures.every((f) => !f.includes('cache owner')),
+    canonicalMobileAuthBoundary: failures.every(
+      (f) => !f.includes('mobile auth') && !f.includes('authenticated-user adoption'),
+    ),
     logoutCleanup: failures.every((f) => !f.includes('cache cleanup')),
     mobileForegroundConvergence: failures.every((f) => !f.includes('mount reconciliation')),
     financialReplayBoundaryPreserved: failures.every((f) => !f.includes('financial payment mutation')),
