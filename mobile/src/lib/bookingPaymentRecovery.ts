@@ -76,3 +76,11 @@ export async function clearPendingPaymentRecovery(
   delete records[appointmentId]
   await writeRecoveryMap(records)
 }
+
+/**
+ * Payment handoffs are user-scoped. A logout or account switch must never make
+ * one client's pending financial continuation visible to the next session.
+ */
+export async function clearAllPendingPaymentRecovery(): Promise<void> {
+  await AsyncStorage.removeItem(STORAGE_KEY)
+}
