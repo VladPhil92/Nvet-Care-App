@@ -14,7 +14,9 @@ import { queryClient } from './queryClient'
  * - `ReactQueryDevtools` solo en dev (tree-shaken en build de producción).
  */
 
-const APP_VERSION = '1.0.0'
+// Phase 46 deliberately invalidates pre-ownership persisted state so the first
+// authenticated session cannot briefly hydrate another user's legacy cache.
+const APP_VERSION = '1.0.0-phase46-cache-v2'
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
@@ -45,8 +47,7 @@ export function QueryProvider({ children }: QueryProviderProps) {
         },
       }}
       onSuccess={() => {
-        // Hook futuro: notificar a la app que cache fue rehidratada
-        // y que se puede asumir datos disponibles
+        // Session ownership is reconciled by useAuthStore.restoreSession.
       }}
     >
       {children}
