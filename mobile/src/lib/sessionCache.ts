@@ -72,7 +72,13 @@ export async function adoptSessionCacheOwner(userId: string) {
 
   if (currentOwner !== userId) {
     await queryClient.cancelQueries().catch(() => undefined)
-    queryClient.clear()
+    // Clear only the query cache, not queryClient.clear(): this function runs
+    // synchronously inside the login/register mutation's own mutationFn
+    // (authService.persistSession -> adoptAuthenticatedUser). queryClient.clear()
+    // also wipes the mutation cache, which orphans that very in-flight mutation's
+    // observer and stops its onSuccess/setQueryData from ever reaching the UI —
+    // the screen is then stuck showing the login form after a successful login.
+    queryClient.getQueryCache().clear()
     resetUserScopedRuntimeState()
     await purgePersistedUserState()
   }
@@ -98,7 +104,9 @@ export async function adoptAuthenticatedUser<T extends { id: string }>(user: T) 
  */
 export async function clearSessionCache() {
   await queryClient.cancelQueries().catch(() => undefined)
-  queryClient.clear()
+  // See adoptSessionCacheOwner: only the query cache is cleared here so the
+  // in-flight logout mutation's own observer/onSuccess is not orphaned.
+  queryClient.getQueryCache().clear()
   resetUserScopedRuntimeState()
 
   await Promise.all([
