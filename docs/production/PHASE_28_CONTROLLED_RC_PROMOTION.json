@@ -3,7 +3,7 @@
   "phase": 28,
   "program": "controlled-rc-promotion",
   "candidate": "1.0.0-rc.2",
-  "candidateCommitSha": "bee7afd3382a63344e572f0856847db1d63eadac",
+  "candidateCommitSha": "ac38256845ad9228be040e353011b2e7262b5b60",
   "prerequisitePhase": 27,
   "prerequisiteManifest": "docs/production/RELEASE_CANDIDATE_FREEZE.json",
   "policy": {
@@ -55,7 +55,7 @@
   },
   "promotion": {
     "tag": "1.0.0-rc.2",
-    "targetSha": "bee7afd3382a63344e572f0856847db1d63eadac",
+    "targetSha": "ac38256845ad9228be040e353011b2e7262b5b60",
     "confirmationPhrase": "PROMOTE-1.0.0-rc.2",
     "workflow": ".github/workflows/controlled-rc-promotion.yml",
     "evidenceArtifact": ".artifacts/phase28-controlled-rc-promotion.json",

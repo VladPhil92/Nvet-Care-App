@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "phase": 47,
+  "program": "real-test-deployment-handoff",
+  "candidate": "1.0.0-rc.2",
+  "candidateProductSha": "ac38256845ad9228be040e353011b2e7262b5b60",
+  "prerequisitePhase": 46,
+  "policy": {
+    "featureFreezeRemainsActive": true,
+    "newProductFeaturesAllowed": false,
+    "realEvidenceNeverAutoVerified": true,
+    "physicalPilotMayPrecedePlayConsoleClosure": true,
+    "physicalPilotNeverAuthorizesCommercialLaunch": true,
+    "automaticPlayProductionPromotion": false,
+    "commercialLaunchAuthorized": false
+  },
+  "authoritativeInputs": {
+    "phase46": "docs/production/PHASE_46_CROSS_PLATFORM_CONVERGENCE.json",
+    "rcReadiness": "docs/production/RC_READINESS.json",
+    "androidReadiness": "docs/production/ANDROID_PRODUCTION_READINESS.json",
+    "betaReadiness": "docs/production/BETA_CARTAGENA_READINESS.json",
+    "phase28": "docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json",
+    "phase31": "docs/production/PHASE_31_ANDROID_PLAY_INTERNAL_RELEASE.json",
+    "releaseBlockers": "docs/production/RELEASE_BLOCKERS.json",
+    "operatorEvidence": "docs/production/OPERATOR_EVIDENCE_CONTROL.json"
+  },
+  "tracks": {
+    "physicalDevicePilot": {
+      "purpose": "Install a production-signed APK built from the certified candidate SHA on real Android hardware before Play Console closure.",
+      "workflow": ".github/workflows/real-device-pilot-phase47.yml",
+      "minimumDevices": 2,
+      "allowedScope": [
+        "install-and-launch",
+        "authentication-and-session",
+        "ctg-one-federation",
+        "pet-profile",
+        "appointment-read-paths",
+        "account-deletion-readiness",
+        "offline-recovery-and-cache-boundary"
+      ],
+      "excludedUntilTheirOwnGatesClose": [
+        "commercial-launch",
+        "public-store-rollout",
+        "automatic-real-payment",
+        "closed-beta-booking-activation"
+      ]
+    },
+    "playInternal": {
+      "source": "docs/production/ANDROID_PRODUCTION_READINESS.json",
+      "minimumObservationHours": 24,
+      "minimumPhysicalDevices": 2
+    },
+    "operationalClosedBeta": {
+      "source": "docs/production/BETA_CARTAGENA_READINESS.json",
+      "minimumObservationDays": 7,
+      "minimumVerifiedVets": 3,
+      "maximumInitialClients": 50
+    }
+  },
+  "criticalPath": [
+    "physical-signed-apk-pilot",
+    "controlled-real-transfer-evidence",
+    "controlled-rc-promotion",
+    "play-or-beta-operator-configuration",
+    "real-device-and-real-cohort-observation"
+  ],
+  "reporting": {
+    "artifact": ".artifacts/phase47-real-test-deployment-handoff.json",
+    "engineeringReadyState": "ENGINEERING_READY_EXTERNAL_ACTION_REQUIRED"
+  }
+}
