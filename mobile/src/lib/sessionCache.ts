@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { queryClient } from './queryClient'
+import { qk } from './queryKeys'
 import { clearAllPendingPaymentRecovery } from './bookingPaymentRecovery'
 import { useAppointmentStore } from '../stores/useAppointmentStore'
 import { useChatStore } from '../stores/useChatStore'
@@ -79,6 +80,16 @@ export async function adoptSessionCacheOwner(userId: string) {
   await AsyncStorage.setItem(MOBILE_SESSION_OWNER_STORAGE_KEY, userId).catch(
     () => undefined,
   )
+}
+
+/**
+ * Canonical client-side completion step for every authentication mechanism
+ * after the secure auth service has persisted tokens/profile. Password, TOTP,
+ * recovery-code and CTG One federation flows must all cross this boundary.
+ */
+export async function adoptAuthenticatedUser<T extends { id: string }>(user: T) {
+  await adoptSessionCacheOwner(user.id)
+  queryClient.setQueryData(qk.auth.me(), user)
 }
 
 /**
