@@ -61,9 +61,17 @@
       "prNumber": 254,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
+      "status": "resolved",
+      "owner": "VladPhil92",
+      "justification": "Phase 44 closed the process-restart durability gap for idempotent appointment creation and introduced the local recovery record required for a safe financial continuation. Its post-merge P1 review identified that the continuation still needed to be connected to explicit user-confirmed payment resumption, which is tracked by Phase 45 rather than reopening background financial replay."
+    },
+    {
+      "prNumber": 255,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
       "status": "open",
       "owner": "VladPhil92",
-      "justification": "Phase 44 closes a release-blocking durability gap in mobile appointment booking: an idempotent reservation paused by loss of connectivity can now be reconstructed after process restart only when its idempotency key and service coordinates are safely captured. The allowlist deliberately excludes payments, uploads, authentication and other replay-sensitive mutations, preserving the frozen financial and production-launch boundaries while preventing silent loss of a user booking during the closed beta."
+      "justification": "Phase 45 closes the P1 continuation gap discovered after Phase 44: a booking recovered after process restart now persists an explicit financial handoff and exposes user-confirmed payment resumption from appointment detail. Payments remain excluded from background replay, the original idempotency contract is reused, stale handoffs are discarded when backend transaction state advances, and no provider configuration or commercial launch boundary is changed."
     }
   ]
 }
