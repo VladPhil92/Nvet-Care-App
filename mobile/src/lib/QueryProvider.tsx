@@ -18,9 +18,9 @@ import { shouldDehydrateDurableMutation } from './durableMutationPolicy'
  *    entre reinicios. Phase 44 comienza con reservas idempotentes de citas.
  */
 
-// Cache schema v2 intentionally discards legacy persisted mutation state. Older
-// versions could dehydrate paused mutations without a resumable mutationFn.
-const CACHE_BUSTER = 'nvet-mobile-cache-v2'
+// Cache schema v3 invalidates pre-Phase-46 entries that were not explicitly
+// bound to an authenticated user. Durable mutation policy remains unchanged.
+const CACHE_BUSTER = 'nvet-mobile-cache-v3'
 
 const persister = createAsyncStoragePersister({
   storage: AsyncStorage,

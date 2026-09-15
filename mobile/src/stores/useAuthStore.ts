@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import authService, { AuthResponse, AuthUser, RegisterData } from '../services/auth.service'
+import { adoptSessionCacheOwner, clearSessionCache } from '../lib/sessionCache'
 
 type User = AuthUser
 
@@ -27,6 +28,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null })
     try {
       const response: AuthResponse = await authService.login(email, password)
+      await adoptSessionCacheOwner(response.user.id)
       set({
         user: response.user,
         isAuthenticated: true,
@@ -46,6 +48,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null })
     try {
       const response: AuthResponse = await authService.register(data)
+      await adoptSessionCacheOwner(response.user.id)
       set({
         user: response.user,
         isAuthenticated: true,
@@ -66,6 +69,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await authService.logout()
     } finally {
+      await clearSessionCache()
       set({
         user: null,
         isAuthenticated: false,
@@ -80,12 +84,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const isAuth = await authService.isAuthenticated()
       const user = isAuth ? await authService.getCurrentUser() : null
+
+      if (user) {
+        await adoptSessionCacheOwner(user.id)
+      } else {
+        await clearSessionCache()
+      }
+
       set({
         user,
         isAuthenticated: !!user,
         isLoading: false,
       })
     } catch {
+      await clearSessionCache()
       set({
         user: null,
         isAuthenticated: false,
