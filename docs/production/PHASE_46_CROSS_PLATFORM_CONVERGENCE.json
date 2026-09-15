@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "phase": 46,
+  "candidate": "1.0.0-rc.2",
+  "program": "cross-platform-convergence",
+  "objective": "Improve mobile readiness, performance and web/mobile state convergence without expanding product functionality.",
+  "releaseBoundary": {
+    "featureFreezeRemainsActive": true,
+    "newProductFeaturesAllowed": false,
+    "commercialLaunchAuthorized": false,
+    "publicStoreReleaseAuthorized": false
+  },
+  "requiredInvariants": [
+    "Persisted query state is explicitly owned by one authenticated user on web and mobile.",
+    "Unknown or changed cache ownership purges persisted user-scoped state before the new session is adopted.",
+    "Logout clears query cache and user-scoped Zustand state on both surfaces.",
+    "Mobile logout/account switch disconnects the chat socket and clears pending payment recovery handoffs.",
+    "Mobile mounted screens reconcile with the backend even when hydrated cache data is still inside staleTime.",
+    "Financial mutations remain excluded from automatic background replay.",
+    "Legacy pre-Phase-46 persisted caches are invalidated by cache busters."
+  ],
+  "sharedCanonicalQueryRoots": [
+    "auth",
+    "vets",
+    "appointments",
+    "payments",
+    "chat"
+  ],
+  "validation": {
+    "script": "scripts/verify-cross-platform-convergence-phase46.mjs",
+    "workflow": "cross-platform-convergence-phase46.yml",
+    "mobileTypecheckRequired": true,
+    "dashboardBuildRequired": true,
+    "mobileUnitTestsRequired": true
+  }
+}
