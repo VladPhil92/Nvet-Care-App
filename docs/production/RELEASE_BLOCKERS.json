@@ -80,6 +80,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Phase 46 closes a cross-platform release-readiness defect in which persisted React Query and Zustand state was not explicitly owned by one authenticated Nvet user. The phase makes logout/account switching a hard state boundary on web and mobile, purges legacy/unowned caches, disconnects mobile chat and payment-recovery handoffs, and tightens mobile backend reconciliation without adding product functionality or authorizing financial background replay, provider mutation, Play publication or commercial launch."
+    },
+    {
+      "prNumber": 258,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Fixes a release-blocking regression introduced by Phase 46: adoptSessionCacheOwner/clearSessionCache called queryClient.clear() from inside the login/register/logout mutation's own mutationFn, wiping the mutation cache mid-flight and orphaning that mutation's observer so its onSuccess (and the post-login navigation transition) never fired. This is the confirmed cause of the current Android Detox E2E failure on main. The fix scopes the cache purge to queryClient.getQueryCache().clear() only, adds a regression test, and authorizes no commercial launch, provider mutation, or Play publication."
     }
   ]
 }
