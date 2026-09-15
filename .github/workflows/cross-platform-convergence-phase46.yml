@@ -1,0 +1,80 @@
+name: Nvet Cross-Platform Convergence Phase 46
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/src/**'
+      - 'dashboard/src/**'
+      - 'docs/production/PHASE_46_CROSS_PLATFORM_CONVERGENCE.json'
+      - 'scripts/verify-cross-platform-convergence-phase46.mjs'
+      - '.github/workflows/cross-platform-convergence-phase46.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/src/**'
+      - 'dashboard/src/**'
+      - 'docs/production/PHASE_46_CROSS_PLATFORM_CONVERGENCE.json'
+      - 'scripts/verify-cross-platform-convergence-phase46.mjs'
+      - '.github/workflows/cross-platform-convergence-phase46.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase46-cross-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase46:
+    name: Mobile/web convergence and readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install frozen dependencies
+        run: npm ci
+
+      - name: Verify Phase 46 convergence contract
+        run: node scripts/verify-cross-platform-convergence-phase46.mjs --write-evidence
+
+      - name: Mobile TypeScript contract
+        run: npm --workspace mobile run typecheck
+
+      - name: Mobile unit tests
+        run: npm --workspace mobile run test:ci -- --runInBand
+
+      - name: Dashboard production build
+        run: npm --workspace dashboard run build
+
+      - name: Upload Phase 46 evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase46-cross-platform-convergence-evidence
+          path: .artifacts/phase46/phase46-convergence-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Phase 46 summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Nvet Care — Phase 46'
+            echo '- Scope: optimization, mobile readiness and web/mobile convergence'
+            echo '- New product functionality: NO'
+            echo '- Session-bound cache ownership: required on web and mobile'
+            echo '- Mobile foreground/mount reconciliation: required'
+            echo '- Financial background replay: prohibited'
+            echo '- Feature freeze: preserved'
+            echo '- Public/commercial release authorization: NO'
+          } >> "$GITHUB_STEP_SUMMARY"
