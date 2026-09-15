@@ -71,6 +71,10 @@ export const queryClient = new QueryClient({
       refetchOnReconnect: true,
       // Mobile: refetch al volver al foreground vía focusManager
       refetchOnWindowFocus: true,
+      // Phase 46: mounted screens reconcile with the backend even when a
+      // hydrated cache entry is still inside staleTime. Cached data remains
+      // visible immediately; the network refresh happens in background.
+      refetchOnMount: 'always',
       // OfflineFirst: si hay cache, mostrar y refetch en background
       networkMode: 'offlineFirst',
       structuralSharing: true,
