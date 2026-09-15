@@ -1,0 +1,64 @@
+name: Nvet Real Test Deployment Handoff Phase 47
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/production/PHASE_47_REAL_TEST_DEPLOYMENT_HANDOFF.json'
+      - 'docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'scripts/verify-real-test-deployment-handoff-phase47.mjs'
+      - '.github/workflows/real-device-pilot-phase47.yml'
+      - '.github/workflows/real-test-deployment-handoff-phase47.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/production/PHASE_47_REAL_TEST_DEPLOYMENT_HANDOFF.json'
+      - 'docs/production/PHASE_28_CONTROLLED_RC_PROMOTION.json'
+      - 'docs/production/RELEASE_BLOCKERS.json'
+      - 'scripts/verify-real-test-deployment-handoff-phase47.mjs'
+      - '.github/workflows/real-device-pilot-phase47.yml'
+      - '.github/workflows/real-test-deployment-handoff-phase47.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  handoff:
+    name: Real-test deployment handoff
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout full repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Verify Phase 47 handoff contract
+        run: node scripts/verify-real-test-deployment-handoff-phase47.mjs --write-evidence
+
+      - name: Re-evaluate controlled RC promotion
+        run: node scripts/verify-controlled-rc-promotion.mjs
+
+      - name: Enforce Phase 27 freeze contract
+        run: node scripts/verify-release-candidate-freeze.mjs
+
+      - name: Upload readiness evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase47-real-test-deployment-handoff
+          path: |
+            .artifacts/phase47-real-test-deployment-handoff.json
+            .artifacts/phase28-controlled-rc-promotion.json
+          if-no-files-found: warn
+          retention-days: 30
