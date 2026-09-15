@@ -5,6 +5,7 @@ import appointmentService, {
   type CreateAppointmentData,
 } from '../services/appointment.service'
 import liveLocationService from '../services/live-location.service'
+import { savePendingPaymentRecovery } from './bookingPaymentRecovery'
 import { invalidateAfterBooking, qk } from './queryKeys'
 import {
   BOOK_APPOINTMENT_MUTATION_KEY,
@@ -45,9 +46,6 @@ export function registerDurableMutationDefaults(queryClient: QueryClient): void 
           throw new Error(LOCATION_REQUIRED_MESSAGE)
         }
 
-        // The variables object is the same object stored in Mutation.state.
-        // Capturing device-only input here makes the persisted mutation fully
-        // replayable without asking for location after a process restart.
         variables.serviceLatitude = coordinates.latitude
         variables.serviceLongitude = coordinates.longitude
       }
@@ -63,12 +61,29 @@ export function registerDurableMutationDefaults(queryClient: QueryClient): void 
       return appointmentService.createAppointment(variables)
     },
 
-    onSuccess: async (appointment: Appointment) => {
+    onSuccess: async (
+      appointment: Appointment,
+      variables: CreateAppointmentData,
+    ) => {
       queryClient.setQueryData(
         qk.appointments.detail(appointment.id),
         appointment,
       )
       await invalidateAfterBooking(queryClient, appointment.id)
+
+      // A hydrated booking no longer has the screen promise continuation that
+      // normally starts payment. Persist the continuation, but never execute a
+      // financial mutation in the background: the client must confirm it.
+      if (variables.idempotencyKey) {
+        await savePendingPaymentRecovery({
+          appointmentId: appointment.id,
+          paymentMethod: variables.paymentMethod,
+          amountCop: variables.amount,
+          amountCtg: variables.amountCtg,
+          idempotencyKey: variables.idempotencyKey,
+          createdAt: new Date().toISOString(),
+        })
+      }
     },
   })
 }
