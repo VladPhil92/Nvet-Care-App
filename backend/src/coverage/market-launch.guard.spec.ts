@@ -63,6 +63,14 @@ describe("MarketLaunchGuard", () => {
     expect(policy.assertBookingAllowed).toHaveBeenCalledTimes(1);
   });
 
+  it("treats a trailing slash as the same booking-create route", async () => {
+    await guard.canActivate(
+      contextFor({ method: "POST", originalUrl: "/api/appointments/", body: {} }),
+    );
+
+    expect(policy.assertBookingAllowed).toHaveBeenCalledTimes(1);
+  });
+
   it("ignores the query string when matching the booking path", async () => {
     await guard.canActivate(
       contextFor({
