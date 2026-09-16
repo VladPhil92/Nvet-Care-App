@@ -17,8 +17,8 @@
       "note": "Verify provider-level automatic production backups with the read-only Nvet Production Backup Evidence workflow defined in .github/workflows/production-backup-evidence.yml. A successful provider metadata audit may satisfy this gate; repository pg_dump/pg_restore rehearsals alone may not. See docs/production/RC_EVIDENCE_RUNBOOK.md."
     },
     "restoreDrillVerified": {
-      "status": "pending",
-      "evidence": null,
+      "status": "verified",
+      "evidence": "provider-console: Railway Postgres deployment 32ff3b0e-a204-415b-a6ed-48655277bf39; restored volume 5a43f680-bc1a-4749-8b24-203afc4b0997; Web Production Convergence run 34370643266 PASS",
       "note": "Nvet Recovery Readiness proves the application-level pg_dump/pg_restore procedure. A provider-level Railway restore changes mounted-volume state and therefore remains an operator-controlled maintenance drill; retain dated redacted evidence before RC promotion. See docs/production/RC_EVIDENCE_RUNBOOK.md."
     },
     "productionAlertingVerified": {
