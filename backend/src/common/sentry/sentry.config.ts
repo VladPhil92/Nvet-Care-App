@@ -40,8 +40,7 @@ export function initSentry() {
     // Filtrar errores no relevantes
     beforeSend(event: any, hint: any) {
       const error = hint?.originalException as
-        | (Error & { status?: number; statusCode?: number })
-        | undefined;
+        (Error & { status?: number; statusCode?: number }) | undefined;
 
       // Ignorar errores 4xx que son responsabilidad del cliente
       if (error) {

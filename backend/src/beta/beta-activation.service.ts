@@ -26,11 +26,7 @@ const MAX_INITIAL_CLIENTS = 50;
 
 type ActivationEventType = "AUTHORIZED" | "REVOKED";
 type ActivationState =
-  | "MISSING"
-  | "ACTIVE"
-  | "EXPIRED"
-  | "REVOKED"
-  | "CONFLICTED";
+  "MISSING" | "ACTIVE" | "EXPIRED" | "REVOKED" | "CONFLICTED";
 
 type ActivationMetadata = {
   schemaVersion: 1;

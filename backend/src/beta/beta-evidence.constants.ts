@@ -37,18 +37,10 @@ export type Phase36ObservationEvidenceGate =
 export type BetaEvidenceGate = (typeof ALL_BETA_EVIDENCE_GATES)[number];
 export type BetaEvidenceEnvironment = "production" | "staging";
 export type BetaEvidenceEventType =
-  | "SUBMITTED"
-  | "APPROVED"
-  | "REJECTED"
-  | "REVOKED";
+  "SUBMITTED" | "APPROVED" | "REJECTED" | "REVOKED";
 
 export type BetaEvidenceStatus =
-  | "PENDING"
-  | "APPROVED"
-  | "REJECTED"
-  | "REVOKED"
-  | "EXPIRED"
-  | "CONFLICTED";
+  "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "EXPIRED" | "CONFLICTED";
 
 export type BetaGateStatus = "PENDING" | "VERIFIED" | "CONFLICTED";
 

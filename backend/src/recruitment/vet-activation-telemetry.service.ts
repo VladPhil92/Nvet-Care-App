@@ -70,12 +70,7 @@ type ConsentSummary = Awaited<
 type ConsentStatus = ConsentSummary["permissions"][number];
 
 export type VetActivationRisk =
-  | "ON_TRACK"
-  | "AT_RISK"
-  | "BREACHED"
-  | "CRITICAL"
-  | "COMPLETE"
-  | "PAUSED";
+  "ON_TRACK" | "AT_RISK" | "BREACHED" | "CRITICAL" | "COMPLETE" | "PAUSED";
 
 export type VetActivationBlocker =
   | "CONTACT_PERMISSION_REQUIRED"

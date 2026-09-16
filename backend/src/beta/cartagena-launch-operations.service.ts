@@ -43,12 +43,7 @@ type ObservationState =
   | "ABORTED"
   | "CONFLICTED";
 type ExpiryState =
-  | "NON_EXPIRING"
-  | "HEALTHY"
-  | "ATTENTION"
-  | "WARNING"
-  | "CRITICAL"
-  | "EXPIRED";
+  "NON_EXPIRING" | "HEALTHY" | "ATTENTION" | "WARNING" | "CRITICAL" | "EXPIRED";
 
 type ObservationMetadata = {
   schemaVersion: 1;
