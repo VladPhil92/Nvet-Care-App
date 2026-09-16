@@ -10,6 +10,7 @@ import { VetsService } from "./vets.service";
 import { VerificationService } from "./verification.service";
 import { ProfessionalRegistryService } from "./professional-registry.service";
 import { PricesService } from "./prices.service";
+import { MembershipsService } from "./memberships.service";
 import { ScheduleService } from "./schedule.service";
 import { PublicVetLocationInterceptor } from "./public-location.interceptor";
 import { AuthModule } from "../auth/auth.module";
@@ -53,6 +54,7 @@ import { AuthModule } from "../auth/auth.module";
     VerificationService,
     ProfessionalRegistryService,
     PricesService,
+    MembershipsService,
     ScheduleService,
     {
       provide: APP_INTERCEPTOR,
@@ -64,6 +66,7 @@ import { AuthModule } from "../auth/auth.module";
     VerificationService,
     ProfessionalRegistryService,
     PricesService,
+    MembershipsService,
     ScheduleService,
   ],
 })
