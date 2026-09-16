@@ -1,0 +1,155 @@
+name: PR 265 Repair
+
+on:
+  push:
+    branches:
+      - fix/vet-pricing-memberships-consistency
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: fix/vet-pricing-memberships-consistency
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --include=dev --legacy-peer-deps
+
+      - name: Format backend files
+        run: |
+          npx prettier --write \
+            backend/src/appointments/appointments.service.ts \
+            backend/src/payments/payments.service.ts \
+            backend/src/vets/commercial-policy.ts \
+            backend/src/vets/memberships.service.ts \
+            backend/src/vets/prices.service.ts
+
+      - name: Make membership migration legacy-safe
+        shell: bash
+        run: |
+          cat > backend/prisma/migrations/20260916090000_vet_pricing_memberships_consistency/migration.sql <<'SQL'
+          -- Nvet Care commercial consistency
+          -- This migration is deliberately idempotent because production-predeploy
+          -- supports one-time adoption of historical db-push databases that may
+          -- already contain the canonical objects before Prisma history is baselined.
+
+          DO $$
+          BEGIN
+            CREATE TYPE "MembershipStatus" AS ENUM ('ACTIVE', 'PENDING_CHANGE', 'PAST_DUE', 'CANCELED');
+          EXCEPTION
+            WHEN duplicate_object THEN NULL;
+          END
+          $$;
+
+          ALTER TABLE "prices"
+          ADD COLUMN IF NOT EXISTS "service_code" TEXT;
+
+          CREATE INDEX IF NOT EXISTS "prices_vet_id_service_code_idx"
+          ON "prices"("vet_id", "service_code");
+
+          CREATE TABLE IF NOT EXISTS "vet_memberships" (
+            "id" TEXT NOT NULL,
+            "vet_profile_id" TEXT NOT NULL,
+            "tier" "VetTier" NOT NULL DEFAULT 'FREE',
+            "status" "MembershipStatus" NOT NULL DEFAULT 'ACTIVE',
+            "monthly_price_cop" INTEGER NOT NULL DEFAULT 0,
+            "commission_pct" DOUBLE PRECISION NOT NULL,
+            "current_period_start" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "current_period_end" TIMESTAMP(3),
+            "requested_tier" "VetTier",
+            "requested_monthly_price_cop" INTEGER,
+            "requested_at" TIMESTAMP(3),
+            "resolution_note" TEXT,
+            "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updated_at" TIMESTAMP(3) NOT NULL,
+            CONSTRAINT "vet_memberships_pkey" PRIMARY KEY ("id")
+          );
+
+          CREATE UNIQUE INDEX IF NOT EXISTS "vet_memberships_vet_profile_id_key"
+          ON "vet_memberships"("vet_profile_id");
+
+          CREATE INDEX IF NOT EXISTS "vet_memberships_status_idx"
+          ON "vet_memberships"("status");
+
+          CREATE INDEX IF NOT EXISTS "vet_memberships_tier_idx"
+          ON "vet_memberships"("tier");
+
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'vet_memberships_vet_profile_id_fkey'
+            ) THEN
+              ALTER TABLE "vet_memberships"
+              ADD CONSTRAINT "vet_memberships_vet_profile_id_fkey"
+              FOREIGN KEY ("vet_profile_id") REFERENCES "vet_profiles"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+            END IF;
+          END
+          $$;
+          SQL
+
+      - name: Register release blocker
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'docs/production/RELEASE_BLOCKERS.json';
+          const registry = JSON.parse(fs.readFileSync(path, 'utf8'));
+          if (!registry.blockers.some((entry) => entry.prNumber === 265)) {
+            registry.blockers.push({
+              prNumber: 265,
+              candidate: registry.candidate,
+              severity: 'release-blocking',
+              status: 'open',
+              owner: 'VladPhil92',
+              justification: 'Corrects release-blocking veterinary marketplace inconsistencies across pricing, commissions, memberships, booking amount authority and legacy database convergence. The change preserves veterinarian price autonomy, removes simulated plan activation, centralizes commercial policy, and adds an auditable paid-plan pending state without authorizing commercial launch or weakening payment, security, backup or operator-evidence gates.'
+            });
+          }
+          fs.writeFileSync(path, JSON.stringify(registry, null, 2) + '\n');
+          NODE
+
+      - name: Sync operator evidence projections
+        run: |
+          node --input-type=module <<'NODE'
+          import { syncReadinessManifestsFromOperatorEvidence } from './scripts/lib/operator-evidence.mjs';
+          const changed = await syncReadinessManifestsFromOperatorEvidence();
+          console.log('Synced operator evidence projections:', changed);
+          NODE
+
+      - name: Commit repairs
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            backend/src/appointments/appointments.service.ts \
+            backend/src/payments/payments.service.ts \
+            backend/src/vets/commercial-policy.ts \
+            backend/src/vets/memberships.service.ts \
+            backend/src/vets/prices.service.ts \
+            backend/prisma/migrations/20260916090000_vet_pricing_memberships_consistency/migration.sql \
+            docs/production/RELEASE_BLOCKERS.json \
+            docs/production/RC_READINESS.json \
+            docs/production/BETA_CARTAGENA_READINESS.json \
+            docs/production/ANDROID_PRODUCTION_READINESS.json \
+            docs/production/GLOBAL_READINESS.json
+          if git diff --cached --quiet; then
+            echo "No repairs to commit"
+            exit 0
+          fi
+          git commit -m "fix: close PR 265 CI and recovery gates"
+          git push origin HEAD:fix/vet-pricing-memberships-consistency
