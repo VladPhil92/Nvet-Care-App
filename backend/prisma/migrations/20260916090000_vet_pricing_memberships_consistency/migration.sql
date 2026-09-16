@@ -14,7 +14,7 @@ ON "prices"("vet_id", "service_code");
 CREATE TABLE "vet_memberships" (
   "id" TEXT NOT NULL,
   "vet_profile_id" TEXT NOT NULL,
-  "tier" "VetTier" NOT NULL,
+  "tier" "VetTier" NOT NULL DEFAULT 'FREE',
   "status" "MembershipStatus" NOT NULL DEFAULT 'ACTIVE',
   "monthly_price_cop" INTEGER NOT NULL DEFAULT 0,
   "commission_pct" DOUBLE PRECISION NOT NULL,
