@@ -23,6 +23,7 @@
     "operatorStatus": "blocked",
     "declaredBlockers": [
       "rcPromoted",
+      "productionBackupConfigured",
       "paymentRailVerified",
       "cartagenaVetCoverageVerified",
       "clientCohortConfigured",
