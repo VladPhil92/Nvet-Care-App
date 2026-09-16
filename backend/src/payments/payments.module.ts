@@ -10,10 +10,12 @@ import { PseSettlementService } from "./pse-settlement.service";
 import { FinancialOperationsService } from "./financial-operations.service";
 import { FinancialDataCryptoService } from "./financial-data-crypto.service";
 import { AuthModule } from "../auth/auth.module";
+import { ChatModule } from "../chat/chat.module";
 
 @Module({
   imports: [
     AuthModule,
+    ChatModule,
     MulterModule.register({
       storage: memoryStorage(),
       limits: {

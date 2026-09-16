@@ -176,11 +176,25 @@ try {
   form.set('transferDate', new Date().toISOString());
   form.set('file', new Blob([pdf], { type: 'application/pdf' }), `proof-${runId}.pdf`);
 
+  // Pilot-phase model: the CLIENT pays the company's account directly (no
+  // gateway yet) and is the one who reports the transfer, not the VET — the
+  // vet never handles the money. Certify the VET is explicitly forbidden
+  // from submitting proof before certifying the real (client) path.
+  const vetAttempt = await request(
+    `/payments/transactions/${transactionId}/verify-transfer`,
+    { method: 'POST', headers: auth(vetToken), body: form },
+  );
+  if (vetAttempt.status !== 403) {
+    throw new Error(
+      `Expected the VET to be forbidden from submitting transfer proof, got ${vetAttempt.status}.`,
+    );
+  }
+
   const verifying = await readJson(
     'submit private transfer proof',
     await request(`/payments/transactions/${transactionId}/verify-transfer`, {
       method: 'POST',
-      headers: auth(vetToken),
+      headers: auth(clientToken),
       body: form,
     }),
   );
@@ -192,7 +206,9 @@ try {
     throw new Error('TRANSFER evidence did not persist its integrity contract.');
   }
   if (verifying?.transferProofStorageKey || verifying?.hashOnchain) {
-    throw new Error('Private transfer storage identifier leaked to VET.');
+    throw new Error(
+      'Private transfer storage identifier leaked in the proof-submission response.',
+    );
   }
 
   const proofResponse = await request(

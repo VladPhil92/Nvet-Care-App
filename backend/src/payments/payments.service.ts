@@ -63,7 +63,7 @@ const CTG_TO_COP_RATE = 30;
  * Cada flow de pago tiene su trayectoria:
  *  - CTG:      PENDING → CONFIRMED → LIQUIDATED
  *  - PSE:      PENDING → VERIFYING (webhook) → CONFIRMED → LIQUIDATED
- *  - TRANSFER: PENDING → VERIFYING (vet sube comprobante) → CONFIRMED → LIQUIDATED
+ *  - TRANSFER: PENDING → VERIFYING (cliente sube comprobante) → CONFIRMED → LIQUIDATED
  *  - DISPUTED solo desde CONFIRMED o LIQUIDATED (manejo por admin)
  *  - FAILED desde cualquier estado no-terminal
  */
@@ -188,7 +188,7 @@ export class PaymentsService {
         break;
 
       case PaymentMethod.TRANSFER:
-        // TRANSFER queda PENDING hasta que vet sube comprobante
+        // TRANSFER queda PENDING hasta que el cliente sube comprobante
         initialStatus = TransactionStatus.PENDING;
         break;
 

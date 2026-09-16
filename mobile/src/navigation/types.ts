@@ -37,6 +37,11 @@ export type ClientSearchStackParamList = {
     | undefined
   VetDetail: { vetId: string }
   BookAppointment: { vetId: string; serviceType?: string }
+  TransferPayment: {
+    transactionId: string
+    appointmentId: string
+    amountCop: number
+  }
 }
 
 export type ClientAppointmentsStackParamList = {

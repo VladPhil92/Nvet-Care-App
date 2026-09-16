@@ -192,12 +192,25 @@ export default function BookAppointmentScreen({ navigation, route }: Props) {
       })
 
       // 2) Procesar pago con la misma idempotency-key (link cita ↔ tx)
-      await payMutation.mutateAsync({
+      const transaction: any = await payMutation.mutateAsync({
         appointmentId: appointment.id,
         paymentMethod: data.paymentMethod,
         amountCop: data.amount,
         idempotencyKey,
       })
+
+      // TRANSFER queda PENDING hasta que el cliente paga a la cuenta de la
+      // empresa y sube el comprobante — la cita todavía no está confirmada,
+      // así que en vez del aviso de "reserva confirmada" lo llevamos directo
+      // a las instrucciones de pago.
+      if (data.paymentMethod === 'TRANSFER') {
+        navigation.replace('TransferPayment', {
+          transactionId: transaction.id,
+          appointmentId: appointment.id,
+          amountCop: data.amount,
+        })
+        return
+      }
 
       Alert.alert(
         '¡Cita reservada! 🐾',

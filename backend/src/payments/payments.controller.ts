@@ -101,9 +101,14 @@ export class PaymentsController {
     return replay.result;
   }
 
+  @Get("transfer-destination")
+  getTransferDestination() {
+    return this.financialOperations.getTransferDestination();
+  }
+
   @Post("transactions/:id/verify-transfer")
-  @UseGuards(RolesGuard, VerifiedVetGuard)
-  @Roles(UserRole.VET)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.CLIENT)
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor("file"))
   async verifyTransfer(
