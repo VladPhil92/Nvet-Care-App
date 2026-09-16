@@ -152,6 +152,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Post-merge follow-up to PR #266, closing two bugs a Codex review surfaced after merge. First, StorageService's local driver (the default without Cloudinary) returned a relative /uploads/public/... URL that main.ts never mounted as static content, so pet photos — the first public upload in this codebase to use the local driver, since every other caller's folder is forced-private — were unreachable; fixed by mounting the local public upload directory in main.ts and having uploadToLocal return an absolute URL via a new PUBLIC_BACKEND_URL env var. Second, MyPetsScreen's Save button only tracked the create/update mutation's pending state, re-enabling before the awaited photo upload finished and allowing a double-tap to create a duplicate pet; fixed with a dedicated isSaving state covering the whole operation. No changes to money, settlement, entitlement, KYC, wallet or identity paths; authorizes no commercial launch, provider mutation, or Play publication. Merged into main as PR #269; the blocker is retained as resolved audit history."
+    },
+    {
+      "prNumber": 271,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Pre-launch hardening pass driven by a full monorepo diagnostic run. Mobile: five hot screens (booking date selector, client appointment list, vet dashboard, vet earnings, vet schedule) derived a list with an inline empty-array fallback, allocating a new array identity every render and defeating the downstream useMemo so slot grids, filters, sorts and chart buckets recomputed on each render; the fallback is now memoized on the query data. Also removes 18 unused imports and bindings, taking the mobile lint baseline from 25 warnings to 0. Backend: the pets, payments and vets multipart upload modules bounded only fileSize and files, leaving multer field and part counters unbounded while multer stays pinned below 2.2.1 by the NestJS 10 line, where several open high-severity denial-of-service advisories are reachable only through unbounded multipart field parsing; each module now declares fields, parts, fieldNameSize and headerPairs sized against its own DTO, and the security convergence gate asserts those limits stay in place (verified to fail when a limit is removed). Behavior-preserving for every legitimate request path. No changes to money, settlement, entitlement, KYC, wallet or identity logic; authorizes no commercial launch, provider mutation, or Play publication."
     }
   ]
 }
