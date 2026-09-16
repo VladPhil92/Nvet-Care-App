@@ -102,7 +102,8 @@ export class PetsController {
     @Param("id", ParseUUIDPipe) id: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.petsService.updatePhoto(req.user.id, id, file);
+    const publicBaseUrl = `${req.protocol}://${req.get("host")}`;
+    return this.petsService.updatePhoto(req.user.id, id, file, publicBaseUrl);
   }
 
   @Delete(":id/photo")

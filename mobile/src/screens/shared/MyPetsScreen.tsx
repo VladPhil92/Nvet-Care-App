@@ -89,6 +89,7 @@ export default function MyPetsScreen({ navigation }: Props) {
   const [form, setForm] = useState<PetFormData>(EMPTY_FORM)
   const [speciesOpen, setSpeciesOpen] = useState(false)
   const [pickedPhoto, setPickedPhoto] = useState<PickedDocument | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   const openCreate = useCallback(() => {
     setEditingPet(null)
@@ -143,6 +144,7 @@ export default function MyPetsScreen({ navigation }: Props) {
       notes: form.notes.trim() || undefined,
     }
 
+    setIsSaving(true)
     let petId: string
     try {
       if (editingPet) {
@@ -153,6 +155,7 @@ export default function MyPetsScreen({ navigation }: Props) {
         petId = newPet.id
       }
     } catch (e: any) {
+      setIsSaving(false)
       Alert.alert('Error', e?.response?.data?.message ?? 'No se pudo guardar. Intenta de nuevo.')
       return
     }
@@ -169,6 +172,7 @@ export default function MyPetsScreen({ navigation }: Props) {
         'La mascota se guardó, pero la foto no se pudo subir. Intenta de nuevo desde editar.',
       )
     }
+    setIsSaving(false)
     setModalOpen(false)
   }, [form, editingPet, createMut, updateMut, uploadPickedPhoto])
 
@@ -338,17 +342,17 @@ export default function MyPetsScreen({ navigation }: Props) {
               </Text>
               <Pressable
                 onPress={handleSave}
-                disabled={createMut.isPending || updateMut.isPending}
+                disabled={isSaving}
                 accessibilityRole="button"
                 accessibilityLabel="Guardar"
               >
                 <Text
                   style={[
                     styles.modalSave,
-                    (createMut.isPending || updateMut.isPending) && { opacity: 0.5 },
+                    isSaving && { opacity: 0.5 },
                   ]}
                 >
-                  {createMut.isPending || updateMut.isPending ? '...' : 'Guardar'}
+                  {isSaving ? '...' : 'Guardar'}
                 </Text>
               </Pressable>
             </View>

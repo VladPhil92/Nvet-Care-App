@@ -53,6 +53,8 @@ export class StorageService {
   private readonly driver: "local" | "cloudinary";
   private readonly uploadDir: string;
   private readonly cloudinaryFolder: string;
+  /** Explicit operator override; takes priority over the per-request origin when set. */
+  private readonly configuredPublicBaseUrl: string | null;
 
   constructor(private readonly magicBytes: MagicBytesValidator) {
     const configured = (process.env.STORAGE_DRIVER ?? "").toLowerCase();
@@ -64,6 +66,9 @@ export class StorageService {
     this.uploadDir =
       process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
     this.cloudinaryFolder = process.env.CLOUDINARY_UPLOAD_FOLDER ?? "nvetcare";
+    this.configuredPublicBaseUrl = process.env.PUBLIC_BACKEND_URL
+      ? process.env.PUBLIC_BACKEND_URL.replace(/\/+$/, "")
+      : null;
 
     this.logger.log(`StorageService initialized: driver=${this.driver}`);
 
@@ -79,7 +84,11 @@ export class StorageService {
   async upload(
     file: Express.Multer.File,
     folder: string,
-    options?: { filename?: string; visibility?: StorageVisibility },
+    options?: {
+      filename?: string;
+      visibility?: StorageVisibility;
+      publicBaseUrl?: string;
+    },
   ): Promise<UploadResult> {
     this.validateUpload(file);
 
@@ -109,6 +118,7 @@ export class StorageService {
     return this.uploadToLocal(file, folder, {
       filename: options?.filename,
       visibility,
+      publicBaseUrl: options?.publicBaseUrl,
     });
   }
 
@@ -163,7 +173,11 @@ export class StorageService {
   private async uploadToLocal(
     file: Express.Multer.File,
     folder: string,
-    options: { filename?: string; visibility: StorageVisibility },
+    options: {
+      filename?: string;
+      visibility: StorageVisibility;
+      publicBaseUrl?: string;
+    },
   ): Promise<UploadResult> {
     const ext = path.extname(file.originalname).toLowerCase();
     const baseName = options.filename ?? crypto.randomBytes(16).toString("hex");
@@ -180,13 +194,23 @@ export class StorageService {
       throw new InternalServerErrorException("No se pudo guardar el archivo");
     }
 
-    const publicUrl = `/uploads/public/${folder}/${fileName}`;
+    const baseUrl = (
+      this.configuredPublicBaseUrl ??
+      options.publicBaseUrl ??
+      `http://localhost:${process.env.PORT ?? 3000}`
+    ).replace(/\/+$/, "");
+    const publicUrl = `${baseUrl}/uploads/public/${folder}/${fileName}`;
     return {
       url: options.visibility === "public" ? publicUrl : filePath,
       storageKey: filePath,
       driver: "local",
       visibility: options.visibility,
     };
+  }
+
+  /** Absolute filesystem directory served as static content at /uploads/public (local driver only). */
+  getLocalPublicUploadDir(): string {
+    return path.join(this.uploadDir, "public");
   }
 
   private async deleteFromLocal(storageKey: string): Promise<void> {
