@@ -1,21 +1,24 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
   Request,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { UserRole } from "@prisma/client";
+import type { Response } from "express";
+import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
-import { Roles } from "../auth/decorators/roles.decorator";
 import { VerifyTransferDto } from "./dto/payment.dto";
 import { ManualTransferPaymentService } from "./manual-transfer-payment.service";
 
@@ -45,6 +48,23 @@ export class ManualTransferPaymentController {
     );
   }
 
+  @Get(":transactionId/proof")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  async getProof(
+    @Param("transactionId", ParseUUIDPipe) transactionId: string,
+    @Res() res: Response,
+  ) {
+    const proof = await this.manualTransferPaymentService.getProof(transactionId);
+    res.setHeader("Content-Type", proof.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${proof.fileName}"`,
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(proof.buffer);
+  }
+
   @Post(":transactionId/approve")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
@@ -53,7 +73,10 @@ export class ManualTransferPaymentController {
     @Request() req,
     @Param("transactionId", ParseUUIDPipe) transactionId: string,
   ) {
-    return this.manualTransferPaymentService.approve(req.user.id, transactionId);
+    return this.manualTransferPaymentService.approve(
+      req.user.id,
+      transactionId,
+    );
   }
 
   @Post(":transactionId/reject")
