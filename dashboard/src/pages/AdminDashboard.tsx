@@ -8,6 +8,8 @@ import {
   useAdminAppointmentsQuery,
   usePaymentMethodStatsQuery,
 } from '../hooks/queries/useAdminQueries'
+import { useVerifyTransferMutation } from '../hooks/queries/useAdminMutations'
+import { adminService } from '../services/admin.service'
 
 function Skeleton({ w = '80px', h = '24px' }: { w?: string; h?: string }) {
   return (
@@ -46,6 +48,7 @@ export default function AdminDashboard() {
   const transferQ = useTransferTrackingQuery({ refetchInterval: 30_000 })
   const appointmentsQ = useAdminAppointmentsQuery({ limit: 5 } as any)
   const paymentStatsQ = usePaymentMethodStatsQuery()
+  const verifyTransferM = useVerifyTransferMutation()
 
   const metrics = metricsQ.data
   const transfers = transferQ.data ?? []
@@ -67,11 +70,54 @@ export default function AdminDashboard() {
           { label: 'Transferencia', pct: 20, val: '—', color: T.payTRF, badge: 'trf' as const },
         ]
 
+  const openTransferProof = async (transactionId: string) => {
+    try {
+      const blob = await adminService.getTransferProof(transactionId)
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
+      link.click()
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
+    } catch (error: any) {
+      window.alert(error?.response?.data?.message || 'No fue posible abrir el comprobante.')
+    }
+  }
+
+  const approveTransfer = async (transactionId: string) => {
+    if (!window.confirm('¿Confirmar que el comprobante corresponde al pago recibido?')) return
+    try {
+      await verifyTransferM.mutateAsync({ transactionId, action: 'CONFIRM' })
+    } catch (error: any) {
+      window.alert(error?.response?.data?.message || 'No fue posible aprobar la transferencia.')
+    }
+  }
+
+  const rejectTransfer = async (transactionId: string) => {
+    const reason = window.prompt(
+      'Motivo del rechazo (mínimo 10 caracteres). Este mensaje será visible para el cliente:',
+    )
+    if (reason === null) return
+    if (reason.trim().length < 10) {
+      window.alert('El motivo de rechazo debe tener al menos 10 caracteres.')
+      return
+    }
+    try {
+      await verifyTransferM.mutateAsync({
+        transactionId,
+        action: 'REJECT',
+        reason: reason.trim(),
+      })
+    } catch (error: any) {
+      window.alert(error?.response?.data?.message || 'No fue posible rechazar la transferencia.')
+    }
+  }
+
   return (
     <div style={{ padding: containerPadding }}>
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
 
-      {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: kpiColumns, gap: 14, marginBottom: 24 }}>
         <Metric
           label="CITAS HOY"
@@ -88,11 +134,7 @@ export default function AdminDashboard() {
         <Metric
           label="VOLUMEN CTG HOY"
           value={metricsQ.isLoading ? '…' : String(metrics?.volumenCtgHoy ?? 0)}
-          sub={
-            metrics
-              ? `≈ ${formatCOP((metrics.volumenCtgHoy ?? 0) * 420)} COP`
-              : undefined
-          }
+          sub={metrics ? `≈ ${formatCOP((metrics.volumenCtgHoy ?? 0) * 420)} COP` : undefined}
           accent={T.gold}
         />
         <Metric
@@ -103,9 +145,7 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* Two columns */}
       <div style={{ display: 'grid', gridTemplateColumns: panelColumns, gap: 16, marginBottom: 20 }}>
-        {/* Payment methods */}
         <div style={cardStyle}>
           <div style={{ padding: '18px 22px', borderBottom: `1px solid ${T.line}` }}>
             <div style={{ fontFamily: F.sans, fontSize: 15, fontWeight: 600, color: T.ink }}>
@@ -141,7 +181,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Transfer tracking */}
         <div style={cardStyle}>
           <div
             style={{
@@ -171,30 +210,94 @@ export default function AdminDashboard() {
             ) : (
               transfers.slice(0, 5).map((r, i) => (
                 <div
-                  key={i}
+                  key={r.id}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '11px 22px',
+                    padding: '12px 22px',
                     borderBottom: i < transfers.length - 1 ? `1px solid ${T.line}` : 'none',
                   }}
                 >
-                  <TierBadge t={r.tier} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 500, color: T.ink }}>{r.vet}</div>
-                    <div style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted }}>{r.client}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <TierBadge t={r.tier} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 500, color: T.ink }}>{r.vet}</div>
+                      <div style={{ fontFamily: F.sans, fontSize: 12, color: T.inkMuted }}>
+                        {r.client}
+                        {r.transferCode ? ` · Ref. ${r.transferCode}` : ''}
+                      </div>
+                    </div>
+                    <span style={{ fontFamily: F.mono, fontSize: 13, color: T.sage }}>
+                      ${r.amount.toLocaleString('es-CO')}
+                    </span>
+                    <Badge variant={r.rawStatus === 'VERIFYING' ? 'warn' : 'default'}>
+                      {r.rawStatus === 'VERIFYING' ? 'Verificando' : 'Esperando comprobante'}
+                    </Badge>
                   </div>
-                  <span style={{ fontFamily: F.mono, fontSize: 13, color: T.sage }}>
-                    ${r.amount.toLocaleString('es-CO')}
-                  </span>
-                  <Badge
-                    variant={
-                      r.status === 'Confirmada' ? 'ok' : r.status === 'Pendiente' ? 'warn' : 'err'
-                    }
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                      marginTop: 10,
+                      alignItems: 'center',
+                    }}
                   >
-                    {r.status}
-                  </Badge>
+                    <span style={{ fontFamily: F.sans, fontSize: 11, color: T.inkMuted }}>
+                      {r.waitingMinutes} min en cola
+                    </span>
+                    {r.proofAvailable ? (
+                      <button
+                        type="button"
+                        onClick={() => openTransferProof(r.id)}
+                        style={{
+                          border: `1px solid ${T.line}`,
+                          background: T.surfaceAlt,
+                          color: T.ink,
+                          borderRadius: 7,
+                          padding: '6px 9px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Ver comprobante
+                      </button>
+                    ) : null}
+                    {r.rawStatus === 'VERIFYING' ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={verifyTransferM.isPending}
+                          onClick={() => approveTransfer(r.id)}
+                          style={{
+                            border: 'none',
+                            background: T.sage,
+                            color: '#fff',
+                            borderRadius: 7,
+                            padding: '6px 9px',
+                            cursor: verifyTransferM.isPending ? 'wait' : 'pointer',
+                            opacity: verifyTransferM.isPending ? 0.6 : 1,
+                          }}
+                        >
+                          Aprobar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={verifyTransferM.isPending}
+                          onClick={() => rejectTransfer(r.id)}
+                          style={{
+                            border: `1px solid ${T.danger ?? '#b91c1c'}`,
+                            background: 'transparent',
+                            color: T.danger ?? '#b91c1c',
+                            borderRadius: 7,
+                            padding: '6px 9px',
+                            cursor: verifyTransferM.isPending ? 'wait' : 'pointer',
+                            opacity: verifyTransferM.isPending ? 0.6 : 1,
+                          }}
+                        >
+                          Rechazar
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               ))
             )}
@@ -202,7 +305,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Recent appointments */}
       <div style={cardStyle}>
         <div
           style={{
@@ -308,7 +410,7 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {appointments.map((r, _i) => (
+                {appointments.map((r) => (
                   <tr key={r.id} style={{ borderBottom: `1px solid ${T.line}` }}>
                     {!isTablet && (
                       <td style={{ padding: '12px 16px' }}>

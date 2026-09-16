@@ -9,6 +9,8 @@ import { PseWebhookGuard } from "./guards/pse-webhook.guard";
 import { PseSettlementService } from "./pse-settlement.service";
 import { FinancialOperationsService } from "./financial-operations.service";
 import { FinancialDataCryptoService } from "./financial-data-crypto.service";
+import { ManualTransferPaymentController } from "./manual-transfer-payment.controller";
+import { ManualTransferPaymentService } from "./manual-transfer-payment.service";
 import { AuthModule } from "../auth/auth.module";
 import { ChatModule } from "../chat/chat.module";
 
@@ -42,19 +44,25 @@ import { ChatModule } from "../chat/chat.module";
       },
     }),
   ],
-  controllers: [PaymentsController, PseWebhookController],
+  controllers: [
+    PaymentsController,
+    ManualTransferPaymentController,
+    PseWebhookController,
+  ],
   providers: [
     PaymentsService,
     PseWebhookGuard,
     PseSettlementService,
     FinancialOperationsService,
     FinancialDataCryptoService,
+    ManualTransferPaymentService,
   ],
   exports: [
     PaymentsService,
     PseWebhookGuard,
     PseSettlementService,
     FinancialOperationsService,
+    ManualTransferPaymentService,
   ],
 })
 export class PaymentsModule {}

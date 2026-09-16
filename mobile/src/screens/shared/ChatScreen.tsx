@@ -17,6 +17,7 @@ import {
   EmptyState,
   UI_COLORS,
 } from '../../components/ui/primitives'
+import ClientTransferPaymentCard from '../../components/payments/ClientTransferPaymentCard'
 import { useChatStore } from '../../stores/useChatStore'
 import { useCurrentUserQuery } from '../../hooks/queries/useMobileQueries'
 import { formatCOP, formatRelativeTime } from '../../utils/format'
@@ -32,6 +33,7 @@ import { formatCOP, formatRelativeTime } from '../../utils/format'
  *  - Auto-scroll al bottom al recibir mensajes nuevos.
  *  - Input con autofocus y send button deshabilitado si está vacío.
  *  - Badge "Chat monitoreado" para reforzar el carácter arbitrado.
+ *  - Flujo de transferencia manual visible exclusivamente para el cliente.
  *
  * Decisiones:
  *  - Se usa `useChatStore` (Zustand) en lugar de React Query porque el chat es
@@ -51,6 +53,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const userQuery = useCurrentUserQuery()
   const currentUserId = userQuery.data?.id
+  const currentUserRole = userQuery.data?.role
 
   const [text, setText] = useState('')
   const listRef = useRef<FlatList>(null)
@@ -71,7 +74,6 @@ export default function ChatScreen({ navigation, route }: Props) {
   const clearMessages = useChatStore((s) => s.clearMessages)
   const clearError = useChatStore((s) => s.clearError)
 
-  // Conectar al montar; desconectar al desmontar
   useEffect(() => {
     fetchMessages(appointmentId).catch(() => {
       /* el store loguea el error */
@@ -85,10 +87,8 @@ export default function ChatScreen({ navigation, route }: Props) {
     }
   }, [appointmentId, connectSocket, disconnectSocket, fetchMessages, clearMessages])
 
-  // Auto-scroll al final cuando llega un mensaje nuevo
   useEffect(() => {
     if (messages.length > 0) {
-      // Pequeño delay para permitir render
       setTimeout(() => {
         listRef.current?.scrollToEnd({ animated: true })
       }, 50)
@@ -113,7 +113,6 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable
           onPress={() => navigation.goBack()}
@@ -136,7 +135,6 @@ export default function ChatScreen({ navigation, route }: Props) {
         />
       </View>
 
-      {/* Reconnect banner */}
       {!isConnected && !isLoading && (
         <ReconnectBanner
           isReconnecting={isReconnecting}
@@ -145,7 +143,6 @@ export default function ChatScreen({ navigation, route }: Props) {
         />
       )}
 
-      {/* Error banner */}
       {error && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText} numberOfLines={2}>
@@ -157,7 +154,6 @@ export default function ChatScreen({ navigation, route }: Props) {
         </View>
       )}
 
-      {/* Lista de mensajes */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
@@ -206,14 +202,18 @@ export default function ChatScreen({ navigation, route }: Props) {
           />
         )}
 
-        {/* Typing indicator */}
+        <ClientTransferPaymentCard
+          appointmentId={appointmentId}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+        />
+
         {isTypingByOther && (
           <View style={styles.typingBox}>
             <Text style={styles.typingText}>Escribiendo…</Text>
           </View>
         )}
 
-        {/* Input */}
         <View style={styles.inputRow}>
           <TextInput
             value={text}
@@ -249,10 +249,6 @@ export default function ChatScreen({ navigation, route }: Props) {
   )
 }
 
-// =====================================================================
-// MessageBubble
-// =====================================================================
-
 interface MessageBubbleProps {
   message: any
   isOwn: boolean
@@ -261,7 +257,6 @@ interface MessageBubbleProps {
 function MessageBubble({ message, isOwn }: MessageBubbleProps) {
   const isVet = message.sender?.role === 'VET'
 
-  // SYSTEM message
   if (message.type === 'SYSTEM') {
     return (
       <View style={styles.systemRow}>
@@ -270,7 +265,6 @@ function MessageBubble({ message, isOwn }: MessageBubbleProps) {
     )
   }
 
-  // PRICE message
   if (message.type === 'PRICE' && message.priceData) {
     return (
       <View style={[styles.bubbleRow, isOwn && styles.bubbleRowOwn]}>
@@ -297,7 +291,6 @@ function MessageBubble({ message, isOwn }: MessageBubbleProps) {
     )
   }
 
-  // TEXT message
   return (
     <View style={[styles.bubbleRow, isOwn && styles.bubbleRowOwn]}>
       <View
@@ -323,10 +316,6 @@ function MessageBubble({ message, isOwn }: MessageBubbleProps) {
     </View>
   )
 }
-
-// =====================================================================
-// ConnectionDot + ReconnectBanner
-// =====================================================================
 
 interface ConnectionDotProps {
   isConnected: boolean
@@ -429,7 +418,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  // Banners
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -456,11 +444,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 6,
   },
-  // Lista
   messagesContent: { padding: 12, gap: 8, flexGrow: 1 },
   loadingBox: { padding: 16, gap: 8 },
   emptyBox: { flex: 1, justifyContent: 'center' },
-  // Bubble
   bubbleRow: { flexDirection: 'row', justifyContent: 'flex-start' },
   bubbleRowOwn: { justifyContent: 'flex-end' },
   bubble: {
@@ -499,7 +485,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   bubbleTimeOwn: { color: '#FFFFFFcc' },
-  // System
   systemRow: { alignItems: 'center', paddingVertical: 8 },
   systemText: {
     fontSize: 12,
@@ -510,7 +495,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     fontStyle: 'italic',
   },
-  // Price card
   priceCard: {
     backgroundColor: UI_COLORS.card,
     borderRadius: 14,
@@ -533,13 +517,11 @@ const styles = StyleSheet.create({
     color: UI_COLORS.sage,
   },
   priceCtg: { fontSize: 12, color: UI_COLORS.gold, fontWeight: '600' },
-  // Typing
   typingBox: {
     paddingHorizontal: 16,
     paddingVertical: 4,
   },
   typingText: { fontSize: 12, color: UI_COLORS.muted, fontStyle: 'italic' },
-  // Input
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
