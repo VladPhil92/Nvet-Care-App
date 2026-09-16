@@ -15,15 +15,7 @@
 
 import React from 'react'
 import { View, StyleSheet } from 'react-native'
-import Svg, {
-  Circle,
-  Path,
-  G,
-  Defs,
-  LinearGradient,
-  Stop,
-  Line,
-} from 'react-native-svg'
+import Svg, { Circle, Path, Line } from 'react-native-svg'
 import { Colors } from '../../theme/colors'
 
 interface PatternProps {

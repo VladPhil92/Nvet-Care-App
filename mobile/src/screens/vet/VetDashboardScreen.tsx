@@ -89,7 +89,10 @@ export default function VetDashboardScreen({ navigation }: Props) {
   const balanceQuery = useBalanceQuery()
 
   const user = userQuery.data
-  const todayAppointments = todayQuery.data ?? []
+  const todayAppointments = useMemo(
+    () => todayQuery.data ?? [],
+    [todayQuery.data],
+  )
   const balance = balanceQuery.data
 
   const todayKpis = useMemo(() => {

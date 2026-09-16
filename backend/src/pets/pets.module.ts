@@ -17,9 +17,16 @@ import { AuthModule } from "../auth/auth.module";
     AuthModule,
     MulterModule.register({
       storage: memoryStorage(),
+      // Bounded part/field counts: multer is pinned below 2.2.1 by the NestJS 10
+      // line, where several open DoS advisories are reachable only through
+      // unbounded multipart field parsing. This endpoint takes no body fields.
       limits: {
         fileSize: 10 * 1024 * 1024,
         files: 1,
+        fields: 2,
+        parts: 4,
+        fieldNameSize: 100,
+        headerPairs: 32,
       },
       fileFilter: (_req, file, cb) => {
         const allowed = ["image/jpeg", "image/jpg", "image/png"];

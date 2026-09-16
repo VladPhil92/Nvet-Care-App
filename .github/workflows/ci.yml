@@ -25,6 +25,11 @@ concurrency:
 
 env:
   NODE_VERSION: '22.x'
+  # Root `npm ci` installs every workspace, so the dashboard's puppeteer
+  # devDependency downloads a browser in each job. No workflow runs the only
+  # consumer (`dashboard` a11y:check), so the download is pure install-time
+  # network-failure risk.
+  PUPPETEER_SKIP_DOWNLOAD: '1'
 
 jobs:
   changes:

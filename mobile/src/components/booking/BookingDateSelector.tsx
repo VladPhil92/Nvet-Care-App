@@ -124,7 +124,7 @@ export default function BookingDateSelector({
   }, [selectedDate, dateOptions])
 
   const scheduleQuery = useVetScheduleQuery(vetId, selectedDate ?? undefined)
-  const slots = scheduleQuery.data ?? []
+  const slots = useMemo(() => scheduleQuery.data ?? [], [scheduleQuery.data])
   const grouped = useMemo(() => groupSlotsByPeriod(slots), [slots])
 
   return (

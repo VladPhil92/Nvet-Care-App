@@ -12,7 +12,6 @@ import {
   Button,
   Badge,
   Skeleton,
-  EmptyState,
   SectionHeader,
   UI_COLORS,
 } from '../../components/ui/primitives'
@@ -96,7 +95,10 @@ export default function VetEarningsScreen({ navigation }: Props) {
   const pendingQuery = useTransactionsQuery({ status: 'VERIFYING' })
 
   const earnings = earningsQuery.data
-  const transactions = transactionsQuery.data ?? []
+  const transactions = useMemo(
+    () => transactionsQuery.data ?? [],
+    [transactionsQuery.data],
+  )
   const pendingTransfers = pendingQuery.data ?? []
 
   const chartData = useMemo(

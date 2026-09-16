@@ -20,9 +20,16 @@ import { ChatModule } from "../chat/chat.module";
     ChatModule,
     MulterModule.register({
       storage: memoryStorage(),
+      // Bounded part/field counts: multer is pinned below 2.2.1 by the NestJS 10
+      // line, where several open DoS advisories are reachable only through
+      // unbounded multipart field parsing. VerifyTransferDto carries 2 fields.
       limits: {
         fileSize: 5 * 1024 * 1024,
         files: 1,
+        fields: 6,
+        parts: 8,
+        fieldNameSize: 100,
+        headerPairs: 32,
       },
       fileFilter: (_req, file, cb) => {
         const allowed = [

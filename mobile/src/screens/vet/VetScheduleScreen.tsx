@@ -4,12 +4,10 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
-  Card,
   Badge,
   Skeleton,
   EmptyState,
@@ -99,7 +97,7 @@ export default function VetScheduleScreen({ navigation }: Props) {
     startDate: weekStart,
     endDate: weekEnd,
   })
-  const appointments = apptsQuery.data ?? []
+  const appointments = useMemo(() => apptsQuery.data ?? [], [apptsQuery.data])
 
   // Query de excepciones del servidor (bloqueos persistidos)
   const exceptionsQuery = useScheduleExceptionsQuery(weekStart, weekEnd)
