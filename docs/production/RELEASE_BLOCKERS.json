@@ -141,9 +141,9 @@
       "prNumber": 268,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
-      "status": "open",
+      "status": "resolved",
       "owner": "VladPhil92",
-      "justification": "Adds the exact manual-transfer QR asset used by the client transfer flow in mobile chat so the pilot company-account payment destination can be rendered from repository-owned source bytes without network transformation. This is an asset-only protected product change and does not alter settlement logic, provider configuration, payment authorization, commercial-launch status, or Play publication boundaries."
+      "justification": "Completes the client-facing manual TRANSFER payment flow in chat with the exact repository-owned Bancolombia/Bre-B QR bytes, proof submission, private evidence review, and rendered administrative approve/reject controls. The correction also closes concurrent admin decision races by making VERIFYING-to-terminal transitions atomic and normalizes transfer-tracking data before rendering. It preserves the existing pilot rail boundaries from PR #264 and does not authorize commercial launch, provider mutation, or Play publication. Merged into main as PR #268; the blocker is retained as resolved audit history."
     },
     {
       "prNumber": 269,
@@ -152,7 +152,6 @@
       "status": "open",
       "owner": "VladPhil92",
       "justification": "Post-merge follow-up to PR #266, closing two bugs a Codex review surfaced after merge. First, StorageService's local driver (the default without Cloudinary) returned a relative /uploads/public/... URL that main.ts never mounted as static content, so pet photos — the first public upload in this codebase to use the local driver, since every other caller's folder is forced-private — were unreachable; fixed by mounting the local public upload directory in main.ts and having uploadToLocal return an absolute URL via a new PUBLIC_BACKEND_URL env var. Second, MyPetsScreen's Save button only tracked the create/update mutation's pending state, re-enabling before the awaited photo upload finished and allowing a double-tap to create a duplicate pet; fixed with a dedicated isSaving state covering the whole operation. No changes to money, settlement, entitlement, KYC, wallet or identity paths; authorizes no commercial launch, provider mutation, or Play publication."
-      "justification": "Completes the client-facing manual TRANSFER payment flow in chat with the exact repository-owned Bancolombia/Bre-B QR bytes, proof submission, private evidence review, and rendered administrative approve/reject controls. The correction also closes concurrent admin decision races by making VERIFYING-to-terminal transitions atomic and normalizes transfer-tracking data before rendering. It preserves the existing pilot rail boundaries from PR #264 and does not authorize commercial launch, provider mutation, or Play publication."
     }
   ]
 }
