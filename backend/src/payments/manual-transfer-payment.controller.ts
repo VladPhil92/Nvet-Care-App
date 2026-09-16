@@ -55,7 +55,8 @@ export class ManualTransferPaymentController {
     @Param("transactionId", ParseUUIDPipe) transactionId: string,
     @Res() res: Response,
   ) {
-    const proof = await this.manualTransferPaymentService.getProof(transactionId);
+    const proof =
+      await this.manualTransferPaymentService.getProof(transactionId);
     res.setHeader("Content-Type", proof.mimeType);
     res.setHeader(
       "Content-Disposition",
