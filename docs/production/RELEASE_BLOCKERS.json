@@ -133,9 +133,17 @@
       "prNumber": 267,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
+      "status": "resolved",
+      "owner": "VladPhil92",
+      "justification": "Preserves the first repository-owned chunk of the exact manual-transfer QR source bytes without recompression or network transformation. Merged into main as PR #267; the blocker is retained as resolved audit history."
+    },
+    {
+      "prNumber": 268,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
       "status": "open",
       "owner": "VladPhil92",
-      "justification": "Adds the exact manual-transfer QR asset used by the client transfer flow in mobile chat so the pilot company-account payment destination can be rendered from repository-owned source bytes without network transformation. This is an asset-only protected product change and does not alter settlement logic, provider configuration, payment authorization, commercial-launch status, or Play publication boundaries."
+      "justification": "Completes the client-facing manual TRANSFER payment flow in chat with the exact repository-owned Bancolombia/Bre-B QR bytes, proof submission, private evidence review, and rendered administrative approve/reject controls. The correction also closes concurrent admin decision races by making VERIFYING-to-terminal transitions atomic and normalizes transfer-tracking data before rendering. It preserves the existing pilot rail boundaries from PR #264 and does not authorize commercial launch, provider mutation, or Play publication."
     }
   ]
 }
