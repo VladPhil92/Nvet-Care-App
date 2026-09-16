@@ -17,7 +17,9 @@ export type AuthStackParamList = {
 export type ClientTabParamList = {
   ClientHome: undefined
   ClientSearch: NavigatorScreenParams<ClientSearchStackParamList> | undefined
-  ClientAppointments: undefined
+  ClientAppointments:
+    | NavigatorScreenParams<ClientAppointmentsStackParamList>
+    | undefined
   ClientAi: undefined
   ClientProfile: undefined
 }
@@ -38,8 +40,9 @@ export type ClientSearchStackParamList = {
   VetDetail: { vetId: string }
   BookAppointment: { vetId: string; serviceType?: string }
   TransferPayment: {
+    transactionId: string
     appointmentId: string
-    resumeTransactionId?: string
+    amountCop: number
   }
 }
 
