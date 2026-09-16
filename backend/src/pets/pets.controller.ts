@@ -8,6 +8,8 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
   Request,
   HttpCode,
   HttpStatus,
@@ -15,6 +17,7 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { UserRole } from "@prisma/client";
 import { PetsService } from "./pets.service";
 import { ClinicalRecordService } from "./clinical-record.service";
@@ -90,6 +93,21 @@ export class PetsController {
     @Body() dto: UpdatePetDto,
   ) {
     return this.petsService.updatePet(req.user.id, id, dto);
+  }
+
+  @Post(":id/photo")
+  @UseInterceptors(FileInterceptor("file"))
+  async uploadPhoto(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.petsService.updatePhoto(req.user.id, id, file);
+  }
+
+  @Delete(":id/photo")
+  async deletePhoto(@Request() req, @Param("id", ParseUUIDPipe) id: string) {
+    return this.petsService.removePhoto(req.user.id, id);
   }
 
   @Delete(":id")

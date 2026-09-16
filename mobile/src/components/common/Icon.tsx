@@ -56,6 +56,7 @@ export type IconName =
   | 'trash'
   | 'chevron-up'
   | 'chevron-down'
+  | 'camera'
 
 interface IconProps {
   name: IconName
@@ -378,6 +379,13 @@ function renderIcon(name: IconName): React.ReactNode {
       return <Path d="M6 15 L12 9 L18 15" />
     case 'chevron-down':
       return <Path d="M6 9 L12 15 L18 9" />
+    case 'camera':
+      return (
+        <>
+          <Path d="M4 8 H7 L9 5 H15 L17 8 H20 C20.55 8 21 8.45 21 9 V18 C21 18.55 20.55 19 20 19 H4 C3.45 19 3 18.55 3 18 V9 C3 8.45 3.45 8 4 8 Z" />
+          <Circle cx="12" cy="13.5" r="3.2" />
+        </>
+      )
     default:
       return null
   }

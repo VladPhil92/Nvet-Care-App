@@ -19,6 +19,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  Image,
   Pressable,
   Alert,
   Modal,
@@ -39,8 +40,11 @@ import {
   useCreatePetMutation,
   useUpdatePetMutation,
   useDeletePetMutation,
+  useUploadPetPhotoMutation,
 } from '../../hooks/queries/useMobileMutations'
 import type { Pet } from '../../services/pet.service'
+import { pickImage } from '../../utils/imagePicker'
+import type { PickedDocument } from '../../components/common/DocumentPickerCard'
 
 const SPECIES_OPTIONS = [
   { value: 'DOG', label: '🐕 Perro' },
@@ -78,15 +82,18 @@ export default function MyPetsScreen({ navigation }: Props) {
   const createMut = useCreatePetMutation()
   const updateMut = useUpdatePetMutation()
   const deleteMut = useDeletePetMutation()
+  const uploadPhotoMut = useUploadPetPhotoMutation()
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingPet, setEditingPet] = useState<Pet | null>(null)
   const [form, setForm] = useState<PetFormData>(EMPTY_FORM)
   const [speciesOpen, setSpeciesOpen] = useState(false)
+  const [pickedPhoto, setPickedPhoto] = useState<PickedDocument | null>(null)
 
   const openCreate = useCallback(() => {
     setEditingPet(null)
     setForm(EMPTY_FORM)
+    setPickedPhoto(null)
     setModalOpen(true)
   }, [])
 
@@ -99,8 +106,28 @@ export default function MyPetsScreen({ navigation }: Props) {
       weight: pet.weight ? String(pet.weight) : '',
       notes: pet.notes ?? '',
     })
+    setPickedPhoto(null)
     setModalOpen(true)
   }, [])
+
+  const handlePickPhoto = useCallback(async () => {
+    const picked = await pickImage()
+    if (picked) setPickedPhoto(picked)
+  }, [])
+
+  const uploadPickedPhoto = useCallback(
+    async (petId: string) => {
+      if (!pickedPhoto) return
+      const formData = new FormData()
+      formData.append('file', {
+        uri: pickedPhoto.uri,
+        name: pickedPhoto.name,
+        type: pickedPhoto.type,
+      } as any)
+      await uploadPhotoMut.mutateAsync({ petId, formData })
+    },
+    [pickedPhoto, uploadPhotoMut],
+  )
 
   const handleSave = useCallback(async () => {
     if (!form.name.trim()) {
@@ -116,19 +143,34 @@ export default function MyPetsScreen({ navigation }: Props) {
       notes: form.notes.trim() || undefined,
     }
 
+    let petId: string
     try {
       if (editingPet) {
         await updateMut.mutateAsync({ petId: editingPet.id, data: payload })
-        Alert.alert('✓ Guardado', `Datos de ${form.name} actualizados.`)
+        petId = editingPet.id
       } else {
-        await createMut.mutateAsync(payload)
-        Alert.alert('✓ Mascota agregada', `${form.name} ya está en tu perfil.`)
+        const newPet = await createMut.mutateAsync(payload)
+        petId = newPet.id
       }
-      setModalOpen(false)
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.message ?? 'No se pudo guardar. Intenta de nuevo.')
+      return
     }
-  }, [form, editingPet, createMut, updateMut])
+
+    try {
+      await uploadPickedPhoto(petId)
+      Alert.alert(
+        editingPet ? '✓ Guardado' : '✓ Mascota agregada',
+        editingPet ? `Datos de ${form.name} actualizados.` : `${form.name} ya está en tu perfil.`,
+      )
+    } catch {
+      Alert.alert(
+        'Datos guardados',
+        'La mascota se guardó, pero la foto no se pudo subir. Intenta de nuevo desde editar.',
+      )
+    }
+    setModalOpen(false)
+  }, [form, editingPet, createMut, updateMut, uploadPickedPhoto])
 
   const handleDelete = useCallback((pet: Pet) => {
     Alert.alert(
@@ -165,7 +207,11 @@ export default function MyPetsScreen({ navigation }: Props) {
   const renderPetCard = useCallback(({ item: pet }: { item: Pet }) => (
     <View style={styles.petCard}>
       <View style={styles.petAvatar}>
-        <Text style={styles.petEmoji}>{SPECIES_EMOJI[pet.species] ?? '🐾'}</Text>
+        {pet.photo ? (
+          <Image source={{ uri: pet.photo }} style={styles.petPhoto} />
+        ) : (
+          <Text style={styles.petEmoji}>{SPECIES_EMOJI[pet.species] ?? '🐾'}</Text>
+        )}
       </View>
       <View style={styles.petInfo}>
         <Text style={styles.petName}>{pet.name}</Text>
@@ -312,6 +358,27 @@ export default function MyPetsScreen({ navigation }: Props) {
               contentContainerStyle={styles.modalContent}
               keyboardShouldPersistTaps="handled"
             >
+              {/* Foto */}
+              <Pressable
+                style={styles.photoPicker}
+                onPress={handlePickPhoto}
+                accessibilityRole="button"
+                accessibilityLabel="Elegir foto de la mascota"
+              >
+                {pickedPhoto ? (
+                  <Image source={{ uri: pickedPhoto.uri }} style={styles.photoPreview} />
+                ) : editingPet?.photo ? (
+                  <Image source={{ uri: editingPet.photo }} style={styles.photoPreview} />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <Icon name="camera" size={22} color={Colors.inkMuted} />
+                  </View>
+                )}
+                <Text style={styles.photoPickerText}>
+                  {pickedPhoto || editingPet?.photo ? 'Cambiar foto' : 'Agregar foto (opcional)'}
+                </Text>
+              </Pressable>
+
               {/* Nombre */}
               <Text style={styles.fieldLabel}>Nombre *</Text>
               <TextInput
@@ -459,6 +526,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   petEmoji: { fontSize: 26 },
+  petPhoto: { width: 52, height: 52, borderRadius: 26 },
   petInfo: { flex: 1 },
   petName: { fontSize: 16, fontWeight: '700', color: Colors.ink, marginBottom: 2 },
   petDetail: { fontSize: 13, color: Colors.inkMuted },
@@ -496,6 +564,21 @@ const styles = StyleSheet.create({
   modalCancel: { fontSize: 15, color: Colors.inkMuted },
   modalSave: { fontSize: 15, fontWeight: '700', color: Colors.sage },
   modalContent: { padding: 20, paddingBottom: 40 },
+
+  photoPicker: { alignItems: 'center', marginBottom: 8 },
+  photoPreview: { width: 88, height: 88, borderRadius: 44 },
+  photoPlaceholder: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: Colors.greenSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.line,
+    borderStyle: 'dashed',
+  },
+  photoPickerText: { fontSize: 13, color: Colors.sage, fontWeight: '600', marginTop: 8 },
 
   fieldLabel: {
     fontSize: 13,

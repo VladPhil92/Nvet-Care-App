@@ -18,7 +18,7 @@ describe("PetsService health profile V2", () => {
       update: petUpdate,
     },
   } as unknown as PrismaService;
-  const service = new PetsService(prisma);
+  const service = new PetsService(prisma, {} as never);
 
   const profile = (): UpdatePetHealthProfileDto => ({
     allergies: [

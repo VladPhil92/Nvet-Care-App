@@ -10,6 +10,8 @@ import { apiClient } from './api'
  *   POST   /pets           — crear mascota
  *   PATCH  /pets/:id       — actualizar
  *   DELETE /pets/:id       — eliminar (soft delete)
+ *   POST   /pets/:id/photo — subir/reemplazar foto (multipart, campo "file")
+ *   DELETE /pets/:id/photo — quitar foto
  */
 
 export type PetSpecies =
@@ -76,6 +78,18 @@ class PetService {
 
   async deletePet(petId: string): Promise<void> {
     await apiClient.delete(`/pets/${petId}`)
+  }
+
+  async uploadPhoto(petId: string, formData: FormData): Promise<Pet> {
+    const response = await apiClient.post(`/pets/${petId}/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  }
+
+  async deletePhoto(petId: string): Promise<Pet> {
+    const response = await apiClient.delete(`/pets/${petId}/photo`)
+    return response.data
   }
 }
 
