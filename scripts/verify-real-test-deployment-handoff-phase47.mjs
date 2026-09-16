@@ -34,6 +34,20 @@ function summarizeGates(record) {
   }
 }
 
+function currentPullRequestNumber() {
+  if (process.env.GITHUB_EVENT_NAME !== 'pull_request') return null
+  const eventPath = process.env.GITHUB_EVENT_PATH?.trim()
+  if (!eventPath) return null
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(eventPath, 'utf8'))
+    const value = Number(payload.pull_request?.number ?? payload.number)
+    return Number.isInteger(value) && value > 0 ? value : null
+  } catch {
+    return null
+  }
+}
+
 require(phase47.phase === 47 && phase47.program === 'real-test-deployment-handoff', 'Phase 47 identity is invalid')
 require(phase47.candidate === '1.0.0-rc.2', 'Phase 47 candidate must remain 1.0.0-rc.2')
 require(phase47.policy?.featureFreezeRemainsActive === true, 'feature freeze must remain active')
@@ -42,7 +56,33 @@ require(phase47.policy?.commercialLaunchAuthorized === false, 'Phase 47 cannot a
 require(phase46.phase === 46, 'Phase 46 must be the immediate engineering prerequisite')
 require(phase28.candidateCommitSha === phase47.candidateProductSha, 'Phase 28 promotion target must equal the certified Phase 47 product SHA')
 require(phase28.promotion?.targetSha === phase47.candidateProductSha, 'Phase 28 promotion targetSha is stale')
-require((blockers.blockers ?? []).filter((entry) => entry.status === 'open').length === 0, 'merged release blockers must be resolved before operator handoff')
+
+const currentPrNumber = currentPullRequestNumber()
+const openBlockers = (blockers.blockers ?? []).filter((entry) => entry.status === 'open')
+const currentReleaseBlockerUnderReview = currentPrNumber
+  ? openBlockers.find(
+      (entry) =>
+        entry.prNumber === currentPrNumber &&
+        entry.candidate === phase47.candidate &&
+        entry.severity === 'release-blocking',
+    ) ?? null
+  : null
+const unresolvedMergedBlockers = openBlockers.filter(
+  (entry) => entry !== currentReleaseBlockerUnderReview,
+)
+
+// Phase 27 requires the release-blocker entry for the *current* product-changing
+// pull request to remain OPEN through its merge. Phase 47, conversely, must
+// reject blockers that were already merged and never closed. During a PR run we
+// therefore exclude only the matching, candidate-scoped release blocker that is
+// currently under review. Push/workflow_dispatch runs have no current PR number,
+// so the same entry remains fail-closed after merge until it is explicitly
+// resolved by the release-governance flow.
+require(
+  unresolvedMergedBlockers.length === 0,
+  'merged release blockers must be resolved before operator handoff',
+)
+
 require(pilotWorkflow.includes('assembleRelease'), 'physical pilot workflow must build a release APK')
 require(pilotWorkflow.includes('apksigner') && pilotWorkflow.includes('verify --verbose --print-certs'), 'physical pilot workflow must cryptographically verify the APK')
 require(pilotWorkflow.includes(phase47.candidateProductSha), 'physical pilot workflow must pin the certified candidate SHA')
@@ -54,7 +94,6 @@ require(phase31.policy?.commercialLaunchAuthorized === false, 'Phase 31 must not
 const rcProgress = summarizeGates(rc.requiredExternalEvidence)
 const androidProgress = summarizeGates(android.requiredEvidence)
 const betaProgress = summarizeGates(beta.requiredEvidence)
-const openBlockers = (blockers.blockers ?? []).filter((entry) => entry.status === 'open')
 
 const report = {
   schemaVersion: 1,
@@ -65,7 +104,8 @@ const report = {
   state: failures.length === 0 ? 'ENGINEERING_READY_EXTERNAL_ACTION_REQUIRED' : 'ENGINEERING_BLOCKED',
   engineering: {
     status: failures.length === 0 ? 'verified' : 'failed',
-    openReleaseBlockers: openBlockers.length,
+    openReleaseBlockers: unresolvedMergedBlockers.length,
+    releaseBlockerUnderReview: currentReleaseBlockerUnderReview?.prNumber ?? null,
     failures,
   },
   firstRealDevicePilot: {
