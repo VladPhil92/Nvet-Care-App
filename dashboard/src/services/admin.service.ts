@@ -42,13 +42,42 @@ export interface Appointment {
 }
 
 export interface TransferTracking {
-  id?: string
+  id: string
+  appointmentId: string
   vet: string
   vetId: string
   tier: 'free' | 'pro' | 'elite'
   client: string
   amount: number
   status: 'Confirmada' | 'Pendiente' | 'En disputa'
+  rawStatus: 'PENDING' | 'VERIFYING'
+  proofAvailable: boolean
+  transferCode?: string
+  waitingMinutes: number
+}
+
+interface TransferTrackingApiRow {
+  id: string
+  appointmentId: string
+  amountCop: number
+  status: 'PENDING' | 'VERIFYING'
+  transferCode?: string | null
+  transferProofStorageKey?: string | null
+  waitingMinutes?: number
+  appointment?: {
+    client?: {
+      firstName?: string | null
+      lastName?: string | null
+    }
+    vet?: {
+      id?: string
+      tier?: string
+      user?: {
+        firstName?: string | null
+        lastName?: string | null
+      }
+    }
+  }
 }
 
 export interface PaymentMethodStats {
@@ -89,6 +118,19 @@ export type DisputeResolution = 'CONFIRM' | 'REFUND' | 'CANCEL'
 export type VetTierInput = 'free' | 'pro' | 'elite' | 'FREE' | 'PRO' | 'ELITE'
 export type ExportFormat = 'csv' | 'xlsx' | 'CSV' | 'XLSX'
 
+function fullName(
+  person?: { firstName?: string | null; lastName?: string | null },
+  fallback = '—',
+) {
+  const value = `${person?.firstName ?? ''} ${person?.lastName ?? ''}`.trim()
+  return value || fallback
+}
+
+function normalizeTier(value?: string): TransferTracking['tier'] {
+  const tier = value?.toLowerCase()
+  return tier === 'pro' || tier === 'elite' ? tier : 'free'
+}
+
 class AdminService {
   async getMetrics(filters: MetricsFilters = {}): Promise<AdminMetrics> {
     const response = await apiClient.get<AdminMetrics>('/admin/metrics', { params: filters })
@@ -106,7 +148,28 @@ class AdminService {
   }
 
   async getTransferTracking(): Promise<TransferTracking[]> {
-    const response = await apiClient.get<TransferTracking[]>('/admin/transfer-tracking')
+    const response = await apiClient.get<TransferTrackingApiRow[]>('/admin/transfer-tracking')
+    return response.data.map((row) => ({
+      id: row.id,
+      appointmentId: row.appointmentId,
+      vet: fullName(row.appointment?.vet?.user, 'Veterinario'),
+      vetId: row.appointment?.vet?.id ?? '',
+      tier: normalizeTier(row.appointment?.vet?.tier),
+      client: fullName(row.appointment?.client, 'Cliente'),
+      amount: Number(row.amountCop ?? 0),
+      status: 'Pendiente',
+      rawStatus: row.status,
+      proofAvailable: Boolean(row.transferProofStorageKey),
+      transferCode: row.transferCode ?? undefined,
+      waitingMinutes: Number(row.waitingMinutes ?? 0),
+    }))
+  }
+
+  async getTransferProof(transactionId: string): Promise<Blob> {
+    const response = await apiClient.get(
+      `/payments/manual-transfer/${transactionId}/proof`,
+      { responseType: 'blob' },
+    )
     return response.data
   }
 
