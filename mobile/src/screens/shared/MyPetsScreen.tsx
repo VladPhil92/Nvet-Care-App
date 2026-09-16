@@ -32,10 +32,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Colors } from '../../theme/colors'
 import { Icon } from '../../components/common/Icon'
-import {
-  useMyPetsQuery,
-  usePetDetailQuery,
-} from '../../hooks/queries/useMobileQueries'
+import { useMyPetsQuery } from '../../hooks/queries/useMobileQueries'
 import {
   useCreatePetMutation,
   useUpdatePetMutation,

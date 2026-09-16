@@ -57,12 +57,10 @@ const BENEFITS = [
   },
 ] as const
 
-export default function StoreScreen({ navigation, route }: StoreScreenProps) {
+export default function StoreScreen({ navigation }: StoreScreenProps) {
   const [email, setEmail] = useState('')
   const [registered, setRegistered] = useState(false)
   const [loading, setLoading] = useState(false)
-
-  const category = route?.params?.category
 
   const handleRegister = useCallback(async () => {
     if (!email || !email.includes('@')) {

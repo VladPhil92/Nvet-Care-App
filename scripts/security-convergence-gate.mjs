@@ -268,6 +268,41 @@ try {
   failures.push(`Phase 27 release candidate freeze failed closed: ${error?.message ?? error}`)
 }
 
+// ---------------------------------------------------------------------------
+// 9. Multipart upload modules bound every part/field counter. multer stays
+//    pinned below 2.2.1 by the NestJS 10 line, where the open denial-of-service
+//    advisories are reachable only through unbounded multipart field parsing.
+// ---------------------------------------------------------------------------
+const requiredMultipartLimits = [
+  'fileSize',
+  'files',
+  'fields',
+  'parts',
+  'fieldNameSize',
+  'headerPairs',
+]
+
+const multipartModules = walk('backend/src').filter(
+  (rel) => !rel.endsWith('.spec.ts') && /MulterModule\.register\(/.test(read(rel)),
+)
+
+if (multipartModules.length === 0) {
+  failures.push(
+    'Multipart upload hardening: no MulterModule.register() call found to verify',
+  )
+}
+
+for (const rel of multipartModules) {
+  const source = read(rel)
+  for (const limit of requiredMultipartLimits) {
+    if (!new RegExp(`${limit}\\s*:\\s*\\d`).test(source)) {
+      failures.push(
+        `Multipart upload hardening: ${rel} must declare a numeric \`${limit}\` limit`,
+      )
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('❌ Production Security, Privacy & Canonical Runtime Convergence gate failed:')
   for (const failure of failures) console.error(` - ${failure}`)
@@ -285,3 +320,6 @@ console.log('   - workflow_run certification concurrency: valid-trigger scoped +
 console.log('   - web convergence staging context: explicit environment/service isolation')
 console.log('   - operator evidence projection: append-only approved ledger bound to CI Success')
 console.log('   - Phase 27 product freeze: release-blocker-only drift bound to CI Success')
+console.log(
+  `   - multipart upload limits: bounded file/field/part counters across ${multipartModules.length} module(s)`,
+)

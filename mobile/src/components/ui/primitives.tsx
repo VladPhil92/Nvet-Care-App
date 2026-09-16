@@ -8,7 +8,6 @@ import {
   Animated,
   Easing,
   ViewStyle,
-  TextStyle,
   PressableProps,
 } from 'react-native'
 
