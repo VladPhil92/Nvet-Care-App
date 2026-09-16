@@ -90,6 +90,14 @@
       "justification": "Fixes a release-blocking regression introduced by Phase 46: adoptSessionCacheOwner/clearSessionCache called queryClient.clear() from inside the login/register/logout mutation's own mutationFn, wiping the mutation cache mid-flight and orphaning that mutation's observer so its onSuccess (and the post-login navigation transition) never fired. This is the confirmed cause of the Android Detox E2E failure that was on main. The fix scopes the cache purge to queryClient.getQueryCache().clear(), additionally purges every non-'auth' mutation from the live MutationCache at the session boundary (closing a cross-account paused-mutation leak found in review), and adds regression tests for both. Merged; authorizes no commercial launch, provider mutation, or Play publication."
     },
     {
+      "prNumber": 260,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Closes a second, distinct root cause of the same Android Detox E2E failure left open after PR #258/#259 merged: queryClient.getQueryCache().clear() (the #258 fix) still detaches any QueryObserver already mounted on a query key, and RootNavigator's useCurrentUserQuery() is mounted on 'auth','me' at the exact moment adoptSessionCacheOwner runs inside the login mutation's mutationFn, so the subsequent setQueryData never reaches the mounted component. Verified empirically against the real @tanstack/react-query library with a new integration test. Replaces the query-cache clear with queryClient.removeQueries({predicate: ...}) scoped to non-'auth' queries, which never touches the auth observer's own query. No commercial launch, provider mutation, or Play publication is authorized."
+    },
+    {
       "prNumber": 261,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",

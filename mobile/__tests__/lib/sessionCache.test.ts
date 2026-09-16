@@ -11,17 +11,18 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }))
 
 jest.mock('../../src/lib/queryClient', () => {
-  const queryCacheClear = jest.fn()
+  const removeQueries = jest.fn()
   const mutationCacheRemove = jest.fn()
   let mutations: unknown[] = []
   return {
     queryClient: {
       cancelQueries: jest.fn(async () => undefined),
       clear: jest.fn(),
-      getQueryCache: () => ({ clear: queryCacheClear }),
+      getQueryCache: () => ({ clear: jest.fn() }),
+      removeQueries,
       getMutationCache: () => ({ getAll: () => mutations, remove: mutationCacheRemove }),
       setQueryData: jest.fn(),
-      __queryCacheClear: queryCacheClear,
+      __removeQueries: removeQueries,
       __mutationCacheRemove: mutationCacheRemove,
       __setMutations: (next: unknown[]) => {
         mutations = next
@@ -47,54 +48,64 @@ jest.mock('../../src/stores/useWalletStore', () => ({
 
 import { adoptSessionCacheOwner, clearSessionCache } from '../../src/lib/sessionCache'
 import { queryClient } from '../../src/lib/queryClient'
+import { qk } from '../../src/lib/queryKeys'
 
 const queryClientMock = queryClient as unknown as {
-  __queryCacheClear: jest.Mock
+  __removeQueries: jest.Mock
   __mutationCacheRemove: jest.Mock
   __setMutations: (next: unknown[]) => void
 }
-const queryCacheClear = queryClientMock.__queryCacheClear
+const removeQueries = queryClientMock.__removeQueries
 const mutationCacheRemove = queryClientMock.__mutationCacheRemove
 
 /**
- * Regression test for the Phase 46 mobile login regression: adopting/clearing
- * the session cache runs synchronously inside the login/register/logout
- * mutation's own mutationFn (authService.persistSession / clearSession). Using
- * the nuclear queryClient.clear() there wipes the mutation cache mid-flight,
- * orphaning that very mutation's observer so its onSuccess (and the UI
- * transition after a successful login) never fires. Only the query cache may
- * be cleared here.
+ * Regression test for the mobile login regression (surfaced twice: first via
+ * queryClient.clear() orphaning the in-flight login mutation, then via
+ * queryClient.getQueryCache().clear() orphaning RootNavigator's own
+ * useCurrentUserQuery() observer — see sessionCache.integration.test.ts for
+ * the real-QueryClient reproduction of the second one). adoptSessionCacheOwner
+ * and clearSessionCache run synchronously inside the login/register/logout
+ * mutation's own mutationFn, while an 'auth','me' QueryObserver is already
+ * mounted. Neither queryClient.clear() nor queryCache.clear() may be called
+ * here; only non-'auth' queries and non-'auth' mutations may be purged.
  */
 describe('sessionCache', () => {
   beforeEach(() => {
     for (const key of Object.keys(mockStorage)) delete mockStorage[key]
     ;(queryClient.clear as jest.Mock).mockClear()
-    queryCacheClear.mockClear()
+    ;(queryClient.setQueryData as jest.Mock).mockClear()
+    removeQueries.mockClear()
     mutationCacheRemove.mockClear()
     queryClientMock.__setMutations([])
   })
 
-  it('adoptSessionCacheOwner never wipes the mutation cache for a new owner', async () => {
+  it('adoptSessionCacheOwner removes only non-auth queries for a new owner', async () => {
     await adoptSessionCacheOwner('user-1')
 
-    expect(queryCacheClear).toHaveBeenCalledTimes(1)
+    expect(removeQueries).toHaveBeenCalledTimes(1)
+    const predicate = removeQueries.mock.calls[0][0].predicate
+    expect(predicate({ queryKey: ['auth', 'me'] })).toBe(false)
+    expect(predicate({ queryKey: ['vets', 'search'] })).toBe(true)
     expect(queryClient.clear).not.toHaveBeenCalled()
   })
 
   it('adoptSessionCacheOwner is a no-op for the already-adopted owner', async () => {
     await adoptSessionCacheOwner('user-1')
-    queryCacheClear.mockClear()
+    removeQueries.mockClear()
 
     await adoptSessionCacheOwner('user-1')
 
-    expect(queryCacheClear).not.toHaveBeenCalled()
+    expect(removeQueries).not.toHaveBeenCalled()
     expect(queryClient.clear).not.toHaveBeenCalled()
   })
 
-  it('clearSessionCache never wipes the mutation cache', async () => {
+  it('clearSessionCache removes only non-auth queries', async () => {
     await clearSessionCache()
 
-    expect(queryCacheClear).toHaveBeenCalledTimes(1)
+    expect(removeQueries).toHaveBeenCalledTimes(1)
+    const predicate = removeQueries.mock.calls[0][0].predicate
+    expect(predicate({ queryKey: ['auth', 'me'] })).toBe(false)
+    expect(predicate({ queryKey: ['appointments', 'list'] })).toBe(true)
     expect(queryClient.clear).not.toHaveBeenCalled()
   })
 
@@ -120,5 +131,26 @@ describe('sessionCache', () => {
 
     expect(mutationCacheRemove).toHaveBeenCalledWith(bookingMutation)
     expect(mutationCacheRemove).not.toHaveBeenCalledWith(authMutation)
+  })
+
+  /**
+   * P1 regression (Codex review on #260): authService.logoutAllDevices(),
+   * changePassword() and deleteAccount() call clearSessionCache() directly,
+   * with no mutation onSuccess to clear the cache afterward the way
+   * useLogoutMutation does. qk.auth.me() has staleTime: Infinity, so without
+   * explicitly nulling it here, RootNavigator's useCurrentUserQuery() would
+   * keep serving the stale cached user and treat the device as still signed
+   * in after those flows revoke the session server-side.
+   */
+  it('clearSessionCache writes null to the auth.me query through its observer', async () => {
+    await clearSessionCache()
+
+    expect(queryClient.setQueryData).toHaveBeenCalledWith(qk.auth.me(), null)
+  })
+
+  it('adoptSessionCacheOwner never writes to the auth.me query itself', async () => {
+    await adoptSessionCacheOwner('user-1')
+
+    expect(queryClient.setQueryData).not.toHaveBeenCalled()
   })
 })
