@@ -1,5 +1,7 @@
 import { apiClient, dedupedGet } from './api'
 
+export type VetTier = 'FREE' | 'PRO' | 'ELITE'
+
 export interface VetUserSummary {
   id: string
   firstName?: string
@@ -11,10 +13,50 @@ export interface VetUserSummary {
 
 export interface VetPrice {
   id: string
+  serviceCode?: string | null
   serviceName: string
   priceCop: number
   priceCtg?: number | null
   isActive: boolean
+}
+
+export interface SuggestedService {
+  code: string
+  name: string
+  suggestedPriceCop: number
+  suggestedMinCop: number
+  suggestedMaxCop: number
+  priceType: 'FIXED' | 'FROM'
+  description: string
+}
+
+export interface ServiceCatalogResponse {
+  disclaimer: string
+  ctgToCopRate: number
+  services: SuggestedService[]
+}
+
+export interface MembershipPlan {
+  tier: VetTier
+  name: string
+  monthlyPriceCop: number
+  commissionPct: number
+  description: string
+  perks: string[]
+}
+
+export interface MembershipState {
+  id: string
+  tier: VetTier
+  status: 'ACTIVE' | 'PENDING_CHANGE' | 'PAST_DUE' | 'CANCELED'
+  activePlan: MembershipPlan
+  requestedTier?: VetTier | null
+  requestedPlan?: MembershipPlan | null
+  requestedAt?: string | null
+  currentPeriodStart?: string | null
+  currentPeriodEnd?: string | null
+  billingMode: 'FREE' | 'EXTERNAL_CONFIRMATION'
+  note?: string | null
 }
 
 export interface VetSchedule {
@@ -40,7 +82,7 @@ export interface VetProfile {
   userId: string
   licenseNumber: string
   specialties: string[]
-  tier: 'FREE' | 'PRO' | 'ELITE'
+  tier: VetTier
   ctgBalance: number
   bio?: string | null
   yearsExperience?: number | null
@@ -178,6 +220,23 @@ class VetService {
     return response.data
   }
 
+  getServiceCatalog(): Promise<ServiceCatalogResponse> {
+    return dedupedGet<ServiceCatalogResponse>('/vets/service-catalog')
+  }
+
+  getMembershipPlans(): Promise<MembershipPlan[]> {
+    return dedupedGet<MembershipPlan[]>('/vets/membership-plans')
+  }
+
+  getMembership(): Promise<MembershipState> {
+    return dedupedGet<MembershipState>('/vets/me/membership')
+  }
+
+  async requestMembershipChange(tier: VetTier): Promise<MembershipState> {
+    const response = await apiClient.post<MembershipState>('/vets/me/membership/request', { tier })
+    return response.data
+  }
+
   getEarnings(params: { startDate?: string; endDate?: string } = {}): Promise<VetEarnings> {
     return dedupedGet<VetEarnings>('/vets/me/earnings', params)
   }
@@ -228,12 +287,20 @@ class VetService {
     return response.data
   }
 
-  async createPrice(input: { serviceName: string; priceCop: number; priceCtg?: number }): Promise<VetPrice> {
+  async createPrice(input: {
+    serviceCode?: string
+    serviceName: string
+    priceCop: number
+    priceCtg?: number
+  }): Promise<VetPrice> {
     const response = await apiClient.post<VetPrice>('/vets/me/prices', input)
     return response.data
   }
 
-  async updatePrice(priceId: string, input: Partial<Pick<VetPrice, 'serviceName' | 'priceCop' | 'priceCtg' | 'isActive'>>): Promise<VetPrice> {
+  async updatePrice(
+    priceId: string,
+    input: Partial<Pick<VetPrice, 'serviceCode' | 'serviceName' | 'priceCop' | 'priceCtg' | 'isActive'>>,
+  ): Promise<VetPrice> {
     const response = await apiClient.put<VetPrice>(`/vets/me/prices/${priceId}`, input)
     return response.data
   }
