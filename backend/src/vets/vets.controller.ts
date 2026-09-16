@@ -28,6 +28,7 @@ import { UserRole } from "@prisma/client";
 import { VetsService } from "./vets.service";
 import { VerificationService } from "./verification.service";
 import { PricesService } from "./prices.service";
+import { MembershipsService } from "./memberships.service";
 
 import { SearchVetsDto } from "./dto/search-vets.dto";
 import {
@@ -41,6 +42,10 @@ import {
   BulkCreatePricesDto,
 } from "./dto/price.dto";
 import {
+  RequestMembershipChangeDto,
+  ResolveMembershipChangeDto,
+} from "./dto/membership.dto";
+import {
   UploadDocumentDto,
   ApproveDocumentDto,
   RejectDocumentDto,
@@ -53,11 +58,24 @@ export class VetsController {
     private readonly vetsService: VetsService,
     private readonly verificationService: VerificationService,
     private readonly pricesService: PricesService,
+    private readonly membershipsService: MembershipsService,
   ) {}
 
   @Get()
   async searchVets(@Query() filters: SearchVetsDto) {
     return this.vetsService.searchVets(filters);
+  }
+
+  /** Catálogo de referencia. Nunca fija el precio final del veterinario. */
+  @Get("service-catalog")
+  getServiceCatalog() {
+    return this.pricesService.getSuggestedCatalog();
+  }
+
+  /** Planes comerciales públicos, expresados en COP. */
+  @Get("membership-plans")
+  getMembershipPlans() {
+    return this.membershipsService.getPlans();
   }
 
   @Get("me")
@@ -80,6 +98,23 @@ export class VetsController {
   @Roles(UserRole.VET)
   async updateMyProfile(@Request() req, @Body() dto: UpdateVetProfileDto) {
     return this.vetsService.updateVetProfile(req.user.id, dto);
+  }
+
+  @Get("me/membership")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VET)
+  getMyMembership(@Request() req) {
+    return this.membershipsService.getMyMembership(req.user.id);
+  }
+
+  @Post("me/membership/request")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VET)
+  requestMembershipChange(
+    @Request() req,
+    @Body() dto: RequestMembershipChangeDto,
+  ) {
+    return this.membershipsService.requestChange(req.user.id, dto.tier);
   }
 
   @Post("me/availability/toggle")
@@ -154,9 +189,7 @@ export class VetsController {
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: UploadDocumentDto,
   ) {
-    if (!file) {
-      throw new BadRequestException("El archivo es obligatorio");
-    }
+    if (!file) throw new BadRequestException("El archivo es obligatorio");
     return this.verificationService.uploadDocument(
       req.user.id,
       dto.documentType,
@@ -297,6 +330,26 @@ export class VetsController {
       documentId,
       dto.reason,
     );
+  }
+
+  @Post("admin/memberships/:vetId/approve")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  approveMembershipChange(
+    @Param("vetId", ParseUUIDPipe) vetId: string,
+    @Body() dto: ResolveMembershipChangeDto,
+  ) {
+    return this.membershipsService.approvePendingChange(vetId, dto.note);
+  }
+
+  @Post("admin/memberships/:vetId/reject")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  rejectMembershipChange(
+    @Param("vetId", ParseUUIDPipe) vetId: string,
+    @Body() dto: ResolveMembershipChangeDto,
+  ) {
+    return this.membershipsService.rejectPendingChange(vetId, dto.note);
   }
 
   @Get(":id")

@@ -56,6 +56,13 @@ export interface VerifyTransferMetadata {
   transferDate?: string
 }
 
+export interface TransferDestination {
+  accountHolder: string
+  bankName: string
+  transferKey: string
+  note: string
+}
+
 export interface WithdrawalResponse {
   success: boolean
   message: string
@@ -119,6 +126,11 @@ const paymentService = {
 
   async getTransactionById(id: string): Promise<Transaction> {
     const response = await api.get(`/payments/transactions/${id}`)
+    return response.data
+  },
+
+  async getTransferDestination(): Promise<TransferDestination> {
+    const response = await api.get('/payments/transfer-destination')
     return response.data
   },
 

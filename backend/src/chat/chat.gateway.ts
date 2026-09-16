@@ -221,4 +221,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Server-triggered notice (not a client socket event) used by other
+   * modules — e.g. FinancialOperationsService posting a transfer-proof
+   * status update — to persist a SYSTEM message and broadcast it live to
+   * whoever is already in the appointment's room, the same way a normal
+   * chat message is broadcast.
+   */
+  async emitSystemMessage(
+    appointmentId: string,
+    senderId: string,
+    content: string,
+  ) {
+    const message = await this.chatService.createSystemNotice(
+      appointmentId,
+      senderId,
+      content,
+    );
+    this.server.to(appointmentId).emit("message", message);
+    return message;
+  }
 }

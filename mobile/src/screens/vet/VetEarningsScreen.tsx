@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
   RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -36,14 +35,15 @@ import {
  * Capacidades:
  *  - KPIs: ingresos brutos / comisiones / neto / saldo disponible
  *  - Gráfico de barras de últimos 6 meses (derivado de transacciones CONFIRMED)
- *  - Lista de transferencias pendientes de verificación con CTA "Verificar"
+ *  - Lista informativa de transferencias en verificación (el cliente reporta el
+ *    comprobante y un administrador lo valida; el vet solo puede ver el estado)
  *  - Botón "Solicitar retiro" si hay saldo disponible
  *  - Pull-to-refresh
  *
  * Decisiones:
  *  - El gráfico se deriva en memoria de `useTransactionsQuery({ type: 'PAYMENT' })`.
  *    Cuando el backend exponga `/vets/me/earnings/by-month`, se conectará directo.
- *  - Las transferencias pendientes se filtran de `useTransactionsQuery({ status: 'VERIFYING' })`.
+ *  - Las transferencias en verificación se filtran de `useTransactionsQuery({ status: 'VERIFYING' })`.
  *  - El KPI grid usa una sola query (`useEarningsQuery`) para totales.
  */
 
@@ -113,13 +113,6 @@ export default function VetEarningsScreen({ navigation }: Props) {
   const handleRequestWithdrawal = useCallback(() => {
     navigation.navigate('RequestWithdrawal')
   }, [navigation])
-
-  const handleVerifyTransfer = useCallback(
-    (transactionId: string) => {
-      navigation.navigate('TransferVerification', { transactionId })
-    },
-    [navigation],
-  )
 
   const isLoading = earningsQuery.isLoading
   const isRefetching =
@@ -216,12 +209,12 @@ export default function VetEarningsScreen({ navigation }: Props) {
           )}
         </Card>
 
-        {/* Transferencias pendientes */}
+        {/* Transferencias en verificación */}
         <SectionHeader
-          title="Transferencias por verificar"
+          title="Transferencias en verificación"
           subtitle={
             pendingTransfers.length > 0
-              ? `${pendingTransfers.length} esperando tu acción`
+              ? `${pendingTransfers.length} en revisión por administración`
               : 'Todo en orden'
           }
         />
@@ -231,17 +224,13 @@ export default function VetEarningsScreen({ navigation }: Props) {
           <Card variant="flat" style={styles.allDoneCard}>
             <Text style={styles.allDoneGlyph}>✓</Text>
             <Text style={styles.allDoneText}>
-              No hay transferencias pendientes de verificación.
+              No hay transferencias en verificación.
             </Text>
           </Card>
         ) : (
           <View style={{ gap: 8 }}>
             {pendingTransfers.map((tx: any) => (
-              <PendingTransferCard
-                key={tx.id}
-                transaction={tx}
-                onVerify={() => handleVerifyTransfer(tx.id)}
-              />
+              <PendingTransferCard key={tx.id} transaction={tx} />
             ))}
           </View>
         )}
@@ -297,38 +286,30 @@ function KpiCard({ label, value, isLoading, tone, sign, highlight }: KpiCardProp
 
 interface PendingTransferCardProps {
   transaction: any
-  onVerify: () => void
 }
 
-function PendingTransferCard({ transaction, onVerify }: PendingTransferCardProps) {
+function PendingTransferCard({ transaction }: PendingTransferCardProps) {
   return (
-    <Pressable
-      onPress={onVerify}
-      style={({ pressed }) => [
-        styles.pendingCard,
-        pressed && { opacity: 0.85 },
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={`Verificar transferencia de ${formatCOP(transaction.amountCop)}, ${formatRelativeTime(transaction.createdAt)}`}
-      accessibilityHint="Toca para subir comprobante"
+    <View
+      style={styles.pendingCard}
+      accessibilityLabel={`Transferencia de ${formatCOP(transaction.amountCop)} en revisión por administración, ${formatRelativeTime(transaction.createdAt)}`}
     >
       <View style={{ flex: 1 }}>
         <View style={styles.pendingTopRow}>
-          <Badge label="Por verificar" tone="warning" size="sm" />
+          <Badge label="En verificación" tone="warning" size="sm" />
           <Text style={styles.pendingAmount}>
             {formatCOP(transaction.amountCop)}
           </Text>
         </View>
         <Text style={styles.pendingDescription} numberOfLines={1}>
-          {transaction.description ?? 'Transferencia pendiente'}
+          {transaction.description ?? 'Transferencia en verificación'}
         </Text>
         <Text style={styles.pendingMeta}>
           {formatRelativeTime(transaction.createdAt)} ·{' '}
           {transaction.paymentMethod}
         </Text>
       </View>
-      <Text style={styles.pendingChevron}>›</Text>
-    </Pressable>
+    </View>
   )
 }
 
@@ -426,11 +407,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: UI_COLORS.muted,
     marginTop: 4,
-  },
-  pendingChevron: {
-    fontSize: 28,
-    color: UI_COLORS.muted,
-    marginLeft: 12,
   },
   // All done
   allDoneCard: {

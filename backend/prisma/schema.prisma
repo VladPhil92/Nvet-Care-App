@@ -25,6 +25,13 @@ enum VetTier {
   ELITE
 }
 
+enum MembershipStatus {
+  ACTIVE
+  PENDING_CHANGE
+  PAST_DUE
+  CANCELED
+}
+
 enum AppointmentStatus {
   PENDING
   CONFIRMED
@@ -296,11 +303,41 @@ model VetProfile {
   scheduleExceptions           ScheduleException[]
   professionalRegistryCheck    VetProfessionalRegistryCheck?
   withdrawals                  VetWithdrawal[]
+  membership                   VetMembership?
 
   @@index([verificationStatus])
   @@index([city])
   @@index([tier, isAvailableNow])
   @@map("vet_profiles")
+}
+
+model VetMembership {
+  id           String     @id @default(uuid())
+  vetProfileId String     @unique @map("vet_profile_id")
+  vetProfile   VetProfile @relation(fields: [vetProfileId], references: [id], onDelete: Cascade)
+
+  // Tier efectivo: es el que determina la comisión de transacciones.
+  tier             VetTier          @default(FREE)
+  status           MembershipStatus @default(ACTIVE)
+  monthlyPriceCop  Int              @default(0) @map("monthly_price_cop")
+  commissionPct    Float            @map("commission_pct")
+
+  // Periodo comercial actual. Free no requiere fecha de finalización.
+  currentPeriodStart DateTime  @default(now()) @map("current_period_start")
+  currentPeriodEnd   DateTime? @map("current_period_end")
+
+  // Un upgrade pago nunca activa beneficios antes de confirmarse el cobro.
+  requestedTier            VetTier? @map("requested_tier")
+  requestedMonthlyPriceCop Int?     @map("requested_monthly_price_cop")
+  requestedAt              DateTime? @map("requested_at")
+  resolutionNote           String?   @map("resolution_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([tier])
+  @@map("vet_memberships")
 }
 
 model VetProfessionalRegistryCheck {
@@ -350,7 +387,7 @@ model VerificationDocument {
   reviewNotes String?   @map("review_notes")
 
   uploadedAt DateTime @default(now()) @map("uploaded_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([vetProfileId])
   @@index([type])
@@ -587,9 +624,12 @@ model Price {
   vetId String     @map("vet_id")
   vet   VetProfile @relation(fields: [vetId], references: [id], onDelete: Cascade)
 
-  serviceName String @map("service_name")
-  priceCop    Float  @map("price_cop")
-  priceCtg    Float  @map("price_ctg")
+  // serviceCode vincula servicios estándar al catálogo maestro. Es opcional
+  // para permitir servicios personalizados creados libremente por cada vet.
+  serviceCode String? @map("service_code")
+  serviceName String  @map("service_name")
+  priceCop    Float   @map("price_cop")
+  priceCtg    Float   @map("price_ctg")
 
   isActive Boolean @default(true) @map("is_active")
 
@@ -597,6 +637,7 @@ model Price {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([vetId, serviceName])
+  @@index([vetId, serviceCode])
   @@map("prices")
 }
 

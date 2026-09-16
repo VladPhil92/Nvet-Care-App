@@ -16,19 +16,28 @@ Target: isolated staging only.
 
 Required identities:
 
-- CLIENT — initiates the payment;
-- VET — uploads the transfer proof;
+- CLIENT — initiates the payment and uploads the transfer proof;
+- VET — never handles the money and must be rejected if it attempts to submit proof;
 - ADMIN — confirms the received transfer.
+
+Pilot-phase model (see `docs/production/RELEASE_BLOCKERS.json` for the PR that
+introduced it): the client transfers directly to the company's own account
+(`FinancialOperationsService.getTransferDestination()`, shown in-app before
+upload) rather than to the vet, so the client — not the vet — is the one who
+reports the payment. The vet is paid out later, net of commission, through
+the existing `VetWithdrawal` flow once the appointment is confirmed and
+settled.
 
 Required lifecycle:
 
 1. create a dedicated staging appointment using `TRANSFER`;
 2. CLIENT calls `/payments/process` and receives a `PENDING` transaction;
-3. VET uploads a synthetic proof and the transaction becomes `VERIFYING`;
-4. ADMIN confirms the transfer and the transaction becomes `CONFIRMED`;
-5. the appointment becomes `CONFIRMED`;
-6. CLIENT can read the confirmed transaction and appointment;
-7. the synthetic appointment is cancelled after certification so its slot is released.
+3. VET attempting to submit proof is rejected with 403 (certifies the pilot-phase authorization boundary);
+4. CLIENT uploads a synthetic proof and the transaction becomes `VERIFYING`;
+5. ADMIN confirms the transfer and the transaction becomes `CONFIRMED`;
+6. the appointment becomes `CONFIRMED`;
+7. CLIENT can read the confirmed transaction and appointment;
+8. the synthetic appointment is cancelled after certification so its slot is released.
 
 The harness refuses known production hosts and requires `NVET_PAYMENT_CERTIFICATION_TARGET=staging`.
 

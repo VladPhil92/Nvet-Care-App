@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import {
   View,
   Text,
@@ -7,50 +7,56 @@ import {
   Pressable,
   TextInput,
   Alert,
+  Clipboard,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import {
-  Card,
-  Button,
-  Badge,
-  UI_COLORS,
-} from '../../components/ui/primitives'
+import { Card, Button, Badge, UI_COLORS } from '../../components/ui/primitives'
 import DocumentPickerCard, {
   PickedDocument,
 } from '../../components/common/DocumentPickerCard'
+import { useTransferDestinationQuery } from '../../hooks/queries/useMobileQueries'
 import { useVerifyTransferMutation } from '../../hooks/queries/useMobileMutations'
 import { pickImage } from '../../utils/imagePicker'
+import { formatCOP } from '../../utils/format'
 
 /**
- * TransferVerificationScreen — pantalla del vet para subir comprobante.
+ * TransferPaymentScreen — pantalla del cliente para pagar por transferencia
+ * directa durante la fase piloto (sin pasarela PSE todavía).
  *
- * Cuando un cliente paga por TRANSFER, el vet debe subir el comprobante de la
- * transferencia recibida para confirmar el pago. La transacción pasa de
- * VERIFYING → CONFIRMED.
- *
- * Capacidades:
- *  - Image picker para el comprobante (JPG/PNG/PDF)
- *  - Input para código/referencia de la transferencia
- *  - Date picker simple (input de texto YYYY-MM-DD por simplicidad)
- *  - Validación: comprobante + código son requeridos
+ * Flujo: el cliente transfiere el monto acordado a la cuenta de la empresa
+ * (mostrada aquí), luego sube el comprobante + código de la transferencia.
+ * Un administrador valida el comprobante y la cita queda confirmada — el
+ * estado se refleja también como aviso automático en el chat de la cita.
  */
 
 interface Props {
   navigation: any
-  route: { params: { transactionId: string } }
+  route: {
+    params: {
+      transactionId: string
+      appointmentId: string
+      amountCop: number
+    }
+  }
 }
 
-export default function TransferVerificationScreen({ navigation, route }: Props) {
-  const { transactionId } = route.params
+export default function TransferPaymentScreen({ navigation, route }: Props) {
+  const { transactionId, appointmentId, amountCop } = route.params
+
+  const destinationQuery = useTransferDestinationQuery()
+  const verifyMutation = useVerifyTransferMutation()
 
   const [proof, setProof] = useState<PickedDocument | null>(null)
   const [transferCode, setTransferCode] = useState('')
   const [transferDate, setTransferDate] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const verifyMutation = useVerifyTransferMutation()
+  const handleCopyKey = useCallback((value: string) => {
+    Clipboard.setString(value)
+    Alert.alert('Copiado', 'Llave copiada al portapapeles.')
+  }, [])
 
   const handlePickProof = useCallback(async () => {
     const picked = await pickImage()
@@ -82,30 +88,41 @@ export default function TransferVerificationScreen({ navigation, route }: Props)
       })
       Alert.alert(
         'Comprobante enviado',
-        'Verificaremos la transferencia. Recibirás una notificación cuando se confirme.',
-        [{ text: 'Entendido', onPress: () => navigation.goBack() }],
+        'Un administrador validará tu pago pronto. Te avisaremos por el chat de la cita en cuanto se confirme.',
+        [
+          {
+            text: 'Ver cita',
+            onPress: () =>
+              navigation.getParent()?.navigate('ClientAppointments', {
+                screen: 'AppointmentDetail',
+                params: { appointmentId },
+              }),
+          },
+        ],
       )
     } catch (err: any) {
       Alert.alert(
         'Error',
         err?.response?.data?.message ||
-          'No pudimos verificar la transferencia. Intenta de nuevo.',
+          'No pudimos enviar el comprobante. Intenta de nuevo.',
       )
     }
-  }, [proof, transferCode, transferDate, transactionId, verifyMutation, navigation])
+  }, [
+    proof,
+    transferCode,
+    transferDate,
+    transactionId,
+    appointmentId,
+    verifyMutation,
+    navigation,
+  ])
+
+  const destination = destinationQuery.data
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-        >
-          <Text style={styles.back}>‹</Text>
-        </Pressable>
-        <Text style={styles.title}>Verificar transferencia</Text>
+        <Text style={styles.title}>Pagar por transferencia</Text>
       </View>
 
       <KeyboardAvoidingView
@@ -113,18 +130,52 @@ export default function TransferVerificationScreen({ navigation, route }: Props)
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.content}>
-          <Card variant="flat" style={styles.intro}>
-            <Badge label="Por verificar" tone="warning" outline size="sm" />
-            <Text style={styles.introText}>
-              Sube el comprobante que recibiste y escribe el código o
-              referencia de la transferencia. Validaremos los datos en minutos.
-            </Text>
+          <Card variant="flat" style={styles.amountCard}>
+            <Text style={styles.amountLabel}>Monto a transferir</Text>
+            <Text style={styles.amountValue}>{formatCOP(amountCop)}</Text>
+          </Card>
+
+          <Card variant="flat" style={styles.destinationCard}>
+            <Badge label="Cuenta piloto" tone="warning" outline size="sm" />
+            {destinationQuery.isLoading ? (
+              <Text style={styles.introText}>Cargando datos de la cuenta…</Text>
+            ) : destination ? (
+              <>
+                <Text style={styles.destinationLabel}>Banco</Text>
+                <Text style={styles.destinationValue}>
+                  {destination.bankName}
+                </Text>
+
+                <Text style={styles.destinationLabel}>Titular</Text>
+                <Text style={styles.destinationValue}>
+                  {destination.accountHolder}
+                </Text>
+
+                <Text style={styles.destinationLabel}>Llave</Text>
+                <Pressable
+                  onPress={() => handleCopyKey(destination.transferKey)}
+                  style={styles.keyRow}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copiar llave de transferencia"
+                >
+                  <Text style={styles.keyValue}>{destination.transferKey}</Text>
+                  <Text style={styles.copyHint}>Copiar</Text>
+                </Pressable>
+
+                <Text style={styles.destinationNote}>{destination.note}</Text>
+              </>
+            ) : (
+              <Text style={styles.introText}>
+                No pudimos cargar los datos de la cuenta. Intenta de nuevo.
+              </Text>
+            )}
           </Card>
 
           <View style={{ marginTop: 24 }}>
+            <Text style={styles.sectionTitle}>Ya transferí, subo mi comprobante</Text>
             <DocumentPickerCard
               label="Comprobante de la transferencia"
-              description="JPG, PNG o PDF. Asegúrate de que se vean el monto, fecha y código."
+              description="Foto del comprobante (JPG o PNG). Asegúrate de que se vean el monto, fecha y código."
               required
               glyph="🧾"
               document={proof}
@@ -170,9 +221,7 @@ export default function TransferVerificationScreen({ navigation, route }: Props)
           <View style={{ marginTop: 24 }}>
             <Button
               label={
-                verifyMutation.isPending
-                  ? 'Enviando…'
-                  : 'Enviar comprobante'
+                verifyMutation.isPending ? 'Enviando…' : 'Enviar comprobante'
               }
               onPress={handleSubmit}
               loading={verifyMutation.isPending}
@@ -196,13 +245,55 @@ const styles = StyleSheet.create({
     backgroundColor: UI_COLORS.card,
     borderBottomWidth: 1,
     borderBottomColor: UI_COLORS.border,
-    gap: 8,
   },
-  back: { fontSize: 28, color: UI_COLORS.gold },
   title: { fontSize: 17, fontWeight: '700', color: UI_COLORS.text },
   content: { padding: 16, paddingBottom: 40 },
-  intro: { gap: 8 },
+  amountCard: { alignItems: 'center', gap: 4 },
+  amountLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: UI_COLORS.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  amountValue: { fontSize: 28, fontWeight: '800', color: UI_COLORS.text },
+  destinationCard: { marginTop: 16, gap: 4 },
   introText: { fontSize: 13, color: UI_COLORS.muted, lineHeight: 18, marginTop: 4 },
+  destinationLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: UI_COLORS.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 10,
+  },
+  destinationValue: { fontSize: 15, fontWeight: '600', color: UI_COLORS.text },
+  keyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: UI_COLORS.bg,
+    borderWidth: 1,
+    borderColor: UI_COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  keyValue: { fontSize: 18, fontWeight: '800', color: UI_COLORS.text, letterSpacing: 1 },
+  copyHint: { fontSize: 12, fontWeight: '700', color: UI_COLORS.gold },
+  destinationNote: {
+    fontSize: 12,
+    color: UI_COLORS.muted,
+    fontStyle: 'italic',
+    marginTop: 12,
+    lineHeight: 16,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: UI_COLORS.text,
+    marginBottom: 12,
+  },
   fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
