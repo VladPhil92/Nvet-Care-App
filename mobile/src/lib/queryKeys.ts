@@ -41,6 +41,8 @@ export const qk = {
     earnings: (filters?: object) =>
       [...qk.payments.all, 'earnings', filters ?? {}] as const,
     ctgRate: () => [...qk.payments.all, 'ctg-rate'] as const,
+    transferDestination: () =>
+      [...qk.payments.all, 'transfer-destination'] as const,
   },
 
   notifications: {

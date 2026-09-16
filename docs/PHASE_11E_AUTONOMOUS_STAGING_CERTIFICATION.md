@@ -45,7 +45,8 @@ The staging payment gate proves:
 
 - CLIENT creates a new staging-only appointment;
 - CLIENT initiates `TRANSFER` and receives `PENDING`;
-- VET uploads an allowed synthetic PDF proof and advances the transaction to `VERIFYING`;
+- VET is forbidden from submitting proof — the pilot-phase model pays the company's account directly, so only the CLIENT reports the transfer;
+- CLIENT uploads an allowed synthetic PDF proof and advances the transaction to `VERIFYING`;
 - ADMIN confirms the transfer and advances it to `CONFIRMED`;
 - the appointment becomes `CONFIRMED`;
 - the owning CLIENT can read the final transaction/appointment state;

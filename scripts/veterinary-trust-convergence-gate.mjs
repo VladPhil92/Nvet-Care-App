@@ -61,7 +61,11 @@ for (const [rel, operations] of [
   ],
   [
     "backend/src/payments/payments.controller.ts",
-    ["verifyTransfer", "getMyEarnings", "requestWithdrawal"],
+    // verifyTransfer is deliberately CLIENT-only (Phase 27 manual transfer
+    // pilot: the client reports the proof of their own payment to the
+    // company account, not the vet) and is asserted CLIENT-scoped by
+    // scripts/certify-transfer-payment-rail-v2.mjs instead.
+    ["getMyEarnings", "requestWithdrawal"],
   ],
   [
     "backend/src/vets/vets.controller.ts",

@@ -109,9 +109,17 @@
       "prNumber": 265,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
+      "status": "resolved",
+      "owner": "VladPhil92",
+      "justification": "Corrects release-blocking veterinary marketplace inconsistencies across pricing, commissions, memberships, booking amount authority and legacy database convergence. The change preserves veterinarian price autonomy, removes simulated plan activation, centralizes commercial policy, and adds an auditable paid-plan pending state without authorizing commercial launch or weakening payment, security, backup or operator-evidence gates. Merged into main as PR #265; the blocker is retained as resolved audit history."
+    },
+    {
+      "prNumber": 264,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
       "status": "open",
       "owner": "VladPhil92",
-      "justification": "Corrects release-blocking veterinary marketplace inconsistencies across pricing, commissions, memberships, booking amount authority and legacy database convergence. The change preserves veterinarian price autonomy, removes simulated plan activation, centralizes commercial policy, and adds an auditable paid-plan pending state without authorizing commercial launch or weakening payment, security, backup or operator-evidence gates."
+      "justification": "Introduces the pilot-phase manual TRANSFER payment flow requested for the first month of user/vet acquisition, before a PSE gateway is formalized for CTG One Technology S.A.S.: the CLIENT now pays the company's own Bre-B account directly and submits the proof (FinancialOperationsService.submitTransferProof authorizes the client, not the vet, which now receives 403), a new public GET /payments/transfer-destination exposes the env-var-configurable pilot account, and admin confirm/reject actions now post automatic SYSTEM chat notices on the appointment thread. Reuses the existing TRANSFER state machine, private/magic-bytes-validated storage, and admin transfer-tracking review queue without modification. Updates the payment-rail-certification workflow and script to certify the vet is explicitly forbidden from submitting proof before certifying the client path. No commercial launch, provider mutation, or Play publication is authorized; the vet's net payout continues through the existing VetWithdrawal mechanism, unchanged by this PR."
     }
   ]
 }

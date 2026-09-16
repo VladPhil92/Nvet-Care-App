@@ -115,6 +115,40 @@ export class ChatService {
   }
 
   /**
+   * Persist an automated status notice (e.g. transfer-proof submitted,
+   * confirmed or rejected) attributed to whoever triggered it. Unlike
+   * sendMessage(), this deliberately skips assertChatWritable(): a payment
+   * notice on a still-PENDING appointment (the client hasn't been confirmed
+   * yet) must still be visible, since informing the client/vet of that
+   * status *is* the point of the notice.
+   */
+  async createSystemNotice(
+    appointmentId: string,
+    senderId: string,
+    content: string,
+  ) {
+    return this.prisma.message.create({
+      data: {
+        appointmentId,
+        senderId,
+        content,
+        type: MessageType.SYSTEM,
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            role: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
    * Share official price (vets only)
    */
   async sharePrice(

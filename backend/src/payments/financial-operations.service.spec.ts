@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from "@nestjs/common";
 import {
   AppointmentStatus,
@@ -13,6 +14,7 @@ const TX_ID = "00000000-0000-4000-8000-000000000001";
 const APPT_ID = "00000000-0000-4000-8000-000000000002";
 const VET_ID = "00000000-0000-4000-8000-000000000003";
 const VET_USER_ID = "00000000-0000-4000-8000-000000000004";
+const CLIENT_USER_ID = "00000000-0000-4000-8000-000000000005";
 
 const pdfFile = {
   originalname: "proof.pdf",
@@ -25,6 +27,7 @@ describe("FinancialOperationsService", () => {
   let prisma: any;
   let crypto: any;
   let storage: any;
+  let chatGateway: any;
   let service: FinancialOperationsService;
 
   beforeEach(() => {
@@ -68,16 +71,23 @@ describe("FinancialOperationsService", () => {
       read: jest.fn(),
       delete: jest.fn().mockResolvedValue(undefined),
     };
-    service = new FinancialOperationsService(prisma, crypto, storage);
+    chatGateway = { emitSystemMessage: jest.fn().mockResolvedValue(undefined) };
+    service = new FinancialOperationsService(
+      prisma,
+      crypto,
+      storage,
+      chatGateway,
+    );
   });
 
-  it("persists private TRANSFER evidence with an integrity hash", async () => {
+  it("persists private TRANSFER evidence with an integrity hash and notifies the chat", async () => {
     prisma.transaction.findUnique.mockResolvedValue({
       id: TX_ID,
+      appointmentId: APPT_ID,
       paymentMethod: PaymentMethod.TRANSFER,
       status: TransactionStatus.PENDING,
       transferProofStorageKey: null,
-      appointment: { vet: { userId: VET_USER_ID } },
+      appointment: { clientId: CLIENT_USER_ID },
     });
     prisma.transaction.update.mockImplementation(async ({ data }) => ({
       id: TX_ID,
@@ -85,7 +95,7 @@ describe("FinancialOperationsService", () => {
     }));
 
     const result = await service.submitTransferProof(
-      VET_USER_ID,
+      CLIENT_USER_ID,
       TX_ID,
       pdfFile,
       { transferCode: "TRF-001" },
@@ -101,6 +111,36 @@ describe("FinancialOperationsService", () => {
     expect(result.transferProofStorageKey).toBe(
       "cloudinary:v1:private:raw:key",
     );
+    expect(chatGateway.emitSystemMessage).toHaveBeenCalledWith(
+      APPT_ID,
+      CLIENT_USER_ID,
+      expect.stringContaining("comprobante"),
+    );
+  });
+
+  it("refuses transfer proof submission from the vet — pilot phase pays the company, only the client reports it", async () => {
+    prisma.transaction.findUnique.mockResolvedValue({
+      id: TX_ID,
+      appointmentId: APPT_ID,
+      paymentMethod: PaymentMethod.TRANSFER,
+      status: TransactionStatus.PENDING,
+      transferProofStorageKey: null,
+      appointment: { clientId: CLIENT_USER_ID },
+    });
+
+    await expect(
+      service.submitTransferProof(VET_USER_ID, TX_ID, pdfFile, {
+        transferCode: "TRF-001",
+      }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(storage.upload).not.toHaveBeenCalled();
+  });
+
+  it("exposes the pilot-phase company transfer destination", () => {
+    const destination = service.getTransferDestination();
+    expect(destination.transferKey).toBeTruthy();
+    expect(destination.accountHolder).toBeTruthy();
+    expect(destination.bankName).toBeTruthy();
   });
 
   it("refuses transfer confirmation without durable evidence", async () => {

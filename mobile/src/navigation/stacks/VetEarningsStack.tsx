@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
 import type { VetEarningsStackParamList } from '../types'
 import RequestWithdrawalScreen from '../../screens/vet/RequestWithdrawalScreen'
-import TransferVerificationScreen from '../../screens/vet/TransferVerificationScreen'
 import { lazyScreen } from '../lazyScreen'
 
 const VetEarningsScreen = lazyScreen<any>(
@@ -22,10 +21,6 @@ export default function VetEarningsStack() {
       }}
     >
       <Stack.Screen name="EarningsMain" component={VetEarningsScreen} />
-      <Stack.Screen
-        name="TransferVerification"
-        component={TransferVerificationScreen}
-      />
       <Stack.Screen
         name="RequestWithdrawal"
         component={RequestWithdrawalScreen}
