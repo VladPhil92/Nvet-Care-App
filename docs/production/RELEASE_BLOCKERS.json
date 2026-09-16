@@ -106,7 +106,6 @@
       "justification": "Closes 9 of the 19 production high-severity dependency findings tracked as temporary exceptions in docs/production/PHASE_38_VULNERABILITY_EXCEPTIONS.json (expiring 2026-09-21T15:56:00Z, fail-closed): brace-expansion, browserslist, engine.io, form-data, nanoid, shell-quote, socket.io-adapter, socket.io-parser, ws. Each is pinned via root package.json overrides to a confirmed-patched non-major version; none are imported directly by application code. The remaining 10 findings require semver-major NestJS (10->12) and React Native (0.75->0.87) migrations and are deliberately left as open, separately tracked exceptions rather than attempted inside this frozen RC. Regenerates package-lock.json (npm install --legacy-peer-deps, matching CI) and reformats 6 unrelated backend files via eslint --fix as an incidental, no-logic-change consequence of a transitive prettier patch bump pulled in by the regeneration. A P1 review finding that the brace-expansion override forced an unrelated, already-safe major line (minimatch@10.2.6's brace-expansion@^5.0.8..^5.0.12) down to the older 2.1.7 was fixed by scoping that one dependent out of the blanket override and pinning it to ^5.0.9 (the first patched release in its own line) instead. Merged; authorizes no commercial launch, provider mutation, or Play publication."
     },
     {
-      "prNumber": 266,
       "prNumber": 265,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
@@ -118,10 +117,17 @@
       "prNumber": 264,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
+      "status": "resolved",
+      "owner": "VladPhil92",
+      "justification": "Introduces the pilot-phase manual TRANSFER payment flow requested for the first month of user/vet acquisition, before a PSE gateway is formalized for CTG One Technology S.A.S.: the CLIENT now pays the company's own Bre-B account directly and submits the proof (FinancialOperationsService.submitTransferProof authorizes the client, not the vet, which now receives 403), a new public GET /payments/transfer-destination exposes the env-var-configurable pilot account, and admin confirm/reject actions now post automatic SYSTEM chat notices on the appointment thread. Reuses the existing TRANSFER state machine, private/magic-bytes-validated storage, and admin transfer-tracking review queue without modification. Updates the payment-rail-certification workflow and script to certify the vet is explicitly forbidden from submitting proof before certifying the client path. No commercial launch, provider mutation, or Play publication is authorized; the vet's net payout continues through the existing VetWithdrawal mechanism, unchanged by this PR. Merged into main as PR #264; the blocker is retained as resolved audit history."
+    },
+    {
+      "prNumber": 266,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
       "status": "open",
       "owner": "VladPhil92",
       "justification": "Closes a functionality gap surfaced by the pet/vet/chat feature audit: pet creation had no way to attach a photo despite Pet.photo and the mobile pickImage() helper already existing unused. Adds POST/DELETE /pets/:id/photo, ownership-checked via the existing requireOwner guard and uploaded through the shared StorageService (magic-bytes validated, public visibility, image-only allow-list) behind a dedicated PetsModule Multer config mirroring the vets/payments upload modules. Mobile MyPetsScreen gains a camera/gallery photo picker in the create/edit modal and renders the uploaded photo on the pet card. No changes to money, settlement, entitlement, KYC, wallet or identity paths; authorizes no commercial launch, provider mutation, or Play publication."
-      "justification": "Introduces the pilot-phase manual TRANSFER payment flow requested for the first month of user/vet acquisition, before a PSE gateway is formalized for CTG One Technology S.A.S.: the CLIENT now pays the company's own Bre-B account directly and submits the proof (FinancialOperationsService.submitTransferProof authorizes the client, not the vet, which now receives 403), a new public GET /payments/transfer-destination exposes the env-var-configurable pilot account, and admin confirm/reject actions now post automatic SYSTEM chat notices on the appointment thread. Reuses the existing TRANSFER state machine, private/magic-bytes-validated storage, and admin transfer-tracking review queue without modification. Updates the payment-rail-certification workflow and script to certify the vet is explicitly forbidden from submitting proof before certifying the client path. No commercial launch, provider mutation, or Play publication is authorized; the vet's net payout continues through the existing VetWithdrawal mechanism, unchanged by this PR."
     }
   ]
 }
