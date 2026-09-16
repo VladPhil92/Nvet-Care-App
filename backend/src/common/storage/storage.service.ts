@@ -53,6 +53,7 @@ export class StorageService {
   private readonly driver: "local" | "cloudinary";
   private readonly uploadDir: string;
   private readonly cloudinaryFolder: string;
+  private readonly localPublicBaseUrl: string;
 
   constructor(private readonly magicBytes: MagicBytesValidator) {
     const configured = (process.env.STORAGE_DRIVER ?? "").toLowerCase();
@@ -64,6 +65,10 @@ export class StorageService {
     this.uploadDir =
       process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
     this.cloudinaryFolder = process.env.CLOUDINARY_UPLOAD_FOLDER ?? "nvetcare";
+    this.localPublicBaseUrl = (
+      process.env.PUBLIC_BACKEND_URL ??
+      `http://localhost:${process.env.PORT ?? 3000}`
+    ).replace(/\/+$/, "");
 
     this.logger.log(`StorageService initialized: driver=${this.driver}`);
 
@@ -180,13 +185,18 @@ export class StorageService {
       throw new InternalServerErrorException("No se pudo guardar el archivo");
     }
 
-    const publicUrl = `/uploads/public/${folder}/${fileName}`;
+    const publicUrl = `${this.localPublicBaseUrl}/uploads/public/${folder}/${fileName}`;
     return {
       url: options.visibility === "public" ? publicUrl : filePath,
       storageKey: filePath,
       driver: "local",
       visibility: options.visibility,
     };
+  }
+
+  /** Absolute filesystem directory served as static content at /uploads/public (local driver only). */
+  getLocalPublicUploadDir(): string {
+    return path.join(this.uploadDir, "public");
   }
 
   private async deleteFromLocal(storageKey: string): Promise<void> {

@@ -8,6 +8,7 @@ import { Logger as PinoLogger } from "nestjs-pino";
 import helmet from "helmet";
 import compression = require("compression");
 import { AppModule } from "./app.module";
+import { StorageService } from "./common/storage/storage.service";
 
 const CTG_ONE_PRODUCTION_SUPABASE_URL =
   "https://mdscwjvlihdiflcvghhk.supabase.co";
@@ -80,6 +81,16 @@ async function bootstrap() {
   const expressApp = app.getHttpAdapter().getInstance();
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const express = require("express");
+
+  // Local storage driver (default without Cloudinary configured) needs its
+  // public upload directory servable; StorageService's local public URLs
+  // resolve against this same path. Cloudinary-backed deployments never hit
+  // this route since their URLs point at Cloudinary directly.
+  expressApp.use(
+    "/uploads/public",
+    express.static(app.get(StorageService).getLocalPublicUploadDir()),
+  );
+
   expressApp.use(
     express.json({
       limit: "1mb",
