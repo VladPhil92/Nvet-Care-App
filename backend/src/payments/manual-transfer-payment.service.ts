@@ -12,8 +12,8 @@ import {
   UserRole,
 } from "@prisma/client";
 import { createHash } from "crypto";
-import { PrismaService } from "../prisma/prisma.service";
 import { StorageService } from "../common/storage/storage.service";
+import { PrismaService } from "../prisma/prisma.service";
 import type { VerifyTransferDto } from "./dto/payment.dto";
 
 const CUSTOMER_SERVICE_WHATSAPP = "3186428218";
@@ -69,14 +69,18 @@ export class ManualTransferPaymentService {
       { visibility: "private" },
     );
     const proofSha256 = createHash("sha256").update(file.buffer).digest("hex");
+    const submittedAt = new Date();
 
-    const updated = await this.prisma.transaction.update({
-      where: { id: transactionId },
+    const claimed = await this.prisma.transaction.updateMany({
+      where: {
+        id: transactionId,
+        status: TransactionStatus.PENDING,
+      },
       data: {
         status: TransactionStatus.VERIFYING,
         transferCode: dto.transferCode.trim(),
         transferDate: dto.transferDate ? new Date(dto.transferDate) : null,
-        transferSubmittedAt: new Date(),
+        transferSubmittedAt: submittedAt,
         transferProofStorageKey: uploaded.storageKey,
         transferProofFileName: this.sanitizeFileName(file.originalname),
         transferProofMimeType: file.mimetype,
@@ -85,6 +89,17 @@ export class ManualTransferPaymentService {
         transferRejectedAt: null,
         transferRejectionReason: null,
       },
+    });
+
+    if (claimed.count !== 1) {
+      await this.storage.delete(uploaded.storageKey);
+      throw new ConflictException(
+        "La transferencia cambió de estado antes de recibir el comprobante",
+      );
+    }
+
+    const updated = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
     });
 
     const admins = await this.prisma.user.findMany({
@@ -96,7 +111,6 @@ export class ManualTransferPaymentService {
     });
 
     if (admins.length > 0) {
-      const occurredAt = new Date();
       await this.prisma.notification.createMany({
         data: admins.map((admin) => ({
           userId: admin.id,
@@ -112,13 +126,46 @@ export class ManualTransferPaymentService {
             amountCop: transaction.amountCop,
             petName: transaction.appointment.pet.name,
           },
-          occurredAt,
+          occurredAt: submittedAt,
         })),
         skipDuplicates: true,
       });
     }
 
     return updated;
+  }
+
+  async getProof(transactionId: string): Promise<{
+    buffer: Buffer;
+    mimeType: string;
+    fileName: string;
+  }> {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: {
+        paymentMethod: true,
+        transferProofStorageKey: true,
+        transferProofFileName: true,
+        transferProofMimeType: true,
+      },
+    });
+
+    if (!transaction) throw new NotFoundException("Transacción no encontrada");
+    if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
+      throw new BadRequestException("Solo aplicable a pagos por transferencia");
+    }
+    if (!transaction.transferProofStorageKey) {
+      throw new NotFoundException("La transferencia aún no tiene comprobante");
+    }
+
+    const buffer = await this.storage.read(transaction.transferProofStorageKey);
+    return {
+      buffer,
+      mimeType: transaction.transferProofMimeType || "application/octet-stream",
+      fileName: this.sanitizeFileName(
+        transaction.transferProofFileName || "comprobante",
+      ),
+    };
   }
 
   async approve(adminUserId: string, transactionId: string) {
@@ -149,9 +196,12 @@ export class ManualTransferPaymentService {
     }
 
     const now = new Date();
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const payment = await tx.transaction.update({
-        where: { id: transactionId },
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.transaction.updateMany({
+        where: {
+          id: transactionId,
+          status: TransactionStatus.VERIFYING,
+        },
         data: {
           status: TransactionStatus.CONFIRMED,
           verifiedAt: now,
@@ -160,6 +210,12 @@ export class ManualTransferPaymentService {
           transferRejectionReason: null,
         },
       });
+
+      if (claimed.count !== 1) {
+        throw new ConflictException(
+          "La transferencia ya fue revisada por otro administrador",
+        );
+      }
 
       await tx.appointment.update({
         where: { id: transaction.appointmentId },
@@ -186,7 +242,10 @@ export class ManualTransferPaymentService {
           title: "Pago aprobado y servicio confirmado",
           message: `Validamos tu transferencia. El servicio ${transaction.appointment.serviceType} para ${transaction.appointment.pet.name} quedó confirmado.`,
           actionPath: `/appointments/${transaction.appointmentId}`,
-          metadata: { transactionId, appointmentId: transaction.appointmentId },
+          metadata: {
+            transactionId,
+            appointmentId: transaction.appointmentId,
+          },
           occurredAt: now,
         },
       });
@@ -216,22 +275,25 @@ export class ManualTransferPaymentService {
             petId: transaction.appointment.petId,
             petName: transaction.appointment.pet.name,
             clientId: transaction.appointment.clientId,
-            clientName: `${transaction.appointment.client.firstName ?? ""} ${transaction.appointment.client.lastName ?? ""}`.trim(),
+            clientName:
+              `${transaction.appointment.client.firstName ?? ""} ${transaction.appointment.client.lastName ?? ""}`.trim(),
             notes: transaction.appointment.notes,
           },
           occurredAt: now,
         },
       });
 
-      return payment;
+      return tx.transaction.findUnique({ where: { id: transactionId } });
     });
-
-    return updated;
   }
 
   async reject(adminUserId: string, transactionId: string, reason: string) {
     const normalizedReason = reason?.trim();
-    if (!normalizedReason || normalizedReason.length < 10 || normalizedReason.length > 500) {
+    if (
+      !normalizedReason ||
+      normalizedReason.length < 10 ||
+      normalizedReason.length > 500
+    ) {
       throw new BadRequestException(
         "La razón de rechazo debe tener entre 10 y 500 caracteres",
       );
@@ -253,8 +315,11 @@ export class ManualTransferPaymentService {
 
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.transaction.update({
-        where: { id: transactionId },
+      const claimed = await tx.transaction.updateMany({
+        where: {
+          id: transactionId,
+          status: TransactionStatus.VERIFYING,
+        },
         data: {
           status: TransactionStatus.FAILED,
           transferReviewedById: adminUserId,
@@ -262,6 +327,12 @@ export class ManualTransferPaymentService {
           transferRejectionReason: normalizedReason,
         },
       });
+
+      if (claimed.count !== 1) {
+        throw new ConflictException(
+          "La transferencia ya fue revisada por otro administrador",
+        );
+      }
 
       await tx.notification.upsert({
         where: {
@@ -293,7 +364,7 @@ export class ManualTransferPaymentService {
         },
       });
 
-      return updated;
+      return tx.transaction.findUnique({ where: { id: transactionId } });
     });
   }
 
