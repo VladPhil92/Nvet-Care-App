@@ -63,6 +63,12 @@ async function purgePersistedUserState() {
  * tokens and submit as the wrong account. The current 'auth' mutation is
  * preserved because this function runs from inside its own mutationFn.
  */
+function purgeOtherUserQueries() {
+  queryClient.removeQueries({
+    predicate: (query) => !Array.isArray(query.queryKey) || query.queryKey[0] !== 'auth',
+  })
+}
+
 function purgeOtherUserMutations() {
   const mutationCache = queryClient.getMutationCache()
   for (const mutation of mutationCache.getAll()) {
@@ -91,13 +97,19 @@ export async function adoptSessionCacheOwner(userId: string) {
 
   if (currentOwner !== userId) {
     await queryClient.cancelQueries().catch(() => undefined)
-    // Clear only the query cache, not queryClient.clear(): this function runs
-    // synchronously inside the login/register mutation's own mutationFn
-    // (authService.persistSession -> adoptAuthenticatedUser). queryClient.clear()
-    // also wipes the mutation cache, which orphans that very in-flight mutation's
-    // observer and stops its onSuccess/setQueryData from ever reaching the UI —
-    // the screen is then stuck showing the login form after a successful login.
-    queryClient.getQueryCache().clear()
+    // Never call queryClient.clear() or queryCache.clear() here: this function
+    // runs synchronously inside the login/register mutation's own mutationFn
+    // (authService.persistSession -> adoptAuthenticatedUser), while
+    // RootNavigator's useCurrentUserQuery() observer is actively mounted on
+    // the SAME 'auth','me' query key this call is about to seed via
+    // setQueryData. Clearing the query cache (verified empirically against
+    // the real @tanstack/react-query implementation) detaches that live
+    // observer from its query; the setQueryData call right after this
+    // function returns then writes to a fresh, unobserved query object and
+    // never reaches the mounted component — the app is stuck on the login
+    // screen after a successful authentication. Removing every query except
+    // the 'auth' domain leaves that observer's own query untouched.
+    purgeOtherUserQueries()
     purgeOtherUserMutations()
     resetUserScopedRuntimeState()
     await purgePersistedUserState()
@@ -124,9 +136,18 @@ export async function adoptAuthenticatedUser<T extends { id: string }>(user: T) 
  */
 export async function clearSessionCache() {
   await queryClient.cancelQueries().catch(() => undefined)
-  // See adoptSessionCacheOwner: only the query cache is cleared here so the
-  // in-flight logout mutation's own observer/onSuccess is not orphaned.
-  queryClient.getQueryCache().clear()
+  // See adoptSessionCacheOwner: purgeOtherUserQueries() leaves the 'auth'
+  // query's own observer attached rather than detaching it. But this
+  // function is also called directly by authService.logoutAllDevices(),
+  // changePassword() and deleteAccount() — none of which go through a
+  // mutation that clears the cache afterward like useLogoutMutation does.
+  // qk.auth.me() has staleTime: Infinity, so without this, RootNavigator
+  // would keep rendering the authenticated stack with the stale cached user
+  // after those flows revoke the session server-side. Writing null through
+  // the still-attached observer ends the session for every caller; a later
+  // queryClient.clear() (e.g. useLogoutMutation's onSuccess) is unaffected.
+  purgeOtherUserQueries()
+  queryClient.setQueryData(qk.auth.me(), null)
   purgeOtherUserMutations()
   resetUserScopedRuntimeState()
 
