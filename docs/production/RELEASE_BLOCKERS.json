@@ -125,9 +125,17 @@
       "prNumber": 266,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
+      "status": "resolved",
+      "owner": "VladPhil92",
+      "justification": "Closes a functionality gap surfaced by the pet/vet/chat feature audit: pet creation had no way to attach a photo despite Pet.photo and the mobile pickImage() helper already existing unused. Adds POST/DELETE /pets/:id/photo, ownership-checked via the existing requireOwner guard and uploaded through the shared StorageService (magic-bytes validated, public visibility, image-only allow-list) behind a dedicated PetsModule Multer config mirroring the vets/payments upload modules. Mobile MyPetsScreen gains a camera/gallery photo picker in the create/edit modal and renders the uploaded photo on the pet card. No changes to money, settlement, entitlement, KYC, wallet or identity paths; authorizes no commercial launch, provider mutation, or Play publication. Merged into main as PR #266; the blocker is retained as resolved audit history."
+    },
+    {
+      "prNumber": 267,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
       "status": "open",
       "owner": "VladPhil92",
-      "justification": "Closes a functionality gap surfaced by the pet/vet/chat feature audit: pet creation had no way to attach a photo despite Pet.photo and the mobile pickImage() helper already existing unused. Adds POST/DELETE /pets/:id/photo, ownership-checked via the existing requireOwner guard and uploaded through the shared StorageService (magic-bytes validated, public visibility, image-only allow-list) behind a dedicated PetsModule Multer config mirroring the vets/payments upload modules. Mobile MyPetsScreen gains a camera/gallery photo picker in the create/edit modal and renders the uploaded photo on the pet card. No changes to money, settlement, entitlement, KYC, wallet or identity paths; authorizes no commercial launch, provider mutation, or Play publication."
+      "justification": "Adds the exact manual-transfer QR asset used by the client transfer flow in mobile chat so the pilot company-account payment destination can be rendered from repository-owned source bytes without network transformation. This is an asset-only protected product change and does not alter settlement logic, provider configuration, payment authorization, commercial-launch status, or Play publication boundaries."
     }
   ]
 }
