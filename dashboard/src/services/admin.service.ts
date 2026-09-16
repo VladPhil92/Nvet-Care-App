@@ -119,19 +119,29 @@ class AdminService {
   }
 
   /**
-   * Compatibilidad con la UI legacy. El endpoint se mantiene encapsulado aquí
-   * para que una futura migración a la máquina de estados de disputas no se
-   * propague a los componentes.
+   * Verificación manual de transferencias. La aprobación confirma la cita y
+   * dispara las notificaciones al cliente y al veterinario; el rechazo conserva
+   * la cita sin confirmar y comunica al cliente el canal de Servicio al Cliente.
    */
   async verifyTransfer(
     transactionId: string,
     verification: boolean | { action: 'CONFIRM' | 'REJECT'; reason?: string },
   ): Promise<void> {
-    const payload =
+    const normalized =
       typeof verification === 'boolean'
-        ? { verified: verification }
+        ? { action: verification ? 'CONFIRM' as const : 'REJECT' as const }
         : verification
-    await apiClient.post(`/admin/transactions/${transactionId}/verify`, payload)
+
+    if (normalized.action === 'CONFIRM') {
+      await apiClient.post(`/payments/manual-transfer/${transactionId}/approve`)
+      return
+    }
+
+    await apiClient.post(`/payments/manual-transfer/${transactionId}/reject`, {
+      reason:
+        normalized.reason?.trim() ||
+        'No fue posible validar la transferencia con el comprobante recibido.',
+    })
   }
 
   async resolveDispute(
