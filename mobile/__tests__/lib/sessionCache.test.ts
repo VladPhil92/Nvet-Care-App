@@ -12,13 +12,20 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 jest.mock('../../src/lib/queryClient', () => {
   const queryCacheClear = jest.fn()
+  const mutationCacheRemove = jest.fn()
+  let mutations: unknown[] = []
   return {
     queryClient: {
       cancelQueries: jest.fn(async () => undefined),
       clear: jest.fn(),
       getQueryCache: () => ({ clear: queryCacheClear }),
+      getMutationCache: () => ({ getAll: () => mutations, remove: mutationCacheRemove }),
       setQueryData: jest.fn(),
       __queryCacheClear: queryCacheClear,
+      __mutationCacheRemove: mutationCacheRemove,
+      __setMutations: (next: unknown[]) => {
+        mutations = next
+      },
     },
   }
 })
@@ -41,8 +48,13 @@ jest.mock('../../src/stores/useWalletStore', () => ({
 import { adoptSessionCacheOwner, clearSessionCache } from '../../src/lib/sessionCache'
 import { queryClient } from '../../src/lib/queryClient'
 
-const queryCacheClear = (queryClient as unknown as { __queryCacheClear: jest.Mock })
-  .__queryCacheClear
+const queryClientMock = queryClient as unknown as {
+  __queryCacheClear: jest.Mock
+  __mutationCacheRemove: jest.Mock
+  __setMutations: (next: unknown[]) => void
+}
+const queryCacheClear = queryClientMock.__queryCacheClear
+const mutationCacheRemove = queryClientMock.__mutationCacheRemove
 
 /**
  * Regression test for the Phase 46 mobile login regression: adopting/clearing
@@ -58,6 +70,8 @@ describe('sessionCache', () => {
     for (const key of Object.keys(mockStorage)) delete mockStorage[key]
     ;(queryClient.clear as jest.Mock).mockClear()
     queryCacheClear.mockClear()
+    mutationCacheRemove.mockClear()
+    queryClientMock.__setMutations([])
   })
 
   it('adoptSessionCacheOwner never wipes the mutation cache for a new owner', async () => {
@@ -82,5 +96,29 @@ describe('sessionCache', () => {
 
     expect(queryCacheClear).toHaveBeenCalledTimes(1)
     expect(queryClient.clear).not.toHaveBeenCalled()
+  })
+
+  it('adoptSessionCacheOwner purges a previous user\'s paused mutations but keeps the in-flight auth one', async () => {
+    const authMutation = { options: { mutationKey: ['auth', 'login'] } }
+    const bookingMutation = { options: { mutationKey: ['appointments', 'book'] } }
+    const keylessMutation = { options: {} }
+    queryClientMock.__setMutations([authMutation, bookingMutation, keylessMutation])
+
+    await adoptSessionCacheOwner('user-1')
+
+    expect(mutationCacheRemove).toHaveBeenCalledWith(bookingMutation)
+    expect(mutationCacheRemove).toHaveBeenCalledWith(keylessMutation)
+    expect(mutationCacheRemove).not.toHaveBeenCalledWith(authMutation)
+  })
+
+  it('clearSessionCache purges every non-auth mutation on logout', async () => {
+    const authMutation = { options: { mutationKey: ['auth', 'logout'] } }
+    const bookingMutation = { options: { mutationKey: ['appointments', 'book'] } }
+    queryClientMock.__setMutations([authMutation, bookingMutation])
+
+    await clearSessionCache()
+
+    expect(mutationCacheRemove).toHaveBeenCalledWith(bookingMutation)
+    expect(mutationCacheRemove).not.toHaveBeenCalledWith(authMutation)
   })
 })

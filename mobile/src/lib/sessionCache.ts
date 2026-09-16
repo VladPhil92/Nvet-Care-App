@@ -55,6 +55,25 @@ async function purgePersistedUserState() {
 }
 
 /**
+ * Removes every mutation from the live MutationCache except ones under the
+ * 'auth' domain (login/register/logout/updateProfile). A previous user's
+ * paused durable mutation — e.g. an offline appointment booking retained by
+ * QueryProvider's resumePausedMutations — must never survive a session
+ * boundary: left in the cache, it can resume under the next signed-in user's
+ * tokens and submit as the wrong account. The current 'auth' mutation is
+ * preserved because this function runs from inside its own mutationFn.
+ */
+function purgeOtherUserMutations() {
+  const mutationCache = queryClient.getMutationCache()
+  for (const mutation of mutationCache.getAll()) {
+    const key = mutation.options.mutationKey
+    if (!Array.isArray(key) || key[0] !== 'auth') {
+      mutationCache.remove(mutation)
+    }
+  }
+}
+
+/**
  * Binds persisted client state to a single authenticated Nvet user.
  *
  * A missing owner is treated as untrusted legacy state and purged. This makes
@@ -79,6 +98,7 @@ export async function adoptSessionCacheOwner(userId: string) {
     // observer and stops its onSuccess/setQueryData from ever reaching the UI —
     // the screen is then stuck showing the login form after a successful login.
     queryClient.getQueryCache().clear()
+    purgeOtherUserMutations()
     resetUserScopedRuntimeState()
     await purgePersistedUserState()
   }
@@ -107,6 +127,7 @@ export async function clearSessionCache() {
   // See adoptSessionCacheOwner: only the query cache is cleared here so the
   // in-flight logout mutation's own observer/onSuccess is not orphaned.
   queryClient.getQueryCache().clear()
+  purgeOtherUserMutations()
   resetUserScopedRuntimeState()
 
   await Promise.all([
