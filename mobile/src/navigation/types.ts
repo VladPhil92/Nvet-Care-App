@@ -58,6 +58,7 @@ export type VetProfileStackParamList = {
   EditProfile: undefined
   DeleteAccount: undefined
   PriceManagement: undefined
+  Membership: undefined
   RequestWithdrawal: undefined
   TwoFactorEnrollment: undefined
   ChangePassword: undefined
@@ -103,6 +104,7 @@ export type SharedStackParamList = {
   TwoFactorEnrollment: undefined
   ActiveSessions: undefined
   PriceManagement: undefined
+  Membership: undefined
   RequestWithdrawal: undefined
   TransferVerification: { transactionId: string }
   ChangePassword: undefined
