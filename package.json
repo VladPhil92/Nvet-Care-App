@@ -13,6 +13,9 @@
   "overrides": {
     "react-native-reanimated": "3.15.5",
     "brace-expansion": "2.1.7",
+    "minimatch@10.2.6": {
+      "brace-expansion": "^5.0.9"
+    },
     "browserslist": "4.28.7",
     "engine.io": "6.6.9",
     "form-data": "4.0.6",
