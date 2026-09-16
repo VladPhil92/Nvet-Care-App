@@ -282,8 +282,54 @@ const requiredMultipartLimits = [
   'headerPairs',
 ]
 
+// A commented-out limit leaves multer on its unbounded default, so the checks
+// below run against source with comments stripped, and only inside the braces
+// of each `limits` object — never against the module at large.
+function stripComments(source) {
+  let output = ''
+  let mode = 'code'
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    const next = source[index + 1]
+    if (mode === 'code') {
+      if (char === '/' && next === '/') mode = 'line'
+      else if (char === '/' && next === '*') mode = 'block'
+      else output += char
+    } else if (mode === 'line') {
+      if (char === '\n') {
+        mode = 'code'
+        output += char
+      }
+    } else if (char === '*' && next === '/') {
+      mode = 'code'
+      index += 1
+    }
+  }
+  return output
+}
+
+function extractLimitsBlocks(source) {
+  const blocks = []
+  const opener = /limits\s*:\s*\{/g
+  let match
+  while ((match = opener.exec(source)) !== null) {
+    let depth = 1
+    let index = match.index + match[0].length
+    const start = index
+    while (index < source.length && depth > 0) {
+      if (source[index] === '{') depth += 1
+      else if (source[index] === '}') depth -= 1
+      index += 1
+    }
+    if (depth === 0) blocks.push(source.slice(start, index - 1))
+  }
+  return blocks
+}
+
 const multipartModules = walk('backend/src').filter(
-  (rel) => !rel.endsWith('.spec.ts') && /MulterModule\.register\(/.test(read(rel)),
+  (rel) =>
+    !rel.endsWith('.spec.ts') &&
+    /MulterModule\.register\(/.test(stripComments(read(rel))),
 )
 
 if (multipartModules.length === 0) {
@@ -293,12 +339,20 @@ if (multipartModules.length === 0) {
 }
 
 for (const rel of multipartModules) {
-  const source = read(rel)
-  for (const limit of requiredMultipartLimits) {
-    if (!new RegExp(`${limit}\\s*:\\s*\\d`).test(source)) {
-      failures.push(
-        `Multipart upload hardening: ${rel} must declare a numeric \`${limit}\` limit`,
-      )
+  const blocks = extractLimitsBlocks(stripComments(read(rel)))
+  if (blocks.length === 0) {
+    failures.push(
+      `Multipart upload hardening: ${rel} registers MulterModule without a \`limits\` object`,
+    )
+    continue
+  }
+  for (const block of blocks) {
+    for (const limit of requiredMultipartLimits) {
+      if (!new RegExp(`(?:^|[{,\\s])${limit}\\s*:\\s*\\d`).test(block)) {
+        failures.push(
+          `Multipart upload hardening: ${rel} must declare a numeric \`${limit}\` limit`,
+        )
+      }
     }
   }
 }
