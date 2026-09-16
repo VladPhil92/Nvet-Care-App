@@ -41,7 +41,8 @@ export const SUGGESTED_SERVICE_CATALOG: SuggestedVeterinaryService[] = [
     suggestedMinCop: 85_000,
     suggestedMaxCop: 115_000,
     priceType: "FROM",
-    description: "Precio de referencia; el valor final depende del biológico aplicado.",
+    description:
+      "Precio de referencia; el valor final depende del biológico aplicado.",
   },
   {
     code: "DEWORMING",
@@ -50,7 +51,8 @@ export const SUGGESTED_SERVICE_CATALOG: SuggestedVeterinaryService[] = [
     suggestedMinCop: 70_000,
     suggestedMaxCop: 90_000,
     priceType: "FROM",
-    description: "Precio de referencia; puede variar según peso y producto utilizado.",
+    description:
+      "Precio de referencia; puede variar según peso y producto utilizado.",
   },
   {
     code: "PREVENTIVE_CHECKUP",
@@ -96,7 +98,8 @@ export const VET_MEMBERSHIP_PLANS: Record<VetTier, VetMembershipPlan> = {
     name: "Free Vet",
     monthlyPriceCop: 0,
     commissionPct: 10,
-    description: "Sin mensualidad. El veterinario conserva libertad total de precios.",
+    description:
+      "Sin mensualidad. El veterinario conserva libertad total de precios.",
     perks: [
       "Servicios y citas ilimitados",
       "Perfil profesional verificado",
@@ -109,7 +112,8 @@ export const VET_MEMBERSHIP_PLANS: Record<VetTier, VetMembershipPlan> = {
     name: "VetPro",
     monthlyPriceCop: 39_900,
     commissionPct: 8,
-    description: "Menor comisión y herramientas de crecimiento para la práctica.",
+    description:
+      "Menor comisión y herramientas de crecimiento para la práctica.",
     perks: [
       "Servicios y citas ilimitados",
       "8% de comisión por transacción",

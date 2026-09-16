@@ -15,10 +15,7 @@ import {
   Prisma,
   UserRole,
 } from "@prisma/client";
-import {
-  CTG_TO_COP_RATE,
-  getCommissionRate,
-} from "../vets/commercial-policy";
+import { CTG_TO_COP_RATE, getCommissionRate } from "../vets/commercial-policy";
 
 export interface PseWebhookPayload {
   externalTransactionId: string;
@@ -557,7 +554,9 @@ export class PaymentsService {
     });
 
     if (!user || !user.vetProfile) {
-      throw new ForbiddenException("Solo veterinarios pueden solicitar retiros");
+      throw new ForbiddenException(
+        "Solo veterinarios pueden solicitar retiros",
+      );
     }
 
     const balance = await this.getBalance(userId, UserRole.VET);

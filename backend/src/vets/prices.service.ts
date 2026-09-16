@@ -66,7 +66,10 @@ export class PricesService {
     if (!vet) throw new NotFoundException("Vet profile not found");
 
     this.validatePriceRange(data.priceCop);
-    const normalized = this.normalizeService(data.serviceCode, data.serviceName);
+    const normalized = this.normalizeService(
+      data.serviceCode,
+      data.serviceName,
+    );
 
     await this.assertServiceIsUnique(
       vet.id,
@@ -175,21 +178,30 @@ export class PricesService {
 
     const normalized = prices.map((price) => {
       this.validatePriceRange(price.priceCop);
-      const service = this.normalizeService(price.serviceCode, price.serviceName);
+      const service = this.normalizeService(
+        price.serviceCode,
+        price.serviceName,
+      );
       return { ...price, ...service };
     });
 
-    const requestKeys = normalized.map((p) => p.serviceCode ?? p.serviceName.toLowerCase());
+    const requestKeys = normalized.map(
+      (p) => p.serviceCode ?? p.serviceName.toLowerCase(),
+    );
     if (new Set(requestKeys).size !== requestKeys.length) {
       throw new BadRequestException("Duplicate services in request");
     }
 
-    const existing = await this.prisma.price.findMany({ where: { vetId: vet.id } });
+    const existing = await this.prisma.price.findMany({
+      where: { vetId: vet.id },
+    });
     const conflicts = normalized.filter((candidate) =>
       existing.some(
         (current) =>
-          (candidate.serviceCode && current.serviceCode === candidate.serviceCode) ||
-          current.serviceName.toLowerCase() === candidate.serviceName.toLowerCase(),
+          (candidate.serviceCode &&
+            current.serviceCode === candidate.serviceCode) ||
+          current.serviceName.toLowerCase() ===
+            candidate.serviceName.toLowerCase(),
       ),
     );
     if (conflicts.length > 0) {
@@ -241,7 +253,10 @@ export class PricesService {
     };
   }
 
-  private normalizeService(serviceCode: string | undefined, serviceName: string) {
+  private normalizeService(
+    serviceCode: string | undefined,
+    serviceName: string,
+  ) {
     const trimmedName = serviceName.trim();
     if (!trimmedName) throw new BadRequestException("Service name is required");
 
@@ -251,7 +266,9 @@ export class PricesService {
 
     const suggested = findSuggestedService(serviceCode);
     if (!suggested) {
-      throw new BadRequestException(`Unknown Nvet service code: ${serviceCode}`);
+      throw new BadRequestException(
+        `Unknown Nvet service code: ${serviceCode}`,
+      );
     }
 
     return {

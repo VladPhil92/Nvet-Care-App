@@ -138,8 +138,10 @@ export class AppointmentsService {
     });
 
     if (!vet) throw new NotFoundException("Veterinarian not found");
-    if (!vet.isActive) throw new BadRequestException("Veterinarian is not active");
-    if (!vet.isVerified) throw new BadRequestException("Veterinarian is not verified");
+    if (!vet.isActive)
+      throw new BadRequestException("Veterinarian is not active");
+    if (!vet.isVerified)
+      throw new BadRequestException("Veterinarian is not verified");
 
     if (this.coverage) {
       this.coverage.assertBookableLocation({
@@ -326,7 +328,9 @@ export class AppointmentsService {
 
     let estimatedArrival: string | null =
       appointment.etaMinutes != null
-        ? new Date(Date.now() + appointment.etaMinutes * 60 * 1000).toISOString()
+        ? new Date(
+            Date.now() + appointment.etaMinutes * 60 * 1000,
+          ).toISOString()
         : null;
 
     if (
@@ -399,7 +403,8 @@ export class AppointmentsService {
     };
 
     if (next === AppointmentStatus.CONFIRMED) timestampField.confirmedAt = now;
-    if (next === AppointmentStatus.IN_PROGRESS) timestampField.inProgressAt = now;
+    if (next === AppointmentStatus.IN_PROGRESS)
+      timestampField.inProgressAt = now;
     if (next === AppointmentStatus.COMPLETED) timestampField.completedAt = now;
 
     return this.prisma.appointment.update({

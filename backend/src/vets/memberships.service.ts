@@ -5,10 +5,7 @@ import {
 } from "@nestjs/common";
 import { MembershipStatus, VetTier } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import {
-  VET_MEMBERSHIP_PLANS,
-  getMembershipPlan,
-} from "./commercial-policy";
+import { VET_MEMBERSHIP_PLANS, getMembershipPlan } from "./commercial-policy";
 
 @Injectable()
 export class MembershipsService {
@@ -29,7 +26,8 @@ export class MembershipsService {
     }
 
     const membership =
-      vet.membership ?? (await this.createMembershipForExistingVet(vet.id, vet.tier));
+      vet.membership ??
+      (await this.createMembershipForExistingVet(vet.id, vet.tier));
 
     // Si un admin actualizó el tier por la ruta legacy, reconciliamos el estado
     // para que no quede una solicitud pendiente ya resuelta de facto.
@@ -62,7 +60,8 @@ export class MembershipsService {
     }
 
     const membership =
-      vet.membership ?? (await this.createMembershipForExistingVet(vet.id, vet.tier));
+      vet.membership ??
+      (await this.createMembershipForExistingVet(vet.id, vet.tier));
 
     if (requestedTier === vet.tier) {
       return this.toResponse(membership);
