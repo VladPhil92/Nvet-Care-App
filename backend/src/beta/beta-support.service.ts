@@ -23,11 +23,7 @@ const SENSITIVE_CHANNEL_PATTERN =
 
 type BetaSupportEventType = "CONFIGURED" | "REVOKED";
 type BetaSupportState =
-  | "MISSING"
-  | "ACTIVE"
-  | "EXPIRED"
-  | "REVOKED"
-  | "CONFLICTED";
+  "MISSING" | "ACTIVE" | "EXPIRED" | "REVOKED" | "CONFLICTED";
 
 type BetaSupportMetadata = {
   schemaVersion: 1;

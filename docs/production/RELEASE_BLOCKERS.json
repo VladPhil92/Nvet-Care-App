@@ -96,6 +96,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Closes a second, distinct root cause of the same Android Detox E2E failure left open after PR #258/#259 merged: queryClient.getQueryCache().clear() (the #258 fix) still detaches any QueryObserver already mounted on a query key, and RootNavigator's useCurrentUserQuery() is mounted on 'auth','me' at the exact moment adoptSessionCacheOwner runs inside the login mutation's mutationFn, so the subsequent setQueryData never reaches the mounted component. Verified empirically against the real @tanstack/react-query library with a new integration test. Replaces the query-cache clear with queryClient.removeQueries({predicate: ...}) scoped to non-'auth' queries, which never touches the auth observer's own query. A post-merge P1 review also found that clearSessionCache() is called directly (not through a cache-clearing mutation) by authService.logoutAllDevices(), changePassword() and deleteAccount(); since qk.auth.me() has staleTime: Infinity, clearSessionCache() now writes null through that same preserved observer so those flows end the session immediately instead of leaving the previous user visibly authenticated. Merged; authorizes no commercial launch, provider mutation, or Play publication."
+    },
+    {
+      "prNumber": 261,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Closes 9 of the 19 production high-severity dependency findings tracked as temporary exceptions in docs/production/PHASE_38_VULNERABILITY_EXCEPTIONS.json (expiring 2026-09-21T15:56:00Z, fail-closed): brace-expansion, browserslist, engine.io, form-data, nanoid, shell-quote, socket.io-adapter, socket.io-parser, ws. Each is pinned via root package.json overrides to a confirmed-patched non-major version; none are imported directly by application code. The remaining 10 findings require semver-major NestJS (10->12) and React Native (0.75->0.87) migrations and are deliberately left as open, separately tracked exceptions rather than attempted inside this frozen RC. Regenerates package-lock.json (npm install --legacy-peer-deps, matching CI) and reformats 6 unrelated backend files via eslint --fix as an incidental, no-logic-change consequence of a transitive prettier patch bump pulled in by the regeneration. A P1 review finding that the brace-expansion override forced an unrelated, already-safe major line (minimatch@10.2.6's brace-expansion@^5.0.8..^5.0.12) down to the older 2.1.7 was fixed by scoping that one dependent out of the blanket override and pinning it to ^5.0.9 (the first patched release in its own line) instead. No commercial launch, provider mutation, or Play publication is authorized."
     }
   ]
 }
