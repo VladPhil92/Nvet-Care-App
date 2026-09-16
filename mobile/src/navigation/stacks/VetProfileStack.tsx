@@ -11,6 +11,7 @@ import TopUpWalletScreen from '../../screens/shared/TopUpWalletScreen'
 import EditProfileScreen from '../../screens/shared/EditProfileScreen'
 import DeleteAccountScreen from '../../screens/shared/DeleteAccountScreen'
 import PriceManagementScreen from '../../screens/vet/PriceManagementScreen'
+import MembershipScreen from '../../screens/vet/MembershipScreen'
 import RequestWithdrawalScreen from '../../screens/vet/RequestWithdrawalScreen'
 import TwoFactorEnrollmentScreen from '../../screens/auth/TwoFactorEnrollmentScreen'
 import ChangePasswordScreen from '../../screens/auth/ChangePasswordScreen'
@@ -19,12 +20,6 @@ import MyPetsScreen from '../../screens/shared/MyPetsScreen'
 
 const Stack = createNativeStackNavigator<VetProfileStackParamList>()
 
-/**
- * Stack del tab Perfil para usuarios VET.
- *
- * Pantallas accesibles desde el menú del perfil:
- *   ProfileMain → Wallet / Notifications / VetVerification / PriceManagement / DeleteAccount
- */
 export default function VetProfileStack() {
   return (
     <Stack.Navigator
@@ -45,11 +40,11 @@ export default function VetProfileStack() {
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <Stack.Screen name="PriceManagement" component={PriceManagementScreen} />
+      <Stack.Screen name="Membership" component={MembershipScreen} />
       <Stack.Screen
         name="RequestWithdrawal"
         component={RequestWithdrawalScreen}
       />
-      {/* Seguridad: enrollment 2FA + lista de sesiones (criticidad alta para vets que manejan pagos) */}
       <Stack.Screen
         name="TwoFactorEnrollment"
         component={TwoFactorEnrollmentScreen}

@@ -26,6 +26,16 @@ describe("AppointmentsService geographic coverage boundary", () => {
     paymentMethod: "TRANSFER",
   };
 
+  const price = {
+    id: "price-1",
+    vetId: vet.id,
+    serviceName: "CONSULTATION",
+    serviceCode: "CONSULTATION",
+    priceCop: 80_000,
+    priceCtg: 80,
+    isActive: true,
+  };
+
   it("passes the service point and vet coverage profile before creating a booking", async () => {
     const prisma: any = {
       vetProfile: { findUnique: jest.fn().mockResolvedValue(vet) },
@@ -34,6 +44,7 @@ describe("AppointmentsService geographic coverage boundary", () => {
           .fn()
           .mockResolvedValue({ id: dto.petId, ownerId: "client-1" }),
       },
+      price: { findFirst: jest.fn().mockResolvedValue(price) },
       appointment: {
         create: jest.fn().mockResolvedValue({ id: "appointment-1" }),
       },
@@ -43,7 +54,9 @@ describe("AppointmentsService geographic coverage boundary", () => {
         .fn()
         .mockResolvedValue([{ time: "10:00", available: true }]),
     };
-    const beta: any = { assertBookingAllowed: jest.fn().mockResolvedValue(undefined) };
+    const beta: any = {
+      assertBookingAllowed: jest.fn().mockResolvedValue(undefined),
+    };
     const coverage: any = { assertBookableLocation: jest.fn() };
     const service = new AppointmentsService(prisma, schedule, beta, coverage);
 
@@ -64,7 +77,11 @@ describe("AppointmentsService geographic coverage boundary", () => {
       "client-1",
       "Cartagena de Indias",
     );
-    expect(prisma.appointment.create).toHaveBeenCalledTimes(1);
+    expect(prisma.appointment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ amount: price.priceCop }),
+      }),
+    );
   });
 
   it("does not create a booking when geographic coverage rejects the service point", async () => {

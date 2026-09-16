@@ -23,6 +23,16 @@ describe('AppointmentsService booking integrity', () => {
     paymentMethod: PaymentMethod.PSE,
   };
 
+  const publishedPrice = {
+    id: 'price-1',
+    vetId: createDto.vetId,
+    serviceName: 'HOME_VISIT',
+    serviceCode: 'HOME_VISIT',
+    priceCop: 95_000,
+    priceCtg: 95,
+    isActive: true,
+  };
+
   beforeEach(() => {
     prisma = {
       vetProfile: {
@@ -38,6 +48,9 @@ describe('AppointmentsService booking integrity', () => {
           id: createDto.petId,
           ownerId: 'client-1',
         }),
+      },
+      price: {
+        findFirst: jest.fn().mockResolvedValue(publishedPrice),
       },
       appointment: {
         create: jest.fn(),
@@ -65,7 +78,7 @@ describe('AppointmentsService booking integrity', () => {
     expect(prisma.appointment.create).not.toHaveBeenCalled();
   });
 
-  it('reserva el slot sin crear una transacción financiera prematura', async () => {
+  it('reserva el slot usando el precio publicado por el vet, no el monto del cliente', async () => {
     scheduleService.getAvailability.mockResolvedValue([
       { date: '2099-01-05', time: '09:00', available: true },
     ]);
@@ -76,7 +89,19 @@ describe('AppointmentsService booking integrity', () => {
     const call = prisma.appointment.create.mock.calls[0][0];
     expect(call.data.date.toISOString()).toBe('2099-01-05T00:00:00.000Z');
     expect(call.data.status).toBe(AppointmentStatus.PENDING);
+    expect(call.data.amount).toBe(publishedPrice.priceCop);
+    expect(call.data.amount).not.toBe(createDto.amount);
     expect(call.data.transaction).toBeUndefined();
+    expect(prisma.price.findFirst).toHaveBeenCalledWith({
+      where: {
+        vetId: createDto.vetId,
+        isActive: true,
+        OR: [
+          { serviceName: createDto.serviceType },
+          { serviceCode: createDto.serviceType },
+        ],
+      },
+    });
     expect(scheduleService.getAvailability).toHaveBeenCalledWith(
       createDto.vetId,
       '2099-01-05',

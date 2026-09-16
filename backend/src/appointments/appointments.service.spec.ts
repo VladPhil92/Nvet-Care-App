@@ -25,6 +25,15 @@ describe('AppointmentsService', () => {
   };
 
   const basePet = { id: PET_ID, ownerId: CLIENT_ID };
+  const basePrice = {
+    id: 'price-1',
+    vetId: VET_PROFILE_ID,
+    serviceName: 'CONSULTATION',
+    serviceCode: 'CONSULTATION',
+    priceCop: 80_000,
+    priceCtg: 80,
+    isActive: true,
+  };
 
   const baseAppointment = {
     id: APPT_ID,
@@ -48,6 +57,7 @@ describe('AppointmentsService', () => {
     prisma = {
       vetProfile: { findUnique: jest.fn() },
       pet: { findUnique: jest.fn() },
+      price: { findFirst: jest.fn().mockResolvedValue(basePrice) },
       appointment: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -95,6 +105,7 @@ describe('AppointmentsService', () => {
             vetId: VET_PROFILE_ID,
             clientId: CLIENT_ID,
             petId: PET_ID,
+            amount: basePrice.priceCop,
             status: AppointmentStatus.PENDING,
           }),
         }),

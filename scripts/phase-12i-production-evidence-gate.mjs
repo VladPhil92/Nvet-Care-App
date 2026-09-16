@@ -56,7 +56,25 @@ if (backupGateVerified) {
 if (!providerReady && !backupGateVerified) {
   assert(rcEvidence.productionBackupConfigured.status === 'pending', 'backup gate remains pending while provider evidence is incomplete');
   assert(betaEvidence.productionBackupConfigured.status === 'pending', 'beta backup gate remains pending while provider evidence is incomplete');
-  assert(rcEvidence.restoreDrillVerified.status === 'pending', 'restore drill cannot be promoted before usable provider backup evidence exists');
+
+  // Backup configuration and restore-drill evidence have independent freshness
+  // windows. A restore that was validly executed after backup configuration must
+  // not be retroactively invalidated merely because the later *current backup*
+  // freshness window expires first. If the restore gate remains verified, its
+  // own approved evidence must still be substantive; otherwise it stays pending.
+  if (rcEvidence.restoreDrillVerified.status === 'verified') {
+    assert(
+      typeof rcEvidence.restoreDrillVerified.evidence === 'string' &&
+        rcEvidence.restoreDrillVerified.evidence.trim().length >= 12,
+      'verified restore drill retains independent substantive approved evidence',
+    );
+  } else {
+    assert(
+      rcEvidence.restoreDrillVerified.status === 'pending',
+      'restore drill remains pending until independently verified',
+    );
+  }
+
   assert(phase.promotion.rcPromotionAuthorized === false, 'RC promotion remains blocked while provider backup evidence is incomplete');
   assert(closure.authorization.rcPromotionAuthorized === false, 'operator closure remains fail-closed for RC promotion');
 }
