@@ -48,6 +48,7 @@ jest.mock('../../src/stores/useWalletStore', () => ({
 
 import { adoptSessionCacheOwner, clearSessionCache } from '../../src/lib/sessionCache'
 import { queryClient } from '../../src/lib/queryClient'
+import { qk } from '../../src/lib/queryKeys'
 
 const queryClientMock = queryClient as unknown as {
   __removeQueries: jest.Mock
@@ -72,6 +73,7 @@ describe('sessionCache', () => {
   beforeEach(() => {
     for (const key of Object.keys(mockStorage)) delete mockStorage[key]
     ;(queryClient.clear as jest.Mock).mockClear()
+    ;(queryClient.setQueryData as jest.Mock).mockClear()
     removeQueries.mockClear()
     mutationCacheRemove.mockClear()
     queryClientMock.__setMutations([])
@@ -129,5 +131,26 @@ describe('sessionCache', () => {
 
     expect(mutationCacheRemove).toHaveBeenCalledWith(bookingMutation)
     expect(mutationCacheRemove).not.toHaveBeenCalledWith(authMutation)
+  })
+
+  /**
+   * P1 regression (Codex review on #260): authService.logoutAllDevices(),
+   * changePassword() and deleteAccount() call clearSessionCache() directly,
+   * with no mutation onSuccess to clear the cache afterward the way
+   * useLogoutMutation does. qk.auth.me() has staleTime: Infinity, so without
+   * explicitly nulling it here, RootNavigator's useCurrentUserQuery() would
+   * keep serving the stale cached user and treat the device as still signed
+   * in after those flows revoke the session server-side.
+   */
+  it('clearSessionCache writes null to the auth.me query through its observer', async () => {
+    await clearSessionCache()
+
+    expect(queryClient.setQueryData).toHaveBeenCalledWith(qk.auth.me(), null)
+  })
+
+  it('adoptSessionCacheOwner never writes to the auth.me query itself', async () => {
+    await adoptSessionCacheOwner('user-1')
+
+    expect(queryClient.setQueryData).not.toHaveBeenCalled()
   })
 })

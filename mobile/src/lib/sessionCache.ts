@@ -136,11 +136,18 @@ export async function adoptAuthenticatedUser<T extends { id: string }>(user: T) 
  */
 export async function clearSessionCache() {
   await queryClient.cancelQueries().catch(() => undefined)
-  // See adoptSessionCacheOwner: the 'auth' query is left alone here so the
-  // in-flight logout mutation's own observer is never detached mid-flight.
-  // useLogoutMutation's onSuccess/onError already run a full queryClient.clear()
-  // once this mutation has settled, which is safe.
+  // See adoptSessionCacheOwner: purgeOtherUserQueries() leaves the 'auth'
+  // query's own observer attached rather than detaching it. But this
+  // function is also called directly by authService.logoutAllDevices(),
+  // changePassword() and deleteAccount() — none of which go through a
+  // mutation that clears the cache afterward like useLogoutMutation does.
+  // qk.auth.me() has staleTime: Infinity, so without this, RootNavigator
+  // would keep rendering the authenticated stack with the stale cached user
+  // after those flows revoke the session server-side. Writing null through
+  // the still-attached observer ends the session for every caller; a later
+  // queryClient.clear() (e.g. useLogoutMutation's onSuccess) is unaffected.
   purgeOtherUserQueries()
+  queryClient.setQueryData(qk.auth.me(), null)
   purgeOtherUserMutations()
   resetUserScopedRuntimeState()
 

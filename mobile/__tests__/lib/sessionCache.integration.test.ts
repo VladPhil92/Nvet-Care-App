@@ -107,7 +107,16 @@ describe('sessionCache (real QueryClient integration)', () => {
     unsubscribe()
   })
 
-  it('clearSessionCache does not detach the auth query observer either', async () => {
+  /**
+   * P1 regression (Codex review on #260): authService.logoutAllDevices(),
+   * changePassword() and deleteAccount() call clearSessionCache() directly —
+   * unlike useLogoutMutation, none of them run a queryClient.clear() of their
+   * own afterward. qk.auth.me() has staleTime: Infinity, so without
+   * clearSessionCache() itself writing null through the still-attached
+   * observer, RootNavigator would keep reporting the old cached user as
+   * still signed in after those flows revoke the session server-side.
+   */
+  it('clearSessionCache does not detach the auth query observer, and itself writes null through it', async () => {
     await adoptAuthenticatedUser({ id: 'user-1', role: 'CLIENT' })
 
     const observer = new QueryObserver(queryClient, {
@@ -115,13 +124,17 @@ describe('sessionCache (real QueryClient integration)', () => {
       queryFn: async () => null,
       staleTime: Infinity,
     })
-    const unsubscribe = observer.subscribe(() => {})
+    const results: unknown[] = []
+    const unsubscribe = observer.subscribe((result) => {
+      results.push(result.data)
+    })
     await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(observer.getCurrentResult().data).toEqual({ id: 'user-1', role: 'CLIENT' })
 
     await clearSessionCache()
-    queryClient.setQueryData(qk.auth.me(), null)
 
     expect(observer.getCurrentResult().data).toBeNull()
+    expect(results[results.length - 1]).toBeNull()
 
     unsubscribe()
   })
