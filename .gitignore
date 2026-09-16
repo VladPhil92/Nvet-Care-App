@@ -68,6 +68,10 @@ temp/
 
 # Test artifacts
 coverage/
+# `backend/src/coverage` is the service-coverage bounded context, not a report
+# directory. Without this exception the rule above silently drops new source
+# files added there.
+!backend/src/coverage/
 junit.xml
 *.lcov
 .jest-cache/
