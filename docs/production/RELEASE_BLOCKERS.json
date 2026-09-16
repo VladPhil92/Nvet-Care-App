@@ -88,6 +88,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Fixes a release-blocking regression introduced by Phase 46: adoptSessionCacheOwner/clearSessionCache called queryClient.clear() from inside the login/register/logout mutation's own mutationFn, wiping the mutation cache mid-flight and orphaning that mutation's observer so its onSuccess (and the post-login navigation transition) never fired. This is the confirmed cause of the Android Detox E2E failure that was on main. The fix scopes the cache purge to queryClient.getQueryCache().clear(), additionally purges every non-'auth' mutation from the live MutationCache at the session boundary (closing a cross-account paused-mutation leak found in review), and adds regression tests for both. Merged; authorizes no commercial launch, provider mutation, or Play publication."
+    },
+    {
+      "prNumber": 261,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Closes 9 of the 19 production high-severity dependency findings tracked as temporary exceptions in docs/production/PHASE_38_VULNERABILITY_EXCEPTIONS.json (expiring 2026-09-21T15:56:00Z, fail-closed): brace-expansion, browserslist, engine.io, form-data, nanoid, shell-quote, socket.io-adapter, socket.io-parser, ws. Each is pinned via root package.json overrides to a confirmed-patched non-major version; none are imported directly by application code. The remaining 10 findings require semver-major NestJS (10->12) and React Native (0.75->0.87) migrations and are deliberately left as open, separately tracked exceptions rather than attempted inside this frozen RC. Regenerates package-lock.json (npm install --legacy-peer-deps, matching CI) and reformats 6 unrelated backend files via eslint --fix as an incidental, no-logic-change consequence of a transitive prettier patch bump pulled in by the regeneration. No commercial launch, provider mutation, or Play publication is authorized."
     }
   ]
 }
