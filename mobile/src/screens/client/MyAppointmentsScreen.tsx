@@ -91,7 +91,10 @@ export default function MyAppointmentsScreen({ navigation }: Props) {
   const appointmentsQuery = useAppointmentsQuery({})
   const cancelMutation = useCancelAppointmentMutation()
 
-  const allAppointments = appointmentsQuery.data ?? []
+  const allAppointments = useMemo(
+    () => appointmentsQuery.data ?? [],
+    [appointmentsQuery.data],
+  )
 
   const filtered = useMemo(() => {
     const list =
@@ -277,7 +280,7 @@ interface SegmentTabProps {
   onPress: () => void
 }
 
-function SegmentTab({ id, label, count, isActive, onPress }: SegmentTabProps) {
+function SegmentTab({ label, count, isActive, onPress }: SegmentTabProps) {
   return (
     <Pressable
       onPress={onPress}

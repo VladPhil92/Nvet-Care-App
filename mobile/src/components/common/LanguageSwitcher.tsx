@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
-import { Badge, UI_COLORS } from '../ui/primitives'
+import { UI_COLORS } from '../ui/primitives'
 import { useI18n } from '../../i18n/I18nProvider'
 
 /**

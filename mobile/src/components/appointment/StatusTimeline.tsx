@@ -82,8 +82,6 @@ export default function StatusTimeline({ currentStatus, timeline }: Props) {
           !isAlternativePath && currentIdx >= 0 && idx < currentIdx
         const isCurrent =
           !isAlternativePath && status === currentStatus
-        const isFuture =
-          !isAlternativePath && currentIdx >= 0 && idx > currentIdx
         const eventTime = getEventTime(status)
 
         const dotState: 'past' | 'current' | 'future' =

@@ -21,13 +21,10 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  TextInput,
-  Image,
   RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
-import { useI18n } from '../../i18n/I18nProvider'
 import { Colors } from '../../theme/colors'
 import { Logo } from '../../components/common/Logo'
 import { Icon, IconNode, type IconName } from '../../components/common/Icon'
@@ -52,7 +49,6 @@ interface QuickAction {
 }
 
 export default function HomeScreenV2({ navigation }: HomeScreenProps) {
-  const { t } = useI18n()
   const userQ = useCurrentUserQuery()
   const todayApptQ = useTodayAppointmentsQuery()
   const balanceQ = useBalanceQuery()
