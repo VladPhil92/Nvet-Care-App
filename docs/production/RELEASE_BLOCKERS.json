@@ -85,9 +85,9 @@
       "prNumber": 258,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
-      "status": "open",
+      "status": "resolved",
       "owner": "VladPhil92",
-      "justification": "Fixes a release-blocking regression introduced by Phase 46: adoptSessionCacheOwner/clearSessionCache called queryClient.clear() from inside the login/register/logout mutation's own mutationFn, wiping the mutation cache mid-flight and orphaning that mutation's observer so its onSuccess (and the post-login navigation transition) never fired. This is the confirmed cause of the current Android Detox E2E failure on main. The fix scopes the cache purge to queryClient.getQueryCache().clear() only, adds a regression test, and authorizes no commercial launch, provider mutation, or Play publication."
+      "justification": "Fixes a release-blocking regression introduced by Phase 46: adoptSessionCacheOwner/clearSessionCache called queryClient.clear() from inside the login/register/logout mutation's own mutationFn, wiping the mutation cache mid-flight and orphaning that mutation's observer so its onSuccess (and the post-login navigation transition) never fired. This is the confirmed cause of the Android Detox E2E failure that was on main. The fix scopes the cache purge to queryClient.getQueryCache().clear(), additionally purges every non-'auth' mutation from the live MutationCache at the session boundary (closing a cross-account paused-mutation leak found in review), and adds regression tests for both. Merged; authorizes no commercial launch, provider mutation, or Play publication."
     }
   ]
 }
