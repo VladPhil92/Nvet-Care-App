@@ -93,7 +93,10 @@ export default function TransferPaymentScreen({ navigation, route }: Props) {
           {
             text: 'Ver cita',
             onPress: () =>
-              navigation.replace('AppointmentDetail', { appointmentId }),
+              navigation.getParent()?.navigate('ClientAppointments', {
+                screen: 'AppointmentDetail',
+                params: { appointmentId },
+              }),
           },
         ],
       )
@@ -172,7 +175,7 @@ export default function TransferPaymentScreen({ navigation, route }: Props) {
             <Text style={styles.sectionTitle}>Ya transferí, subo mi comprobante</Text>
             <DocumentPickerCard
               label="Comprobante de la transferencia"
-              description="JPG, PNG o PDF. Asegúrate de que se vean el monto, fecha y código."
+              description="Foto del comprobante (JPG o PNG). Asegúrate de que se vean el monto, fecha y código."
               required
               glyph="🧾"
               document={proof}

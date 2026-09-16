@@ -17,7 +17,9 @@ export type AuthStackParamList = {
 export type ClientTabParamList = {
   ClientHome: undefined
   ClientSearch: NavigatorScreenParams<ClientSearchStackParamList> | undefined
-  ClientAppointments: undefined
+  ClientAppointments:
+    | NavigatorScreenParams<ClientAppointmentsStackParamList>
+    | undefined
   ClientAi: undefined
   ClientProfile: undefined
 }
@@ -90,7 +92,6 @@ export type VetScheduleStackParamList = {
 
 export type VetEarningsStackParamList = {
   EarningsMain: undefined
-  TransferVerification: { transactionId: string }
   RequestWithdrawal: undefined
 }
 
@@ -109,7 +110,6 @@ export type SharedStackParamList = {
   ActiveSessions: undefined
   PriceManagement: undefined
   RequestWithdrawal: undefined
-  TransferVerification: { transactionId: string }
   ChangePassword: undefined
 }
 
