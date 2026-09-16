@@ -12,25 +12,16 @@ import {
   PaymentMethod,
   TransactionStatus,
   AppointmentStatus,
-  VetTier,
   Prisma,
   UserRole,
 } from "@prisma/client";
-
-// ============================================================
-// TYPES
-// ============================================================
+import { CTG_TO_COP_RATE, getCommissionRate } from "../vets/commercial-policy";
 
 export interface PseWebhookPayload {
-  /** ID que el provider asigna a la transacción */
   externalTransactionId: string;
-  /** Nuestro transactionId que enviamos en initiatePse */
   transactionId: string;
-  /** APPROVED | DECLINED | PENDING | EXPIRED */
   status: string;
-  /** Monto confirmado (para double-check anti-fraude) */
   amount?: number;
-  /** Timestamp del provider (ISO8601) */
   timestamp?: string;
 }
 
@@ -42,31 +33,6 @@ import {
   TransactionFiltersDto,
 } from "./dto/payment.dto";
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-
-const TIER_COMMISSIONS: Record<VetTier, number> = {
-  FREE: 0.1,
-  PRO: 0.08,
-  ELITE: 0.03,
-};
-
-/**
- * Tasa CTG ↔ COP. En producción debería venir de un oracle blockchain
- * o un servicio externo (CoinGecko, etc.) con cache de 5min.
- */
-const CTG_TO_COP_RATE = 30;
-
-/**
- * State machine de transacciones.
- * Cada flow de pago tiene su trayectoria:
- *  - CTG:      PENDING → CONFIRMED → LIQUIDATED
- *  - PSE:      PENDING → VERIFYING (webhook) → CONFIRMED → LIQUIDATED
- *  - TRANSFER: PENDING → VERIFYING (vet sube comprobante) → CONFIRMED → LIQUIDATED
- *  - DISPUTED solo desde CONFIRMED o LIQUIDATED (manejo por admin)
- *  - FAILED desde cualquier estado no-terminal
- */
 const VALID_TRANSITIONS: Record<TransactionStatus, TransactionStatus[]> = {
   PENDING: [
     TransactionStatus.VERIFYING,
@@ -85,10 +51,9 @@ const VALID_TRANSITIONS: Record<TransactionStatus, TransactionStatus[]> = {
     TransactionStatus.LIQUIDATED,
     TransactionStatus.FAILED,
   ],
-  FAILED: [], // terminal
+  FAILED: [],
 };
 
-// PSE bank codes (subset; completo en producción)
 const PSE_BANKS: Record<string, string> = {
   "1007": "Bancolombia",
   "1051": "Davivienda",
@@ -97,14 +62,9 @@ const PSE_BANKS: Record<string, string> = {
   "1023": "Banco Caja Social",
 };
 
-// ============================================================
-// SERVICE
-// ============================================================
-
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  /** Cache de idempotency keys (en producción usar Redis con TTL 24h) */
   private readonly idempotencyCache = new Map<
     string,
     { result: any; ts: number }
@@ -116,37 +76,18 @@ export class PaymentsService {
     private storage: StorageService,
   ) {}
 
-  // ============================================================
-  // PROCESS PAYMENT
-  // ============================================================
-
-  /**
-   * Procesa un pago para una cita.
-   *
-   * Flow:
-   * 1. Resolver idempotency key (si existe → retornar resultado cacheado)
-   * 2. Validar cita y ownership del cliente
-   * 3. Validar/crear transacción según paymentMethod
-   * 4. Aplicar efectos (descuento CTG, generar URL PSE, etc.)
-   * 5. Cachear resultado por idempotency
-   */
   async processPayment(userId: string, dto: ProcessPaymentDto) {
-    // 1. Idempotency check
     if (dto.idempotencyKey) {
       const cached = this.getIdempotencyResult(dto.idempotencyKey);
       if (cached) return cached;
     }
 
-    // 2. Validar cita
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: dto.appointmentId },
       include: { vet: true, transaction: true },
     });
 
-    if (!appointment) {
-      throw new NotFoundException("Cita no encontrada");
-    }
-
+    if (!appointment) throw new NotFoundException("Cita no encontrada");
     if (appointment.clientId !== userId) {
       throw new ForbiddenException("Solo el cliente de la cita puede pagarla");
     }
@@ -160,69 +101,56 @@ export class PaymentsService {
       );
     }
 
-    // Validación cruzada del monto vs cita
     if (Math.abs(dto.amountCop - appointment.amount) > 1) {
       throw new BadRequestException(
         `El monto (${dto.amountCop}) no coincide con la cita (${appointment.amount})`,
       );
     }
 
-    // 3. Calcular comisión por tier del vet
-    const commissionPct = TIER_COMMISSIONS[appointment.vet.tier];
-    const commissionAmount = dto.amountCop * commissionPct;
+    // Única fuente de verdad para comisiones: política comercial de Nvet.
+    const commissionPct = getCommissionRate(appointment.vet.tier);
+    const commissionAmount = appointment.amount * commissionPct;
 
-    // 4. Estado inicial según método
     let initialStatus: TransactionStatus;
     let amountCtg: number | null = null;
 
     switch (dto.paymentMethod) {
       case PaymentMethod.CTG:
-        // CTG se confirma inmediatamente (saldo descontado del cliente)
-        amountCtg = dto.amountCtg ?? this.copToCtg(dto.amountCop);
+        amountCtg = dto.amountCtg ?? this.copToCtg(appointment.amount);
         initialStatus = TransactionStatus.CONFIRMED;
         break;
-
       case PaymentMethod.PSE:
-        // PSE queda PENDING hasta webhook del banco
         initialStatus = TransactionStatus.PENDING;
         break;
-
       case PaymentMethod.TRANSFER:
-        // TRANSFER queda PENDING hasta que vet sube comprobante
         initialStatus = TransactionStatus.PENDING;
         break;
-
       default:
         throw new BadRequestException("Método de pago no soportado");
     }
 
-    // 5. Crear transacción (si ya existía con FAILED, actualizarla)
     const transaction = await this.prisma.$transaction(async (tx) => {
+      const transactionData = {
+        amountCop: appointment.amount,
+        amountCtg,
+        commissionPct: commissionPct * 100,
+        commissionAmount,
+        paymentMethod: dto.paymentMethod,
+        status: initialStatus,
+      };
+
       const newTx = appointment.transaction
         ? await tx.transaction.update({
             where: { id: appointment.transaction.id },
-            data: {
-              amountCop: dto.amountCop,
-              amountCtg,
-              commissionPct: commissionPct * 100,
-              commissionAmount,
-              paymentMethod: dto.paymentMethod,
-              status: initialStatus,
-            },
+            data: transactionData,
           })
         : await tx.transaction.create({
             data: {
               appointmentId: dto.appointmentId,
-              amountCop: dto.amountCop,
-              amountCtg,
-              commissionPct: commissionPct * 100,
-              commissionAmount,
-              paymentMethod: dto.paymentMethod,
-              status: initialStatus,
+              ...transactionData,
             },
           });
 
-      // Si CTG, debitar al vet la comisión y acreditar el neto
       if (dto.paymentMethod === PaymentMethod.CTG) {
         await tx.appointment.update({
           where: { id: dto.appointmentId },
@@ -233,55 +161,31 @@ export class PaymentsService {
       return newTx;
     });
 
-    // 6. Cachear idempotency
     if (dto.idempotencyKey) {
       this.setIdempotencyResult(dto.idempotencyKey, transaction);
     }
-
     return transaction;
   }
 
-  // ============================================================
-  // VERIFY TRANSFER (vet sube comprobante)
-  // ============================================================
-
-  /**
-   * El veterinario verifica una transferencia recibida subiendo el
-   * comprobante (foto/PDF). El service:
-   *  1. Valida ownership (es el vet de la cita)
-   *  2. Persiste el archivo a disco/S3
-   *  3. Pasa la transacción a VERIFYING
-   *  4. Notifica al admin (TODO: cola de notificaciones)
-   */
   async verifyTransfer(
     userId: string,
     transactionId: string,
     file: Express.Multer.File,
     dto: VerifyTransferDto,
   ) {
-    if (!file) {
-      throw new BadRequestException("El comprobante es obligatorio");
-    }
+    if (!file) throw new BadRequestException("El comprobante es obligatorio");
 
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
-      include: {
-        appointment: {
-          include: { vet: true },
-        },
-      },
+      include: { appointment: { include: { vet: true } } },
     });
 
-    if (!transaction) {
-      throw new NotFoundException("Transacción no encontrada");
-    }
-
+    if (!transaction) throw new NotFoundException("Transacción no encontrada");
     if (transaction.appointment.vet.userId !== userId) {
       throw new ForbiddenException(
         "Solo el veterinario de la cita puede verificar la transferencia",
       );
     }
-
     if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
       throw new BadRequestException("Solo aplicable a pagos por transferencia");
     }
@@ -291,7 +195,6 @@ export class PaymentsService {
       TransactionStatus.VERIFYING,
     );
 
-    // Guardar archivo vía StorageService (local o Cloudinary según STORAGE_DRIVER)
     const uploaded = await this.storage.upload(
       file,
       `transfers/${transactionId}`,
@@ -302,15 +205,10 @@ export class PaymentsService {
       data: {
         status: TransactionStatus.VERIFYING,
         transferCode: dto.transferCode,
-        // Guardamos la URL del comprobante en hashOnchain como placeholder (en producción: campo dedicado)
         hashOnchain: uploaded.url,
       },
     });
   }
-
-  // ============================================================
-  // ADMIN: confirmar/rechazar transferencia
-  // ============================================================
 
   async adminConfirmTransfer(adminUserId: string, transactionId: string) {
     const transaction = await this.prisma.transaction.findUnique({
@@ -332,13 +230,10 @@ export class PaymentsService {
           verifiedAt: new Date(),
         },
       });
-
-      // Confirmar la cita
       await tx.appointment.update({
         where: { id: transaction.appointmentId },
         data: { status: AppointmentStatus.CONFIRMED },
       });
-
       return updated;
     });
   }
@@ -357,34 +252,24 @@ export class PaymentsService {
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
     });
-
     if (!transaction) throw new NotFoundException("Transacción no encontrada");
     this.validateStateTransition(transaction.status, TransactionStatus.FAILED);
 
     return this.prisma.transaction.update({
       where: { id: transactionId },
-      data: {
-        status: TransactionStatus.FAILED,
-      },
+      data: { status: TransactionStatus.FAILED },
     });
   }
-
-  // ============================================================
-  // BALANCE & TRANSACTIONS
-  // ============================================================
 
   async getBalance(userId: string, actingRole?: UserRole) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { vetProfile: true },
     });
-
     if (!user) throw new NotFoundException("Usuario no encontrado");
 
     const effectiveRole = actingRole ?? user.role;
-
     if (effectiveRole === UserRole.VET && user.vetProfile) {
-      // Calcular saldo del vet basado en transacciones LIQUIDATED
       const liquidated = await this.prisma.transaction.aggregate({
         where: {
           appointment: { vetId: user.vetProfile.id },
@@ -392,7 +277,6 @@ export class PaymentsService {
         },
         _sum: { amountCop: true, commissionAmount: true },
       });
-
       const pending = await this.prisma.transaction.aggregate({
         where: {
           appointment: { vetId: user.vetProfile.id },
@@ -415,8 +299,6 @@ export class PaymentsService {
       };
     }
 
-    // CLIENT mode always uses the client's own balance, even if the database
-    // identity also has administrative/veterinarian authority.
     return {
       ctgBalance: user.ctgBalance,
       copBalance: 0,
@@ -434,25 +316,19 @@ export class PaymentsService {
       where: { id: userId },
       include: { vetProfile: true },
     });
-
     if (!user) throw new NotFoundException("Usuario no encontrado");
 
     const effectiveRole = actingRole ?? user.role;
     const where: Prisma.TransactionWhereInput = {};
 
-    // Restricción por el rol EFECTIVO de la solicitud. El modo CLIENT de la
-    // identidad raíz nunca puede recuperar el rol persistido para ampliar el
-    // alcance a transacciones de terceros.
     if (effectiveRole === UserRole.VET && user.vetProfile) {
       where.appointment = { vetId: user.vetProfile.id };
     } else if (effectiveRole === UserRole.CLIENT) {
       where.appointment = { clientId: userId };
     }
-    // ADMIN/SUPERADMIN ven todas únicamente cuando ése es el rol efectivo.
 
     if (filters.status) where.status = filters.status;
     if (filters.paymentMethod) where.paymentMethod = filters.paymentMethod;
-
     if (filters.startDate || filters.endDate) {
       where.createdAt = {};
       if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
@@ -499,12 +375,9 @@ export class PaymentsService {
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
       include: {
-        appointment: {
-          include: { vet: true, client: true, pet: true },
-        },
+        appointment: { include: { vet: true, client: true, pet: true } },
       },
     });
-
     if (!transaction) throw new NotFoundException("Transacción no encontrada");
 
     const persistedUser = actingRole
@@ -524,37 +397,11 @@ export class PaymentsService {
     if (!isClient && !isVet && !isAdmin) {
       throw new ForbiddenException("No tienes acceso a esta transacción");
     }
-
     return transaction;
   }
 
-  // ============================================================
-  // PSE — WEBHOOK HANDLER
-  // ============================================================
-
-  /**
-   * Procesa el webhook entrante del proveedor PSE.
-   *
-   * Responsabilidades:
-   *  1. Idempotencia por `externalTransactionId` — si el evento ya fue
-   *     procesado, retorna sin efectos (el provider puede reintentar).
-   *  2. Validación de monto (anti-fraude): si `amount` viene en el payload,
-   *     verifica que coincida con el monto de la transacción (±1 COP).
-   *  3. Mapeo de status externo → estado interno:
-   *     APPROVED  → CONFIRMED  (+ AppointmentStatus.CONFIRMED)
-   *     DECLINED  → FAILED
-   *     EXPIRED   → FAILED
-   *     PENDING   → sin cambio (el provider enviará otro webhook)
-   *  4. Logging estructurado para forensics y debugging.
-   *
-   * El método NO lanza excepciones para estados desconocidos porque eso
-   * causaría que el provider reintente indefinidamente. En cambio,
-   * loggea y retorna silenciosamente.
-   */
   async handlePseWebhook(payload: PseWebhookPayload): Promise<void> {
     const { externalTransactionId, transactionId, status, amount } = payload;
-
-    // 1. Idempotencia: si ya procesamos este evento externo, salir sin efectos
     const idempotencyKey = `pse_webhook:${externalTransactionId}`;
     const alreadyProcessed = this.getIdempotencyResult(idempotencyKey);
     if (alreadyProcessed) {
@@ -564,7 +411,6 @@ export class PaymentsService {
       return;
     }
 
-    // 2. Buscar la transacción interna
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
       include: { appointment: true },
@@ -575,7 +421,6 @@ export class PaymentsService {
         `PSE webhook: transaccionId=${transactionId} no encontrada. ` +
           `extId=${externalTransactionId} status=${status}`,
       );
-      // Cachear para evitar retries inútiles
       this.setIdempotencyResult(idempotencyKey, { notFound: true });
       return;
     }
@@ -588,17 +433,14 @@ export class PaymentsService {
       return;
     }
 
-    // 3. Validación de monto (anti-fraude)
     if (amount !== undefined && Math.abs(amount - transaction.amountCop) > 1) {
       this.logger.error(
         `PSE webhook MONTO NO COINCIDE: esperado=${transaction.amountCop} ` +
           `recibido=${amount} txId=${transactionId} extId=${externalTransactionId}`,
       );
-      // NO procesamos: posible manipulación del webhook
       return;
     }
 
-    // 4. Mapear status externo → transición interna
     const upperStatus = status.toUpperCase();
     let newTxStatus: TransactionStatus | null = null;
     let newApptStatus: AppointmentStatus | null = null;
@@ -614,7 +456,6 @@ export class PaymentsService {
         newTxStatus = TransactionStatus.FAILED;
         break;
       case "PENDING":
-        // El provider enviará otro webhook cuando cambie. Sin acción.
         this.logger.log(
           `PSE webhook PENDING — esperando confirmación del banco: txId=${transactionId}`,
         );
@@ -627,7 +468,6 @@ export class PaymentsService {
         return;
     }
 
-    // 5. Verificar que la transición es válida desde el estado actual
     if (!VALID_TRANSITIONS[transaction.status]?.includes(newTxStatus)) {
       this.logger.warn(
         `PSE webhook: transición inválida ${transaction.status} → ${newTxStatus} ` +
@@ -639,7 +479,6 @@ export class PaymentsService {
       return;
     }
 
-    // 6. Aplicar cambios en una transacción DB atómica
     await this.prisma.$transaction(async (tx) => {
       await tx.transaction.update({
         where: { id: transactionId },
@@ -660,28 +499,16 @@ export class PaymentsService {
       }
     });
 
-    // 7. Marcar como procesado para idempotencia
     this.setIdempotencyResult(idempotencyKey, {
       status: newTxStatus,
       processedAt: new Date(),
     });
-
     this.logger.log(
       `PSE webhook procesado: txId=${transactionId} ${transaction.status} → ${newTxStatus} ` +
         `extId=${externalTransactionId}`,
     );
   }
 
-  // ============================================================
-  // PSE — INITIATE + STATUS
-  // ============================================================
-
-  /**
-   * Inicia un pago PSE. En producción esto haría un POST al gateway PSE
-   * (PlacetoPay, ePayco, Wompi) y retornaría la URL de redirección.
-   *
-   * Aquí mockeamos la respuesta para mantener el flow funcional.
-   */
   async initiatePse(userId: string, dto: InitiatePsePaymentDto) {
     const bankName = PSE_BANKS[dto.bank];
     if (!bankName) {
@@ -690,18 +517,13 @@ export class PaymentsService {
       );
     }
 
-    // Crear transacción PENDING
     const tx = await this.processPayment(userId, {
       appointmentId: dto.appointmentId,
       paymentMethod: PaymentMethod.PSE,
       amountCop: dto.amountCop,
     });
 
-    // En producción: llamar al gateway, obtener token y URL
-    // const psePayload = await this.pseGateway.createPayment({...})
-
     const mockPaymentUrl = `https://pse-mock.acme.test/pay/${tx.id}?bank=${dto.bank}`;
-
     return {
       transactionId: tx.id,
       paymentUrl: mockPaymentUrl,
@@ -715,15 +537,8 @@ export class PaymentsService {
     actingRole?: UserRole,
   ) {
     const tx = await this.getTransactionById(userId, transactionId, actingRole);
-    return {
-      status: tx.status,
-      transaction: tx,
-    };
+    return { status: tx.status, transaction: tx };
   }
-
-  // ============================================================
-  // CTG TOKEN
-  // ============================================================
 
   async getCtgRate() {
     return {
@@ -731,10 +546,6 @@ export class PaymentsService {
       lastUpdated: new Date().toISOString(),
     };
   }
-
-  // ============================================================
-  // WITHDRAWAL
-  // ============================================================
 
   async requestWithdrawal(userId: string, dto: RequestWithdrawalDto) {
     const user = await this.prisma.user.findUnique({
@@ -749,15 +560,12 @@ export class PaymentsService {
     }
 
     const balance = await this.getBalance(userId, UserRole.VET);
-
     if (dto.amountCop > balance.copBalance) {
       throw new BadRequestException(
         `Saldo insuficiente. Disponible: ${balance.copBalance.toLocaleString("es-CO")} COP`,
       );
     }
 
-    // En producción: encolar job a BullMQ que mueva el dinero (ACH/PSE saliente)
-    // Aquí registramos como una pseudo-transacción de retiro
     return {
       success: true,
       message:
@@ -769,10 +577,6 @@ export class PaymentsService {
       ).toISOString(),
     };
   }
-
-  // ============================================================
-  // EARNINGS SUMMARY (vets)
-  // ============================================================
 
   async getEarningsSummary(
     userId: string,
@@ -808,7 +612,6 @@ export class PaymentsService {
 
     const total = aggregates._sum.amountCop ?? 0;
     const commissions = aggregates._sum.commissionAmount ?? 0;
-
     return {
       totalEarnings: total,
       totalCommissions: commissions,
@@ -816,21 +619,13 @@ export class PaymentsService {
       transactionCount: aggregates._count,
       byTier: {
         tier: user.vetProfile.tier,
-        commissionPct: TIER_COMMISSIONS[user.vetProfile.tier] * 100,
+        commissionPct: getCommissionRate(user.vetProfile.tier) * 100,
         commissionAmount: commissions,
         earnings: total - commissions,
       },
     };
   }
 
-  // ============================================================
-  // ADMIN: liquidación batch
-  // ============================================================
-
-  /**
-   * Marca como LIQUIDATED las transacciones CONFIRMED con más de N días.
-   * Pensado para correr en un cron job diario (BullMQ Repeatable).
-   */
   async liquidateConfirmedTransactions(daysHold = 7) {
     const cutoff = new Date(Date.now() - daysHold * 24 * 60 * 60 * 1000);
 
@@ -848,10 +643,6 @@ export class PaymentsService {
     return { liquidatedCount: result.count };
   }
 
-  // ============================================================
-  // PRIVATE HELPERS
-  // ============================================================
-
   private validateStateTransition(
     current: TransactionStatus,
     next: TransactionStatus,
@@ -864,7 +655,7 @@ export class PaymentsService {
   }
 
   private copToCtg(cop: number): number {
-    return Math.round(cop / CTG_TO_COP_RATE);
+    return Math.round((cop / CTG_TO_COP_RATE) * 100) / 100;
   }
 
   private getIdempotencyResult(key: string) {

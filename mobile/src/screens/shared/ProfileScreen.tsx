@@ -22,15 +22,6 @@ import { useLogoutMutation } from '../../hooks/queries/useMobileMutations'
 import { useI18n } from '../../i18n/I18nProvider'
 import LanguageSwitcher from '../../components/common/LanguageSwitcher'
 
-/**
- * ProfileScreen — perfil de cuenta basado en el rol persistido por backend.
- *
- * El tipo de cuenta se define al registrarse y no se puede alternar mediante
- * estado local. CLIENT conserva el dashboard de usuario y VET conserva el
- * dashboard profesional. La verificación profesional es un estado distinto
- * del rol y solo controla la capacidad de ofrecer servicios públicamente.
- */
-
 interface Props {
   navigation: any
 }
@@ -154,6 +145,12 @@ export default function ProfileScreen({ navigation }: Props) {
                   glyph="📋"
                   label={t('profile.menu.services')}
                   onPress={() => navigation.navigate('PriceManagement')}
+                />
+                <MenuRow
+                  glyph="⭐"
+                  label="Membresía veterinaria"
+                  value="Planes y comisión"
+                  onPress={() => navigation.navigate('Membership')}
                 />
               </>
             )}

@@ -2,10 +2,6 @@
 //
 // Fuente: brand kit oficial entregado en /public/images/Corporative Images/
 // Paleta: Azul Profundo + Verde Principal + Naranja Acento + Grises neutros
-//
-// IMPORTANTE: los nombres de tokens (T.sage, T.gold, T.dark, T.ink, T.canvas)
-// se mantienen para compatibilidad retroactiva con todos los componentes
-// existentes; lo que cambia son los HEX codes a la paleta oficial.
 
 const BRAND_COLORS = {
   blueDeep: '#0D1B2A',
@@ -71,7 +67,6 @@ export const T = {
 }
 
 export const F = {
-  // DM Sans is the actually loaded and rendered canonical sans family.
   sans: "'DM Sans', 'Nunito Sans', sans-serif",
   serif: "'Cormorant Garamond', 'Garamond', serif",
   mono: "'DM Mono', 'Courier New', monospace",
@@ -128,56 +123,58 @@ export const MEDIA = {
   desktopUp: `@media (min-width: ${BREAKPOINTS.desktop}px)`,
 }
 
+/**
+ * Snapshot UI de la política comercial canónica del backend.
+ * La API de membresías sigue siendo la autoridad de estado/activación.
+ */
 export const TIERS = {
   free: {
-    id: "free",
-    name: "Free Vet",
-    badge: "GRATIS",
-    price: 0,
+    id: 'free',
+    apiTier: 'FREE' as const,
+    name: 'Free Vet',
+    badge: 'GRATIS',
     priceCOP: 0,
     commission: 10,
-    limit: 5,
     color: T.inkMuted,
     perks: [
-      "5 servicios/mes",
-      "Perfil básico verificado",
-      "CTG · PSE · Transferencia",
+      'Servicios y citas ilimitados',
+      'Perfil profesional verificado',
+      'CTG · PSE · Transferencia',
+      '10% de comisión por transacción',
     ],
   },
   pro: {
-    id: "pro",
-    name: "VetPro",
-    badge: "PRO",
-    price: 10,
-    priceCOP: 42000,
+    id: 'pro',
+    apiTier: 'PRO' as const,
+    name: 'VetPro',
+    badge: 'PRO',
+    priceCOP: 39900,
     commission: 8,
-    limit: null,
     color: T.sage,
     perks: [
-      "Servicios ilimitados",
-      "8% comisión por servicio",
-      "Perfil destacado",
-      "Chat prioritario",
-      "Reportes mensuales",
+      'Servicios y citas ilimitados',
+      '8% de comisión por transacción',
+      'Perfil destacado',
+      'Chat prioritario',
+      'Reportes mensuales',
     ],
   },
   elite: {
-    id: "elite",
-    name: "VetElite",
-    badge: "ELITE",
-    price: 20,
-    priceCOP: 84000,
+    id: 'elite',
+    apiTier: 'ELITE' as const,
+    name: 'VetElite',
+    badge: 'ELITE',
+    priceCOP: 79900,
     commission: 3,
-    limit: null,
     color: T.gold,
     perks: [
-      "Servicios ilimitados",
-      "3% comisión — la más baja",
-      "Top de listado garantizado",
-      "Insignia Elite verificada",
-      "Analytics avanzado",
-      "Chat VIP + soporte dedicado",
-      "Acceso anticipado a features",
+      'Servicios y citas ilimitados',
+      '3% de comisión por transacción',
+      'Prioridad de posicionamiento',
+      'Insignia Elite verificada',
+      'Analytics avanzado',
+      'Soporte dedicado',
+      'Acceso anticipado a nuevas funciones',
     ],
   },
 }

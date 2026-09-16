@@ -16,8 +16,16 @@ import { Type } from "class-transformer";
 
 /**
  * DTO para crear un precio individual.
+ *
+ * serviceCode es opcional: enlaza el servicio a una sugerencia del catálogo
+ * maestro de Nvet sin restringir el precio final fijado por el veterinario.
  */
 export class CreatePriceDto {
+  @IsOptional()
+  @IsString()
+  @Length(2, 64)
+  serviceCode?: string;
+
   @IsString()
   @IsNotEmpty()
   @Length(2, 100)
@@ -40,6 +48,11 @@ export class CreatePriceDto {
  * DTO para actualización parcial de un precio.
  */
 export class UpdatePriceDto {
+  @IsOptional()
+  @IsString()
+  @Length(2, 64)
+  serviceCode?: string;
+
   @IsOptional()
   @IsString()
   @Length(2, 100)
