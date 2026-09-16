@@ -27,10 +27,50 @@ export interface VetUser {
 
 export interface VetPrice {
   id: string
+  serviceCode?: string | null
   serviceName: string
   priceCop: number
   priceCtg: number
   isActive: boolean
+}
+
+export interface SuggestedService {
+  code: string
+  name: string
+  suggestedPriceCop: number
+  suggestedMinCop: number
+  suggestedMaxCop: number
+  priceType: 'FIXED' | 'FROM'
+  description: string
+}
+
+export interface ServiceCatalogResponse {
+  disclaimer: string
+  ctgToCopRate: number
+  services: SuggestedService[]
+}
+
+export interface MembershipPlan {
+  tier: VetTier
+  name: string
+  monthlyPriceCop: number
+  commissionPct: number
+  description: string
+  perks: string[]
+}
+
+export interface MembershipState {
+  id: string
+  tier: VetTier
+  status: 'ACTIVE' | 'PENDING_CHANGE' | 'PAST_DUE' | 'CANCELED'
+  activePlan: MembershipPlan
+  requestedTier?: VetTier | null
+  requestedPlan?: MembershipPlan | null
+  requestedAt?: string | null
+  currentPeriodStart?: string | null
+  currentPeriodEnd?: string | null
+  billingMode: 'FREE' | 'EXTERNAL_CONFIRMATION'
+  note?: string | null
 }
 
 export interface VetSchedule {
@@ -168,6 +208,26 @@ class VetService {
     return response.data
   }
 
+  async getServiceCatalog(): Promise<ServiceCatalogResponse> {
+    const response = await apiClient.get<ServiceCatalogResponse>('/vets/service-catalog')
+    return response.data
+  }
+
+  async getMembershipPlans(): Promise<MembershipPlan[]> {
+    const response = await apiClient.get<MembershipPlan[]>('/vets/membership-plans')
+    return response.data
+  }
+
+  async getMyMembership(): Promise<MembershipState> {
+    const response = await apiClient.get<MembershipState>('/vets/me/membership')
+    return response.data
+  }
+
+  async requestMembershipChange(tier: VetTier): Promise<MembershipState> {
+    const response = await apiClient.post<MembershipState>('/vets/me/membership/request', { tier })
+    return response.data
+  }
+
   async getVetPrices(vetId: string): Promise<VetPrice[]> {
     const response = await apiClient.get<VetPrice[]>(`/vets/${vetId}/prices`)
     return response.data
@@ -204,9 +264,10 @@ class VetService {
   }
 
   async createPrice(data: {
+    serviceCode?: string
     serviceName: string
     priceCop: number
-    priceCtg: number
+    priceCtg?: number
   }): Promise<VetPrice> {
     const response = await apiClient.post<VetPrice>('/vets/me/prices', data)
     return response.data
@@ -215,6 +276,7 @@ class VetService {
   async updatePrice(
     priceId: string,
     data: Partial<{
+      serviceCode: string
       serviceName: string
       priceCop: number
       priceCtg: number
@@ -236,10 +298,6 @@ class VetService {
     return response.data
   }
 
-  /**
-   * Compatibilidad temporal para hooks legacy. El contrato correcto es un
-   * documento por FormData y la pantalla nueva usa uploadVerificationDocument.
-   */
   async uploadVerificationDocuments(formData: FormData): Promise<unknown> {
     return this.uploadVerificationDocument(formData)
   }
