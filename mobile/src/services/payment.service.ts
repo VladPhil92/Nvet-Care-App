@@ -26,6 +26,8 @@ export interface Transaction {
   commissionPct?: number
   hashOnchain?: string
   transferProof?: string
+  transferRejectedAt?: string
+  transferRejectionReason?: string
   createdAt: string
   updatedAt: string
 }
@@ -122,6 +124,11 @@ const paymentService = {
     return response.data
   },
 
+  /**
+   * Manual TRANSFER rail: the client who requested the service submits the
+   * transfer receipt. Admin verification is required before the appointment is
+   * confirmed and released to the veterinarian.
+   */
   async verifyTransfer(
     transactionId: string,
     file: TransferProofFile,
@@ -139,7 +146,7 @@ const paymentService = {
     }
 
     const response = await api.post(
-      `/payments/transactions/${transactionId}/verify-transfer`,
+      `/payments/manual-transfer/${transactionId}/proof`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } },
     )
