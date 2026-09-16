@@ -39,14 +39,10 @@ export class AppointmentsService {
       const vetProfile = await this.prisma.vetProfile.findUnique({
         where: { userId },
       });
-      if (vetProfile) {
-        where.vetId = vetProfile.id;
-      }
+      if (vetProfile) where.vetId = vetProfile.id;
     }
 
-    if (filters.status) {
-      where.status = filters.status as AppointmentStatus;
-    }
+    if (filters.status) where.status = filters.status as AppointmentStatus;
 
     if (filters.startDate || filters.endDate) {
       where.date = {};
@@ -84,23 +80,17 @@ export class AppointmentsService {
   }
 
   async getTodayAppointments(vetProfileId: string) {
-    if (!vetProfileId) {
-      throw new BadRequestException("Vet profile not found");
-    }
+    if (!vetProfileId) throw new BadRequestException("Vet profile not found");
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     return this.prisma.appointment.findMany({
       where: {
         vetId: vetProfileId,
-        date: {
-          gte: today,
-          lt: tomorrow,
-        },
+        date: { gte: today, lt: tomorrow },
       },
       include: {
         client: {
@@ -122,48 +112,35 @@ export class AppointmentsService {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id },
       include: {
-        vet: {
-          include: {
-            user: true,
-          },
-        },
+        vet: { include: { user: true } },
         client: true,
         pet: true,
         transaction: true,
       },
     });
-
-    if (!appointment) {
-      throw new NotFoundException("Appointment not found");
-    }
-
+    if (!appointment) throw new NotFoundException("Appointment not found");
     return appointment;
   }
 
   /**
    * Crear la cita reserva exclusivamente el slot. La transacción financiera
    * se crea después, en PaymentsService, cuando el cliente realmente inicia
-   * el pago. Separar ambos pasos evita una transacción PENDING fantasma que
-   * bloqueaba `/payments/process` inmediatamente después del booking.
+   * el pago.
+   *
+   * IMPORTANTE: el monto enviado por el cliente NO es autoritativo. El precio
+   * se resuelve nuevamente desde el servicio activo publicado por el vet. Así
+   * el veterinario conserva libertad total para fijar su tarifa sin permitir
+   * manipulación del monto desde el cliente.
    */
   async createAppointment(clientId: string, data: CreateAppointmentDto) {
     const vet = await this.prisma.vetProfile.findUnique({
       where: { id: data.vetId },
     });
 
-    if (!vet) {
-      throw new NotFoundException("Veterinarian not found");
-    }
-    if (!vet.isActive) {
-      throw new BadRequestException("Veterinarian is not active");
-    }
-    if (!vet.isVerified) {
-      throw new BadRequestException("Veterinarian is not verified");
-    }
+    if (!vet) throw new NotFoundException("Veterinarian not found");
+    if (!vet.isActive) throw new BadRequestException("Veterinarian is not active");
+    if (!vet.isVerified) throw new BadRequestException("Veterinarian is not verified");
 
-    // Phase 14 national coverage boundary. Cartagena is the only active market
-    // by default; future markets become operational through provider config.
-    // The client service point must also fall inside the selected vet's radius.
     if (this.coverage) {
       this.coverage.assertBookableLocation({
         serviceLatitude: data.serviceLatitude,
@@ -178,19 +155,31 @@ export class AppointmentsService {
       });
     }
 
-    // Phase 12 closed-beta boundary remains defense in depth for the first
-    // commercial pilot: invite-only, Cartagena-only and current legal consent.
     await this.closedBetaAccess.assertBookingAllowed(clientId, vet.city);
 
-    const pet = await this.prisma.pet.findUnique({
-      where: { id: data.petId },
-    });
-
-    if (!pet) {
-      throw new NotFoundException("Pet not found");
-    }
+    const pet = await this.prisma.pet.findUnique({ where: { id: data.petId } });
+    if (!pet) throw new NotFoundException("Pet not found");
     if (pet.ownerId !== clientId) {
       throw new ForbiddenException("Pet does not belong to you");
+    }
+
+    // serviceType puede venir como nombre visible (clientes legacy) o como
+    // serviceCode canónico. En ambos casos el precio final sale de Price.
+    const servicePrice = await this.prisma.price.findFirst({
+      where: {
+        vetId: data.vetId,
+        isActive: true,
+        OR: [
+          { serviceName: data.serviceType },
+          { serviceCode: data.serviceType },
+        ],
+      },
+    });
+
+    if (!servicePrice) {
+      throw new BadRequestException(
+        "El servicio seleccionado ya no está disponible con este veterinario. Actualiza la lista de servicios e intenta nuevamente.",
+      );
     }
 
     const dateOnly = this.toDateOnly(data.date);
@@ -202,11 +191,11 @@ export class AppointmentsService {
           vetId: data.vetId,
           clientId,
           petId: data.petId,
-          serviceType: data.serviceType,
+          serviceType: servicePrice.serviceName,
           date: this.toUtcDateOnly(data.date),
           time: data.time,
           address: data.address,
-          amount: data.amount,
+          amount: servicePrice.priceCop,
           paymentMethod: data.paymentMethod,
           notes: data.notes,
           status: AppointmentStatus.PENDING,
@@ -235,11 +224,6 @@ export class AppointmentsService {
     }
   }
 
-  /**
-   * Reprogramar fecha u hora vuelve a validar disponibilidad. La cita actual
-   * se excluye del cálculo para que mantener el mismo slot no sea un falso
-   * conflicto.
-   */
   async updateAppointment(id: string, data: UpdateAppointmentDto) {
     const appointment = await this.getAppointmentById(id);
 
@@ -257,7 +241,6 @@ export class AppointmentsService {
         ? this.toDateOnly(data.date)
         : this.toDateOnly(appointment.date);
       const targetTime = data.time ?? appointment.time;
-
       await this.assertSlotAvailable(
         appointment.vetId,
         targetDate,
@@ -290,7 +273,6 @@ export class AppointmentsService {
 
   async cancelAppointment(id: string, reason?: string) {
     const appointment = await this.getAppointmentById(id);
-
     if (appointment.status === AppointmentStatus.COMPLETED) {
       throw new BadRequestException("Cannot cancel completed appointment");
     }
@@ -306,9 +288,7 @@ export class AppointmentsService {
     });
   }
 
-  /**
-   * Get appointment tracking with GPS location and ETA
-   */
+  /** Get appointment tracking with GPS location and ETA. */
   async getAppointmentTracking(id: string) {
     const appointment = await this.getAppointmentById(id);
 
@@ -346,9 +326,7 @@ export class AppointmentsService {
 
     let estimatedArrival: string | null =
       appointment.etaMinutes != null
-        ? new Date(
-            Date.now() + appointment.etaMinutes * 60 * 1000,
-          ).toISOString()
+        ? new Date(Date.now() + appointment.etaMinutes * 60 * 1000).toISOString()
         : null;
 
     if (
@@ -358,9 +336,7 @@ export class AppointmentsService {
       const [hours, minutes] = appointment.time.split(":").map(Number);
       const scheduled = new Date(appointment.date);
       scheduled.setHours(hours, minutes, 0, 0);
-      if (scheduled > new Date()) {
-        estimatedArrival = scheduled.toISOString();
-      }
+      if (scheduled > new Date()) estimatedArrival = scheduled.toISOString();
     }
 
     return {
@@ -376,9 +352,6 @@ export class AppointmentsService {
     };
   }
 
-  /**
-   * Update vet GPS location for an in-progress appointment
-   */
   async updateVetLocation(
     id: string,
     vetUserId: string,
@@ -391,7 +364,6 @@ export class AppointmentsService {
     if (appointment.vet.userId !== vetUserId) {
       throw new ForbiddenException("Only the assigned vet can update location");
     }
-
     if (appointment.status !== AppointmentStatus.IN_PROGRESS) {
       throw new BadRequestException(
         "Location updates only allowed for in-progress appointments",
@@ -416,13 +388,9 @@ export class AppointmentsService {
     });
   }
 
-  /**
-   * Update appointment status (vets only) — records per-status timestamps
-   */
   async updateAppointmentStatus(id: string, status: string) {
     const appointment = await this.getAppointmentById(id);
     const next = status as AppointmentStatus;
-
     this.validateStatusTransition(appointment.status, next);
 
     const now = new Date();
@@ -431,16 +399,12 @@ export class AppointmentsService {
     };
 
     if (next === AppointmentStatus.CONFIRMED) timestampField.confirmedAt = now;
-    if (next === AppointmentStatus.IN_PROGRESS)
-      timestampField.inProgressAt = now;
+    if (next === AppointmentStatus.IN_PROGRESS) timestampField.inProgressAt = now;
     if (next === AppointmentStatus.COMPLETED) timestampField.completedAt = now;
 
     return this.prisma.appointment.update({
       where: { id },
-      data: {
-        status: next,
-        ...timestampField,
-      },
+      data: { status: next, ...timestampField },
       include: {
         vet: { include: { user: true } },
         client: true,
@@ -451,13 +415,9 @@ export class AppointmentsService {
 
   async addClinicalNotes(id: string, diagnosis: string, treatment: string) {
     await this.getAppointmentById(id);
-
     return this.prisma.appointment.update({
       where: { id },
-      data: {
-        diagnosis,
-        treatment,
-      },
+      data: { diagnosis, treatment },
       include: {
         vet: { include: { user: true } },
         client: true,
@@ -478,7 +438,6 @@ export class AppointmentsService {
       excludeAppointmentId ? { excludeAppointmentId } : undefined,
     );
     const slot = availability.find((candidate) => candidate.time === time);
-
     if (!slot?.available) {
       throw new ConflictException(
         "The selected veterinarian time slot is no longer available",
