@@ -333,13 +333,20 @@ export class PetsService {
    * deleted here; it is orphaned rather than tracked for cleanup, the same
    * tradeoff every other single-URL avatar/photo field in this schema makes.
    */
-  async updatePhoto(ownerId: string, petId: string, file: Express.Multer.File) {
+  async updatePhoto(
+    ownerId: string,
+    petId: string,
+    file: Express.Multer.File,
+    publicBaseUrl?: string,
+  ) {
     if (!file?.buffer?.length) {
       throw new BadRequestException("La foto es obligatoria");
     }
 
     const pet = await this.requireOwner(ownerId, petId);
-    const uploaded = await this.storage.upload(file, `pets/${petId}`);
+    const uploaded = await this.storage.upload(file, `pets/${petId}`, {
+      publicBaseUrl,
+    });
 
     return this.prisma.pet.update({
       where: { id: pet.id },

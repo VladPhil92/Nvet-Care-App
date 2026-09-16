@@ -35,9 +35,16 @@ describe("PetsService pet photo", () => {
     });
     petUpdate.mockResolvedValue({ id: "pet-1", photo: "/uploads/public/pets/pet-1/photo.jpg" });
 
-    await service.updatePhoto("owner-1", "pet-1", file);
+    await service.updatePhoto(
+      "owner-1",
+      "pet-1",
+      file,
+      "https://staging.nvetcare.com",
+    );
 
-    expect(storageUpload).toHaveBeenCalledWith(file, "pets/pet-1");
+    expect(storageUpload).toHaveBeenCalledWith(file, "pets/pet-1", {
+      publicBaseUrl: "https://staging.nvetcare.com",
+    });
     expect(petUpdate).toHaveBeenCalledWith({
       where: { id: "pet-1" },
       data: { photo: "/uploads/public/pets/pet-1/photo.jpg" },
