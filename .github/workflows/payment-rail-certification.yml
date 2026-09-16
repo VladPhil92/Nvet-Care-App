@@ -26,7 +26,7 @@ env:
 
 jobs:
   certify-transfer:
-    name: Certify CLIENT → VET → ADMIN transfer lifecycle
+    name: Certify CLIENT → ADMIN transfer lifecycle (VET forbidden)
     if: >-
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
@@ -94,7 +94,7 @@ jobs:
             echo '- Recovery prerequisite: exact-candidate Nvet Recovery Readiness must complete successfully before transaction certification begins.'
             echo '- Target: isolated Railway staging only.'
             echo '- Credentials: loaded from the runtime-rotated Railway staging session and masked in Actions.'
-            echo '- Required identities: CLIENT → verified VET → ADMIN.'
+            echo '- Required identities: CLIENT (pays + reports) → verified VET (appointment counterpart, forbidden from reporting) → ADMIN (confirms).'
             echo '- Required transaction lifecycle: PENDING → VERIFYING → CONFIRMED.'
             echo '- Transfer evidence must be private, readable only through the authenticated admin endpoint and SHA-256 identical to the submitted proof.'
             echo '- Private storage identifiers and legacy TRANSFER hashOnchain values must not appear in VET, ADMIN confirmation or CLIENT responses.'

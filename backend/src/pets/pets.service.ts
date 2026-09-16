@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { StorageService } from "../common/storage/storage.service";
 import { CreatePetDto, UpdatePetDto } from "./dto/pet.dto";
 import { UpdatePetHealthProfileDto } from "./dto/pet-health-profile.dto";
 
@@ -39,7 +40,10 @@ type PreventiveAgendaItem = {
  */
 @Injectable()
 export class PetsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   // ============================================================
   // GET — mascotas del dueño autenticado
@@ -315,6 +319,41 @@ export class PetsService {
         }),
         ...(dto.notes !== undefined && { notes: dto.notes.trim() }),
       },
+    });
+  }
+
+  /**
+   * Sube o reemplaza la foto de la mascota. Almacenamiento público (no es
+   * información sensible como los documentos de verificación) vía el mismo
+   * StorageService con validación de magic-bytes que ya usan vets/pagos.
+   *
+   * Pet.photo only stores StorageService's public delivery URL, not its
+   * internal storageKey (a different, driver-specific value — see
+   * UploadResult), so a replaced photo's previous file is not explicitly
+   * deleted here; it is orphaned rather than tracked for cleanup, the same
+   * tradeoff every other single-URL avatar/photo field in this schema makes.
+   */
+  async updatePhoto(ownerId: string, petId: string, file: Express.Multer.File) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException("La foto es obligatoria");
+    }
+
+    const pet = await this.requireOwner(ownerId, petId);
+    const uploaded = await this.storage.upload(file, `pets/${petId}`);
+
+    return this.prisma.pet.update({
+      where: { id: pet.id },
+      data: { photo: uploaded.url },
+    });
+  }
+
+  async removePhoto(ownerId: string, petId: string) {
+    const pet = await this.requireOwner(ownerId, petId);
+    if (!pet.photo) return pet;
+
+    return this.prisma.pet.update({
+      where: { id: pet.id },
+      data: { photo: null },
     });
   }
 

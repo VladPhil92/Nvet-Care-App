@@ -12,10 +12,12 @@ import { FinancialDataCryptoService } from "./financial-data-crypto.service";
 import { ManualTransferPaymentController } from "./manual-transfer-payment.controller";
 import { ManualTransferPaymentService } from "./manual-transfer-payment.service";
 import { AuthModule } from "../auth/auth.module";
+import { ChatModule } from "../chat/chat.module";
 
 @Module({
   imports: [
     AuthModule,
+    ChatModule,
     MulterModule.register({
       storage: memoryStorage(),
       limits: {

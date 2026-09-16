@@ -9,7 +9,7 @@ describe("PetsService preventive agenda V1", () => {
       findMany: petFindMany,
     },
   } as unknown as PrismaService;
-  const service = new PetsService(prisma);
+  const service = new PetsService(prisma, {} as never);
 
   beforeEach(() => {
     jest.clearAllMocks();

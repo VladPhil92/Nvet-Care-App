@@ -58,6 +58,13 @@ export interface VerifyTransferMetadata {
   transferDate?: string
 }
 
+export interface TransferDestination {
+  accountHolder: string
+  bankName: string
+  transferKey: string
+  note: string
+}
+
 export interface WithdrawalResponse {
   success: boolean
   message: string
@@ -129,6 +136,11 @@ const paymentService = {
    * transfer receipt. Admin verification is required before the appointment is
    * confirmed and released to the veterinarian.
    */
+  async getTransferDestination(): Promise<TransferDestination> {
+    const response = await api.get('/payments/transfer-destination')
+    return response.data
+  },
+
   async verifyTransfer(
     transactionId: string,
     file: TransferProofFile,

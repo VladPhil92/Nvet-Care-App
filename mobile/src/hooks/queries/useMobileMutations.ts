@@ -313,6 +313,47 @@ export function useCreatePetMutation() {
 }
 
 // ============================================================
+// PETS - photo upload / removal
+// ============================================================
+
+interface UploadPetPhotoVars {
+  petId: string
+  formData: FormData
+}
+
+function applyPetUpdate(qc: ReturnType<typeof useQueryClient>, updatedPet: Pet) {
+  qc.setQueryData(qk.pets.detail(updatedPet.id), updatedPet)
+  qc.setQueryData<Pet[] | undefined>(
+    qk.pets.list(),
+    (prev: Pet[] | undefined) =>
+      prev?.map((p: Pet) => (p.id === updatedPet.id ? updatedPet : p)),
+  )
+}
+
+export function useUploadPetPhotoMutation() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationKey: ['pets', 'upload-photo'],
+    mutationFn: ({ petId, formData }: UploadPetPhotoVars) =>
+      petService.uploadPhoto(petId, formData),
+
+    onSuccess: (updatedPet: Pet) => applyPetUpdate(qc, updatedPet),
+  })
+}
+
+export function useDeletePetPhotoMutation() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationKey: ['pets', 'delete-photo'],
+    mutationFn: (petId: string) => petService.deletePhoto(petId),
+
+    onSuccess: (updatedPet: Pet) => applyPetUpdate(qc, updatedPet),
+  })
+}
+
+// ============================================================
 // PRICES
 // ============================================================
 

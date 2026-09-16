@@ -87,6 +87,31 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
 
   const apt = query.data
   const status: AppointmentStatus = apt?.status ?? 'PENDING'
+  const transaction = apt?.transaction as
+    | { id: string; status: string }
+    | undefined
+  const needsTransferProof =
+    !isVet &&
+    status === 'PENDING' &&
+    apt?.paymentMethod === 'TRANSFER' &&
+    transaction?.status === 'PENDING'
+  const transferInVerification =
+    !isVet &&
+    status === 'PENDING' &&
+    apt?.paymentMethod === 'TRANSFER' &&
+    transaction?.status === 'VERIFYING'
+
+  const handleResumeTransferProof = () => {
+    if (!transaction) return
+    navigation.getParent()?.navigate('ClientSearch', {
+      screen: 'TransferPayment',
+      params: {
+        transactionId: transaction.id,
+        appointmentId,
+        amountCop: apt!.amount,
+      },
+    })
+  }
 
   useEffect(() => {
     let active = true
@@ -392,6 +417,30 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
                       loading={payMutation.isPending}
                       onPress={handleResumePayment}
                     />
+                  </Card>
+                ) : null}
+
+                {needsTransferProof ? (
+                  <Card style={{ marginTop: 14 }}>
+                    <Text style={styles.sectionTitle}>Falta subir tu comprobante</Text>
+                    <Text style={[styles.subtle, { marginTop: 6, marginBottom: 12 }]}>
+                      Ya generamos tu transferencia pendiente, pero aún no recibimos el comprobante de pago. Súbelo para que un administrador confirme tu cita.
+                    </Text>
+                    <Button
+                      label="Subir comprobante"
+                      variant="primary"
+                      fullWidth
+                      onPress={handleResumeTransferProof}
+                    />
+                  </Card>
+                ) : null}
+
+                {transferInVerification ? (
+                  <Card style={{ marginTop: 14 }}>
+                    <Text style={styles.sectionTitle}>Comprobante en revisión</Text>
+                    <Text style={[styles.subtle, { marginTop: 6 }]}>
+                      Recibimos tu comprobante. Un administrador lo está validando y confirmará tu cita pronto.
+                    </Text>
                   </Card>
                 ) : null}
 

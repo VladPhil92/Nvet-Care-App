@@ -12,6 +12,10 @@ const BookAppointmentScreen = lazyScreen<any>(
   () => import('../../screens/client/BookAppointmentScreen'),
   { displayName: 'BookAppointmentScreen' },
 )
+const TransferPaymentScreen = lazyScreen<any>(
+  () => import('../../screens/client/TransferPaymentScreen'),
+  { displayName: 'TransferPaymentScreen' },
+)
 
 const Stack = createNativeStackNavigator<ClientSearchStackParamList>()
 
@@ -32,6 +36,11 @@ export default function ClientSearchStack() {
           animation: 'slide_from_bottom',
           gestureEnabled: false,
         }}
+      />
+      <Stack.Screen
+        name="TransferPayment"
+        component={TransferPaymentScreen}
+        options={{ gestureEnabled: false }}
       />
     </Stack.Navigator>
   )

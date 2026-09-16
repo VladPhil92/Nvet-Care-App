@@ -15,6 +15,7 @@ import { createHash } from "crypto";
 import * as path from "path";
 import { StorageService } from "../common/storage/storage.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { ChatGateway } from "../chat/chat.gateway";
 import {
   PayoutDestination,
   FinancialDataCryptoService,
@@ -23,6 +24,33 @@ import type {
   RequestWithdrawalDto,
   VerifyTransferDto,
 } from "./dto/payment.dto";
+
+export interface TransferDestination {
+  accountHolder: string;
+  bankName: string;
+  transferKey: string;
+  note: string;
+}
+
+/**
+ * Destino de pago manual para la fase piloto (sin pasarela PSE todavía).
+ * El cliente transfiere directo a esta cuenta de la empresa y sube el
+ * comprobante; el admin lo valida. Configurable por variable de entorno
+ * para poder rotar a la cuenta definitiva de CTG One Technology S.A.S.
+ * sin requerir un release de la app — estos NO son datos secretos, son la
+ * información de pago que ya se le muestra públicamente al cliente.
+ */
+function getTransferDestination(): TransferDestination {
+  return {
+    accountHolder:
+      process.env.TRANSFER_PILOT_ACCOUNT_HOLDER || "Juan Pablo Valderrama Pino",
+    bankName: process.env.TRANSFER_PILOT_BANK_NAME || "Bancolombia (Bre-B)",
+    transferKey: process.env.TRANSFER_PILOT_ACCOUNT_KEY || "1047444344",
+    note:
+      process.env.TRANSFER_PILOT_NOTE ||
+      "Cuenta piloto temporal mientras se formaliza la pasarela PSE de CTG One Technology S.A.S.",
+  };
+}
 
 export const WITHDRAWAL_STATUSES = [
   "PENDING",
@@ -56,11 +84,22 @@ export class FinancialOperationsService {
     private readonly prisma: PrismaService,
     private readonly financialCrypto: FinancialDataCryptoService,
     private readonly storage: StorageService,
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   // ========================================================================
   // TRANSFER PAYMENT RAIL — canonical production-capable application path
   // ========================================================================
+
+  /**
+   * Pilot-phase manual transfer destination: the CLIENT pays this account
+   * directly (no payment gateway yet) and later submits proof below. Public
+   * payment-collection info, not a secret — safe to expose to any
+   * authenticated user.
+   */
+  getTransferDestination(): TransferDestination {
+    return getTransferDestination();
+  }
 
   async submitTransferProof(
     userId: string,
@@ -74,12 +113,15 @@ export class FinancialOperationsService {
 
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
-      include: { appointment: { include: { vet: true } } },
+      include: { appointment: true },
     });
     if (!transaction) throw new NotFoundException("Transacción no encontrada");
-    if (transaction.appointment.vet.userId !== userId) {
+    // Pilot-phase model: the client pays the company's account directly (see
+    // getTransferDestination()) and is the one who reports/uploads proof —
+    // the vet never handles the money and has nothing to verify here.
+    if (transaction.appointment.clientId !== userId) {
       throw new ForbiddenException(
-        "Solo el veterinario de la cita puede verificar la transferencia",
+        "Solo el cliente de la cita puede reportar la transferencia",
       );
     }
     if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
@@ -119,6 +161,14 @@ export class FinancialOperationsService {
     if (oldStorageKey && oldStorageKey !== uploaded.storageKey) {
       await this.storage.delete(oldStorageKey).catch(() => undefined);
     }
+
+    await this.chatGateway
+      .emitSystemMessage(
+        transaction.appointmentId,
+        userId,
+        "🧾 El cliente envió el comprobante de la transferencia. Un administrador lo revisará pronto.",
+      )
+      .catch(() => undefined);
 
     return updated;
   }
@@ -187,8 +237,8 @@ export class FinancialOperationsService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.transaction.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.transaction.update({
         where: { id: transactionId },
         data: {
           status: TransactionStatus.CONFIRMED,
@@ -202,8 +252,18 @@ export class FinancialOperationsService {
         where: { id: transaction.appointmentId },
         data: { status: AppointmentStatus.CONFIRMED },
       });
-      return updated;
+      return result;
     });
+
+    await this.chatGateway
+      .emitSystemMessage(
+        transaction.appointmentId,
+        adminUserId,
+        "✅ Pago confirmado por administración. La cita quedó reservada.",
+      )
+      .catch(() => undefined);
+
+    return updated;
   }
 
   async rejectTransfer(
@@ -231,7 +291,7 @@ export class FinancialOperationsService {
       );
     }
 
-    return this.prisma.transaction.update({
+    const updated = await this.prisma.transaction.update({
       where: { id: transactionId },
       data: {
         status: TransactionStatus.FAILED,
@@ -240,6 +300,16 @@ export class FinancialOperationsService {
         transferRejectionReason: normalizedReason,
       },
     });
+
+    await this.chatGateway
+      .emitSystemMessage(
+        transaction.appointmentId,
+        adminUserId,
+        `⚠️ El comprobante fue rechazado: ${normalizedReason}. Por favor intenta la transferencia de nuevo.`,
+      )
+      .catch(() => undefined);
+
+    return updated;
   }
 
   // ========================================================================

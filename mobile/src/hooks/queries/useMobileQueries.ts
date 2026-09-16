@@ -195,6 +195,14 @@ export function useCtgRateQuery() {
   })
 }
 
+export function useTransferDestinationQuery() {
+  return useQuery({
+    queryKey: qk.payments.transferDestination(),
+    queryFn: () => paymentService.getTransferDestination(),
+    staleTime: STALE_TIMES.MEDIUM,
+  })
+}
+
 // ============================================================
 // PETS
 // ============================================================

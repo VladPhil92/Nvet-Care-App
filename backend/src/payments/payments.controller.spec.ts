@@ -163,4 +163,20 @@ describe("PaymentsController production rail guards", () => {
       withdrawal: { id: "withdrawal-1", status: "PENDING" },
     });
   });
+
+  it("exposes the pilot-phase manual transfer destination to any authenticated user", () => {
+    const { controller, financialOperations } = createController();
+    (financialOperations as any).getTransferDestination = jest
+      .fn()
+      .mockReturnValue({
+        accountHolder: "Juan Pablo Valderrama Pino",
+        bankName: "Bancolombia (Bre-B)",
+        transferKey: "1047444344",
+        note: "Cuenta piloto temporal",
+      });
+
+    const result = controller.getTransferDestination();
+
+    expect(result).toMatchObject({ transferKey: "1047444344" });
+  });
 });
