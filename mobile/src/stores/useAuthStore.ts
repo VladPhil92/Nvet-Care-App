@@ -27,8 +27,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null })
     try {
+      // authService.login already adopts the session cache owner via
+      // persistSession -> adoptAuthenticatedUser; calling it again here was
+      // redundant and, worse, ran a second time outside that atomic sequence.
       const response: AuthResponse = await authService.login(email, password)
-      await adoptSessionCacheOwner(response.user.id)
       set({
         user: response.user,
         isAuthenticated: true,
@@ -47,8 +49,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (data) => {
     set({ isLoading: true, error: null })
     try {
+      // See login: authService.register already adopts the session cache
+      // owner via persistSession -> adoptAuthenticatedUser.
       const response: AuthResponse = await authService.register(data)
-      await adoptSessionCacheOwner(response.user.id)
       set({
         user: response.user,
         isAuthenticated: true,
@@ -67,9 +70,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     set({ isLoading: true })
     try {
+      // authService.logout already clears the session cache via clearSession.
       await authService.logout()
     } finally {
-      await clearSessionCache()
       set({
         user: null,
         isAuthenticated: false,
