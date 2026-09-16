@@ -149,9 +149,9 @@
       "prNumber": 269,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
-      "status": "open",
+      "status": "resolved",
       "owner": "VladPhil92",
-      "justification": "Post-merge follow-up to PR #266, closing two bugs a Codex review surfaced after merge. First, StorageService's local driver (the default without Cloudinary) returned a relative /uploads/public/... URL that main.ts never mounted as static content, so pet photos — the first public upload in this codebase to use the local driver, since every other caller's folder is forced-private — were unreachable; fixed by mounting the local public upload directory in main.ts and having uploadToLocal return an absolute URL via a new PUBLIC_BACKEND_URL env var. Second, MyPetsScreen's Save button only tracked the create/update mutation's pending state, re-enabling before the awaited photo upload finished and allowing a double-tap to create a duplicate pet; fixed with a dedicated isSaving state covering the whole operation. No changes to money, settlement, entitlement, KYC, wallet or identity paths; authorizes no commercial launch, provider mutation, or Play publication."
+      "justification": "Post-merge follow-up to PR #266, closing two bugs a Codex review surfaced after merge. First, StorageService's local driver (the default without Cloudinary) returned a relative /uploads/public/... URL that main.ts never mounted as static content, so pet photos — the first public upload in this codebase to use the local driver, since every other caller's folder is forced-private — were unreachable; fixed by mounting the local public upload directory in main.ts and having uploadToLocal return an absolute URL via a new PUBLIC_BACKEND_URL env var. Second, MyPetsScreen's Save button only tracked the create/update mutation's pending state, re-enabling before the awaited photo upload finished and allowing a double-tap to create a duplicate pet; fixed with a dedicated isSaving state covering the whole operation. No changes to money, settlement, entitlement, KYC, wallet or identity paths; authorizes no commercial launch, provider mutation, or Play publication. Merged into main as PR #269; the blocker is retained as resolved audit history."
     }
   ]
 }
