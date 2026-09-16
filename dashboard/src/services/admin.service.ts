@@ -42,13 +42,42 @@ export interface Appointment {
 }
 
 export interface TransferTracking {
-  id?: string
+  id: string
+  appointmentId: string
   vet: string
   vetId: string
   tier: 'free' | 'pro' | 'elite'
   client: string
   amount: number
   status: 'Confirmada' | 'Pendiente' | 'En disputa'
+  rawStatus: 'PENDING' | 'VERIFYING'
+  proofAvailable: boolean
+  transferCode?: string
+  waitingMinutes: number
+}
+
+interface TransferTrackingApiRow {
+  id: string
+  appointmentId: string
+  amountCop: number
+  status: 'PENDING' | 'VERIFYING'
+  transferCode?: string | null
+  transferProofStorageKey?: string | null
+  waitingMinutes?: number
+  appointment?: {
+    client?: {
+      firstName?: string | null
+      lastName?: string | null
+    }
+    vet?: {
+      id?: string
+      tier?: string
+      user?: {
+        firstName?: string | null
+        lastName?: string | null
+      }
+    }
+  }
 }
 
 export interface PaymentMethodStats {
@@ -89,6 +118,19 @@ export type DisputeResolution = 'CONFIRM' | 'REFUND' | 'CANCEL'
 export type VetTierInput = 'free' | 'pro' | 'elite' | 'FREE' | 'PRO' | 'ELITE'
 export type ExportFormat = 'csv' | 'xlsx' | 'CSV' | 'XLSX'
 
+function fullName(
+  person?: { firstName?: string | null; lastName?: string | null },
+  fallback = '—',
+) {
+  const value = `${person?.firstName ?? ''} ${person?.lastName ?? ''}`.trim()
+  return value || fallback
+}
+
+function normalizeTier(value?: string): TransferTracking['tier'] {
+  const tier = value?.toLowerCase()
+  return tier === 'pro' || tier === 'elite' ? tier : 'free'
+}
+
 class AdminService {
   async getMetrics(filters: MetricsFilters = {}): Promise<AdminMetrics> {
     const response = await apiClient.get<AdminMetrics>('/admin/metrics', { params: filters })
@@ -106,7 +148,28 @@ class AdminService {
   }
 
   async getTransferTracking(): Promise<TransferTracking[]> {
-    const response = await apiClient.get<TransferTracking[]>('/admin/transfer-tracking')
+    const response = await apiClient.get<TransferTrackingApiRow[]>('/admin/transfer-tracking')
+    return response.data.map((row) => ({
+      id: row.id,
+      appointmentId: row.appointmentId,
+      vet: fullName(row.appointment?.vet?.user, 'Veterinario'),
+      vetId: row.appointment?.vet?.id ?? '',
+      tier: normalizeTier(row.appointment?.vet?.tier),
+      client: fullName(row.appointment?.client, 'Cliente'),
+      amount: Number(row.amountCop ?? 0),
+      status: 'Pendiente',
+      rawStatus: row.status,
+      proofAvailable: Boolean(row.transferProofStorageKey),
+      transferCode: row.transferCode ?? undefined,
+      waitingMinutes: Number(row.waitingMinutes ?? 0),
+    }))
+  }
+
+  async getTransferProof(transactionId: string): Promise<Blob> {
+    const response = await apiClient.get(
+      `/payments/manual-transfer/${transactionId}/proof`,
+      { responseType: 'blob' },
+    )
     return response.data
   }
 
@@ -119,19 +182,29 @@ class AdminService {
   }
 
   /**
-   * Compatibilidad con la UI legacy. El endpoint se mantiene encapsulado aquí
-   * para que una futura migración a la máquina de estados de disputas no se
-   * propague a los componentes.
+   * Verificación manual de transferencias. La aprobación confirma la cita y
+   * dispara las notificaciones al cliente y al veterinario; el rechazo conserva
+   * la cita sin confirmar y comunica al cliente el canal de Servicio al Cliente.
    */
   async verifyTransfer(
     transactionId: string,
     verification: boolean | { action: 'CONFIRM' | 'REJECT'; reason?: string },
   ): Promise<void> {
-    const payload =
+    const normalized =
       typeof verification === 'boolean'
-        ? { verified: verification }
+        ? { action: verification ? 'CONFIRM' as const : 'REJECT' as const }
         : verification
-    await apiClient.post(`/admin/transactions/${transactionId}/verify`, payload)
+
+    if (normalized.action === 'CONFIRM') {
+      await apiClient.post(`/payments/manual-transfer/${transactionId}/approve`)
+      return
+    }
+
+    await apiClient.post(`/payments/manual-transfer/${transactionId}/reject`, {
+      reason:
+        normalized.reason?.trim() ||
+        'No fue posible validar la transferencia con el comprobante recibido.',
+    })
   }
 
   async resolveDispute(

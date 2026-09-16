@@ -55,6 +55,7 @@ export const T = {
   ok: BRAND_COLORS.greenAccessible,
   warn: '#B8511A',
   err: '#C53030',
+  danger: '#C53030',
   pending: BRAND_COLORS.grayDark,
   dark: BRAND_COLORS.blueDeep,
   darkAlt: BRAND_COLORS.blueDeepAlt,
