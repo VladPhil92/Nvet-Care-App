@@ -2,37 +2,44 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
   ConflictException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { VetTier } from "@prisma/client";
+import {
+  CTG_TO_COP_RATE,
+  SUGGESTED_SERVICE_CATALOG,
+  findSuggestedService,
+} from "./commercial-policy";
 
-// ============================================
-// CONSTANTS
-// ============================================
+// Límites técnicos anti-error. No son precios sugeridos ni restricciones comerciales.
+const MIN_PRICE_COP = 5_000;
+const MAX_PRICE_COP = 10_000_000;
 
-// Max prices per tier
-const TIER_PRICE_LIMITS = {
-  [VetTier.FREE]: 5,
-  [VetTier.PRO]: 20,
-  [VetTier.ELITE]: Infinity,
-};
-
-// CTG to COP exchange rate (should come from service/config)
-const CTG_TO_COP_RATE = 30; // 1 CTG = 30 COP
-
-// Min/Max price (COP)
-const MIN_PRICE_COP = 5000; // 5,000 COP minimum
-const MAX_PRICE_COP = 10_000_000; // 10M COP maximum
+interface PriceInput {
+  serviceCode?: string;
+  serviceName: string;
+  priceCop: number;
+  priceCtg?: number;
+}
 
 @Injectable()
 export class PricesService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Get all prices for a vet
+   * Catálogo orientativo de Nvet. Los rangos y valores NO son obligatorios:
+   * el veterinario conserva la decisión sobre su precio final.
    */
+  getSuggestedCatalog() {
+    return {
+      disclaimer:
+        "Los precios de Nvet son referencias sugeridas. Cada veterinario define libremente el precio final de sus servicios.",
+      ctgToCopRate: CTG_TO_COP_RATE,
+      services: SUGGESTED_SERVICE_CATALOG,
+    };
+  }
+
+  /** Get all prices for a vet. */
   async getVetPrices(vetProfileId: string, activeOnly = true) {
     return this.prisma.price.findMany({
       where: {
@@ -43,94 +50,48 @@ export class PricesService {
     });
   }
 
-  /**
-   * Get vet's own prices (authenticated)
-   */
+  /** Get vet's own prices (authenticated). */
   async getMyPrices(userId: string, activeOnly = false) {
-    const vet = await this.prisma.vetProfile.findUnique({
-      where: { userId },
-    });
-
-    if (!vet) {
-      throw new NotFoundException("Vet profile not found");
-    }
-
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException("Vet profile not found");
     return this.getVetPrices(vet.id, activeOnly);
   }
 
   /**
-   * Create new price
+   * Create a service price. Membership tier never limits the number of
+   * services: Nvet monetizes through the tier commission and paid membership.
    */
-  async createPrice(
-    userId: string,
-    data: {
-      serviceName: string;
-      priceCop: number;
-      priceCtg?: number;
-      description?: string;
-    },
-  ) {
-    const vet = await this.prisma.vetProfile.findUnique({
-      where: { userId },
-      include: {
-        _count: {
-          select: {
-            prices: { where: { isActive: true } },
-          },
-        },
-      },
-    });
+  async createPrice(userId: string, data: PriceInput) {
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException("Vet profile not found");
 
-    if (!vet) {
-      throw new NotFoundException("Vet profile not found");
-    }
-
-    // Check tier limit
-    const limit = TIER_PRICE_LIMITS[vet.tier];
-    if (vet._count.prices >= limit) {
-      throw new ForbiddenException(
-        `Your ${vet.tier} tier allows max ${limit} active prices. Upgrade to add more.`,
-      );
-    }
-
-    // Validate price range
     this.validatePriceRange(data.priceCop);
+    const normalized = this.normalizeService(data.serviceCode, data.serviceName);
 
-    // Check for duplicate service name
-    const existing = await this.prisma.price.findFirst({
-      where: {
-        vetId: vet.id,
-        serviceName: data.serviceName,
-      },
-    });
-
-    if (existing) {
-      throw new ConflictException(
-        `Service "${data.serviceName}" already exists. Update it instead.`,
-      );
-    }
-
-    // Auto-calculate CTG price if not provided
-    const priceCtg = data.priceCtg ?? this.convertCopToCtg(data.priceCop);
+    await this.assertServiceIsUnique(
+      vet.id,
+      normalized.serviceName,
+      normalized.serviceCode,
+    );
 
     return this.prisma.price.create({
       data: {
         vetId: vet.id,
-        serviceName: data.serviceName,
+        serviceCode: normalized.serviceCode,
+        serviceName: normalized.serviceName,
         priceCop: data.priceCop,
-        priceCtg,
+        priceCtg: data.priceCtg ?? this.convertCopToCtg(data.priceCop),
         isActive: true,
       },
     });
   }
 
-  /**
-   * Update price
-   */
+  /** Update a service price. The final amount remains entirely vet-defined. */
   async updatePrice(
     userId: string,
     priceId: string,
     data: {
+      serviceCode?: string;
       serviceName?: string;
       priceCop?: number;
       priceCtg?: number;
@@ -142,35 +103,34 @@ export class PricesService {
       include: { vet: true },
     });
 
-    if (!price) {
-      throw new NotFoundException("Price not found");
-    }
-
-    // Ownership verification
+    if (!price) throw new NotFoundException("Price not found");
     if (price.vet.userId !== userId) {
-      throw new ForbiddenException("You can only update your own prices");
+      throw new BadRequestException("You can only update your own prices");
     }
 
-    if (data.priceCop !== undefined) {
-      this.validatePriceRange(data.priceCop);
+    if (data.priceCop !== undefined) this.validatePriceRange(data.priceCop);
+
+    const changingIdentity =
+      data.serviceCode !== undefined || data.serviceName !== undefined;
+    const normalized = changingIdentity
+      ? this.normalizeService(
+          data.serviceCode ?? price.serviceCode ?? undefined,
+          data.serviceName ?? price.serviceName,
+        )
+      : { serviceCode: price.serviceCode, serviceName: price.serviceName };
+
+    if (
+      normalized.serviceName !== price.serviceName ||
+      normalized.serviceCode !== price.serviceCode
+    ) {
+      await this.assertServiceIsUnique(
+        price.vetId,
+        normalized.serviceName,
+        normalized.serviceCode ?? undefined,
+        priceId,
+      );
     }
 
-    // Check duplicate name if changing
-    if (data.serviceName && data.serviceName !== price.serviceName) {
-      const duplicate = await this.prisma.price.findFirst({
-        where: {
-          vetId: price.vetId,
-          serviceName: data.serviceName,
-          id: { not: priceId },
-        },
-      });
-
-      if (duplicate) {
-        throw new ConflictException("Service name already exists");
-      }
-    }
-
-    // Auto-update CTG if only COP changed
     let priceCtg = data.priceCtg;
     if (data.priceCop !== undefined && priceCtg === undefined) {
       priceCtg = this.convertCopToCtg(data.priceCop);
@@ -179,7 +139,10 @@ export class PricesService {
     return this.prisma.price.update({
       where: { id: priceId },
       data: {
-        ...(data.serviceName && { serviceName: data.serviceName }),
+        ...(changingIdentity && {
+          serviceCode: normalized.serviceCode,
+          serviceName: normalized.serviceName,
+        }),
         ...(data.priceCop !== undefined && { priceCop: data.priceCop }),
         ...(priceCtg !== undefined && { priceCtg }),
         ...(data.isActive !== undefined && { isActive: data.isActive }),
@@ -187,111 +150,69 @@ export class PricesService {
     });
   }
 
-  /**
-   * Delete price (soft delete via isActive = false)
-   */
+  /** Delete price (soft delete by default). */
   async deletePrice(userId: string, priceId: string, hardDelete = false) {
     const price = await this.prisma.price.findUnique({
       where: { id: priceId },
       include: { vet: true },
     });
-
-    if (!price) {
-      throw new NotFoundException("Price not found");
-    }
-
+    if (!price) throw new NotFoundException("Price not found");
     if (price.vet.userId !== userId) {
-      throw new ForbiddenException("You can only delete your own prices");
+      throw new BadRequestException("You can only delete your own prices");
     }
 
-    if (hardDelete) {
-      return this.prisma.price.delete({ where: { id: priceId } });
-    }
-
-    // Soft delete
+    if (hardDelete) return this.prisma.price.delete({ where: { id: priceId } });
     return this.prisma.price.update({
       where: { id: priceId },
       data: { isActive: false },
     });
   }
 
-  /**
-   * Bulk create prices (for onboarding)
-   */
-  async bulkCreatePrices(
-    userId: string,
-    prices: Array<{
-      serviceName: string;
-      priceCop: number;
-      priceCtg?: number;
-    }>,
-  ) {
-    const vet = await this.prisma.vetProfile.findUnique({
-      where: { userId },
-      include: {
-        _count: { select: { prices: { where: { isActive: true } } } },
-      },
+  /** Bulk create prices (onboarding). Unlimited across all membership tiers. */
+  async bulkCreatePrices(userId: string, prices: PriceInput[]) {
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException("Vet profile not found");
+
+    const normalized = prices.map((price) => {
+      this.validatePriceRange(price.priceCop);
+      const service = this.normalizeService(price.serviceCode, price.serviceName);
+      return { ...price, ...service };
     });
 
-    if (!vet) {
-      throw new NotFoundException("Vet profile not found");
+    const requestKeys = normalized.map((p) => p.serviceCode ?? p.serviceName.toLowerCase());
+    if (new Set(requestKeys).size !== requestKeys.length) {
+      throw new BadRequestException("Duplicate services in request");
     }
 
-    const limit = TIER_PRICE_LIMITS[vet.tier];
-    if (vet._count.prices + prices.length > limit) {
-      throw new ForbiddenException(
-        `Adding ${prices.length} prices exceeds your ${vet.tier} limit of ${limit}`,
-      );
-    }
-
-    // Validate all prices
-    for (const p of prices) {
-      this.validatePriceRange(p.priceCop);
-    }
-
-    // Check duplicates within request
-    const names = prices.map((p) => p.serviceName);
-    if (new Set(names).size !== names.length) {
-      throw new BadRequestException("Duplicate service names in request");
-    }
-
-    // Check existing duplicates
-    const existing = await this.prisma.price.findMany({
-      where: {
-        vetId: vet.id,
-        serviceName: { in: names },
-      },
-    });
-
-    if (existing.length > 0) {
+    const existing = await this.prisma.price.findMany({ where: { vetId: vet.id } });
+    const conflicts = normalized.filter((candidate) =>
+      existing.some(
+        (current) =>
+          (candidate.serviceCode && current.serviceCode === candidate.serviceCode) ||
+          current.serviceName.toLowerCase() === candidate.serviceName.toLowerCase(),
+      ),
+    );
+    if (conflicts.length > 0) {
       throw new ConflictException(
-        `Services already exist: ${existing.map((e) => e.serviceName).join(", ")}`,
+        `Services already exist: ${conflicts.map((p) => p.serviceName).join(", ")}`,
       );
     }
 
-    // Bulk insert
-    const data = prices.map((p) => ({
-      vetId: vet.id,
-      serviceName: p.serviceName,
-      priceCop: p.priceCop,
-      priceCtg: p.priceCtg ?? this.convertCopToCtg(p.priceCop),
-      isActive: true,
-    }));
-
-    return this.prisma.price.createMany({ data });
+    return this.prisma.price.createMany({
+      data: normalized.map((p) => ({
+        vetId: vet.id,
+        serviceCode: p.serviceCode,
+        serviceName: p.serviceName,
+        priceCop: p.priceCop,
+        priceCtg: p.priceCtg ?? this.convertCopToCtg(p.priceCop),
+        isActive: true,
+      })),
+    });
   }
 
-  /**
-   * Get price statistics for vet
-   */
   async getPriceStats(userId: string) {
-    const vet = await this.prisma.vetProfile.findUnique({
-      where: { userId },
-    });
-
-    if (!vet) {
-      throw new NotFoundException("Vet profile not found");
-    }
+    const vet = await this.prisma.vetProfile.findUnique({ where: { userId } });
+    if (!vet) throw new NotFoundException("Vet profile not found");
 
     const prices = await this.prisma.price.findMany({
       where: { vetId: vet.id, isActive: true },
@@ -303,44 +224,80 @@ export class PricesService {
         avgPriceCop: 0,
         minPriceCop: 0,
         maxPriceCop: 0,
-        tierLimit: TIER_PRICE_LIMITS[vet.tier],
-        remaining: TIER_PRICE_LIMITS[vet.tier],
+        tierLimit: "unlimited",
+        remaining: "unlimited",
       };
     }
 
     const priceCops = prices.map((p) => p.priceCop);
     const sum = priceCops.reduce((a, b) => a + b, 0);
-    const limit = TIER_PRICE_LIMITS[vet.tier];
-
     return {
       total: prices.length,
       avgPriceCop: Math.round(sum / prices.length),
       minPriceCop: Math.min(...priceCops),
       maxPriceCop: Math.max(...priceCops),
-      tierLimit: limit === Infinity ? "unlimited" : limit,
-      remaining: limit === Infinity ? "unlimited" : limit - prices.length,
+      tierLimit: "unlimited",
+      remaining: "unlimited",
     };
   }
 
-  // ============================================
-  // HELPERS
-  // ============================================
+  private normalizeService(serviceCode: string | undefined, serviceName: string) {
+    const trimmedName = serviceName.trim();
+    if (!trimmedName) throw new BadRequestException("Service name is required");
+
+    if (!serviceCode) {
+      return { serviceCode: null as string | null, serviceName: trimmedName };
+    }
+
+    const suggested = findSuggestedService(serviceCode);
+    if (!suggested) {
+      throw new BadRequestException(`Unknown Nvet service code: ${serviceCode}`);
+    }
+
+    return {
+      serviceCode: suggested.code,
+      serviceName: suggested.name,
+    };
+  }
+
+  private async assertServiceIsUnique(
+    vetId: string,
+    serviceName: string,
+    serviceCode?: string | null,
+    excludePriceId?: string,
+  ) {
+    const existing = await this.prisma.price.findFirst({
+      where: {
+        vetId,
+        ...(excludePriceId && { id: { not: excludePriceId } }),
+        OR: [
+          { serviceName: { equals: serviceName, mode: "insensitive" } },
+          ...(serviceCode ? [{ serviceCode }] : []),
+        ],
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException(
+        `Service "${serviceName}" already exists. Update it instead.`,
+      );
+    }
+  }
 
   private validatePriceRange(priceCop: number) {
     if (priceCop < MIN_PRICE_COP) {
       throw new BadRequestException(
-        `Minimum price is ${MIN_PRICE_COP.toLocaleString("es-CO")} COP`,
+        `Minimum technical price is ${MIN_PRICE_COP.toLocaleString("es-CO")} COP`,
       );
     }
-
     if (priceCop > MAX_PRICE_COP) {
       throw new BadRequestException(
-        `Maximum price is ${MAX_PRICE_COP.toLocaleString("es-CO")} COP`,
+        `Maximum technical price is ${MAX_PRICE_COP.toLocaleString("es-CO")} COP`,
       );
     }
   }
 
   private convertCopToCtg(priceCop: number): number {
-    return Math.round(priceCop / CTG_TO_COP_RATE);
+    return Math.round((priceCop / CTG_TO_COP_RATE) * 100) / 100;
   }
 }
