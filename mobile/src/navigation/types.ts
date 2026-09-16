@@ -37,6 +37,10 @@ export type ClientSearchStackParamList = {
     | undefined
   VetDetail: { vetId: string }
   BookAppointment: { vetId: string; serviceType?: string }
+  TransferPayment: {
+    appointmentId: string
+    resumeTransactionId?: string
+  }
 }
 
 export type ClientAppointmentsStackParamList = {
@@ -86,7 +90,6 @@ export type VetScheduleStackParamList = {
 
 export type VetEarningsStackParamList = {
   EarningsMain: undefined
-  TransferVerification: { transactionId: string }
   RequestWithdrawal: undefined
 }
 
@@ -106,7 +109,6 @@ export type SharedStackParamList = {
   PriceManagement: undefined
   Membership: undefined
   RequestWithdrawal: undefined
-  TransferVerification: { transactionId: string }
   ChangePassword: undefined
 }
 
