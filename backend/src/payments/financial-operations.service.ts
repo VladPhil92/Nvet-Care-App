@@ -20,10 +20,7 @@ import {
   PayoutDestination,
   FinancialDataCryptoService,
 } from "./financial-data-crypto.service";
-import type {
-  RequestWithdrawalDto,
-  VerifyTransferDto,
-} from "./dto/payment.dto";
+import type { RequestWithdrawalDto } from "./dto/payment.dto";
 
 export interface TransferDestination {
   accountHolder: string;
@@ -93,84 +90,12 @@ export class FinancialOperationsService {
 
   /**
    * Pilot-phase manual transfer destination: the CLIENT pays this account
-   * directly (no payment gateway yet) and later submits proof below. Public
-   * payment-collection info, not a secret — safe to expose to any
-   * authenticated user.
+   * directly (no payment gateway yet) and submits proof via
+   * ManualTransferPaymentService.submitClientProof. Public payment-collection
+   * info, not a secret — safe to expose to any authenticated user.
    */
   getTransferDestination(): TransferDestination {
     return getTransferDestination();
-  }
-
-  async submitTransferProof(
-    userId: string,
-    transactionId: string,
-    file: Express.Multer.File,
-    dto: VerifyTransferDto,
-  ) {
-    if (!file?.buffer?.length) {
-      throw new BadRequestException("El comprobante es obligatorio");
-    }
-
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id: transactionId },
-      include: { appointment: true },
-    });
-    if (!transaction) throw new NotFoundException("Transacción no encontrada");
-    // Pilot-phase model: the client pays the company's account directly (see
-    // getTransferDestination()) and is the one who reports/uploads proof —
-    // the vet never handles the money and has nothing to verify here.
-    if (transaction.appointment.clientId !== userId) {
-      throw new ForbiddenException(
-        "Solo el cliente de la cita puede reportar la transferencia",
-      );
-    }
-    if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
-      throw new BadRequestException("Solo aplicable a pagos por transferencia");
-    }
-    if (transaction.status !== TransactionStatus.PENDING) {
-      throw new BadRequestException(
-        `Transición de estado inválida: ${transaction.status} → VERIFYING`,
-      );
-    }
-
-    const uploaded = await this.storage.upload(
-      file,
-      `transfers/${transactionId}`,
-      { visibility: "private" },
-    );
-    const proofSha256 = createHash("sha256").update(file.buffer).digest("hex");
-    const oldStorageKey = transaction.transferProofStorageKey;
-
-    const updated = await this.prisma.transaction.update({
-      where: { id: transactionId },
-      data: {
-        status: TransactionStatus.VERIFYING,
-        transferCode: dto.transferCode.trim(),
-        transferDate: dto.transferDate ? new Date(dto.transferDate) : null,
-        transferSubmittedAt: new Date(),
-        transferProofStorageKey: uploaded.storageKey,
-        transferProofFileName: this.sanitizeFileName(file.originalname),
-        transferProofMimeType: file.mimetype,
-        transferProofSha256: proofSha256,
-        transferReviewedById: null,
-        transferRejectedAt: null,
-        transferRejectionReason: null,
-      },
-    });
-
-    if (oldStorageKey && oldStorageKey !== uploaded.storageKey) {
-      await this.storage.delete(oldStorageKey).catch(() => undefined);
-    }
-
-    await this.chatGateway
-      .emitSystemMessage(
-        transaction.appointmentId,
-        userId,
-        "🧾 El cliente envió el comprobante de la transferencia. Un administrador lo revisará pronto.",
-      )
-      .catch(() => undefined);
-
-    return updated;
   }
 
   async readTransferProof(transactionId: string) {

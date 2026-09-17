@@ -9,8 +9,6 @@ import {
   Query,
   Headers,
   UseGuards,
-  UseInterceptors,
-  UploadedFile,
   Request,
   HttpCode,
   HttpStatus,
@@ -18,7 +16,6 @@ import {
   ServiceUnavailableException,
   StreamableFile,
 } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { VerifiedVetGuard } from "../auth/guards/verified-vet.guard";
@@ -30,7 +27,6 @@ import { PaymentsService } from "./payments.service";
 import { FinancialOperationsService } from "./financial-operations.service";
 import {
   ProcessPaymentDto,
-  VerifyTransferDto,
   InitiatePsePaymentDto,
   RequestWithdrawalDto,
   TransactionFiltersDto,
@@ -104,25 +100,6 @@ export class PaymentsController {
   @Get("transfer-destination")
   getTransferDestination() {
     return this.financialOperations.getTransferDestination();
-  }
-
-  @Post("transactions/:id/verify-transfer")
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.CLIENT)
-  @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor("file"))
-  async verifyTransfer(
-    @Request() req,
-    @Param("id", ParseUUIDPipe) id: string,
-    @UploadedFile() file: Express.Multer.File,
-    @Body() dto: VerifyTransferDto,
-  ) {
-    return this.financialOperations.submitTransferProof(
-      req.user.id,
-      id,
-      file,
-      dto,
-    );
   }
 
   @Get("me/balance")
