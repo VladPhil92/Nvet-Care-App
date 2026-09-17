@@ -71,25 +71,31 @@ export class ManualTransferPaymentService {
     const proofSha256 = createHash("sha256").update(file.buffer).digest("hex");
     const submittedAt = new Date();
 
-    const claimed = await this.prisma.transaction.updateMany({
-      where: {
-        id: transactionId,
-        status: TransactionStatus.PENDING,
-      },
-      data: {
-        status: TransactionStatus.VERIFYING,
-        transferCode: dto.transferCode.trim(),
-        transferDate: dto.transferDate ? new Date(dto.transferDate) : null,
-        transferSubmittedAt: submittedAt,
-        transferProofStorageKey: uploaded.storageKey,
-        transferProofFileName: this.sanitizeFileName(file.originalname),
-        transferProofMimeType: file.mimetype,
-        transferProofSha256: proofSha256,
-        transferReviewedById: null,
-        transferRejectedAt: null,
-        transferRejectionReason: null,
-      },
-    });
+    let claimed: { count: number };
+    try {
+      claimed = await this.prisma.transaction.updateMany({
+        where: {
+          id: transactionId,
+          status: TransactionStatus.PENDING,
+        },
+        data: {
+          status: TransactionStatus.VERIFYING,
+          transferCode: dto.transferCode.trim(),
+          transferDate: dto.transferDate ? new Date(dto.transferDate) : null,
+          transferSubmittedAt: submittedAt,
+          transferProofStorageKey: uploaded.storageKey,
+          transferProofFileName: this.sanitizeFileName(file.originalname),
+          transferProofMimeType: file.mimetype,
+          transferProofSha256: proofSha256,
+          transferReviewedById: null,
+          transferRejectedAt: null,
+          transferRejectionReason: null,
+        },
+      });
+    } catch (error) {
+      await this.storage.delete(uploaded.storageKey);
+      throw error;
+    }
 
     if (claimed.count !== 1) {
       await this.storage.delete(uploaded.storageKey);

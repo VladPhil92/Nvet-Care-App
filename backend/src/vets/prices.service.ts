@@ -185,10 +185,18 @@ export class PricesService {
       return { ...price, ...service };
     });
 
-    const requestKeys = normalized.map(
-      (p) => p.serviceCode ?? p.serviceName.toLowerCase(),
+    const hasDuplicateInRequest = normalized.some((candidate, index) =>
+      normalized
+        .slice(0, index)
+        .some(
+          (current) =>
+            (candidate.serviceCode &&
+              current.serviceCode === candidate.serviceCode) ||
+            current.serviceName.toLowerCase() ===
+              candidate.serviceName.toLowerCase(),
+        ),
     );
-    if (new Set(requestKeys).size !== requestKeys.length) {
+    if (hasDuplicateInRequest) {
       throw new BadRequestException("Duplicate services in request");
     }
 
@@ -302,6 +310,9 @@ export class PricesService {
   }
 
   private validatePriceRange(priceCop: number) {
+    if (!Number.isFinite(priceCop)) {
+      throw new BadRequestException("Price must be a finite number");
+    }
     if (priceCop < MIN_PRICE_COP) {
       throw new BadRequestException(
         `Minimum technical price is ${MIN_PRICE_COP.toLocaleString("es-CO")} COP`,

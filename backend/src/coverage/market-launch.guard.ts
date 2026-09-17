@@ -33,7 +33,8 @@ export class MarketLaunchGuard implements CanActivate {
     url?: string;
   }): boolean {
     if (request.method?.toUpperCase() !== "POST") return false;
-    const path = (request.originalUrl ?? request.url ?? "").split("?")[0];
+    const rawPath = (request.originalUrl ?? request.url ?? "").split("?")[0];
+    const path = rawPath.length > 1 ? rawPath.replace(/\/+$/g, "") : rawPath;
     const prefix = (process.env.API_PREFIX || "api").replace(/^\/+|\/+$/g, "");
     return path === `/${prefix}/appointments` || path === "/appointments";
   }
