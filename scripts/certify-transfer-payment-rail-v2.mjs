@@ -181,7 +181,7 @@ try {
   // vet never handles the money. Certify the VET is explicitly forbidden
   // from submitting proof before certifying the real (client) path.
   const vetAttempt = await request(
-    `/payments/transactions/${transactionId}/verify-transfer`,
+    `/payments/manual-transfer/${transactionId}/proof`,
     { method: 'POST', headers: auth(vetToken), body: form },
   );
   if (vetAttempt.status !== 403) {
@@ -192,7 +192,7 @@ try {
 
   const verifying = await readJson(
     'submit private transfer proof',
-    await request(`/payments/transactions/${transactionId}/verify-transfer`, {
+    await request(`/payments/manual-transfer/${transactionId}/proof`, {
       method: 'POST',
       headers: auth(clientToken),
       body: form,
