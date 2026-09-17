@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-} from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import {
   AppointmentStatus,
   PaymentMethod,
@@ -14,14 +10,6 @@ const TX_ID = "00000000-0000-4000-8000-000000000001";
 const APPT_ID = "00000000-0000-4000-8000-000000000002";
 const VET_ID = "00000000-0000-4000-8000-000000000003";
 const VET_USER_ID = "00000000-0000-4000-8000-000000000004";
-const CLIENT_USER_ID = "00000000-0000-4000-8000-000000000005";
-
-const pdfFile = {
-  originalname: "proof.pdf",
-  mimetype: "application/pdf",
-  size: 12,
-  buffer: Buffer.from("%PDF-1.4\nEOF"),
-} as Express.Multer.File;
 
 describe("FinancialOperationsService", () => {
   let prisma: any;
@@ -78,62 +66,6 @@ describe("FinancialOperationsService", () => {
       storage,
       chatGateway,
     );
-  });
-
-  it("persists private TRANSFER evidence with an integrity hash and notifies the chat", async () => {
-    prisma.transaction.findUnique.mockResolvedValue({
-      id: TX_ID,
-      appointmentId: APPT_ID,
-      paymentMethod: PaymentMethod.TRANSFER,
-      status: TransactionStatus.PENDING,
-      transferProofStorageKey: null,
-      appointment: { clientId: CLIENT_USER_ID },
-    });
-    prisma.transaction.update.mockImplementation(async ({ data }) => ({
-      id: TX_ID,
-      ...data,
-    }));
-
-    const result = await service.submitTransferProof(
-      CLIENT_USER_ID,
-      TX_ID,
-      pdfFile,
-      { transferCode: "TRF-001" },
-    );
-
-    expect(storage.upload).toHaveBeenCalledWith(
-      pdfFile,
-      `transfers/${TX_ID}`,
-      { visibility: "private" },
-    );
-    expect(result.status).toBe(TransactionStatus.VERIFYING);
-    expect(result.transferProofSha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(result.transferProofStorageKey).toBe(
-      "cloudinary:v1:private:raw:key",
-    );
-    expect(chatGateway.emitSystemMessage).toHaveBeenCalledWith(
-      APPT_ID,
-      CLIENT_USER_ID,
-      expect.stringContaining("comprobante"),
-    );
-  });
-
-  it("refuses transfer proof submission from the vet — pilot phase pays the company, only the client reports it", async () => {
-    prisma.transaction.findUnique.mockResolvedValue({
-      id: TX_ID,
-      appointmentId: APPT_ID,
-      paymentMethod: PaymentMethod.TRANSFER,
-      status: TransactionStatus.PENDING,
-      transferProofStorageKey: null,
-      appointment: { clientId: CLIENT_USER_ID },
-    });
-
-    await expect(
-      service.submitTransferProof(VET_USER_ID, TX_ID, pdfFile, {
-        transferCode: "TRF-001",
-      }),
-    ).rejects.toThrow(ForbiddenException);
-    expect(storage.upload).not.toHaveBeenCalled();
   });
 
   it("exposes the pilot-phase company transfer destination", () => {

@@ -7,6 +7,12 @@ const migration = read(
 );
 const controller = read('backend/src/payments/payments.controller.ts');
 const operations = read('backend/src/payments/financial-operations.service.ts');
+const manualTransferController = read(
+  'backend/src/payments/manual-transfer-payment.controller.ts',
+);
+const manualTransferService = read(
+  'backend/src/payments/manual-transfer-payment.service.ts',
+);
 const crypto = read('backend/src/payments/financial-data-crypto.service.ts');
 const privacy = read(
   'backend/src/common/interceptors/financial-privacy.interceptor.ts',
@@ -50,11 +56,11 @@ requireMatch(
   'Liquidated transactions must be attached to an auditable settlement batch.',
 );
 requireMatch(
-  has(operations, 'transferProofSha256: proofSha256'),
+  has(manualTransferService, 'transferProofSha256: proofSha256'),
   'Transfer proof SHA-256 must be persisted.',
 );
 requireMatch(
-  has(operations, 'visibility: "private"'),
+  has(manualTransferService, 'visibility: "private"'),
   'Transfer proofs must explicitly request private storage.',
 );
 requireMatch(
@@ -74,8 +80,8 @@ requireMatch(
   'Withdrawal creation must require a persistent idempotency key.',
 );
 requireMatch(
-  has(controller, 'this.financialOperations.submitTransferProof'),
-  'TRANSFER proof submission must use the canonical financial operations service.',
+  has(manualTransferController, 'this.manualTransferPaymentService.submitClientProof'),
+  'TRANSFER proof submission must use the canonical manual-transfer payment service.',
 );
 requireMatch(
   has(controller, 'this.financialOperations.runSettlementBatch'),
