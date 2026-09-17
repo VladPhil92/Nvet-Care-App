@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "type": "approval",
+  "id": "production-backup-configured:approval-35277146268",
+  "gateId": "production-backup-configured",
+  "candidate": "1.0.0-rc.2",
+  "candidateSha": "96623eb6839d1e388ad1ab1dfd99ec9f13cde823",
+  "submissionId": "production-backup-configured:35231472087",
+  "decision": "approved",
+  "approvedAt": "2026-09-17T21:31:38.148Z",
+  "approver": "VladPhil92",
+  "note": null
+}
