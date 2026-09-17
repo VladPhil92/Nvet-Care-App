@@ -204,7 +204,17 @@ export class PasswordService {
       hash.startsWith("$2y$")
     ) {
       try {
-        const valid = await getBcrypt().compare(plaintext, hash);
+        // Node's bcrypt binding only recognizes the $2a$/$2b$ version tags in
+        // its native compare(): a byte-identical hash carrying the $2y$ tag
+        // (as produced by, e.g., PHP's password_hash()) is silently rejected
+        // as a mismatch rather than verified. $2a/$2b/$2y hash identically
+        // for the same salt/cost/password in this implementation, so
+        // normalizing the tag before comparing is safe and makes the
+        // declared $2y$ support actually work instead of always failing.
+        const normalizedHash = hash.startsWith("$2y$")
+          ? "$2b" + hash.slice(3)
+          : hash;
+        const valid = await getBcrypt().compare(plaintext, normalizedHash);
         return this.verificationResult(valid, valid);
       } catch (err) {
         this.logger.warn(`Bcrypt verify failed: ${(err as Error).message}`);
