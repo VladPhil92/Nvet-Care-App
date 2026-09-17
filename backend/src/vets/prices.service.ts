@@ -186,13 +186,15 @@ export class PricesService {
     });
 
     const hasDuplicateInRequest = normalized.some((candidate, index) =>
-      normalized.slice(0, index).some(
-        (current) =>
-          (candidate.serviceCode &&
-            current.serviceCode === candidate.serviceCode) ||
-          current.serviceName.toLowerCase() ===
-            candidate.serviceName.toLowerCase(),
-      ),
+      normalized
+        .slice(0, index)
+        .some(
+          (current) =>
+            (candidate.serviceCode &&
+              current.serviceCode === candidate.serviceCode) ||
+            current.serviceName.toLowerCase() ===
+              candidate.serviceName.toLowerCase(),
+        ),
     );
     if (hasDuplicateInRequest) {
       throw new BadRequestException("Duplicate services in request");
