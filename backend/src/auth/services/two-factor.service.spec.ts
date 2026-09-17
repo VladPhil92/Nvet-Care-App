@@ -186,11 +186,20 @@ describe("TwoFactorService", () => {
 
     it("refuses a code from two steps away, outside the tolerance window", async () => {
       const { secret, encryptedSecret } = await enroll();
-      const farCode = totpAt(secret, Date.now() / 1000 - 90);
+      // Freeze the clock so the code generated here and the service's own
+      // Date.now() read the same instant — otherwise this could drift onto
+      // either side of the ±1-step boundary it's meant to test.
+      const frozenNowMs = Date.now();
+      const nowSpy = jest.spyOn(Date, "now").mockReturnValue(frozenNowMs);
+      try {
+        const farCode = totpAt(secret, frozenNowMs / 1000 - 60);
 
-      await expect(
-        service.confirmEnrollment(USER_ID, encryptedSecret, farCode),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+        await expect(
+          service.confirmEnrollment(USER_ID, encryptedSecret, farCode),
+        ).rejects.toBeInstanceOf(UnauthorizedException);
+      } finally {
+        nowSpy.mockRestore();
+      }
     });
   });
 
