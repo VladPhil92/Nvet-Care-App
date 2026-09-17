@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "type": "submission",
+  "id": "production-backup-configured:35231472087",
+  "gateId": "production-backup-configured",
+  "candidate": "1.0.0-rc.2",
+  "candidateSha": "96623eb6839d1e388ad1ab1dfd99ec9f13cde823",
+  "observedAt": "2026-09-17T08:39:04Z",
+  "submittedAt": "2026-09-17T14:07:36.446Z",
+  "submitter": "VladPhil92",
+  "evidence": {
+    "kind": "github-run",
+    "reference": "https://github.com/VladPhil92/Nvet-Care-App/actions/runs/35200794052",
+    "note": "Auditoría diaria programada de backups de Railway (horario, retención ≥168h, frescura ≤48h) — verde en todas las corridas de esta semana",
+    "redacted": true
+  }
+}
