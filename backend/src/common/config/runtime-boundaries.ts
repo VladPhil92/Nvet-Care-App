@@ -6,7 +6,10 @@ const DEVELOPMENT_ORIGINS = [
   "http://localhost:3001",
 ] as const;
 
-function parseBooleanFlag(value: string | undefined, name: string): boolean | null {
+function parseBooleanFlag(
+  value: string | undefined,
+  name: string,
+): boolean | null {
   if (value == null || value === "") return null;
   if (value === "true") return true;
   if (value === "false") return false;
@@ -34,7 +37,9 @@ function normalizeOrigin(raw: string): string {
     parsed.username ||
     parsed.password
   ) {
-    throw new Error(`CORS origin must not include path, credentials, query or hash: ${value}`);
+    throw new Error(
+      `CORS origin must not include path, credentials, query or hash: ${value}`,
+    );
   }
 
   return parsed.origin;
@@ -42,7 +47,9 @@ function normalizeOrigin(raw: string): string {
 
 function isLocalOrigin(origin: string): boolean {
   const hostname = new URL(origin).hostname.toLowerCase();
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  return (
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+  );
 }
 
 /**
@@ -53,7 +60,9 @@ function isLocalOrigin(origin: string): boolean {
  * In non-production environments, identity exchange defaults to disabled when
  * no provider URL exists, avoiding accidental use of production identity.
  */
-export function applyIdentityLaunchDefaults(env: RuntimeEnv = process.env): void {
+export function applyIdentityLaunchDefaults(
+  env: RuntimeEnv = process.env,
+): void {
   const emergencyDisabled =
     env.NVET_CTG_IDENTITY_EXCHANGE_DISABLED === "true";
   const configuredEnabled = parseBooleanFlag(
@@ -85,9 +94,7 @@ export function applyIdentityLaunchDefaults(env: RuntimeEnv = process.env): void
       throw new Error("NVET_CTG_SUPABASE_URL must be a valid URL");
     }
     if (parsed.protocol !== "https:") {
-      throw new Error(
-        "NVET_CTG_SUPABASE_URL must use HTTPS in production",
-      );
+      throw new Error("NVET_CTG_SUPABASE_URL must use HTTPS in production");
     }
   }
 
@@ -121,9 +128,7 @@ export function resolveAllowedOrigins(env: RuntimeEnv = process.env): string[] {
 
     const local = configured.find(isLocalOrigin);
     if (local) {
-      throw new Error(
-        `Production CORS must not allow localhost origins: ${local}`,
-      );
+      throw new Error(`Production CORS must not allow localhost origins: ${local}`);
     }
 
     return [...new Set(configured)];
