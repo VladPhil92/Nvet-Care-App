@@ -9,26 +9,10 @@ import helmet from "helmet";
 import compression = require("compression");
 import { AppModule } from "./app.module";
 import { StorageService } from "./common/storage/storage.service";
-
-const CTG_ONE_PRODUCTION_SUPABASE_URL =
-  "https://mdscwjvlihdiflcvghhk.supabase.co";
-
-function applyIdentityLaunchDefaults(): void {
-  const emergencyDisabled =
-    process.env.NVET_CTG_IDENTITY_EXCHANGE_DISABLED === "true";
-
-  if (process.env.NODE_ENV === "production") {
-    process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED = emergencyDisabled
-      ? "false"
-      : "true";
-  } else {
-    process.env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED ??= emergencyDisabled
-      ? "false"
-      : "true";
-  }
-
-  process.env.NVET_CTG_SUPABASE_URL ??= CTG_ONE_PRODUCTION_SUPABASE_URL;
-}
+import {
+  applyIdentityLaunchDefaults,
+  resolveAllowedOrigins,
+} from "./common/config/runtime-boundaries";
 
 async function bootstrap() {
   applyIdentityLaunchDefaults();
@@ -101,14 +85,7 @@ async function bootstrap() {
   );
   expressApp.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-  const allowedOrigins = [
-    "http://localhost:5173",
-    "http://localhost:8081",
-    "http://localhost:3001",
-    ...(process.env.CORS_ORIGINS
-      ? process.env.CORS_ORIGINS.split(",").map((o) => o.trim())
-      : [process.env.FRONTEND_URL]),
-  ].filter(Boolean);
+  const allowedOrigins = resolveAllowedOrigins();
 
   app.enableCors({
     origin: allowedOrigins,
