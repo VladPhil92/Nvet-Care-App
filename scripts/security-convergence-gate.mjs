@@ -186,7 +186,45 @@ for (const header of [
 }
 
 // ---------------------------------------------------------------------------
-// 6. workflow_run certification concurrency distinguishes valid from skipped
+// 6. Production runtime boundaries fail closed instead of inheriting local or
+//    production-identity defaults implicitly.
+// ---------------------------------------------------------------------------
+requireFile(
+  'backend/src/common/config/runtime-boundaries.ts',
+  'Production runtime boundary configuration',
+)
+requireFile(
+  'backend/src/common/config/runtime-boundaries.spec.ts',
+  'Production runtime boundary regression tests',
+)
+requireText(
+  'backend/src/main.ts',
+  /applyIdentityLaunchDefaults[\s\S]*resolveAllowedOrigins/,
+  'Backend bootstrap must use canonical runtime boundary helpers',
+)
+requireText(
+  'backend/src/common/config/runtime-boundaries.ts',
+  /NVET_CTG_SUPABASE_URL is required when CTG identity exchange is enabled/,
+  'CTG identity exchange must fail closed without an explicit provider URL',
+)
+requireText(
+  'backend/src/common/config/runtime-boundaries.ts',
+  /Production CORS must not allow localhost origins/,
+  'Production CORS must reject localhost origins',
+)
+requireText(
+  'backend/src/common/config/runtime-boundaries.ts',
+  /must configure at least one production origin/,
+  'Production CORS must fail closed without an explicit origin allowlist',
+)
+if (/https:\/\/[A-Za-z0-9-]+\.supabase\.co/.test(read('backend/src/main.ts'))) {
+  failures.push(
+    'Production identity boundary: backend/src/main.ts must not embed a Supabase production project fallback',
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 7. workflow_run certification concurrency distinguishes valid from skipped
 //    triggers before job-level `if` is evaluated by GitHub Actions.
 // ---------------------------------------------------------------------------
 const certificationWorkflows = [
@@ -228,7 +266,7 @@ requireText(
 )
 
 // ---------------------------------------------------------------------------
-// 7. Operator evidence is part of the aggregated CI security boundary.
+// 8. Operator evidence is part of the aggregated CI security boundary.
 //    A manual readiness promotion must be reproducible from the append-only
 //    approved ledger; otherwise the sync would change the checked-in manifest.
 // ---------------------------------------------------------------------------
@@ -258,7 +296,7 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// 8. Phase 27 release candidate freeze is inside CI Success, not an optional
+// 9. Phase 27 release candidate freeze is inside CI Success, not an optional
 //    side workflow. Product-code drift must therefore fail the existing
 //    protected Security Convergence job unless it is an auditable blocker.
 // ---------------------------------------------------------------------------
@@ -269,7 +307,7 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// 9. Multipart upload modules bound every part/field counter. multer stays
+// 10. Multipart upload modules bound every part/field counter. multer stays
 //    pinned below 2.2.1 by the NestJS 10 line, where the open denial-of-service
 //    advisories are reachable only through unbounded multipart field parsing.
 // ---------------------------------------------------------------------------
@@ -370,6 +408,7 @@ console.log('   - dashboard refresh token: HttpOnly cookie')
 console.log('   - public veterinarian responses: allowlisted')
 console.log('   - sensitive uploads: magic-bytes + private storage contract')
 console.log('   - dashboard HTTP perimeter: CSP + transport + anti-framing headers')
+console.log('   - production runtime boundaries: explicit identity provider + production-only CORS allowlist')
 console.log('   - workflow_run certification concurrency: valid-trigger scoped + skipped-run isolated')
 console.log('   - web convergence staging context: explicit environment/service isolation')
 console.log('   - operator evidence projection: append-only approved ledger bound to CI Success')
