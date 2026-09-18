@@ -60,9 +60,10 @@ function isLocalOrigin(origin: string): boolean {
  * In non-production environments, identity exchange defaults to disabled when
  * no provider URL exists, avoiding accidental use of production identity.
  */
-export function applyIdentityLaunchDefaults(env: RuntimeEnv = process.env): void {
-  const emergencyDisabled =
-    env.NVET_CTG_IDENTITY_EXCHANGE_DISABLED === "true";
+export function applyIdentityLaunchDefaults(
+  env: RuntimeEnv = process.env,
+): void {
+  const emergencyDisabled = env.NVET_CTG_IDENTITY_EXCHANGE_DISABLED === "true";
   const configuredEnabled = parseBooleanFlag(
     env.NVET_CTG_IDENTITY_EXCHANGE_ENABLED,
     "NVET_CTG_IDENTITY_EXCHANGE_ENABLED",
