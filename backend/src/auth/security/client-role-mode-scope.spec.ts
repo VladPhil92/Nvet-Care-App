@@ -18,7 +18,7 @@ describe("canonical root CLIENT-mode data scope", () => {
         count: jest.fn().mockResolvedValue(0),
       },
     } as any;
-    const service = new PaymentsService(prisma, {} as any);
+    const service = new PaymentsService(prisma);
 
     await service.getTransactions("root-user", {}, UserRole.CLIENT);
 
@@ -45,7 +45,7 @@ describe("canonical root CLIENT-mode data scope", () => {
         }),
       },
     } as any;
-    const service = new PaymentsService(prisma, {} as any);
+    const service = new PaymentsService(prisma);
 
     await expect(
       service.getTransactionById(
