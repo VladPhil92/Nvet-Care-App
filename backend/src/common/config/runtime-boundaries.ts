@@ -60,9 +60,7 @@ function isLocalOrigin(origin: string): boolean {
  * In non-production environments, identity exchange defaults to disabled when
  * no provider URL exists, avoiding accidental use of production identity.
  */
-export function applyIdentityLaunchDefaults(
-  env: RuntimeEnv = process.env,
-): void {
+export function applyIdentityLaunchDefaults(env: RuntimeEnv = process.env): void {
   const emergencyDisabled =
     env.NVET_CTG_IDENTITY_EXCHANGE_DISABLED === "true";
   const configuredEnabled = parseBooleanFlag(
@@ -128,7 +126,9 @@ export function resolveAllowedOrigins(env: RuntimeEnv = process.env): string[] {
 
     const local = configured.find(isLocalOrigin);
     if (local) {
-      throw new Error(`Production CORS must not allow localhost origins: ${local}`);
+      throw new Error(
+        `Production CORS must not allow localhost origins: ${local}`,
+      );
     }
 
     return [...new Set(configured)];
