@@ -192,6 +192,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Removes a dead, unreachable financial API surface flagged as a technical-debt item in PR #271: POST transactions/:id/verify-transfer (FinancialOperationsService.submitTransferProof) had no caller anywhere in mobile, dashboard, or the rest of the backend — the only live client-side transfer-proof submission path is manual-transfer/:transactionId/proof (ManualTransferPaymentService.submitClientProof, from PR #268). Comparing the two on inspection showed the dead path was also the less safe of the two: it checked transaction.status and then ran a plain update() with no atomic claim, unlike submitClientProof, which uses an updateMany() guarded by status: PENDING plus a claimed.count check that rolls back the uploaded file on a lost race. Two concurrent proof submissions against the dead path (or one racing an admin rejection) could have both passed validation and corrupted the transfer state; this caused no real-world harm only because nothing ever invoked the route. Removes the route, the service method, its now-unused imports, and its 2 spec cases; no other FinancialOperationsService method (confirmTransfer, rejectTransfer, withdrawals, settlement) is touched. Authorizes no commercial launch, provider mutation, or Play publication. Merged into main as PR #275 (commit 1d7b912); the blocker is retained as resolved audit history."
+    },
+    {
+      "prNumber": 280,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Phase 1 Production Boundary Convergence removes implicit production identity-provider fallback, makes production CORS fail closed with an explicit non-local allowlist, and removes the orphaned legacy transfer-proof verifier identified after PR #275. These protected changes reduce release-blocking identity/configuration and financial-path divergence risk without enabling new payment rails, mutating production data, or authorizing beta, Play publication, or commercial launch."
     }
   ]
 }
