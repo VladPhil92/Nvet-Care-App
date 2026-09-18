@@ -10,7 +10,6 @@ import { PaymentMethod, TransactionStatus, AppointmentStatus, VetTier } from '@p
 describe('PaymentsService', () => {
   let service: PaymentsService;
   let prisma: any;
-  let storage: any;
 
   const CLIENT_ID = 'client-1';
   const VET_USER_ID = 'vet-user-1';
@@ -45,9 +44,7 @@ describe('PaymentsService', () => {
       $transaction: jest.fn().mockImplementation(async (fn) => fn(prisma)),
     };
 
-    storage = { upload: jest.fn(), delete: jest.fn() };
-
-    service = new PaymentsService(prisma, storage);
+    service = new PaymentsService(prisma);
     jest.spyOn((service as any).logger, 'log').mockImplementation(() => {});
     jest.spyOn((service as any).logger, 'warn').mockImplementation(() => {});
     jest.spyOn((service as any).logger, 'error').mockImplementation(() => {});
@@ -303,72 +300,6 @@ describe('PaymentsService', () => {
       });
 
       expect(prisma.transaction.update).not.toHaveBeenCalled();
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────
-  // verifyTransfer
-  // ─────────────────────────────────────────────────────────────────
-
-  describe('verifyTransfer', () => {
-    const fakeFile = { originalname: 'recibo.pdf', buffer: Buffer.from('pdf') } as any;
-    const baseTransaction = {
-      id: TX_ID,
-      paymentMethod: PaymentMethod.TRANSFER,
-      status: TransactionStatus.PENDING,
-      appointmentId: APPT_ID,
-      appointment: {
-        vet: { userId: VET_USER_ID },
-      },
-    };
-
-    it('sube el comprobante y cambia estado a VERIFYING', async () => {
-      prisma.transaction.findUnique.mockResolvedValue(baseTransaction);
-      storage.upload.mockResolvedValue({ url: '/uploads/transfers/tx-1/recibo.pdf' });
-      prisma.transaction.update.mockResolvedValue({ status: TransactionStatus.VERIFYING });
-
-      const result = await service.verifyTransfer(VET_USER_ID, TX_ID, fakeFile, {
-        transferCode: 'TRF-001',
-      });
-
-      expect(storage.upload).toHaveBeenCalledWith(
-        fakeFile,
-        `transfers/${TX_ID}`,
-      );
-      expect(result.status).toBe(TransactionStatus.VERIFYING);
-    });
-
-    it('lanza ForbiddenException si el vet no es el de la cita', async () => {
-      prisma.transaction.findUnique.mockResolvedValue(baseTransaction);
-
-      await expect(
-        service.verifyTransfer('otro-vet', TX_ID, fakeFile, { transferCode: 'X' }),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('lanza BadRequestException si el método no es TRANSFER', async () => {
-      prisma.transaction.findUnique.mockResolvedValue({
-        ...baseTransaction,
-        paymentMethod: PaymentMethod.PSE,
-      });
-
-      await expect(
-        service.verifyTransfer(VET_USER_ID, TX_ID, fakeFile, { transferCode: 'X' }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('lanza BadRequestException si no se adjunta archivo', async () => {
-      await expect(
-        service.verifyTransfer(VET_USER_ID, TX_ID, null as any, { transferCode: 'X' }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('lanza NotFoundException si la transacción no existe', async () => {
-      prisma.transaction.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.verifyTransfer(VET_USER_ID, 'no-existe', fakeFile, { transferCode: 'X' }),
-      ).rejects.toThrow(NotFoundException);
     });
   });
 

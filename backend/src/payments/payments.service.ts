@@ -7,7 +7,6 @@ import {
   Logger,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { StorageService } from "../common/storage/storage.service";
 import {
   PaymentMethod,
   TransactionStatus,
@@ -27,7 +26,6 @@ export interface PseWebhookPayload {
 
 import {
   ProcessPaymentDto,
-  VerifyTransferDto,
   InitiatePsePaymentDto,
   RequestWithdrawalDto,
   TransactionFiltersDto,
@@ -71,10 +69,7 @@ export class PaymentsService {
   >();
   private readonly IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
-  constructor(
-    private prisma: PrismaService,
-    private storage: StorageService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   async processPayment(userId: string, dto: ProcessPaymentDto) {
     if (dto.idempotencyKey) {
@@ -165,49 +160,6 @@ export class PaymentsService {
       this.setIdempotencyResult(dto.idempotencyKey, transaction);
     }
     return transaction;
-  }
-
-  async verifyTransfer(
-    userId: string,
-    transactionId: string,
-    file: Express.Multer.File,
-    dto: VerifyTransferDto,
-  ) {
-    if (!file) throw new BadRequestException("El comprobante es obligatorio");
-
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id: transactionId },
-      include: { appointment: { include: { vet: true } } },
-    });
-
-    if (!transaction) throw new NotFoundException("Transacción no encontrada");
-    if (transaction.appointment.vet.userId !== userId) {
-      throw new ForbiddenException(
-        "Solo el veterinario de la cita puede verificar la transferencia",
-      );
-    }
-    if (transaction.paymentMethod !== PaymentMethod.TRANSFER) {
-      throw new BadRequestException("Solo aplicable a pagos por transferencia");
-    }
-
-    this.validateStateTransition(
-      transaction.status,
-      TransactionStatus.VERIFYING,
-    );
-
-    const uploaded = await this.storage.upload(
-      file,
-      `transfers/${transactionId}`,
-    );
-
-    return this.prisma.transaction.update({
-      where: { id: transactionId },
-      data: {
-        status: TransactionStatus.VERIFYING,
-        transferCode: dto.transferCode,
-        hashOnchain: uploaded.url,
-      },
-    });
   }
 
   async adminConfirmTransfer(adminUserId: string, transactionId: string) {
