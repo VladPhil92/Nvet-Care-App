@@ -116,6 +116,29 @@ Si por alguna razón el provider real falla, `MailService.send()` retorna `{ ok:
 
 ---
 
+## Bloqueante 4 — Límites de runtime explícitos
+
+El backend falla cerrado en producción cuando la identidad CTG One o CORS no tienen
+configuración explícita. Antes del deploy deben existir:
+
+```env
+# Identidad CTG One: sin fallback hard-coded en producción.
+NVET_CTG_SUPABASE_URL=https://<proyecto-ctg-one>.supabase.co
+NVET_CTG_IDENTITY_EXCHANGE_ENABLED=true
+
+# Orígenes web exactos. No se admiten localhost en producción.
+CORS_ORIGINS=https://ctgone.com,https://www.ctgone.com
+```
+
+Reglas:
+
+- si `NVET_CTG_IDENTITY_EXCHANGE_ENABLED=true`, `NVET_CTG_SUPABASE_URL` es obligatorio;
+- en producción, el provider de identidad debe usar HTTPS;
+- `NVET_CTG_IDENTITY_EXCHANGE_DISABLED=true` sigue siendo el kill switch de emergencia;
+- producción exige al menos un origen mediante `CORS_ORIGINS` o `FRONTEND_URL`;
+- `localhost`, `127.0.0.1` y `::1` son rechazados en CORS productivo;
+- staging debe usar su configuración explícita y no depender de defaults productivos.
+
 ## Verificación post-deploy (smoke tests)
 1. **Health check**:
    ```bash
@@ -188,7 +211,8 @@ Si por alguna razón el provider real falla, `MailService.send()` retorna `{ ok:
 - [ ] `MAIL_DRIVER=sendgrid` + API key configurada
 - [ ] Sender verificado en SendGrid (single sender o domain)
 - [ ] `FRONTEND_URL` apunta al dashboard real (links de email)
-- [ ] CORS configurado con dominios de producción
+- [ ] CORS configurado con dominios de producción (sin localhost)
+- [ ] `NVET_CTG_SUPABASE_URL` configurado explícitamente para el ambiente
 - [ ] Sentry DSN configurado (opcional pero recomendado)
 - [ ] Redis configurado (opcional pero recomendado para multi-instance)
 - [ ] Smoke tests 1-7 pasan
