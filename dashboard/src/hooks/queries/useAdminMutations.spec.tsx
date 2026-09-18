@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { qk } from '../../lib/queryKeys'
 
@@ -58,14 +58,14 @@ describe('useVerifyTransferMutation', () => {
 
     result.current.mutate({ transactionId: 'tx-1', action: 'CONFIRM' })
 
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(qc.getQueryData(qk.admin.transferTracking())).toEqual([
         { id: 'tx-2', client: 'Luis Gomez' },
       ])
     })
 
     resolveNetwork()
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    await vi.waitFor(() => expect(result.current.isSuccess).toBe(true))
   })
 
   it('restores the removed row when the backend rejects the decision', async () => {
@@ -81,7 +81,7 @@ describe('useVerifyTransferMutation', () => {
 
     result.current.mutate({ transactionId: 'tx-1', action: 'CONFIRM' })
 
-    await waitFor(() => expect(result.current.isError).toBe(true))
+    await vi.waitFor(() => expect(result.current.isError).toBe(true))
 
     expect(qc.getQueryData(qk.admin.transferTracking())).toEqual(PENDING_QUEUE)
   })
@@ -97,7 +97,7 @@ describe('useVerifyTransferMutation', () => {
 
     result.current.mutate({ transactionId: 'tx-1', action: 'CONFIRM' })
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    await vi.waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(qc.getQueryData(qk.admin.transferTracking())).toBeUndefined()
   })
 
@@ -116,7 +116,7 @@ describe('useVerifyTransferMutation', () => {
       reason: 'comprobante ilegible',
     })
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    await vi.waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(verifyTransfer).toHaveBeenCalledWith('tx-2', {
       action: 'REJECT',
       reason: 'comprobante ilegible',
