@@ -31,7 +31,9 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Regenerate canonical lockfile
-        run: npm install --package-lock-only --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+        run: |
+          npm install --package-lock-only --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+          npm update js-yaml --package-lock-only --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
       - name: Commit lockfile if changed
         shell: bash
