@@ -105,14 +105,7 @@
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.ts$": "ts-jest",
-      "^.+\\.js$": [
-        "babel-jest",
-        {
-          "plugins": [
-            "@babel/plugin-transform-modules-commonjs"
-          ]
-        }
-      ]
+      "^.+\\.js$": "<rootDir>/../jest-nest-esm-transformer.cjs"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s",
