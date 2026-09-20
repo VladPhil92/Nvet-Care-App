@@ -317,18 +317,28 @@ const vulnerabilityExceptions = JSON.parse(
   read('docs/production/PHASE_38_VULNERABILITY_EXCEPTIONS.json'),
 )
 
+const declaredDependencyMajor = (range) => {
+  if (typeof range !== 'string') return null
+
+  const match = range
+    .trim()
+    .match(/^[~^]?(\\d+)(?:\\.\\d+){0,2}(?:-[0-9A-Za-z.-]+)?$/)
+
+  return match ? Number.parseInt(match[1], 10) : null
+}
+
 for (const [pkg, expectedMajor] of [
-  ['@nestjs/common', '12'],
-  ['@nestjs/core', '12'],
-  ['@nestjs/platform-express', '12'],
-  ['@nestjs/platform-socket.io', '12'],
-  ['@nestjs/websockets', '12'],
-  ['@nestjs/swagger', '12'],
-  ['nestjs-pino', '5'],
-  ['pino', '10'],
+  ['@nestjs/common', 12],
+  ['@nestjs/core', 12],
+  ['@nestjs/platform-express', 12],
+  ['@nestjs/platform-socket.io', 12],
+  ['@nestjs/websockets', 12],
+  ['@nestjs/swagger', 12],
+  ['nestjs-pino', 5],
+  ['pino', 10],
 ]) {
   const version = backendPackage.dependencies?.[pkg]
-  if (typeof version !== 'string' || !version.includes(expectedMajor)) {
+  if (declaredDependencyMajor(version) !== expectedMajor) {
     failures.push(
       `Phase 2A runtime boundary: ${pkg} must remain on the certified ${expectedMajor}.x line`,
     )
