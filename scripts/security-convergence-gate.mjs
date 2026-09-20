@@ -322,7 +322,7 @@ const declaredDependencyMajor = (range) => {
 
   const match = range
     .trim()
-    .match(/^[~^]?(\\d+)(?:\\.\\d+){0,2}(?:-[0-9A-Za-z.-]+)?$/)
+    .match(/^[~^]?(\d+)(?:\.\d+){0,2}(?:-[0-9A-Za-z.-]+)?$/)
 
   return match ? Number.parseInt(match[1], 10) : null
 }
@@ -449,7 +449,7 @@ for (const rel of multipartModules) {
   }
   for (const block of blocks) {
     for (const limit of requiredMultipartLimits) {
-      if (!new RegExp(`(?:^|[{,\\s])${limit}\\s*:\\s*\\d`).test(block)) {
+      if (!new RegExp(`(?:^|[{,\\s])${limit}\\s*:\\s*\d`).test(block)) {
         failures.push(
           `Multipart upload hardening: ${rel} must declare a numeric \`${limit}\` limit`,
         )
