@@ -205,9 +205,17 @@
       "prNumber": 282,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
+      "status": "resolved",
+      "owner": "VladPhil92",
+      "justification": "Phase 2A closes the backend half of the open Phase 38 production dependency risk by migrating the NestJS runtime and first-party Nest modules to the supported 12.x line, aligning nestjs-pino/pino and the Node runtime floor, and regenerating the canonical workspace lockfile under CI. It intentionally excludes the independent React Native 0.75->0.87 migration, preserves all external/operator launch gates, performs no production database or provider mutation, and remains subject to full backend, Railway, security, RC and audit certification before merge. Merged into main as PR #282; the post-merge NestJS 12 runtime boot regression is tracked independently by open release-blocker PR #283 so the merged blocker does not remain falsely open."
+    },
+    {
+      "prNumber": 283,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
       "status": "open",
       "owner": "VladPhil92",
-      "justification": "Phase 2A closes the backend half of the open Phase 38 production dependency risk by migrating the NestJS runtime and first-party Nest modules to the supported 12.x line, aligning nestjs-pino/pino and the Node runtime floor, and regenerating the canonical workspace lockfile under CI. It intentionally excludes the independent React Native 0.75->0.87 migration, preserves all external/operator launch gates, performs no production database or provider mutation, and remains subject to full backend, Railway, security, RC and audit certification before merge."
+      "justification": "Phase 2A.1 repairs the NestJS 12 runtime boot regression observed after PR #282 merged: @nestjs/passport 12 reflection metadata caused the concrete fixed-strategy JwtAuthGuard to request AuthModuleOptions inside consuming domain modules such as ReviewsModule, preventing both staging and production Railway startup. The hotfix makes the guard constructor explicitly dependency-free and adds a Nest DI regression test without changing authentication policy, token semantics, roles, payments, database state or Play/public launch authorization. PR #282 remains open in release governance until runtime recovery is externally verified."
     }
   ]
 }

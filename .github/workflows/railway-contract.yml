@@ -47,6 +47,20 @@ jobs:
   contract:
     name: Railway multi-service deployment contract
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nvet
+          POSTGRES_PASSWORD: nvet
+          POSTGRES_DB: nvet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nvet -d nvet"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -215,13 +229,65 @@ jobs:
           docker run --rm --entrypoint node nvet-railway-backend:ci \
             -e "const fs=require('fs'); for (const p of ['/app/backend/dist/main.js','/app/backend/scripts/production-predeploy.mjs','/app/backend/scripts/database-migrate.mjs','/app/backend/scripts/railway-runtime-smoke.mjs','/app/backend/prisma/migrations/20260801000000_baseline_current_schema/migration.sql','/app/backend/prisma/manual-migrations/live_location_v1.sql']) if(!fs.existsSync(p)) process.exit(1);"
 
+      - name: Boot canonical backend image against ephemeral PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          DB_URL='postgresql://nvet:nvet@127.0.0.1:5432/nvet?schema=public'
+
+          # Materialize the current Prisma schema in a disposable CI database.
+          # This never points at Railway or any persistent environment.
+          docker run --rm --network host \
+            -e DATABASE_URL="$DB_URL" \
+            --entrypoint sh \
+            nvet-railway-backend:ci \
+            -lc 'cd /app/backend && npx prisma db push --skip-generate'
+
+          cleanup() {
+            docker rm -f nvet-runtime-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run -d \
+            --name nvet-runtime-smoke \
+            --network host \
+            -e DATABASE_URL="$DB_URL" \
+            -e NODE_ENV=test \
+            -e PORT=3000 \
+            -e JWT_SECRET='nvet-ci-runtime-smoke-secret-2026-at-least-32-chars' \
+            -e NVET_CTG_IDENTITY_EXCHANGE_ENABLED=false \
+            -e MAIL_DRIVER=console \
+            nvet-railway-backend:ci >/dev/null
+
+          passed=0
+          for _ in $(seq 1 120); do
+            logs="$(docker logs nvet-runtime-smoke 2>&1 || true)"
+            if grep -Fq 'Nvet Railway runtime smoke gate passed' <<< "$logs"; then
+              passed=1
+              break
+            fi
+            running="$(docker inspect -f '{{.State.Running}}' nvet-runtime-smoke 2>/dev/null || echo false)"
+            if [ "$running" != "true" ]; then
+              echo "$logs"
+              echo '::error::Canonical Railway image exited before runtime certification'
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker logs nvet-runtime-smoke
+          if [ "$passed" -ne 1 ]; then
+            echo '::error::Canonical Railway image never reached the runtime smoke success marker'
+            exit 1
+          fi
+
       - name: Build isolated recovery worker image
         run: docker build --file Dockerfile.service --tag nvet-recovery-worker:ci .
         working-directory: ops/recovery
 
       - name: Verify recovery worker image contract
         run: |
-          docker inspect nvet-recovery-worker:ci --format '{{json .Config.Entrypoint}}' | grep -Eq '^(null|\[\])$'
+          docker inspect nvet-recovery-worker:ci --format '{{json .Config.Entrypoint}}' | grep -Eq '^(null|\\[\\])$'
           docker inspect nvet-recovery-worker:ci --format '{{json .Config.Cmd}}' | grep -q '"backup.py"'
           docker run --rm --entrypoint sh nvet-recovery-worker:ci -c \
-            "test -f /opt/nvet-recovery/backup.py && test -f /opt/nvet-recovery/verify.py && pg_dump --version | grep -q '18\.'"
+            "test -f /opt/nvet-recovery/backup.py && test -f /opt/nvet-recovery/verify.py && pg_dump --version | grep -q '18\\.'"
