@@ -116,7 +116,11 @@
     "testEnvironment": "node",
     "transformIgnorePatterns": [
       "/node_modules/(?!(@nestjs|nestjs-pino)/)"
-    ]
+    ],
+    "moduleNameMapper": {
+      "^@nestjs/common$": "<rootDir>/../node_modules/@nestjs/common/index.js",
+      "^@nestjs/core$": "<rootDir>/../node_modules/@nestjs/core/index.js"
+    }
   },
   "engines": {
     "node": ">=22.12.0"
