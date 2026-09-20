@@ -65,6 +65,8 @@
     "pino": "^10.3.1"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/plugin-transform-modules-commonjs": "^7.29.7",
     "@nestjs/cli": "^12.0.3",
     "@nestjs/schematics": "^12.0.3",
     "@nestjs/testing": "^12.0.3",
@@ -78,6 +80,7 @@
     "@types/passport-local": "^1.0.38",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "babel-jest": "^29.7.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.5.0",
@@ -101,7 +104,15 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.ts$": "ts-jest",
+      "^.+\\.js$": [
+        "babel-jest",
+        {
+          "plugins": [
+            "@babel/plugin-transform-modules-commonjs"
+          ]
+        }
+      ]
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s",
@@ -109,7 +120,10 @@
       "!**/main.ts"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(@nestjs|nestjs-pino)/)"
+    ]
   },
   "engines": {
     "node": ">=22.12.0"
