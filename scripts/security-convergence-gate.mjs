@@ -307,10 +307,73 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// 10. Multipart upload modules bound every part/field counter. multer stays
-//    pinned below 2.2.1 by the NestJS 10 line, where the open denial-of-service
-//    advisories are reachable only through unbounded multipart field parsing.
+// 10. Multipart upload modules remain bounded even after the NestJS 12 /
+//     Express 5 / Multer 2 migration. These limits are defense-in-depth and
+//     must not be removed merely because the upstream Multer advisories closed.
 // ---------------------------------------------------------------------------
+const rootPackage = JSON.parse(read('package.json'))
+const backendPackage = JSON.parse(read('backend/package.json'))
+const vulnerabilityExceptions = JSON.parse(
+  read('docs/production/PHASE_38_VULNERABILITY_EXCEPTIONS.json'),
+)
+
+const declaredDependencyMajor = (range) => {
+  if (typeof range !== 'string') return null
+
+  const match = range
+    .trim()
+    .match(/^[~^]?([0-9]+)(?:[.][0-9]+){0,2}(?:-[0-9A-Za-z.-]+)?$/)
+
+  return match ? Number.parseInt(match[1], 10) : null
+}
+
+for (const [pkg, expectedMajor] of [
+  ['@nestjs/common', 12],
+  ['@nestjs/core', 12],
+  ['@nestjs/platform-express', 12],
+  ['@nestjs/platform-socket.io', 12],
+  ['@nestjs/websockets', 12],
+  ['@nestjs/swagger', 12],
+  ['nestjs-pino', 5],
+  ['pino', 10],
+]) {
+  const version = backendPackage.dependencies?.[pkg]
+  if (declaredDependencyMajor(version) !== expectedMajor) {
+    failures.push(
+      `Phase 2A runtime boundary: ${pkg} must remain on the certified ${expectedMajor}.x line`,
+    )
+  }
+}
+
+if (rootPackage.engines?.node !== '>=22.22.3') {
+  failures.push(
+    'Phase 2A runtime boundary: root Node engine must remain >=22.22.3 for Nest 12 tooling',
+  )
+}
+
+if (rootPackage.overrides?.['js-yaml'] !== '4.3.2') {
+  failures.push(
+    'Phase 2A vulnerability boundary: js-yaml must remain pinned to patched 4.3.2 unless Phase 38 proves a newer safe resolution',
+  )
+}
+
+for (const resolvedBackendException of [
+  '@nestjs/platform-express',
+  'js-yaml',
+  'lodash',
+  'multer',
+]) {
+  if (
+    vulnerabilityExceptions.exceptions?.some(
+      (entry) => entry.package === resolvedBackendException,
+    )
+  ) {
+    failures.push(
+      `Phase 2A vulnerability boundary: resolved exception ${resolvedBackendException} must not be reintroduced`,
+    )
+  }
+}
+
 const requiredMultipartLimits = [
   'fileSize',
   'files',
@@ -413,6 +476,8 @@ console.log('   - workflow_run certification concurrency: valid-trigger scoped +
 console.log('   - web convergence staging context: explicit environment/service isolation')
 console.log('   - operator evidence projection: append-only approved ledger bound to CI Success')
 console.log('   - Phase 27 product freeze: release-blocker-only drift bound to CI Success')
+console.log('   - Phase 2A runtime: NestJS 12 + Express 5/Multer 2 + Node 22.22.3+ enforced')
+console.log('   - Phase 2A audit: resolved backend Phase 38 exceptions cannot be reintroduced')
 console.log(
   `   - multipart upload limits: bounded file/field/part counters across ${multipartModules.length} module(s)`,
 )
