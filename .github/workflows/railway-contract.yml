@@ -236,7 +236,7 @@ jobs:
           DB_URL='postgresql://nvet:nvet@127.0.0.1:5432/nvet?schema=public'
 
           # Materialize the current Prisma schema in a disposable CI database.
-          # This is never pointed at Railway or any persistent environment.
+          # This never points at Railway or any persistent environment.
           docker run --rm --network host \
             -e DATABASE_URL="$DB_URL" \
             --entrypoint sh \
@@ -262,18 +262,12 @@ jobs:
           passed=0
           for _ in $(seq 1 120); do
             logs="$(docker logs nvet-runtime-smoke 2>&1 || true)"
-            if grep -q 'Nvet Railway runtime smoke gate passed' <<< "$logs"; then
+            if grep -Fq 'Nvet Railway runtime smoke gate passed' <<< "$logs"; then
               passed=1
               break
             fi
-            if ! docker inspect -f '{{.State.Running}}' nvet-runtime-smoke 2>/dev/null | grep -q '^true
-      - name: Verify recovery worker image contract
-        run: |
-          docker inspect nvet-recovery-worker:ci --format '{{json .Config.Entrypoint}}' | grep -Eq '^(null|\[\])$'
-          docker inspect nvet-recovery-worker:ci --format '{{json .Config.Cmd}}' | grep -q '"backup.py"'
-          docker run --rm --entrypoint sh nvet-recovery-worker:ci -c \
-            "test -f /opt/nvet-recovery/backup.py && test -f /opt/nvet-recovery/verify.py && pg_dump --version | grep -q '18\.'"
-; then
+            running="$(docker inspect -f '{{.State.Running}}' nvet-runtime-smoke 2>/dev/null || echo false)"
+            if [ "$running" != "true" ]; then
               echo "$logs"
               echo '::error::Canonical Railway image exited before runtime certification'
               exit 1
@@ -293,7 +287,7 @@ jobs:
 
       - name: Verify recovery worker image contract
         run: |
-          docker inspect nvet-recovery-worker:ci --format '{{json .Config.Entrypoint}}' | grep -Eq '^(null|\[\])$'
+          docker inspect nvet-recovery-worker:ci --format '{{json .Config.Entrypoint}}' | grep -Eq '^(null|\\[\\])$'
           docker inspect nvet-recovery-worker:ci --format '{{json .Config.Cmd}}' | grep -q '"backup.py"'
           docker run --rm --entrypoint sh nvet-recovery-worker:ci -c \
-            "test -f /opt/nvet-recovery/backup.py && test -f /opt/nvet-recovery/verify.py && pg_dump --version | grep -q '18\.'"
+            "test -f /opt/nvet-recovery/backup.py && test -f /opt/nvet-recovery/verify.py && pg_dump --version | grep -q '18\\.'"
