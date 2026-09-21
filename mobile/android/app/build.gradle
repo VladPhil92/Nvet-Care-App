@@ -17,6 +17,19 @@ react {
     autolinkLibrariesWithApp()
 }
 
+// Enable Sentry's React Native Gradle hooks only in release environments where
+// CI credentials are present. Ordinary local/debug and unsigned CI builds must
+// remain deterministic and must never attempt an upload.
+def sentryUploadEnabled = [
+    System.getenv("SENTRY_AUTH_TOKEN"),
+    System.getenv("SENTRY_ORG"),
+    System.getenv("SENTRY_PROJECT")
+].every { value -> value != null && !value.trim().isEmpty() }
+
+if (sentryUploadEnabled) {
+    apply from: "../../../node_modules/@sentry/react-native/sentry.gradle"
+}
+
 // Google Play release bundles are minified with R8. Debug/Detox builds remain
 // unminified for deterministic development and instrumentation behavior.
 def enableProguardInReleaseBuilds = true
