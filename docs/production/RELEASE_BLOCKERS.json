@@ -213,9 +213,9 @@
       "prNumber": 283,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
-      "status": "open",
+      "status": "resolved",
       "owner": "VladPhil92",
-      "justification": "Phase 2A.1 repairs the NestJS 12 runtime boot regression observed after PR #282 merged: @nestjs/passport 12 reflection metadata caused the concrete fixed-strategy JwtAuthGuard to request AuthModuleOptions inside consuming domain modules such as ReviewsModule, preventing both staging and production Railway startup. The hotfix makes the guard constructor explicitly dependency-free and adds a Nest DI regression test without changing authentication policy, token semantics, roles, payments, database state or Play/public launch authorization. PR #282 remains open in release governance until runtime recovery is externally verified."
+      "justification": "Phase 2A.1 repairs the NestJS 12 runtime boot regression observed after PR #282 merged: @nestjs/passport 12 reflection metadata caused the concrete fixed-strategy JwtAuthGuard to request AuthModuleOptions inside consuming domain modules such as ReviewsModule, preventing both staging and production Railway startup. The hotfix makes the guard constructor explicitly dependency-free and adds a Nest DI regression test without changing authentication policy, token semantics, roles, payments, database state or Play/public launch authorization. PR #282 remains open in release governance until runtime recovery is externally verified. Merged into main as commit 3d477104dab1c164b54fcea1ed2b07d4f1982dde. CI Success, Railway Contract with real container boot, staging runtime smoke and production runtime smoke all passed; production also required normalization of NVET_CTG_IDENTITY_EXCHANGE_ENABLED to the canonical literal true while staging is explicitly false."
     }
   ]
 }
