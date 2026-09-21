@@ -221,9 +221,9 @@
       "prNumber": 286,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
-      "status": "open",
+      "status": "resolved",
       "owner": "VladPhil92",
-      "justification": "Adds production mobile crash observability with Sentry so real Android failures can be diagnosed before commercial launch. The change is deliberately fail-closed under the Phase 27 freeze: it inventories Sentry in Play/Data Safety, disables performance tracing to prevent precise-location URL spans, scrubs request payloads/identity data, gates source-map upload behind production CI credentials, and does not authorize Play production, provider mutation, payment changes or commercial launch."
+      "justification": "PR #286 merged after full protected-change certification. Sentry mobile crash observability is now integrated with sendDefaultPii=false, request/body/header scrubbing, performance tracing disabled, protected CI source-map upload, explicit Google Play/Data Safety and privacy inventory, and a fail-closed Sentry compliance audit. PR checks passed across CI, Android Release Preflight, Android Production Readiness, Railway Contract, Release Candidate Certification, Phase 28/29/30/31/32/36/38/46/47. The release-blocking observability gap is resolved; this record does not authorize public Play production, commercial launch, provider mutation, or removal of remaining external/operator evidence gates."
     }
   ]
 }
