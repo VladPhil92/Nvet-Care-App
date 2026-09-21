@@ -19,6 +19,7 @@ const DELETE_ACCOUNT_SCREEN_PATH = new URL('../mobile/src/screens/shared/DeleteA
 const ACCOUNT_LIFECYCLE_CONTROLLER_PATH = new URL('../backend/src/auth/account-lifecycle.controller.ts', import.meta.url);
 const ACCOUNT_LIFECYCLE_SERVICE_PATH = new URL('../backend/src/auth/account-lifecycle.service.ts', import.meta.url);
 const DELETE_ACCOUNT_DTO_PATH = new URL('../backend/src/auth/dto/delete-account.dto.ts', import.meta.url);
+const SENTRY_CONFIG_PATH = new URL('../mobile/src/observability/sentry.ts', import.meta.url);
 
 const args = new Set(process.argv.slice(2));
 const writeEvidence = args.has('--write-evidence');
@@ -70,6 +71,7 @@ const [
   accountLifecycleController,
   accountLifecycleService,
   deleteAccountDto,
+  sentryConfig,
 ] = await Promise.all([
   read(COMPLIANCE_PATH),
   read(DATA_SAFETY_PATH),
@@ -89,6 +91,7 @@ const [
   read(ACCOUNT_LIFECYCLE_CONTROLLER_PATH),
   read(ACCOUNT_LIFECYCLE_SERVICE_PATH),
   read(DELETE_ACCOUNT_DTO_PATH),
+  read(SENTRY_CONFIG_PATH),
 ]);
 
 const compliance = JSON.parse(complianceRaw);
@@ -134,6 +137,7 @@ const dependencies = mobilePackage.dependencies ?? {};
 for (const dependency of [
   '@react-native-async-storage/async-storage',
   '@react-native-community/geolocation',
+  '@sentry/react-native',
   'axios',
   'react-native-image-picker',
   'react-native-maps',
@@ -149,6 +153,25 @@ const advertisingOrAnalyticsSdk = /(?:admob|google-mobile-ads|facebook.*ads|apps
 if (advertisingOrAnalyticsSdk && compliance.sdkInventory?.advertisingSdkObserved === false && compliance.sdkInventory?.mobileAnalyticsSdkObserved === false) {
   fail('an advertising/analytics SDK is present but the compliance inventory still declares none observed');
 }
+
+if (compliance.sdkInventory?.crashReporting?.provider !== 'Sentry') {
+  fail('Sentry crash reporting must be inventoried in sdkInventory');
+}
+if (compliance.sdkInventory?.crashReporting?.package !== '@sentry/react-native') {
+  fail('Sentry crash reporting package must remain @sentry/react-native');
+}
+if (compliance.sdkInventory?.crashReporting?.sendDefaultPii !== false) {
+  fail('Sentry inventory must keep sendDefaultPii=false');
+}
+if (compliance.sdkInventory?.crashReporting?.performanceTracingEnabled !== false) {
+  fail('Sentry performance tracing must remain disabled for the first commercial release');
+}
+requireMatch(sentryConfig, /sendDefaultPii:\s*false/, 'Sentry runtime must keep default PII disabled');
+requireMatch(sentryConfig, /tracesSampleRate:\s*0/, 'Sentry runtime must keep performance transaction sampling disabled');
+requireMatch(sentryConfig, /event\.request\.data\s*=\s*undefined/, 'Sentry runtime must drop request bodies');
+requireMatch(sentryConfig, /event\.request\.cookies\s*=\s*undefined/, 'Sentry runtime must drop cookies');
+requireMatch(sentryConfig, /authorization/, 'Sentry runtime must scrub authorization headers');
+
 
 requireMatch(authService, /email:\s*string/, 'auth inventory must account for email');
 requireMatch(authService, /firstName:\s*string/, 'auth inventory must account for first name');
@@ -183,6 +206,7 @@ for (const requiredId of [
   'payments',
   'ai-inputs',
   'notification-inbox',
+  'third-party-crash-diagnostics',
 ]) {
   if (!inventoryIds.has(requiredId)) fail(`dataInventory is missing ${requiredId}`);
 }
@@ -216,10 +240,12 @@ if (compliance.accountLifecycle?.accountDeletion?.publicRoute !== '/api/privacy/
 
 requireMatch(dataSafety, /Play Console declaration remains external evidence.*pending/is, 'Data Safety document must remain explicit that console evidence is pending');
 requireMatch(dataSafety, /Account deletion lifecycle/i, 'Data Safety document must document the Phase 13D account deletion lifecycle');
+requireMatch(dataSafety, /Sentry crash reporting boundary/i, 'Data Safety document must document the Sentry crash reporting boundary');
 requireMatch(dataSafety, /pseudonimiz/i, 'Data Safety document must disclose pseudonymized retention');
 requireMatch(privacy, /Publication status:\*\* `PENDING`/i, 'privacy source must not be represented as already published');
 requireMatch(privacy, /eliminación de cuenta de autoservicio está implementada/i, 'privacy source must truthfully describe the implemented deletion mechanism');
 requireMatch(privacy, /registros clínicos, financieros, profesionales o de auditoría/i, 'privacy source must disclose retained record categories');
+requireMatch(privacy, /Sentry como proveedor de diagnóstico de errores/i, 'privacy source must disclose Sentry crash diagnostics');
 requireMatch(reviewer, /actual reviewer credentials remain external/i, 'reviewer runbook must keep credentials external');
 requireMatch(reviewer, /Never use ADMIN, SUPERADMIN/i, 'reviewer runbook must prohibit privileged reviewer identities');
 
@@ -265,13 +291,14 @@ const evidence = {
     accountLifecycleControllerSha256: sha256(accountLifecycleController),
     accountLifecycleServiceSha256: sha256(accountLifecycleService),
     deleteAccountScreenSha256: sha256(deleteAccountScreen),
+    sentryConfigSha256: sha256(sentryConfig),
   },
   generatedAt: new Date().toISOString(),
 };
 
 console.log('PASS | Android Play compliance contract | Phase 13D repository inventory is internally consistent');
 console.log(`PASS | Permissions | ${evidence.permissionInventory.join(', ')}`);
-console.log(`PASS | SDK boundary | advertising/analytics observed=${advertisingOrAnalyticsSdk}`);
+console.log(`PASS | SDK boundary | advertising/analytics observed=${advertisingOrAnalyticsSdk}; Sentry crash reporting inventoried with performance tracing disabled`);
 console.log(`PASS | Account deletion lifecycle | status=${deletionStatus}`);
 console.log(`INFO | External evidence still required | ${externalBlockers.join(', ') || 'none'}`);
 
