@@ -13,10 +13,11 @@ import { UserModeProvider } from './src/contexts/UserModeContext'
 import { I18nProvider } from './src/i18n/I18nProvider'
 import RootNavigator from './src/navigation/RootNavigator'
 import { linking } from './src/navigation/linking'
+import type { RootStackParamList } from './src/navigation/types'
 import runtimeTelemetry from './src/services/runtime-telemetry.service'
 import { navigationIntegration } from './src/observability/sentry'
 
-const navigationRef = createNavigationContainerRef()
+const navigationRef = createNavigationContainerRef<RootStackParamList>()
 
 /**
  * App raíz — orden de providers (de afuera hacia adentro):
