@@ -112,7 +112,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   )
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView testID="chat-screen" style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Pressable
           onPress={() => navigation.goBack()}
