@@ -2,7 +2,11 @@ import React, { useEffect } from 'react'
 import { StatusBar } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { NavigationContainer } from '@react-navigation/native'
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from '@react-navigation/native'
+import * as Sentry from '@sentry/react-native'
 
 import { QueryProvider } from './src/lib/QueryProvider'
 import { UserModeProvider } from './src/contexts/UserModeContext'
@@ -10,6 +14,9 @@ import { I18nProvider } from './src/i18n/I18nProvider'
 import RootNavigator from './src/navigation/RootNavigator'
 import { linking } from './src/navigation/linking'
 import runtimeTelemetry from './src/services/runtime-telemetry.service'
+import { navigationIntegration } from './src/observability/sentry'
+
+const navigationRef = createNavigationContainerRef()
 
 /**
  * App raíz — orden de providers (de afuera hacia adentro):
@@ -30,7 +37,7 @@ import runtimeTelemetry from './src/services/runtime-telemetry.service'
  * dejamos un default sensato.
  */
 
-export default function App() {
+function App() {
   useEffect(() => {
     runtimeTelemetry.emit('APP_STARTED')
   }, [])
@@ -41,7 +48,14 @@ export default function App() {
         <I18nProvider>
           <QueryProvider>
             <UserModeProvider>
-              <NavigationContainer linking={linking} fallback={null}>
+              <NavigationContainer
+                ref={navigationRef}
+                linking={linking}
+                fallback={null}
+                onReady={() => {
+                  navigationIntegration.registerNavigationContainer(navigationRef)
+                }}
+              >
                 <StatusBar barStyle="dark-content" />
                 <RootNavigator />
               </NavigationContainer>
@@ -52,3 +66,5 @@ export default function App() {
     </GestureHandlerRootView>
   )
 }
+
+export default Sentry.wrap(App)
