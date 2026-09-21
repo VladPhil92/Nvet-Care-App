@@ -10,7 +10,7 @@ This document is the canonical engineering input for the Google Play **Data safe
 
 The Android client currently declares only `INTERNET`, `ACCESS_COARSE_LOCATION`, and `ACCESS_FINE_LOCATION`. It does not declare background location, camera, microphone, contacts, broad-storage, or Android notification runtime permissions in the app manifest. Location is requested in-app for nearby veterinarian discovery and active-appointment tracking.
 
-The mobile package includes geolocation, maps, user-selected media, local session storage, HTTP transport, realtime socket transport, CTG One identity federation, and first-party runtime diagnostics sent to the Nvet backend. No dedicated advertising SDK or third-party mobile analytics SDK is present in the repository dependency inventory.
+The mobile package includes geolocation, maps, user-selected media, local session storage, HTTP transport, realtime socket transport, CTG One identity federation, first-party runtime diagnostics sent to the Nvet backend, and Sentry crash reporting. No dedicated advertising SDK or third-party mobile analytics SDK is present in the repository dependency inventory. Sentry is a third-party crash-diagnostics processor and must be reviewed separately in the production Data safety declaration.
 
 Phase 35 additionally enforces an HTTPS-only default Android network policy for production/release resources. Emulator-only cleartext access to `10.0.2.2` and `localhost` is isolated under `src/debug` and is therefore excluded from the release bundle.
 
@@ -22,6 +22,7 @@ Phase 35 additionally enforces an HTTPS-only default Android network policy for 
 | Security/session data | access/refresh session, 2FA state, device label, session metadata | account security, fraud prevention | generated as part of authentication | Confirm whether any item maps to Device or other IDs / App activity |
 | Federated authentication | CTG One authorization code, PKCE verifier, OAuth-style state, optional 2FA code, identity linkage | authentication, account linking, fraud/account security | user chooses “Continue with CTG One”; 2FA only when required | Reconcile with Play account-management/security categories and CTG One production processing |
 | Runtime diagnostics/app activity | allow-listed event name, operation duration, normalized outcome code, app/version code | app functionality, diagnostics, performance and release safety | generated while the app is used; client queue is memory-only | Reconcile with Play App activity / App info and performance / Diagnostics taxonomy before submission |
+| Third-party crash diagnostics | exception type/message, raw client stack trace, app release/environment, sanitized breadcrumbs | crash diagnosis and release safety | generated only when an error is captured; performance tracing is disabled | Reconcile Sentry processing/retention with Play Diagnostics/App activity taxonomy and production contract |
 | Veterinarian professional data | license number, specialties, verification status, rating | professional verification and marketplace trust | required for veterinarian role as applicable | Review classification as Other info / account information |
 | Pet and veterinary data | pet identity, species, breed, weight, birth date, photo, notes | veterinary service and continuity of care | user-provided | Pet clinical information does not map one-to-one to human Health data; classify against current Play taxonomy before submission |
 | Appointment and clinical content | date/time, service address, notes, diagnosis, treatment, clinical notes | booking and veterinary care | generated/provided during service | Review User-generated content / Other info mapping |
@@ -31,6 +32,14 @@ Phase 35 additionally enforces an HTTPS-only default Android network policy for 
 | User-selected files/media | transfer proof and other explicitly selected files/images | transfer verification or profile/service workflows | user initiated | Review Photos and videos / Files and docs categories according to final picker flows |
 | AI prompts/context | user question, pet ID, appointment ID, veterinary case context | care guidance, pre-visit support, vet case support/documentation | feature initiated by user | Provider-processing and retention review required before Play submission |
 | Notification inbox activity | type, message, action path, read status | service updates and reminders | generated from account activity | Current mobile implementation is an in-app inbox; no push-notification runtime permission is declared |
+
+## Sentry crash reporting boundary
+
+The signed production client includes `@sentry/react-native` for crash/error diagnostics. This is a separate boundary from the Phase 36 first-party runtime telemetry described below. Sentry error events may contain an exception type/message, a raw client stack trace, app release/environment metadata and sanitized breadcrumbs needed to diagnose a crash.
+
+The Sentry configuration sets `sendDefaultPii: false`, removes request bodies and cookies, strips authorization/cookie/API-key headers, reduces user context to an internal ID only when one is deliberately set, drops arbitrary `extra` payloads, and reduces breadcrumbs to coarse category/type/level/message/timestamp fields. Performance transaction sampling is set to zero for the first commercial Android release, so HTTP/navigation performance spans — including URLs that could otherwise contain precise-location query parameters — are not exported.
+
+Source maps/debug metadata are uploaded from the protected production CI environment using a dedicated CI token; the token is never embedded in the application. The DSN is an ingestion identifier and is compiled only into the signed production client. `sentryDataHandlingReview` remains external evidence and `pending` until the production Sentry organization settings, retention, processor terms and exact Google Play classification are reviewed.
 
 ## Phase 36 first-party runtime diagnostics boundary
 
@@ -48,7 +57,7 @@ The resulting authenticated Nvet session is persisted through the same secure-st
 
 ## Sharing versus service-provider processing
 
-The repository proves that the Android app transmits service data and first-party runtime diagnostics to the Nvet backend and, when the user explicitly chooses federated sign-in, exchanges authentication data with CTG One. Some backend capabilities may then use infrastructure, AI, payment, email, storage, mapping, monitoring, identity, or other processors. Google Play's definition of **sharing** has specific exceptions for service providers and legal purposes; therefore this repository does not hard-code a blanket `shared=true` or `shared=false` answer.
+The repository proves that the Android app transmits service data and first-party runtime diagnostics to the Nvet backend and, when the user explicitly chooses federated sign-in, exchanges authentication data with CTG One. Some backend capabilities may then use infrastructure, AI, payment, email, storage, mapping, monitoring, identity, or other processors. The Android client also sends privacy-minimized crash diagnostics directly to Sentry when error reporting is enabled. Google Play's definition of **sharing** has specific exceptions for service providers and legal purposes; therefore this repository does not hard-code a blanket `shared=true` or `shared=false` answer.
 
 Before submitting the Data safety form, the operator must review the production configuration and contracts for every active processor and record whether each transfer is treated as collection, service-provider processing, or sharing under the then-current Play definition.
 
@@ -90,7 +99,7 @@ Repository code now supports self-service account deletion, release-network hard
 The repository gate may move from `pending` to `verified` only after there is dated evidence that:
 
 1. the Play Console Data safety form was reviewed against the commit/tag being released;
-2. all active production processors, including CTG One identity federation, were reconciled;
+2. all active production processors, including CTG One identity federation and Sentry crash reporting, were reconciled;
 3. permission declarations match the signed bundle;
 4. the signed release bundle preserves the HTTPS-only production network policy and R8/minification boundary;
 5. Phase 36 runtime diagnostics are declared consistently with actual production collection and current Play taxonomy;

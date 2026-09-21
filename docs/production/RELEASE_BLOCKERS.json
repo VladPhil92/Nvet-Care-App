@@ -216,6 +216,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Phase 2A.1 repairs the NestJS 12 runtime boot regression observed after PR #282 merged: @nestjs/passport 12 reflection metadata caused the concrete fixed-strategy JwtAuthGuard to request AuthModuleOptions inside consuming domain modules such as ReviewsModule, preventing both staging and production Railway startup. The hotfix makes the guard constructor explicitly dependency-free and adds a Nest DI regression test without changing authentication policy, token semantics, roles, payments, database state or Play/public launch authorization. PR #282 remains open in release governance until runtime recovery is externally verified. Merged into main as commit 3d477104dab1c164b54fcea1ed2b07d4f1982dde. CI Success, Railway Contract with real container boot, staging runtime smoke and production runtime smoke all passed; production also required normalization of NVET_CTG_IDENTITY_EXCHANGE_ENABLED to the canonical literal true while staging is explicitly false."
+    },
+    {
+      "prNumber": 286,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Adds production mobile crash observability with Sentry so real Android failures can be diagnosed before commercial launch. The change is deliberately fail-closed under the Phase 27 freeze: it inventories Sentry in Play/Data Safety, disables performance tracing to prevent precise-location URL spans, scrubs request payloads/identity data, gates source-map upload behind production CI credentials, and does not authorize Play production, provider mutation, payment changes or commercial launch."
     }
   ]
 }

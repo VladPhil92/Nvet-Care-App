@@ -40,36 +40,90 @@
       "authorizeOrigin": "https://ctgone.com",
       "protocol": "authorization-code + PKCE S256",
       "bearerTokenInRedirect": false
+    },
+    "crashReporting": {
+      "provider": "Sentry",
+      "package": "@sentry/react-native",
+      "purpose": [
+        "crash diagnostics",
+        "release safety"
+      ],
+      "sendDefaultPii": false,
+      "performanceTracingEnabled": false,
+      "sourceMapsUploadedFromCi": true,
+      "externalProcessorReviewRequired": true
     }
   },
   "dataInventory": [
     {
       "id": "account-profile",
       "category": "personal-info",
-      "examples": ["email", "first name", "last name", "phone", "avatar", "role"],
-      "purpose": ["account management", "authentication", "service delivery"],
+      "examples": [
+        "email",
+        "first name",
+        "last name",
+        "phone",
+        "avatar",
+        "role"
+      ],
+      "purpose": [
+        "account management",
+        "authentication",
+        "service delivery"
+      ],
       "source": "mobile/src/services/auth.service.ts"
     },
     {
       "id": "security-session",
       "category": "security-and-session-data",
-      "examples": ["access token", "refresh token", "2FA state", "device label", "session metadata"],
-      "purpose": ["authentication", "fraud and account security"],
+      "examples": [
+        "access token",
+        "refresh token",
+        "2FA state",
+        "device label",
+        "session metadata"
+      ],
+      "purpose": [
+        "authentication",
+        "fraud and account security"
+      ],
       "source": "mobile/src/services/auth.service.ts"
     },
     {
       "id": "federated-auth",
       "category": "security-and-session-data",
-      "examples": ["authorization code", "PKCE verifier", "state", "2FA code when required", "CTG One identity linkage"],
-      "purpose": ["authentication", "account linking", "fraud and account security"],
+      "examples": [
+        "authorization code",
+        "PKCE verifier",
+        "state",
+        "2FA code when required",
+        "CTG One identity linkage"
+      ],
+      "purpose": [
+        "authentication",
+        "account linking",
+        "fraud and account security"
+      ],
       "source": "mobile/src/services/ctg-federation.service.ts",
       "externalProcessorReviewRequired": true
     },
     {
       "id": "runtime-diagnostics",
       "category": "app-activity-and-diagnostics",
-      "examples": ["allow-listed runtime event name", "operation duration", "normalized outcome code", "app version", "version code"],
-      "purpose": ["app functionality", "security", "diagnostics", "performance monitoring", "release safety"],
+      "examples": [
+        "allow-listed runtime event name",
+        "operation duration",
+        "normalized outcome code",
+        "app version",
+        "version code"
+      ],
+      "purpose": [
+        "app functionality",
+        "security",
+        "diagnostics",
+        "performance monitoring",
+        "release safety"
+      ],
       "source": "mobile/src/services/runtime-telemetry.service.ts",
       "privacyBoundary": {
         "userIdentifiers": false,
@@ -83,61 +137,168 @@
       }
     },
     {
+      "id": "third-party-crash-diagnostics",
+      "category": "app-activity-and-diagnostics",
+      "examples": [
+        "exception type and message",
+        "client stack trace",
+        "app release/environment",
+        "sanitized breadcrumbs"
+      ],
+      "purpose": [
+        "crash diagnostics",
+        "release safety"
+      ],
+      "source": "mobile/src/observability/sentry.ts",
+      "externalProcessor": "Sentry",
+      "externalProcessorReviewRequired": true,
+      "privacyBoundary": {
+        "sendDefaultPii": false,
+        "requestBodies": false,
+        "cookies": false,
+        "authorizationHeaders": false,
+        "emails": false,
+        "tokens": false,
+        "clinicalFreeText": false,
+        "paymentCredentials": false,
+        "performanceTransactions": false,
+        "rawClientStackTraces": true
+      }
+    },
+    {
       "id": "vet-professional-profile",
       "category": "professional-info",
-      "examples": ["license number", "specialties", "verification status", "rating"],
-      "purpose": ["veterinarian verification", "marketplace trust", "service delivery"],
+      "examples": [
+        "license number",
+        "specialties",
+        "verification status",
+        "rating"
+      ],
+      "purpose": [
+        "veterinarian verification",
+        "marketplace trust",
+        "service delivery"
+      ],
       "source": "mobile/src/services/auth.service.ts"
     },
     {
       "id": "pet-records",
       "category": "user-provided-pet-and-veterinary-data",
-      "examples": ["pet name", "species", "breed", "weight", "birth date", "photo", "notes"],
-      "purpose": ["veterinary care", "appointment context"],
+      "examples": [
+        "pet name",
+        "species",
+        "breed",
+        "weight",
+        "birth date",
+        "photo",
+        "notes"
+      ],
+      "purpose": [
+        "veterinary care",
+        "appointment context"
+      ],
       "source": "mobile/src/services/pet.service.ts"
     },
     {
       "id": "appointment-clinical",
       "category": "appointments-and-veterinary-records",
-      "examples": ["appointment date and time", "service address", "notes", "diagnosis", "treatment", "clinical notes"],
-      "purpose": ["booking", "service delivery", "veterinary record continuity"],
+      "examples": [
+        "appointment date and time",
+        "service address",
+        "notes",
+        "diagnosis",
+        "treatment",
+        "clinical notes"
+      ],
+      "purpose": [
+        "booking",
+        "service delivery",
+        "veterinary record continuity"
+      ],
       "source": "mobile/src/services/appointment.service.ts"
     },
     {
       "id": "precise-location",
       "category": "location",
-      "examples": ["latitude", "longitude", "accuracy", "heading", "speed"],
-      "purpose": ["nearby veterinarian discovery", "active appointment tracking"],
+      "examples": [
+        "latitude",
+        "longitude",
+        "accuracy",
+        "heading",
+        "speed"
+      ],
+      "purpose": [
+        "nearby veterinarian discovery",
+        "active appointment tracking"
+      ],
       "source": "mobile/src/services/live-location.service.ts",
       "userPermissionRequired": true
     },
     {
       "id": "chat-content",
       "category": "messages-and-user-generated-content",
-      "examples": ["appointment chat messages", "shared service prices", "message reports"],
-      "purpose": ["client-veterinarian communication", "support and trust"],
+      "examples": [
+        "appointment chat messages",
+        "shared service prices",
+        "message reports"
+      ],
+      "purpose": [
+        "client-veterinarian communication",
+        "support and trust"
+      ],
       "source": "mobile/src/services/chat.service.ts"
     },
     {
       "id": "payments",
       "category": "financial-and-transaction-data",
-      "examples": ["payment method", "amount", "transaction status", "transfer proof", "withdrawal account information", "document ID"],
-      "purpose": ["payments", "transfer verification", "withdrawals", "financial records"],
+      "examples": [
+        "payment method",
+        "amount",
+        "transaction status",
+        "transfer proof",
+        "withdrawal account information",
+        "document ID"
+      ],
+      "purpose": [
+        "payments",
+        "transfer verification",
+        "withdrawals",
+        "financial records"
+      ],
       "source": "mobile/src/services/payment.service.ts"
     },
     {
       "id": "ai-inputs",
       "category": "ai-prompts-and-veterinary-context",
-      "examples": ["user question", "pet ID", "appointment ID", "case context"],
-      "purpose": ["care guidance", "pre-visit support", "veterinary case support", "documentation assistance"],
+      "examples": [
+        "user question",
+        "pet ID",
+        "appointment ID",
+        "case context"
+      ],
+      "purpose": [
+        "care guidance",
+        "pre-visit support",
+        "veterinary case support",
+        "documentation assistance"
+      ],
       "source": "mobile/src/services/ai.service.ts",
       "providerProcessingReviewRequired": true
     },
     {
       "id": "notification-inbox",
       "category": "app-activity-and-service-notifications",
-      "examples": ["notification type", "message", "action path", "read state"],
-      "purpose": ["appointment updates", "payment updates", "preventive reminders"],
+      "examples": [
+        "notification type",
+        "message",
+        "action path",
+        "read state"
+      ],
+      "purpose": [
+        "appointment updates",
+        "payment updates",
+        "preventive reminders"
+      ],
       "source": "mobile/src/services/notification.service.ts"
     }
   ],
@@ -182,7 +343,8 @@
     "ctgOneFederationDataHandlingReview": "pending",
     "playRuntimeDiagnosticsDeclarationReview": "pending",
     "accountDeletionProductionRoute": "pending",
-    "accountDeletionProviderPurgeReview": "pending"
+    "accountDeletionProviderPurgeReview": "pending",
+    "sentryDataHandlingReview": "pending"
   },
   "releasePolicy": {
     "automaticProductionPromotion": false,
@@ -211,6 +373,7 @@
     "backend/src/auth/account-lifecycle.controller.ts",
     "backend/src/auth/account-lifecycle.service.ts",
     "backend/src/auth/dto/delete-account.dto.ts",
-    "backend/src/auth/guards/ws-jwt.guard.ts"
+    "backend/src/auth/guards/ws-jwt.guard.ts",
+    "mobile/src/observability/sentry.ts"
   ]
 }

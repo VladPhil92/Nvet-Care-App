@@ -121,6 +121,10 @@ jobs:
           [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] && missing="$missing ANDROID_KEY_ALIAS"
           [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ] && missing="$missing ANDROID_KEY_PASSWORD"
           [ -z "${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}" ] && missing="$missing GOOGLE_MAPS_ANDROID_API_KEY"
+          [ -z "${{ secrets.SENTRY_AUTH_TOKEN }}" ] && missing="$missing SENTRY_AUTH_TOKEN"
+          [ -z "${{ secrets.SENTRY_DSN_MOBILE }}" ] && missing="$missing SENTRY_DSN_MOBILE"
+          [ -z "${{ vars.SENTRY_ORG }}" ] && missing="$missing SENTRY_ORG"
+          [ -z "${{ vars.SENTRY_PROJECT_MOBILE }}" ] && missing="$missing SENTRY_PROJECT_MOBILE"
           [ -z "$EXPECTED_CERT_SHA256" ] && missing="$missing ANDROID_UPLOAD_CERT_SHA256"
           if [ -n "$missing" ]; then
             echo "::error::Faltan secrets de release:$missing"
@@ -192,6 +196,10 @@ jobs:
           NVET_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           NVET_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DSN_MOBILE: ${{ secrets.SENTRY_DSN_MOBILE }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_MOBILE }}
           NVET_ANDROID_VERSION_CODE: ${{ github.run_number }}
           NVET_ANDROID_VERSION_NAME: ${{ github.event.inputs.version_name }}
         run: ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
@@ -337,6 +345,8 @@ jobs:
             echo '- Phase 13C Play compliance evidence: attached to release artifact'
             echo '- Phase 32 SPDX 2.3 SBOM: generated deterministically from package-lock.json, attached and checksummed'
             echo '- AAB/APK provenance + AAB SBOM attestation: GitHub Artifact Attestations/Sigstore'
+            echo "- Sentry mobile project: ${{ vars.SENTRY_PROJECT_MOBILE }}"
+            echo '- Sentry React Native source-map upload: enabled for the signed production build'
             if [ '${{ inputs.publish_internal }}' = 'true' ]; then
               echo "- Google Play Internal draft: ${{ steps.play_upload.outcome }}"
               echo '- Promotion remains manual; this workflow does not release to production.'
