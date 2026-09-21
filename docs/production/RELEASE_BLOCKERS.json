@@ -224,6 +224,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "PR #286 merged after full protected-change certification. Sentry mobile crash observability is now integrated with sendDefaultPii=false, request/body/header scrubbing, performance tracing disabled, protected CI source-map upload, explicit Google Play/Data Safety and privacy inventory, and a fail-closed Sentry compliance audit. PR checks passed across CI, Android Release Preflight, Android Production Readiness, Railway Contract, Release Candidate Certification, Phase 28/29/30/31/32/36/38/46/47. The release-blocking observability gap is resolved; this record does not authorize public Play production, commercial launch, provider mutation, or removal of remaining external/operator evidence gates."
+    },
+    {
+      "prNumber": 288,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Corrective pre-launch certification phase. Restores deterministic staging E2E after the production MarketLaunchGuard minimum-supply invariant exposed a staging-fixture mismatch, pins the Android emulator to Cartagena for proximity search, strengthens stable mobile test selectors/scroll behavior, and hardens authenticated Android deep-link delivery. The change keeps production coverage requirements fail-closed, uses staging-only synthetic fixtures, does not assert real bank movement, and authorizes neither Google Play production publication nor commercial launch."
     }
   ]
 }
