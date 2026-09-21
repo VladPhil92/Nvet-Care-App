@@ -23,6 +23,11 @@ describe('Flow: Cliente reserva cita con transferencia', () => {
       permissions: { notifications: 'YES', location: 'always' },
       languageAndLocale: { language: 'es-CO', locale: 'es-CO' },
     })
+
+    // Keep Android search deterministic. A headless emulator otherwise starts
+    // with an arbitrary/default GPS position, which can legitimately filter
+    // the Cartagena staging veterinarian out of the 20 km search radius.
+    await device.setLocation(10.3997, -75.5144)
   })
 
   it('completa el flujo end-to-end productizable', async () => {
