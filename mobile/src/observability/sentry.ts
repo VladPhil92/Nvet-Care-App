@@ -31,7 +31,10 @@ Sentry.init({
   enabled: Boolean(sentryDsn),
   environment: __DEV__ ? 'development' : 'production',
   sendDefaultPii: false,
-  tracesSampleRate: __DEV__ ? 0 : 0.1,
+  // Crash reporting is enabled, but performance transactions are intentionally
+  // disabled for the first commercial release. This prevents HTTP/navigation
+  // spans from carrying precise-location query strings or other request metadata.
+  tracesSampleRate: 0,
   integrations: [navigationIntegration],
   beforeSend(event) {
     // Nvet may handle veterinary, location, financial and chat context. Keep
