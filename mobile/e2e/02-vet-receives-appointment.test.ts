@@ -27,7 +27,10 @@ describe('Flow: Vet recibe y procesa una cita', () => {
     // 1. Login como vet
     await loginAsVet()
 
-    // 2. Dashboard con la cita fixture de hoy
+    // 2. Dashboard con la cita fixture de hoy. Agenda vive debajo del hero/KPIs
+    // en teléfonos; desplazar el ScrollView certifica la UI real sin asumir que
+    // el heading cabe en el primer viewport del Pixel 6.
+    await element(by.id('vet-dashboard-scroll')).scroll(320, 'down')
     await waitForElement(by.text('Agenda de hoy'), 15_000)
     const seededAppointment = element(
       by.label('Cita 20:00: Consulta general E2E con Cliente'),
@@ -85,6 +88,7 @@ describe('Flow: Vet recibe y procesa una cita', () => {
 
     // 7. Regresar al dashboard y verificar que el estado persistió
     await device.pressBack()
+    await element(by.id('vet-dashboard-scroll')).scroll(320, 'down')
     await waitForElement(by.text('Agenda de hoy'), 10_000)
     await dexpect(element(by.text('Completada'))).toBeVisible()
   })

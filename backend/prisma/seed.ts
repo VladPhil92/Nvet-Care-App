@@ -23,6 +23,34 @@ const FIXTURE_IDS = {
 const E2E_VET_LICENSE = "NVET-E2E-0001";
 const E2E_VET_COMVEZCOL = "99999-9";
 const E2E_VET_SPECIALTIES = ["Consulta general", "Emergencias"];
+
+// Staging must satisfy the same market-supply invariant as production without
+// weakening MarketLaunchGuard. These auxiliary identities exist only because
+// assertSeedAllowed() refuses this seed outside test/staging. They are coverage
+// fixtures, not beta evidence and not real veterinarians.
+const AUXILIARY_COVERAGE_VETS = [
+  {
+    email: "nvet-e2e-coverage-2@nvetcare.invalid",
+    firstName: "Veterinario",
+    lastName: "Cobertura E2E 2",
+    licenseNumber: "NVET-E2E-0002",
+    comvezcolNumber: "99999-8",
+    registryCheckId: "00000000-0000-4000-8000-000000000302",
+    latitude: 10.4101,
+    longitude: -75.5058,
+  },
+  {
+    email: "nvet-e2e-coverage-3@nvetcare.invalid",
+    firstName: "Veterinario",
+    lastName: "Cobertura E2E 3",
+    licenseNumber: "NVET-E2E-0003",
+    comvezcolNumber: "99999-7",
+    registryCheckId: "00000000-0000-4000-8000-000000000303",
+    latitude: 10.3898,
+    longitude: -75.5232,
+  },
+] as const;
+
 const OFFICIAL_REGISTRY_URL =
   "https://consejoprofesionalmvz.gov.co/consulta-de-profesionales/";
 
@@ -101,6 +129,7 @@ async function main(): Promise<void> {
   const fixtureEmails = [
     clientEmail,
     vetEmail,
+    ...AUXILIARY_COVERAGE_VETS.map((fixture) => fixture.email),
     ...(adminCredentials ? [adminCredentials.email] : []),
   ];
   if (new Set(fixtureEmails).size !== fixtureEmails.length) {
@@ -294,6 +323,117 @@ async function main(): Promise<void> {
       isAvailableNow: true,
     },
   });
+
+  // Keep the staging market guard meaningful: create enough synthetic,
+  // geo-consistent, verified profiles to reach the same minimum of three
+  // operational veterinarians required by production booking policy.
+  for (const fixture of AUXILIARY_COVERAGE_VETS) {
+    const auxiliaryUser = await prisma.user.upsert({
+      where: { email: fixture.email },
+      update: {
+        passwordHash: vetPasswordHash,
+        role: UserRole.VET,
+        firstName: fixture.firstName,
+        lastName: fixture.lastName,
+        emailVerified: true,
+        isActive: true,
+        deactivatedAt: null,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+        recoveryCodesHash: [],
+        passwordChangedAt: new Date(),
+      },
+      create: {
+        email: fixture.email,
+        passwordHash: vetPasswordHash,
+        role: UserRole.VET,
+        firstName: fixture.firstName,
+        lastName: fixture.lastName,
+        emailVerified: true,
+        isActive: true,
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    const auxiliaryProfile = await prisma.vetProfile.upsert({
+      where: { licenseNumber: fixture.licenseNumber },
+      update: {
+        userId: auxiliaryUser.id,
+        specialties: E2E_VET_SPECIALTIES,
+        tier: VetTier.FREE,
+        bio: "Fixture sintético de cobertura para staging E2E.",
+        yearsExperience: 5,
+        rating: 5,
+        reviewCount: 0,
+        isVerified: true,
+        isActive: true,
+        verificationStatus: VerificationStatus.APPROVED,
+        verifiedAt: new Date(),
+        latitude: fixture.latitude,
+        longitude: fixture.longitude,
+        city: "Cartagena",
+        department: "Bolívar",
+        serviceRadius: 30,
+        isAvailableNow: false,
+        timezone: "America/Bogota",
+        comvezcolNumber: fixture.comvezcolNumber,
+      },
+      create: {
+        userId: auxiliaryUser.id,
+        licenseNumber: fixture.licenseNumber,
+        specialties: E2E_VET_SPECIALTIES,
+        tier: VetTier.FREE,
+        bio: "Fixture sintético de cobertura para staging E2E.",
+        yearsExperience: 5,
+        rating: 5,
+        reviewCount: 0,
+        isVerified: true,
+        isActive: true,
+        verificationStatus: VerificationStatus.APPROVED,
+        verifiedAt: new Date(),
+        latitude: fixture.latitude,
+        longitude: fixture.longitude,
+        city: "Cartagena",
+        department: "Bolívar",
+        serviceRadius: 30,
+        isAvailableNow: false,
+        timezone: "America/Bogota",
+        comvezcolNumber: fixture.comvezcolNumber,
+      },
+    });
+
+    await prisma.vetProfessionalRegistryCheck.upsert({
+      where: { vetProfileId: auxiliaryProfile.id },
+      update: {
+        status: "VERIFIED",
+        checkedById: null,
+        evidence: `Synthetic staging-only registry evidence for ${fixture.licenseNumber}. Not a real professional identity.`,
+        sourceUrl: OFFICIAL_REGISTRY_URL,
+        checkedAt: new Date(),
+      },
+      create: {
+        id: fixture.registryCheckId,
+        vetProfileId: auxiliaryProfile.id,
+        status: "VERIFIED",
+        checkedById: null,
+        evidence: `Synthetic staging-only registry evidence for ${fixture.licenseNumber}. Not a real professional identity.`,
+        sourceUrl: OFFICIAL_REGISTRY_URL,
+        checkedAt: new Date(),
+      },
+    });
+
+    await prisma.vetProfile.update({
+      where: { id: auxiliaryProfile.id },
+      data: {
+        isVerified: true,
+        verificationStatus: VerificationStatus.APPROVED,
+        isActive: true,
+        isAvailableNow: false,
+      },
+    });
+  }
 
   await prisma.$transaction([
     prisma.appointment.deleteMany({

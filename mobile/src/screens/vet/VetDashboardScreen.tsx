@@ -153,6 +153,7 @@ export default function VetDashboardScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
+        testID="vet-dashboard-scroll"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={

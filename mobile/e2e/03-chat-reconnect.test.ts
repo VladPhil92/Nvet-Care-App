@@ -31,9 +31,15 @@ describe('Flow: Chat WebSocket connectivity', () => {
   it('conecta, recupera sesión y persiste un mensaje', async () => {
     // 1. Login y apertura del chat confirmado mediante deep link en caliente.
     await loginAsClient()
+    // Android deep-link delivery is more deterministic when the Activity is
+    // resumed from background with the URL intent instead of being relaunched
+    // while already foregrounded.
+    if (device.getPlatform() === 'android') {
+      await device.sendToHome()
+    }
     await device.launchApp({ newInstance: false, url: CHAT_URL })
 
-    await waitForElement(by.text('Chat'), 15_000)
+    await waitForElement(by.id('chat-screen'), 15_000)
     await waitFor(element(by.label('En vivo')))
       .toBeVisible()
       .withTimeout(15_000)
@@ -58,8 +64,9 @@ describe('Flow: Chat WebSocket connectivity', () => {
       await device.terminateApp()
       await device.launchApp({ newInstance: true })
       await waitForElement(by.id('client-home-tab'), 30_000)
+      await device.sendToHome()
       await device.launchApp({ newInstance: false, url: CHAT_URL })
-      await waitForElement(by.text('Chat'), 15_000)
+      await waitForElement(by.id('chat-screen'), 15_000)
       await waitFor(element(by.label('En vivo')))
         .toBeVisible()
         .withTimeout(30_000)
