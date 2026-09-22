@@ -229,9 +229,9 @@
       "prNumber": 288,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
-      "status": "open",
+      "status": "resolved",
       "owner": "VladPhil92",
-      "justification": "Corrective pre-launch certification phase. Restores deterministic staging E2E after the production MarketLaunchGuard minimum-supply invariant exposed a staging-fixture mismatch, pins the Android emulator to Cartagena for proximity search, strengthens stable mobile test selectors/scroll behavior, and hardens authenticated Android deep-link delivery. The change keeps production coverage requirements fail-closed, uses staging-only synthetic fixtures, does not assert real bank movement, and authorizes neither Google Play production publication nor commercial launch."
+      "justification": "PR #288 merged after full protected-change certification. Restored deterministic staging E2E after the production MarketLaunchGuard minimum-supply invariant exposed a staging-fixture mismatch, pinned the Android emulator to Cartagena for proximity search, strengthened stable mobile test selectors/scroll behavior, and hardened authenticated Android deep-link delivery. All PR checks passed on the merge commit, including CI Success, Release Candidate Certification, Backend (NestJS), Mobile (React Native), Android RC package/Native (Gradle), Security/Financial/Database/Veterinary Trust Convergence, and Phase 27-32 contracts. The staging E2E determinism gap is resolved; this record does not authorize Google Play production publication, commercial launch, provider mutation, or removal of remaining external/operator evidence gates."
     }
   ]
 }
