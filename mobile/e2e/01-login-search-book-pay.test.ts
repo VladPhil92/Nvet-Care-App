@@ -41,10 +41,7 @@ describe('Flow: Cliente reserva cita con transferencia', () => {
     // top-ranked result. VetCard exposes a stable testID because Android may
     // merge child Text nodes into the accessible Pressable, making by.text()
     // nondeterministic even when the card is visibly rendered.
-    await waitForElement(
-      by.text('Ubicación activa · resultados por proximidad disponibles'),
-      20_000,
-    )
+    await waitForElement(by.id('vet-search-location-active'), 20_000)
     await waitForElement(by.id('vet-search-result-0'), 20_000)
 
     // 3. Abrir el veterinario fixture (ELITE ranks first in the staging seed)
