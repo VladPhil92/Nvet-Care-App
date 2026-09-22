@@ -39,6 +39,7 @@ export interface VetCardData {
 interface Props {
   vet: VetCardData
   onPress?: () => void
+  testID?: string
   /** Layout: 'list' = horizontal compact; 'detailed' = más info, vertical */
   layout?: 'list' | 'detailed'
 }
@@ -55,7 +56,7 @@ const TIER_TONES = {
   ELITE: 'gold' as const,
 }
 
-export default function VetCard({ vet, onPress, layout = 'list' }: Props) {
+export default function VetCard({ vet, onPress, testID, layout = 'list' }: Props) {
   const fullName =
     `${vet.firstName ?? ''} ${vet.lastName ?? ''}`.trim() || 'Veterinario'
 
@@ -71,6 +72,7 @@ export default function VetCard({ vet, onPress, layout = 'list' }: Props) {
 
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
