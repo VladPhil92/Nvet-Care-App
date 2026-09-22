@@ -240,6 +240,14 @@
       "status": "open",
       "owner": "VladPhil92",
       "justification": "Corrective release-certification convergence after the production market/geo guard became authoritative. The TRANSFER certification script now supplies the canonical Cartagena staging service coordinates instead of failing SERVICE_LOCATION_REQUIRED, and the Android Detox client discovery flow uses stable accessibility/test identifiers after geolocation resolution instead of relying on a child Text node that Android may merge into the VetCard Pressable. The change does not weaken MarketLaunchGuard, does not bypass coverage, payment, identity, or release controls, and authorizes no real funds movement, provider mutation, Google Play publication, or commercial launch."
+    },
+    {
+      "prNumber": 291,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Follow-up certification correction after PR #290 reached isolated staging and the authoritative booking catalog rejected the synthetic alias 'Consulta general E2E - transferencia'. The payment certification now books the exact active vet service 'Consulta general E2E' while retaining canonical Cartagena service coordinates, production-equivalent market/geo enforcement, veterinarian pricing authority and the existing TRANSFER lifecycle. No backend validation is weakened and no real funds movement, provider mutation, Play publication or commercial launch is authorized."
     }
   ]
 }
