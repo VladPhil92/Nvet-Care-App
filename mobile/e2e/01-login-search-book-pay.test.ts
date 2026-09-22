@@ -37,10 +37,15 @@ describe('Flow: Cliente reserva cita con transferencia', () => {
     // 2. Ir a Servicios. La tarjeta del fixture es una señal más fuerte de que
     // el stack y la búsqueda remota están listos que un heading puramente visual.
     await element(by.id('client-search-tab')).tap()
-    await waitForElement(by.text('Dr. Veterinario E2E'), 15_000)
+    // Wait for the geolocation-driven query to settle before selecting the
+    // top-ranked result. VetCard exposes a stable testID because Android may
+    // merge child Text nodes into the accessible Pressable, making by.text()
+    // nondeterministic even when the card is visibly rendered.
+    await waitForElement(by.id('vet-search-location-active'), 20_000)
+    await waitForElement(by.id('vet-search-result-0'), 20_000)
 
-    // 3. Abrir el veterinario fixture
-    await element(by.text('Dr. Veterinario E2E')).tap()
+    // 3. Abrir el veterinario fixture (ELITE ranks first in the staging seed)
+    await element(by.id('vet-search-result-0')).tap()
     await waitForElement(by.text('Perfil del veterinario'), 10_000)
 
     // 4. Iniciar reserva

@@ -232,6 +232,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "PR #288 merged after full protected-change certification. Restored deterministic staging E2E after the production MarketLaunchGuard minimum-supply invariant exposed a staging-fixture mismatch, pinned the Android emulator to Cartagena for proximity search, strengthened stable mobile test selectors/scroll behavior, and hardened authenticated Android deep-link delivery. All PR checks passed on the merge commit, including CI Success, Release Candidate Certification, Backend (NestJS), Mobile (React Native), Android RC package/Native (Gradle), Security/Financial/Database/Veterinary Trust Convergence, and Phase 27-32 contracts. The staging E2E determinism gap is resolved; this record does not authorize Google Play production publication, commercial launch, provider mutation, or removal of remaining external/operator evidence gates."
+    },
+    {
+      "prNumber": 290,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Corrective release-certification convergence after the production market/geo guard became authoritative. The TRANSFER certification script now supplies the canonical Cartagena staging service coordinates instead of failing SERVICE_LOCATION_REQUIRED, and the Android Detox client discovery flow uses stable accessibility/test identifiers after geolocation resolution instead of relying on a child Text node that Android may merge into the VetCard Pressable. The change does not weaken MarketLaunchGuard, does not bypass coverage, payment, identity, or release controls, and authorizes no real funds movement, provider mutation, Google Play publication, or commercial launch."
     }
   ]
 }

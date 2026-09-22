@@ -190,7 +190,10 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
           accessibilityLabel="Actualizar ubicación para búsqueda de veterinarios cercanos"
         >
           <Text style={styles.locationIcon}>⌖</Text>
-          <Text style={styles.locationText}>
+          <Text
+            testID={deviceLocation ? 'vet-search-location-active' : 'vet-search-location-inactive'}
+            style={styles.locationText}
+          >
             {!locationResolved
               ? 'Obteniendo ubicación…'
               : deviceLocation
@@ -321,8 +324,12 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
           data={allVets}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
-          renderItem={({ item }) => (
-            <VetCard vet={item} onPress={() => handleVetPress(item.id)} />
+          renderItem={({ item, index }) => (
+            <VetCard
+              vet={item}
+              testID={`vet-search-result-${index}`}
+              onPress={() => handleVetPress(item.id)}
+            />
           )}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.4}
