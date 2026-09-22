@@ -190,7 +190,10 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
           accessibilityLabel="Actualizar ubicación para búsqueda de veterinarios cercanos"
         >
           <Text style={styles.locationIcon}>⌖</Text>
-          <Text style={styles.locationText}>
+          <Text
+            testID={deviceLocation ? 'vet-search-location-active' : 'vet-search-location-inactive'}
+            style={styles.locationText}
+          >
             {!locationResolved
               ? 'Obteniendo ubicación…'
               : deviceLocation
