@@ -321,8 +321,12 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
           data={allVets}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
-          renderItem={({ item }) => (
-            <VetCard vet={item} onPress={() => handleVetPress(item.id)} />
+          renderItem={({ item, index }) => (
+            <VetCard
+              vet={item}
+              testID={`vet-search-result-${index}`}
+              onPress={() => handleVetPress(item.id)}
+            />
           )}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.4}
