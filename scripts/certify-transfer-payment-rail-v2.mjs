@@ -127,7 +127,10 @@ try {
       body: JSON.stringify({
         vetId: vet.id,
         petId: PET_ID,
-        serviceType: 'Consulta general E2E - transferencia',
+        // Pricing/booking authority resolves the service against the vet's
+        // active catalog. Use the exact staging fixture service name instead of
+        // inventing a payment-specific alias that the veterinarian never offered.
+        serviceType: 'Consulta general E2E',
         date: `${dateOnly}T12:00:00.000Z`,
         time,
         address: 'Calle E2E Transfer Rail, Cartagena',
