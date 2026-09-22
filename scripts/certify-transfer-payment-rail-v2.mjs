@@ -99,6 +99,8 @@ if (!vet?.id) {
 const runId = `${process.env.GITHUB_RUN_ID || Date.now()}-${process.env.GITHUB_RUN_ATTEMPT || '1'}`;
 const PET_ID = '00000000-0000-4000-8000-000000000101';
 const AMOUNT = 50_000;
+const SERVICE_LATITUDE = 10.3997;
+const SERVICE_LONGITUDE = -75.5144;
 let appointmentId = null;
 
 const cleanup = async () => {
@@ -129,6 +131,12 @@ try {
         date: `${dateOnly}T12:00:00.000Z`,
         time,
         address: 'Calle E2E Transfer Rail, Cartagena',
+        // MarketLaunchGuard requires an explicit service point when geo
+        // enforcement is enabled. Keep the synthetic payment certification at
+        // the canonical Cartagena staging fixture coordinates so it exercises
+        // the same production booking contract instead of bypassing it.
+        serviceLatitude: SERVICE_LATITUDE,
+        serviceLongitude: SERVICE_LONGITUDE,
         amount: AMOUNT,
         paymentMethod: 'TRANSFER',
         notes: `Financial convergence certification ${runId}`,
