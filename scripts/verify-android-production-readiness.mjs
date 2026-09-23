@@ -138,7 +138,7 @@ async function validateRepositoryContract() {
     fail('Android production contract mismatch: automated Play handoff must remain draft-only.');
   }
 
-  requireMatch(androidBuild, /compileSdkVersion\s*=\s*36\b/, 'compileSdkVersion=36');
+  requireMatch(androidBuild, /compileSdkVersion\s*=\s*37\b/, 'compileSdkVersion=37');
   requireMatch(androidBuild, /targetSdkVersion\s*=\s*36\b/, 'targetSdkVersion=36');
   requireMatch(androidBuild, /com\.android\.tools\.build:gradle:9\.2\.1/, 'AGP 9.2.1');
   requireMatch(wrapper, /gradle-9\.4\.1-bin\.zip/, 'Gradle 9.4.1 wrapper');
