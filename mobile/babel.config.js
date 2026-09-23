@@ -35,7 +35,7 @@ module.exports = function (api) {
         },
       ],
       inlineNvetRuntimeConfig,
-      'react-native-reanimated/plugin', // MUST be last
+      'react-native-worklets/plugin', // MUST be last for Reanimated 4
     ],
   };
 };
