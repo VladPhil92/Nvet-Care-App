@@ -248,6 +248,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Follow-up certification correction after PR #290 reached isolated staging and the authoritative booking catalog rejected the synthetic alias 'Consulta general E2E - transferencia'. The payment certification now books the exact active vet service 'Consulta general E2E' while retaining canonical Cartagena service coordinates, production-equivalent market/geo enforcement, veterinarian pricing authority and the existing TRANSFER lifecycle. No backend validation is weakened and no real funds movement, provider mutation, Play publication or commercial launch is authorized."
+    },
+    {
+      "prNumber": 293,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Phase 48 migrates the frozen mobile candidate from React Native 0.75.4 to 0.87.1 to eliminate the final six Phase 38 high-severity React Native/Metro dependency findings. The migration is isolated behind full CI, Android RC, supply-chain and release-candidate certification; it authorizes no commercial launch, Play production publication, provider mutation, production database mutation or real-funds payment."
     }
   ]
 }
