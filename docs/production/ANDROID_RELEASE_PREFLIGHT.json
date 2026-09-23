@@ -5,7 +5,7 @@
   "program": "android-google-play-release-preflight",
   "applicationId": "com.nvetcare",
   "targetSdk": 36,
-  "compileSdk": 36,
+  "compileSdk": 37,
   "releaseArtifact": "aab",
   "releaseWorkflow": ".github/workflows/release-android.yml",
   "technicalGates": {
