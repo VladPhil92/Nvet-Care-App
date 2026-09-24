@@ -53,4 +53,16 @@ allprojects {
     }
 }
 
+
+// react-native-maps 1.18.0 still declares custom BuildConfig fields. AGP 9
+// disables BuildConfig generation for library modules by default, so enable it
+// only for that dependency rather than weakening the setting globally.
+subprojects { subproject ->
+    if (subproject.name == "react-native-maps") {
+        subproject.plugins.withId("com.android.library") {
+            subproject.android.buildFeatures.buildConfig = true
+        }
+    }
+}
+
 apply plugin: "com.facebook.react.rootproject"
