@@ -74,30 +74,6 @@
     "@types/react-test-renderer": "^19.1.0",
     "react-test-renderer": "19.2.3"
   },
-  "jest": {
-    "preset": "<rootDir>/../node_modules/@react-native/jest-preset/jest-preset.js",
-    "setupFilesAfterEnv": [
-      "<rootDir>/jest.setup.ts"
-    ],
-    "testPathIgnorePatterns": [
-      "/node_modules/",
-      "/e2e/"
-    ],
-    "transformIgnorePatterns": [
-      "node_modules/(?!(react-native|@react-native|@react-navigation|msw|@mswjs)/)"
-    ],
-    "testEnvironmentOptions": {
-      "customExportConditions": [
-        "node",
-        "require",
-        "default"
-      ]
-    },
-    "moduleNameMapper": {
-      "^msw/node$": "<rootDir>/__mocks__/msw/node.js",
-      "^msw$": "<rootDir>/__mocks__/msw.js"
-    }
-  },
   "engines": {
     "node": ">=22.22.3"
   }
