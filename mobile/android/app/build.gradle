@@ -10,6 +10,13 @@ react {
     reactNativeDir = file("../../node_modules/react-native")
     codegenDir = file("../../node_modules/@react-native/codegen")
     cliFile = file("../../node_modules/react-native/cli.js")
+
+    // npm workspaces hoists hermes-compiler to the repository root while the
+    // React Native project root remains mobile/. RN 0.87 auto-detection only
+    // checks <react-root>/node_modules, so point the Gradle plugin at the
+    // canonical hoisted compiler and retain its OS-specific substitution.
+    hermesCommand = file("../../../node_modules/hermes-compiler/hermesc/%OS-BIN%/hermesc").absolutePath
+
     autolinkLibrariesWithApp()
 }
 
