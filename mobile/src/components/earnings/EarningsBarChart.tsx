@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native'
 import { UI_COLORS } from '../ui/primitives'
 import { formatCOPCompact } from '../../utils/format'
@@ -53,7 +53,7 @@ export default function EarningsBarChart({
   formatValue = formatCOPCompact,
 }: Props) {
   const max = Math.max(...data.map((d) => d.value), 1)
-  const animations = useRef(data.map(() => new Animated.Value(0))).current
+  const [animations] = useState(() => data.map(() => new Animated.Value(0)))
 
   useEffect(() => {
     Animated.stagger(
