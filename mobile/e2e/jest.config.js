@@ -7,6 +7,8 @@
  * - Verbose para CI (cada step visible)
  */
 
+const path = require('path')
+
 /** @type {import('@jest/types').Config.InitialOptions} */
 module.exports = {
   rootDir: '..',
@@ -26,6 +28,8 @@ module.exports = {
       'ts-jest',
       {
         tsconfig: {
+          // TypeScript 6 (TS5011) requires an explicit rootDir when ts-jest emits.
+          rootDir: path.resolve(__dirname, '..'),
           target: 'es2020',
           module: 'commonjs',
           esModuleInterop: true,
