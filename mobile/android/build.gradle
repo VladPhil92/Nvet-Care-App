@@ -1,23 +1,22 @@
 buildscript {
     ext {
         // Phase 13 / Google Play 2026: new apps and updates submitted from
-        // 2026-08-31 must target Android 16 (API 36). AGP 8.10 is the first
-        // stable 8.x line with official API 36 support, while retaining JDK 17
-        // and avoiding the broader React Native/AGP 9 migration in the release
-        // stabilization window.
-        buildToolsVersion = "35.0.0"
-        minSdkVersion = 23
-        compileSdkVersion = 36
+        // 2026-08-31 must target Android 16 (API 36). React Native 0.87 compiles
+        // against API 37 and requires minSdk 24; the Android Gradle Plugin
+        // version is pinned by the React Native Gradle Plugin.
+        buildToolsVersion = "37.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 37
         targetSdkVersion = 36
-        ndkVersion = "26.1.10909125"
-        kotlinVersion = "1.9.24"
+        ndkVersion = "27.1.12297006"
+        kotlinVersion = "2.2.0"
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:8.10.1")
+        classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
     }

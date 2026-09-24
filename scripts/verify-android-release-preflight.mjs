@@ -142,7 +142,7 @@ async function main() {
   if (compliance.releasePolicy?.automaticProductionPromotion !== false) fail('automatic Play production promotion must remain disabled');
   if (compliance.releasePolicy?.internalTrackAutomationMaximumStatus !== 'draft') fail('automated Play upload must remain draft-only');
 
-  requireMatch(androidBuild, /compileSdkVersion\s*=\s*36\b/, 'compileSdkVersion must remain 36');
+  requireMatch(androidBuild, /compileSdkVersion\s*=\s*37\b/, 'compileSdkVersion must be 37 (React Native 0.87 baseline)');
   requireMatch(androidBuild, /targetSdkVersion\s*=\s*36\b/, 'targetSdkVersion must remain 36');
   requireMatch(appBuild, /namespace\s+["']com\.nvetcare["']/, 'namespace must remain com.nvetcare');
   requireMatch(appBuild, /applicationId\s+["']com\.nvetcare["']/, 'applicationId must remain com.nvetcare');

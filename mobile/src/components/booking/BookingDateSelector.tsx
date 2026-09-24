@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  type ScrollViewInstance,
 } from 'react-native'
 import { UI_COLORS, EmptyState } from '../ui/primitives'
 import { useVetScheduleQuery } from '../../hooks/queries/useMobileQueries'
@@ -111,7 +112,7 @@ export default function BookingDateSelector({
   onSelect,
 }: Props) {
   const dateOptions = useMemo(() => buildDateOptions(), [])
-  const dateScrollRef = useRef<ScrollView>(null)
+  const dateScrollRef = useRef<ScrollViewInstance>(null)
 
   // Auto-scroll al día seleccionado al cambiar (default: hoy)
   useEffect(() => {

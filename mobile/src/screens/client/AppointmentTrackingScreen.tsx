@@ -275,7 +275,7 @@ export default function AppointmentTrackingScreen({ navigation, route }: Props) 
             region={mapRegion}
             showsCompass
             showsBuildings
-            showsPointsOfInterest
+            showsPointsOfInterests
             toolbarEnabled={false}
           >
             {clientLocation && (

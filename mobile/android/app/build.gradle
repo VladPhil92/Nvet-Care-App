@@ -1,19 +1,26 @@
-// Monorepo: react-native is hoisted to root node_modules, tell Reanimated where to find it
-project.ext.REACT_NATIVE_NODE_MODULES_DIR = file("../../../node_modules/react-native").absolutePath
-
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// React Native 0.87 ships hermesc in the separate `hermes-compiler` npm package,
+// which npm workspaces may install in mobile/node_modules or hoist to the
+// repository root. The RN Gradle plugin only looks under `root/node_modules`,
+// so resolve the real location and fail closed if npm did not provide it.
+def hermesCompilerCandidates = [
+    file("../../node_modules/hermes-compiler/hermesc"),
+    file("../../../node_modules/hermes-compiler/hermesc")
+]
+def hermesCompilerDir = hermesCompilerCandidates.find { it.isDirectory() }
+if (hermesCompilerDir == null) {
+    throw new GradleException("hermes-compiler npm package not found. Run npm ci before Gradle.")
+}
+
 react {
     root = file("../..")
-    reactNativeDir = file("../../../node_modules/react-native")
-    codegenDir = file("../../../node_modules/@react-native/codegen")
-    cliFile = file("../../../node_modules/react-native/cli.js")
-    // RN 0.75 resolves the default Hermes compiler below `root/node_modules`.
-    // In this npm-workspaces monorepo React Native is hoisted one level above
-    // `mobile/`, so make the compiler path explicit and keep %OS-BIN% portable.
-    hermesCommand = file("../../../node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc").absolutePath
+    reactNativeDir = file("../../node_modules/react-native")
+    codegenDir = file("../../node_modules/@react-native/codegen")
+    cliFile = file("../../node_modules/react-native/cli.js")
+    hermesCommand = "${hermesCompilerDir.absolutePath}/%OS-BIN%/hermesc"
     autolinkLibrariesWithApp()
 }
 
@@ -33,7 +40,7 @@ if (sentryUploadEnabled) {
 // Google Play release bundles are minified with R8. Debug/Detox builds remain
 // unminified for deterministic development and instrumentation behavior.
 def enableProguardInReleaseBuilds = true
-def jscFlavor = 'org.webkit:android-jsc:+'
+def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 def releaseStoreFile = System.getenv("NVET_ANDROID_KEYSTORE_FILE")
 def releaseStorePassword = System.getenv("NVET_ANDROID_KEYSTORE_PASSWORD")
 def releaseKeyAlias = System.getenv("NVET_ANDROID_KEY_ALIAS")
@@ -136,7 +143,7 @@ android {
                 signingConfig signingConfigs.release
             }
             minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 
@@ -154,7 +161,7 @@ dependencies {
 
     // Keep the native test harness on the exact version declared in mobile/package.json.
     // com.wix is resolved exclusively from Detox's npm-shipped local Maven repo.
-    androidTestImplementation("com.wix:detox:20.27.6")
+    androidTestImplementation("com.wix:detox:20.51.4")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

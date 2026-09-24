@@ -17,6 +17,15 @@ const {withSentryConfig} = require('@sentry/react-native/metro');
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '..');
 
+// The dashboard workspace keeps React 18 hoisted at the repository root while
+// the app runs React 19 from mobile/node_modules. Hoisted libraries (React
+// Navigation, React Query, Zustand, Sentry...) would otherwise resolve the root
+// React and crash with two React copies, so these singletons always resolve
+// from the app itself.
+const SINGLETONS = ['react', 'react-native'];
+const isSingleton = moduleName =>
+  SINGLETONS.some(name => moduleName === name || moduleName.startsWith(`${name}/`));
+
 const config = {
   projectRoot,
   watchFolders: [workspaceRoot],
@@ -25,6 +34,14 @@ const config = {
       path.resolve(projectRoot, 'node_modules'),
       path.resolve(workspaceRoot, 'node_modules'),
     ],
+    resolveRequest: (context, moduleName, platform) =>
+      context.resolveRequest(
+        isSingleton(moduleName)
+          ? {...context, originModulePath: path.join(projectRoot, 'index.js')}
+          : context,
+        moduleName,
+        platform,
+      ),
   },
 };
 

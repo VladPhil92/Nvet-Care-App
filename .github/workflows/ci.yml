@@ -298,14 +298,15 @@ jobs:
       - name: Verify native dependency compatibility
         working-directory: mobile
         run: |
-          REANIMATED_VERSION="$(node -p "require('react-native-reanimated/package.json').version")"
-          echo "Resolved react-native-reanimated: $REANIMATED_VERSION"
-          test "$REANIMATED_VERSION" = "3.15.5"
+          RN_VERSION="$(node -p "require('react-native/package.json').version")"
+          echo "Resolved react-native: $RN_VERSION"
+          test "$RN_VERSION" = "0.87.1"
+          test ! -e node_modules/react-native-reanimated && test ! -e ../node_modules/react-native-reanimated
 
       - name: Verify Gradle wrapper integrity
         working-directory: mobile
         run: |
-          test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
+          test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "d997cfc60f4cff0e7451d19d49a82fa986695d07"
           ./android/gradlew --version
 
       - name: Build debug, Detox and unsigned release bundle
@@ -313,7 +314,7 @@ jobs:
         env:
           GOOGLE_MAPS_ANDROID_API_KEY: ci-placeholder
           NVET_API_URL: https://ci.invalid/api
-        run: ./gradlew assembleDebug assembleAndroidTest bundleRelease -DtestBuildType=debug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug :app:assembleAndroidTest bundleRelease -DtestBuildType=debug --no-daemon --stacktrace
 
       - name: Verify Android release bundle
         run: test -s mobile/android/app/build/outputs/bundle/release/app-release.aab

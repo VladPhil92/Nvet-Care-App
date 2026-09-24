@@ -35,7 +35,6 @@ module.exports = function (api) {
         },
       ],
       inlineNvetRuntimeConfig,
-      'react-native-reanimated/plugin', // MUST be last
     ],
   };
 };

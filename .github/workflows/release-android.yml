@@ -104,7 +104,7 @@ jobs:
         working-directory: mobile
         run: |
           set -euo pipefail
-          test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
+          test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "d997cfc60f4cff0e7451d19d49a82fa986695d07"
           ./android/gradlew --version
 
       - name: Audit Google Play compliance source

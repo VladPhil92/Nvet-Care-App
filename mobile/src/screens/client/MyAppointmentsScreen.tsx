@@ -257,7 +257,9 @@ export default function MyAppointmentsScreen({ navigation }: Props) {
           refreshControl={
             <RefreshControl
               refreshing={appointmentsQuery.isRefetching}
-              onRefresh={() => appointmentsQuery.refetch()}
+              onRefresh={() => {
+                void appointmentsQuery.refetch()
+              }}
               colors={[UI_COLORS.sage]}
               tintColor={UI_COLORS.sage}
             />

@@ -223,14 +223,15 @@ jobs:
       - name: Verify native dependency pin
         working-directory: mobile
         run: |
-          REANIMATED_VERSION="$(node -p "require('react-native-reanimated/package.json').version")"
-          echo "Resolved react-native-reanimated: $REANIMATED_VERSION"
-          test "$REANIMATED_VERSION" = "3.15.5"
+          RN_VERSION="$(node -p "require('react-native/package.json').version")"
+          echo "Resolved react-native: $RN_VERSION"
+          test "$RN_VERSION" = "0.87.1"
+          test ! -e node_modules/react-native-reanimated && test ! -e ../node_modules/react-native-reanimated
 
       - name: Verify Gradle wrapper integrity
         working-directory: mobile
         run: |
-          test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "e6441136f3d4ba8a0da8d277868979cfbc8ad796"
+          test "$(git hash-object android/gradle/wrapper/gradle-wrapper.jar)" = "d997cfc60f4cff0e7451d19d49a82fa986695d07"
           ./android/gradlew --version
 
       - name: Load frozen Android package identity
