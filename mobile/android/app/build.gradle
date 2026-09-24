@@ -23,7 +23,7 @@ def sentryUploadEnabled = [
 ].every { value -> value != null && !value.trim().isEmpty() }
 
 if (sentryUploadEnabled) {
-    apply from: "../../node_modules/@sentry/react-native/sentry.gradle"
+    apply from: "../../../node_modules/@sentry/react-native/sentry.gradle"
 }
 
 // Google Play release bundles are minified with R8. Debug/Detox builds remain
