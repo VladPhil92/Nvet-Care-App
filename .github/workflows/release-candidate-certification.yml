@@ -225,7 +225,7 @@ jobs:
         run: |
           REANIMATED_VERSION="$(node -p "require('react-native-reanimated/package.json').version")"
           echo "Resolved react-native-reanimated: $REANIMATED_VERSION"
-          test "$REANIMATED_VERSION" = "3.15.5"
+          test "$REANIMATED_VERSION" = "4.6.0"
 
       - name: Verify Gradle wrapper integrity
         working-directory: mobile
