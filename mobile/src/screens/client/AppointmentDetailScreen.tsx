@@ -100,6 +100,8 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
     status === 'PENDING' &&
     apt?.paymentMethod === 'TRANSFER' &&
     transaction?.status === 'VERIFYING'
+  const actionablePaymentRecovery =
+    apt && status === 'PENDING' && !apt.transaction ? paymentRecovery : null
 
   const handleResumeTransferProof = () => {
     if (!transaction) return
@@ -132,11 +134,10 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!apt || !paymentRecovery) return
 
-    if (status !== 'PENDING' || Boolean(apt.transaction)) {
-      setPaymentRecovery(null)
+    if (!actionablePaymentRecovery) {
       void clearPendingPaymentRecovery(appointmentId).catch(() => undefined)
     }
-  }, [apt, appointmentId, paymentRecovery, status])
+  }, [actionablePaymentRecovery, apt, appointmentId, paymentRecovery])
 
   const handleCancel = () => {
     Alert.alert(
@@ -158,17 +159,17 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
   }
 
   const handleResumePayment = () => {
-    if (!paymentRecovery) return
+    if (!actionablePaymentRecovery) return
 
     Alert.alert(
       'Completar pago',
-      `La reserva se recuperó después de la desconexión. ¿Deseas continuar ahora con el pago de ${formatCOP(paymentRecovery.amountCop)} mediante ${paymentRecovery.paymentMethod}?`,
+      `La reserva se recuperó después de la desconexión. ¿Deseas continuar ahora con el pago de ${formatCOP(actionablePaymentRecovery.amountCop)} mediante ${paymentRecovery.paymentMethod}?`,
       [
         { text: 'Ahora no', style: 'cancel' },
         {
           text: 'Continuar pago',
           onPress: async () => {
-            const recovery = paymentRecovery
+            const recovery = actionablePaymentRecovery
             if (!recovery) return
 
             try {
@@ -404,7 +405,7 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
               </Card>
             ) : (
               <>
-                {status === 'PENDING' && paymentRecovery ? (
+                {status === 'PENDING' && actionablePaymentRecovery ? (
                   <Card style={{ marginTop: 14 }}>
                     <Text style={styles.sectionTitle}>Pago pendiente</Text>
                     <Text style={[styles.subtle, { marginTop: 6, marginBottom: 12 }]}>
