@@ -1,4 +1,4 @@
-// RN 0.87 is workspace-local under mobile/node_modules; keep Gradle/Reanimated on that single canonical installation.
+// RN 0.87 is workspace-local under mobile/node_modules; Gradle and Reanimated share that canonical workspace installation.
 project.ext.REACT_NATIVE_NODE_MODULES_DIR = file("../../node_modules/react-native").absolutePath
 
 apply plugin: "com.android.application"
