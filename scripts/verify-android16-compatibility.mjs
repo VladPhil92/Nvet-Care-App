@@ -30,7 +30,7 @@ const [androidBuild, manifest, styles, app, review] = await Promise.all([
   readText(REVIEW_PATH),
 ]);
 
-requireMatch(androidBuild, /compileSdkVersion\s*=\s*36\b/, 'compileSdkVersion must remain 36');
+requireMatch(androidBuild, /compileSdkVersion\s*=\s*37\b/, 'compileSdkVersion must remain 37');
 requireMatch(androidBuild, /targetSdkVersion\s*=\s*36\b/, 'targetSdkVersion must remain 36');
 
 const edgeToEdgeOptOut = /windowOptOutEdgeToEdgeEnforcement/;

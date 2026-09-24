@@ -138,10 +138,10 @@ async function validateRepositoryContract() {
     fail('Android production contract mismatch: automated Play handoff must remain draft-only.');
   }
 
-  requireMatch(androidBuild, /compileSdkVersion\s*=\s*36\b/, 'compileSdkVersion=36');
+  requireMatch(androidBuild, /compileSdkVersion\s*=\s*37\b/, 'compileSdkVersion=37');
   requireMatch(androidBuild, /targetSdkVersion\s*=\s*36\b/, 'targetSdkVersion=36');
-  requireMatch(androidBuild, /com\.android\.tools\.build:gradle:8\.10\.1/, 'AGP 8.10.1');
-  requireMatch(wrapper, /gradle-8\.11\.1-all\.zip/, 'Gradle 8.11.1 wrapper');
+  requireMatch(androidBuild, /com\.android\.tools\.build:gradle:9\.2\.1/, 'AGP 9.2.1');
+  requireMatch(wrapper, /gradle-9\.4\.1-bin\.zip/, 'Gradle 9.4.1 wrapper');
   requireMatch(appBuild, /applicationId\s+["']com\.nvetcare["']/, 'applicationId com.nvetcare');
   requireMatch(appBuild, /NVET_ANDROID_REQUIRE_SIGNING/, 'publishable signing enforcement switch');
   requireMatch(appBuild, /requireReleaseSigning\s*&&\s*!hasReleaseSigning/, 'fail-closed release signing guard');

@@ -247,7 +247,7 @@ export default function MyPetsScreen({ navigation }: Props) {
     </View>
   ), [openEdit, handleDelete])
 
-  const EmptyState = () => (
+  const emptyState = (
     <View style={styles.empty}>
       <Text style={styles.emptyEmoji}>🐾</Text>
       <Text style={styles.emptyTitle}>Sin mascotas registradas</Text>
@@ -302,7 +302,7 @@ export default function MyPetsScreen({ navigation }: Props) {
         renderItem={renderPetCard}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={petsQ.isLoading ? null : <EmptyState />}
+        ListEmptyComponent={petsQ.isLoading ? undefined : emptyState}
         refreshControl={
           <RefreshControl
             refreshing={petsQ.isRefetching}

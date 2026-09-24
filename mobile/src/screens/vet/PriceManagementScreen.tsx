@@ -311,7 +311,7 @@ export default function PriceManagementScreen({ navigation }: Props) {
                   <Text style={styles.addBtnText}>+ Servicio personalizado</Text>
                 </Pressable>
               </View>
-            ) : null
+            ) : undefined
           }
         />
       </KeyboardAvoidingView>

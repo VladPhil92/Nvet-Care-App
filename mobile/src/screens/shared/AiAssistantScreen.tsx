@@ -58,29 +58,26 @@ export default function AiAssistantScreen() {
     [appointmentsQuery.data],
   )
 
-  useEffect(() => {
-    if (isClient && !selectedPetId && petsQuery.data?.length) {
-      setSelectedPetId(petsQuery.data[0].id)
-    }
-  }, [isClient, petsQuery.data, selectedPetId])
-
-  useEffect(() => {
-    if (isVet && !selectedAppointmentId && vetAppointments.length) {
-      setSelectedAppointmentId(vetAppointments[0].id)
-    }
-  }, [isVet, selectedAppointmentId, vetAppointments])
+  const effectivePetId =
+    selectedPetId || (isClient ? petsQuery.data?.[0]?.id ?? '' : '')
+  const effectiveAppointmentId =
+    selectedAppointmentId || (isVet ? vetAppointments[0]?.id ?? '' : '')
 
   const isPending = clientMutation.isPending || vetMutation.isPending
   const canSubmit =
     question.trim().length >= 3 &&
-    (isClient ? Boolean(selectedPetId) : isVet ? Boolean(selectedAppointmentId) : false)
+    (isClient
+      ? Boolean(effectivePetId)
+      : isVet
+        ? Boolean(effectiveAppointmentId)
+        : false)
 
   const handleSubmit = async () => {
     if (!canSubmit || isPending) return
     const cleanQuestion = question.trim()
     if (isClient) {
       await clientMutation.mutateAsync({
-        petId: selectedPetId,
+        petId: effectivePetId,
         question: cleanQuestion,
         mode: clientMode,
       }).catch(() => undefined)
@@ -88,7 +85,7 @@ export default function AiAssistantScreen() {
     }
     if (isVet) {
       await vetMutation.mutateAsync({
-        appointmentId: selectedAppointmentId,
+        appointmentId: effectiveAppointmentId,
         question: cleanQuestion,
         mode: vetMode,
       }).catch(() => undefined)
@@ -137,7 +134,7 @@ export default function AiAssistantScreen() {
                 <ChoiceChip
                   key={pet.id}
                   label={`${pet.name} · ${pet.species}`}
-                  selected={selectedPetId === pet.id}
+                  selected={effectivePetId === pet.id}
                   onPress={() => setSelectedPetId(pet.id)}
                   accent="sage"
                 />
@@ -173,7 +170,7 @@ export default function AiAssistantScreen() {
                 <ChoiceChip
                   key={appointment.id}
                   label={`${appointment.pet.name} · ${appointment.serviceName || appointment.serviceType}`}
-                  selected={selectedAppointmentId === appointment.id}
+                  selected={effectiveAppointmentId === appointment.id}
                   onPress={() => setSelectedAppointmentId(appointment.id)}
                   accent="gold"
                 />

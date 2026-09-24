@@ -263,7 +263,7 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.android_native == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -300,7 +300,7 @@ jobs:
         run: |
           REANIMATED_VERSION="$(node -p "require('react-native-reanimated/package.json').version")"
           echo "Resolved react-native-reanimated: $REANIMATED_VERSION"
-          test "$REANIMATED_VERSION" = "3.15.5"
+          test "$REANIMATED_VERSION" = "4.6.0"
 
       - name: Verify Gradle wrapper integrity
         working-directory: mobile
@@ -313,7 +313,7 @@ jobs:
         env:
           GOOGLE_MAPS_ANDROID_API_KEY: ci-placeholder
           NVET_API_URL: https://ci.invalid/api
-        run: ./gradlew assembleDebug assembleAndroidTest bundleRelease -DtestBuildType=debug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug :app:assembleAndroidTest bundleRelease -DtestBuildType=debug --no-daemon --stacktrace
 
       - name: Verify Android release bundle
         run: test -s mobile/android/app/build/outputs/bundle/release/app-release.aab

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native'
 import { UI_COLORS } from '../ui/primitives'
 import { formatRelativeTime } from '../../utils/format'
@@ -158,7 +158,7 @@ function TimelineRow({
   isLast,
   connectorColor,
 }: TimelineRowProps) {
-  const pulse = useRef(new Animated.Value(0)).current
+  const [pulse] = useState(() => new Animated.Value(0))
 
   useEffect(() => {
     if (dotState !== 'current') return

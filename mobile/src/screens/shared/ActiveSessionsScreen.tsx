@@ -171,7 +171,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
               <Icon name="close" size={18} color="#C53030" />
               <Text style={styles.revokeAllText}>Cerrar todas las sesiones</Text>
             </Pressable>
-          ) : null
+          ) : undefined
         }
       />
     </SafeAreaView>

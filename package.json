@@ -11,7 +11,7 @@
     "dashboard"
   ],
   "overrides": {
-    "react-native-reanimated": "3.15.5",
+    "react-native-reanimated": "4.6.0",
     "brace-expansion": "2.1.7",
     "minimatch@10.2.6": {
       "brace-expansion": "^5.0.9"
@@ -23,7 +23,8 @@
     "shell-quote": "1.9.0",
     "socket.io-adapter": "2.5.8",
     "socket.io-parser": "4.2.7",
-    "js-yaml": "4.3.2"
+    "js-yaml": "4.3.2",
+    "react-native-worklets": "0.12.2"
   },
   "scripts": {
     "mobile": "cd mobile && npm run android",
@@ -43,5 +44,12 @@
   "engines": {
     "node": ">=22.22.3",
     "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "react": "19.2.3",
+    "@types/react": "^19.2.0",
+    "react-dom": "19.2.3",
+    "@types/react-dom": "^19.2.0",
+    "zod": "4.6.5"
   }
 }

@@ -45,7 +45,7 @@ export default function MembershipScreen({ navigation }: Props) {
   }, [])
 
   useEffect(() => {
-    load()
+    void Promise.resolve().then(load)
   }, [load])
 
   const requestChange = useCallback(

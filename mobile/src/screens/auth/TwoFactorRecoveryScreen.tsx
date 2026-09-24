@@ -26,7 +26,7 @@ export default function TwoFactorRecoveryScreen({ navigation, route }: Props) {
   const { email, password } = route.params
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<React.ElementRef<typeof TextInput>>(null)
 
   const handleSubmit = async () => {
     const trimmed = code.trim().toUpperCase().replace(/\s+/g, '')

@@ -65,16 +65,22 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
 
     if (presetSpecialty === undefined && presetAvailableNow === undefined) return
 
-    setActiveSpecialty(presetSpecialty ?? null)
-    setAvailableNow(presetAvailableNow ?? false)
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      setActiveSpecialty(presetSpecialty ?? null)
+      setAvailableNow(presetAvailableNow ?? false)
 
-    // Consumir el preset una sola vez. De este modo, volver desde el detalle no
-    // reimpone filtros que el usuario haya cambiado manualmente, mientras una
-    // nueva entrada desde Emergencias puede suministrarlos de nuevo.
-    navigation.setParams({
-      specialty: undefined,
-      availableNow: undefined,
+      // Consume the external navigation preset after local state is synchronized.
+      navigation.setParams({
+        specialty: undefined,
+        availableNow: undefined,
+      })
     })
+
+    return () => {
+      active = false
+    }
   }, [navigation, route.params?.specialty, route.params?.availableNow])
 
   useEffect(() => {
@@ -336,7 +342,9 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
           refreshControl={
             <RefreshControl
               refreshing={isRefetching && !isFetchingNextPage}
-              onRefresh={refetch}
+              onRefresh={async () => {
+                await refetch()
+              }}
               tintColor={UI_COLORS.sage}
               colors={[UI_COLORS.sage]}
             />
@@ -349,7 +357,7 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
               </View>
             ) : !hasNextPage && allVets.length > 5 ? (
               <Text style={styles.footerEnd}>— Fin de los resultados —</Text>
-            ) : null
+            ) : undefined
           }
           removeClippedSubviews
           windowSize={11}

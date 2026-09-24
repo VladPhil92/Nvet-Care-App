@@ -1,5 +1,5 @@
-// Monorepo: react-native is hoisted to root node_modules, tell Reanimated where to find it
-project.ext.REACT_NATIVE_NODE_MODULES_DIR = file("../../../node_modules/react-native").absolutePath
+// RN 0.87 is workspace-local under mobile/node_modules; Gradle and Reanimated share that canonical workspace installation.
+project.ext.REACT_NATIVE_NODE_MODULES_DIR = file("../../node_modules/react-native").absolutePath
 
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
@@ -7,13 +7,16 @@ apply plugin: "com.facebook.react"
 
 react {
     root = file("../..")
-    reactNativeDir = file("../../../node_modules/react-native")
-    codegenDir = file("../../../node_modules/@react-native/codegen")
-    cliFile = file("../../../node_modules/react-native/cli.js")
-    // RN 0.75 resolves the default Hermes compiler below `root/node_modules`.
-    // In this npm-workspaces monorepo React Native is hoisted one level above
-    // `mobile/`, so make the compiler path explicit and keep %OS-BIN% portable.
-    hermesCommand = file("../../../node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc").absolutePath
+    reactNativeDir = file("../../node_modules/react-native")
+    codegenDir = file("../../node_modules/@react-native/codegen")
+    cliFile = file("../../node_modules/react-native/cli.js")
+
+    // npm workspaces hoists hermes-compiler to the repository root while the
+    // React Native project root remains mobile/. RN 0.87 auto-detection only
+    // checks <react-root>/node_modules, so point the Gradle plugin at the
+    // canonical hoisted compiler and retain its OS-specific substitution.
+    hermesCommand = file("../../../node_modules/hermes-compiler/hermesc/%OS-BIN%/hermesc").absolutePath
+
     autolinkLibrariesWithApp()
 }
 
@@ -136,7 +139,7 @@ android {
                 signingConfig signingConfigs.release
             }
             minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 

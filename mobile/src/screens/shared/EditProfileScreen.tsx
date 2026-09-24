@@ -41,20 +41,16 @@ export default function EditProfileScreen({ navigation }: Props) {
   const updateMutation = useUpdateProfileMutation()
   const user = userQuery.data
 
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [phone, setPhone] = useState('')
+  const [firstNameDraft, setFirstName] = useState<string | null>(null)
+  const [lastNameDraft, setLastName] = useState<string | null>(null)
+  const [phoneDraft, setPhone] = useState<string | null>(null)
   const [avatarUri, setAvatarUri] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Pre-fill al cargar el user
-  useEffect(() => {
-    if (user) {
-      setFirstName(user.firstName ?? '')
-      setLastName(user.lastName ?? '')
-      setPhone(user.phone ?? '')
-    }
-  }, [user])
+  // Before the first edit, form values are derived directly from the async user query.
+  const firstName = firstNameDraft ?? user?.firstName ?? ''
+  const lastName = lastNameDraft ?? user?.lastName ?? ''
+  const phone = phoneDraft ?? user?.phone ?? ''
 
   const validate = useCallback((): boolean => {
     const errs: Record<string, string> = {}

@@ -9,7 +9,7 @@
  * "Usar código de recuperación" para flujo alternativo.
  */
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -36,21 +36,13 @@ export default function TwoFactorVerifyScreen({ navigation, route }: Props) {
   const { email, password } = route.params
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<React.ElementRef<typeof TextInput>>(null)
 
-  // Auto-submit al alcanzar 6 dígitos
-  useEffect(() => {
-    if (code.length === 6 && !submitting) {
-      handleVerify()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code])
-
-  const handleVerify = async () => {
-    if (code.length < 6) return
+  const handleVerify = useCallback(async (verificationCode: string) => {
+    if (verificationCode.length !== 6) return
     setSubmitting(true)
     try {
-      await authService.login({ email, password, twoFactorCode: code })
+      await authService.login({ email, password, twoFactorCode: verificationCode })
       // El RootNavigator detectará el cambio en useCurrentUserQuery y redirigirá
     } catch (error: any) {
       Alert.alert('Código incorrecto', authService.getErrorMessage(error))
@@ -59,7 +51,15 @@ export default function TwoFactorVerifyScreen({ navigation, route }: Props) {
     } finally {
       setSubmitting(false)
     }
-  }
+  }, [email, password])
+
+  const handleCodeChange = useCallback((value: string) => {
+    const nextCode = value.replace(/\D/g, '').slice(0, 6)
+    setCode(nextCode)
+    if (nextCode.length === 6 && !submitting) {
+      void handleVerify(nextCode)
+    }
+  }, [handleVerify, submitting])
 
   const handleUseRecovery = () => {
     navigation.replace('TwoFactorRecovery', { email, password })
@@ -91,7 +91,7 @@ export default function TwoFactorVerifyScreen({ navigation, route }: Props) {
             ref={inputRef}
             style={styles.codeInput}
             value={code}
-            onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+            onChangeText={handleCodeChange}
             keyboardType="number-pad"
             placeholder="000000"
             placeholderTextColor={Colors.inkMuted}

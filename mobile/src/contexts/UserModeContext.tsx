@@ -27,23 +27,27 @@ export const UserModeProvider: React.FC<UserModeProviderProps> = ({ children }) 
   const [mode, setModeState] = useState<UserMode>('CLIENT')
   const [isLoading, setIsLoading] = useState(true)
 
-  // Cargar modo guardado al iniciar
+  // Hydrate persisted mode from the external storage boundary.
   useEffect(() => {
-    loadSavedMode()
-  }, [])
+    let active = true
 
-  const loadSavedMode = async () => {
-    try {
-      const savedMode = await AsyncStorage.getItem(STORAGE_KEY)
-      if (savedMode === 'CLIENT' || savedMode === 'VET') {
-        setModeState(savedMode)
-      }
-    } catch (error) {
-      console.error('Error loading user mode:', error)
-    } finally {
-      setIsLoading(false)
+    void AsyncStorage.getItem(STORAGE_KEY)
+      .then((savedMode) => {
+        if (active && (savedMode === 'CLIENT' || savedMode === 'VET')) {
+          setModeState(savedMode)
+        }
+      })
+      .catch((error) => {
+        console.error('Error loading user mode:', error)
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+
+    return () => {
+      active = false
     }
-  }
+  }, [])
 
   const setMode = async (newMode: UserMode) => {
     try {

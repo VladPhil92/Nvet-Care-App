@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect, useRef } from 'react'
+import React, { ReactNode, useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -343,7 +343,7 @@ export function Skeleton({
   borderRadius = 6,
   style,
 }: SkeletonProps) {
-  const shimmer = useRef(new Animated.Value(0)).current
+  const [shimmer] = useState(() => new Animated.Value(0))
 
   useEffect(() => {
     const loop = Animated.loop(

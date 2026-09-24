@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "phase": 48,
+  "program": "react-native-0.87-security-migration",
+  "candidate": "1.0.0-rc.2",
+  "trackingIssue": 252,
+  "sourceBaseline": "fddffa302c165332d308fca9832555652acb51c9",
+  "policy": {
+    "featureFreezeActive": true,
+    "releaseBlockerRequired": true,
+    "mergeOnlyAfterAllRequiredChecksPass": true,
+    "productionDatabaseMutationAuthorized": false,
+    "providerConfigurationMutationAuthorized": false,
+    "publicStoreReleaseAuthorized": false,
+    "commercialLaunchAuthorized": false,
+    "realPaymentEvidenceSatisfied": false
+  },
+  "target": {
+    "react": "19.2.3",
+    "reactNative": "0.87.1",
+    "reactNativeTooling": "0.87.1",
+    "reactNativeCommunityCli": "20.2.0",
+    "reactNativeReanimated": "4.6.0",
+    "reactNativeWorklets": "0.12.2",
+    "reactNativeGestureHandler": "3.3.0",
+    "android": {
+      "minSdk": 24,
+      "compileSdk": 37,
+      "targetSdk": 36,
+      "buildTools": "37.0.0",
+      "ndk": "27.1.12297006",
+      "kotlin": "2.2.0",
+      "gradle": "9.4.1",
+      "newArchitecture": true
+    }
+  },
+  "exitCriteria": {
+    "deterministicLockfile": true,
+    "productionAuditCritical": 0,
+    "productionAuditHigh": 0,
+    "ciSuccess": true,
+    "releaseCandidateCertificationSuccess": true,
+    "androidRcPackageSuccess": true,
+    "mobileRegressionSuccess": true,
+    "phase38ExceptionsRemovedOnlyAfterAuditEvidence": true
+  }
+}
