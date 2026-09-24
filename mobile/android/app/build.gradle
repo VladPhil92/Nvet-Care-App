@@ -1,5 +1,5 @@
 // Monorepo: react-native is hoisted to root node_modules, tell Reanimated where to find it
-project.ext.REACT_NATIVE_NODE_MODULES_DIR = file("../../../node_modules/react-native").absolutePath
+project.ext.REACT_NATIVE_NODE_MODULES_DIR = file("../../node_modules/react-native").absolutePath
 
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
@@ -7,9 +7,9 @@ apply plugin: "com.facebook.react"
 
 react {
     root = file("../..")
-    reactNativeDir = file("../../../node_modules/react-native")
-    codegenDir = file("../../../node_modules/@react-native/codegen")
-    cliFile = file("../../../node_modules/react-native/cli.js")
+    reactNativeDir = file("../../node_modules/react-native")
+    codegenDir = file("../../node_modules/@react-native/codegen")
+    cliFile = file("../../node_modules/react-native/cli.js")
     autolinkLibrariesWithApp()
 }
 
@@ -23,7 +23,7 @@ def sentryUploadEnabled = [
 ].every { value -> value != null && !value.trim().isEmpty() }
 
 if (sentryUploadEnabled) {
-    apply from: "../../../node_modules/@sentry/react-native/sentry.gradle"
+    apply from: "../../node_modules/@sentry/react-native/sentry.gradle"
 }
 
 // Google Play release bundles are minified with R8. Debug/Detox builds remain
