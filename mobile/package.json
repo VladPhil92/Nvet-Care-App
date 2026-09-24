@@ -75,7 +75,7 @@
     "react-test-renderer": "19.2.3"
   },
   "jest": {
-    "preset": "@react-native/jest-preset",
+    "preset": "<rootDir>/../node_modules/@react-native/jest-preset/jest-preset.js",
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ],
