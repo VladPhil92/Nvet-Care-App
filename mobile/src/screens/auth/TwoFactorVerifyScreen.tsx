@@ -9,7 +9,7 @@
  * "Usar código de recuperación" para flujo alternativo.
  */
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -38,15 +38,7 @@ export default function TwoFactorVerifyScreen({ navigation, route }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const inputRef = useRef<React.ElementRef<typeof TextInput>>(null)
 
-  // Auto-submit al alcanzar 6 dígitos
-  useEffect(() => {
-    if (code.length === 6 && !submitting) {
-      handleVerify()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code])
-
-  const handleVerify = async () => {
+  const handleVerify = useCallback(async () => {
     if (code.length < 6) return
     setSubmitting(true)
     try {
@@ -59,7 +51,14 @@ export default function TwoFactorVerifyScreen({ navigation, route }: Props) {
     } finally {
       setSubmitting(false)
     }
-  }
+  }, [code, email, password])
+
+  // Auto-submit al alcanzar 6 dígitos.
+  useEffect(() => {
+    if (code.length === 6 && !submitting) {
+      void handleVerify()
+    }
+  }, [code, submitting, handleVerify])
 
   const handleUseRecovery = () => {
     navigation.replace('TwoFactorRecovery', { email, password })
