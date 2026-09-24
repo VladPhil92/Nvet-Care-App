@@ -105,14 +105,22 @@ export default function VetScheduleScreen({ navigation }: Props) {
   // Sincronizar excepciones del servidor a estado local al cargar la semana
   useEffect(() => {
     if (!exceptionsQuery.data) return
+
     const blocked = new Set<string>()
     for (const ex of exceptionsQuery.data) {
       if (!ex.isAvailable) {
-        // Normalize ISO date to YYYY-MM-DD
         blocked.add(ex.date.slice(0, 10))
       }
     }
-    setBlockedDates(blocked)
+
+    let active = true
+    queueMicrotask(() => {
+      if (active) setBlockedDates(blocked)
+    })
+
+    return () => {
+      active = false
+    }
   }, [exceptionsQuery.data])
 
   // Convertir citas + bloqueos a ScheduleSlots
