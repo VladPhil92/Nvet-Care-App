@@ -336,7 +336,9 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
           refreshControl={
             <RefreshControl
               refreshing={isRefetching && !isFetchingNextPage}
-              onRefresh={refetch}
+              onRefresh={async () => {
+                await refetch()
+              }}
               tintColor={UI_COLORS.sage}
               colors={[UI_COLORS.sage]}
             />
@@ -349,7 +351,7 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
               </View>
             ) : !hasNextPage && allVets.length > 5 ? (
               <Text style={styles.footerEnd}>— Fin de los resultados —</Text>
-            ) : null
+            ) : undefined
           }
           removeClippedSubviews
           windowSize={11}
