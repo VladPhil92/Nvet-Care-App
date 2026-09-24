@@ -84,10 +84,7 @@ export default function VetAppointmentDetailScreen({ navigation, route }: Props)
   const isTerminal = status === 'COMPLETED' || status === 'CANCELLED'
 
   useEffect(() => {
-    if (!trackable) {
-      setSharing(false)
-      return
-    }
+    if (!trackable) return
 
     let watchId: number | null = null
     let active = true
@@ -135,6 +132,8 @@ export default function VetAppointmentDetailScreen({ navigation, route }: Props)
       if (watchId !== null) liveLocationService.clearWatch(watchId)
     }
   }, [appointmentId, trackable])
+
+  const effectiveSharing = trackable && sharing
 
   const region = useMemo<Region>(() => {
     if (!location) return CARTAGENA_FALLBACK
@@ -363,8 +362,8 @@ export default function VetAppointmentDetailScreen({ navigation, route }: Props)
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Ubicación en vivo</Text>
               <Badge
-                label={sharing ? 'Compartiendo' : 'Inactiva'}
-                tone={sharing ? 'success' : 'muted'}
+                label={effectiveSharing ? 'Compartiendo' : 'Inactiva'}
+                tone={effectiveSharing ? 'success' : 'muted'}
                 size="sm"
                 outline
               />
