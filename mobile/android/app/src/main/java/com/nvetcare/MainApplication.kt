@@ -13,7 +13,7 @@ class MainApplication : Application(), ReactApplication {
     getDefaultReactHost(
       context = applicationContext,
       packageList =
-        PackageList(this).packages.apply {
+        PackageList(this).packages.toMutableList().apply {
           // Custom native vault: AES-GCM material is protected by Android Keystore.
           add(NvetSecureStoragePackage())
         },
