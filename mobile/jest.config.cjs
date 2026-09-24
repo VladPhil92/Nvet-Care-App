@@ -15,11 +15,31 @@ module.exports = {
   resolver: path.join(reactNativePresetDir, 'jest', 'resolver.js'),
   transform: {
     '^.+\\.(js|ts|tsx)$': 'babel-jest',
-    '^.+\\.(bmp|gif|jpg|jpeg|mp4|png|psd|svg|webp)$': path.join(
-      reactNativePresetDir,
-      'jest',
-      'assetFileTransformer.js',
-    ),
+    '^.+\\.(bmp|gif|jpg|jpeg|mp4|png|psd|svg|webp)
+  },
+  setupFiles: [path.join(reactNativePresetDir, 'jest', 'setup.js')],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  testEnvironment: path.join(
+    reactNativePresetDir,
+    'jest',
+    'react-native-env.js',
+  ),
+  testPathIgnorePatterns: ['/node_modules/', '/e2e/'],
+  transformIgnorePatterns: [
+    'node_modules/(?!(react-native|@react-native|@react-navigation|msw|@mswjs)/)',
+  ],
+  testEnvironmentOptions: {
+    customExportConditions: ['node', 'require', 'default'],
+  },
+  moduleNameMapper: {
+    '^react-native/setup-env$': `${reactNativeDir}/src/setup-env.js`,
+    '^react-native($|/.*)': `${reactNativeDir}/$1`,
+    '^msw/node$': '<rootDir>/__mocks__/msw/node.js',
+    '^msw$': '<rootDir>/__mocks__/msw.js',
+  },
+};
+:
+      '<rootDir>/jest.assetFileTransformer.cjs',
   },
   setupFiles: [path.join(reactNativePresetDir, 'jest', 'setup.js')],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
