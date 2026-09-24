@@ -163,7 +163,7 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
 
     Alert.alert(
       'Completar pago',
-      `La reserva se recuperó después de la desconexión. ¿Deseas continuar ahora con el pago de ${formatCOP(actionablePaymentRecovery.amountCop)} mediante ${paymentRecovery.paymentMethod}?`,
+      `La reserva se recuperó después de la desconexión. ¿Deseas continuar ahora con el pago de ${formatCOP(actionablePaymentRecovery.amountCop)} mediante ${actionablePaymentRecovery.paymentMethod}?`,
       [
         { text: 'Ahora no', style: 'cancel' },
         {
