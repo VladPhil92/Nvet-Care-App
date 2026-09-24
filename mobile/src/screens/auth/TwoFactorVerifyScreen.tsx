@@ -36,7 +36,7 @@ export default function TwoFactorVerifyScreen({ navigation, route }: Props) {
   const { email, password } = route.params
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<React.ElementRef<typeof TextInput>>(null)
 
   // Auto-submit al alcanzar 6 dígitos
   useEffect(() => {
