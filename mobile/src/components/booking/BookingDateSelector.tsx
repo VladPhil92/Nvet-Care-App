@@ -111,7 +111,7 @@ export default function BookingDateSelector({
   onSelect,
 }: Props) {
   const dateOptions = useMemo(() => buildDateOptions(), [])
-  const dateScrollRef = useRef<ScrollView>(null)
+  const dateScrollRef = useRef<React.ElementRef<typeof ScrollView>>(null)
 
   // Auto-scroll al día seleccionado al cambiar (default: hoy)
   useEffect(() => {
