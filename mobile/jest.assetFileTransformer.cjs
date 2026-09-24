@@ -13,7 +13,7 @@ module.exports = {
   process: (_, filename) => ({
     code: `module.exports = {
       testUri:
-        ${JSON.stringify(path.relative(basePath, filename).replace(/\\\\/g, '/'))}
+        ${JSON.stringify(path.relative(basePath, filename).replace(/\\/g, '/'))}
     };`,
   }),
   getCacheKey: createCacheKeyFunction([__filename]),
