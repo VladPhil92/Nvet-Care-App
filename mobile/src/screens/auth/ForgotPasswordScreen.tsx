@@ -79,7 +79,7 @@ export default function ForgotPasswordScreen({
                 restablecer tu contraseña en los próximos minutos.
               </Text>
               <Pressable
-                onPress={() => navigation.navigate('Login')}
+                onPress={() => navigation.popTo('Login')}
                 style={styles.submitBtn}
                 accessibilityRole="button"
                 accessibilityLabel="Volver a iniciar sesión"

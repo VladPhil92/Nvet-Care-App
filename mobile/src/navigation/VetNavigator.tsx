@@ -101,7 +101,7 @@ export default function VetNavigator() {
         options={{
           tabBarLabel: 'Panel',
           tabBarAccessibilityLabel: 'Panel veterinario',
-          tabBarTestID: 'vet-dashboard-tab',
+          tabBarButtonTestID: 'vet-dashboard-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="hospital" focused={focused} accent="gold" />
           ),
@@ -113,7 +113,7 @@ export default function VetNavigator() {
         options={{
           tabBarLabel: 'Agenda',
           tabBarAccessibilityLabel: 'Mi agenda',
-          tabBarTestID: 'vet-schedule-tab',
+          tabBarButtonTestID: 'vet-schedule-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="calendar" focused={focused} accent="gold" />
           ),
@@ -125,7 +125,7 @@ export default function VetNavigator() {
         options={{
           tabBarLabel: 'Copiloto',
           tabBarAccessibilityLabel: 'Copiloto clínico de inteligencia artificial',
-          tabBarTestID: 'vet-ai-tab',
+          tabBarButtonTestID: 'vet-ai-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="chat" focused={focused} accent="gold" showAccentDot />
           ),
@@ -137,7 +137,7 @@ export default function VetNavigator() {
         options={{
           tabBarLabel: 'Ingresos',
           tabBarAccessibilityLabel: 'Mis ingresos',
-          tabBarTestID: 'vet-earnings-tab',
+          tabBarButtonTestID: 'vet-earnings-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="secure-payment" focused={focused} accent="gold" />
           ),
@@ -149,7 +149,7 @@ export default function VetNavigator() {
         options={{
           tabBarLabel: 'Perfil',
           tabBarAccessibilityLabel: 'Mi perfil profesional',
-          tabBarTestID: 'vet-profile-tab',
+          tabBarButtonTestID: 'vet-profile-tab',
           tabBarIcon: ({ focused }) => (
             <TabBarIcon name="profile" focused={focused} accent="gold" />
           ),

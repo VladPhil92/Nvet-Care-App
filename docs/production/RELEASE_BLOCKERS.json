@@ -261,9 +261,17 @@
       "prNumber": 297,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
-      "status": "open",
+      "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Corrective E2E certification follow-up to the Phase 48 React Native 0.87 migration. Mobile E2E run 36078617291 showed the app disconnecting from Detox at launch in all three Android flows because Detox 20.27.6 predates React Native 0.83+ support. The change moves only the Detox test dependency (npm package and androidTest coordinate) to 20.51.4 and regenerates the canonical lockfile; no product code, backend validation, market guard, payment or identity control changes, and it authorizes no commercial launch, Play publication, provider mutation or real-funds movement."
+    },
+    {
+      "prNumber": 298,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Closes the last seven moderate production advisories (decode-uri-component GHSA-vcc3-ghjq-m6fr via React Navigation 6 / query-string 7) by migrating @react-navigation/native, native-stack and bottom-tabs to 7.x. Code changes are limited to the v7 API: tabBarTestID renamed to tabBarButtonTestID with unchanged IDs, popTo for ForgotPassword -> Login, and explicit parent-tab routing from Notifications to appointment details. No backend, market guard, payment, identity or release control changes; it authorizes no commercial launch, Play publication, provider mutation or real-funds movement."
     }
   ]
 }
