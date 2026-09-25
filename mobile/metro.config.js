@@ -17,6 +17,13 @@ const {withSentryConfig} = require('@sentry/react-native/metro');
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '..');
 
+// React Native 0.87 no longer installs @react-native/assets-registry; its
+// registry ships inside react-native as `react-native/asset-registry`.
+// react-native-svg still imports the old path, which breaks the debug bundle
+// (and with it every Detox launch). Point it at the registry Metro already
+// registers assets into, so SVG image lookups share the same asset table.
+const LEGACY_ASSET_REGISTRY = '@react-native/assets-registry/registry';
+
 const config = {
   projectRoot,
   watchFolders: [workspaceRoot],
@@ -25,6 +32,14 @@ const config = {
       path.resolve(projectRoot, 'node_modules'),
       path.resolve(workspaceRoot, 'node_modules'),
     ],
+    resolveRequest: (context, moduleName, platform) =>
+      context.resolveRequest(
+        context,
+        moduleName === LEGACY_ASSET_REGISTRY
+          ? 'react-native/asset-registry'
+          : moduleName,
+        platform,
+      ),
   },
 };
 
