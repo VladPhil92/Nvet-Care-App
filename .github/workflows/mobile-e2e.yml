@@ -147,6 +147,7 @@ jobs:
         with:
           name: detox-artifacts-ios
           path: mobile/.detox-artifacts
+          include-hidden-files: true
           retention-days: 14
 
   e2e-android:
@@ -294,6 +295,9 @@ jobs:
         with:
           name: detox-artifacts-android-${{ env.RC_CANDIDATE_SHA }}
           path: mobile/.detox-artifacts
+          # The artifacts root is a dot-directory; upload-artifact skips hidden
+          # paths by default, which silently dropped every Detox screenshot.
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
 
