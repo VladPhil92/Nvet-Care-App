@@ -253,7 +253,7 @@
       "prNumber": 293,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
-      "status": "open",
+      "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Phase 48 migrates the frozen mobile candidate from React Native 0.75.4 to 0.87.1 to eliminate the final six Phase 38 high-severity React Native/Metro dependency findings. The migration is isolated behind full CI, Android RC, supply-chain and release-candidate certification; it authorizes no commercial launch, Play production publication, provider mutation, production database mutation or real-funds payment."
     },
