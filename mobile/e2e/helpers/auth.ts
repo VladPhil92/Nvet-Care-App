@@ -12,6 +12,8 @@
  * identidades implícitas o potencialmente desincronizadas.
  */
 
+import { device } from 'detox'
+
 import { waitForElement } from '../setup'
 
 function requiredFixture(name: string): string {
@@ -35,13 +37,25 @@ const FIXTURES = {
 
 const LOGIN_SUBMIT_MATCHER = by.id('login-submit')
 
+// Each login field has a visible caption with the same wording as the input's
+// accessibilityLabel. On Android by.label() also matches TextView text, so the
+// bare label resolves to two views; narrow it to the native text input.
+function textInput(label: string): Detox.NativeMatcher {
+  const inputType =
+    device.getPlatform() === 'android'
+      ? 'com.facebook.react.views.textinput.ReactEditText'
+      : 'RCTUITextField'
+  return by.label(label).and(by.type(inputType))
+}
+
 export async function loginAs(role: 'client' | 'vet') {
   const creds = FIXTURES[role]
 
-  const emailInput = element(by.label('Correo electrónico'))
-  const passwordInput = element(by.label('Contraseña'))
+  const emailMatcher = textInput('Correo electrónico')
+  const emailInput = element(emailMatcher)
+  const passwordInput = element(textInput('Contraseña'))
 
-  await waitForElement(by.label('Correo electrónico'), 30_000)
+  await waitForElement(emailMatcher, 30_000)
   await emailInput.replaceText(creds.email)
   await passwordInput.replaceText(creds.password)
   await waitForElement(LOGIN_SUBMIT_MATCHER)
