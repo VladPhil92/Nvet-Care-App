@@ -25,6 +25,29 @@ interface Props {
   navigation: any
 }
 
+/**
+ * Notifications lives in both profile stacks, but appointment details live in
+ * other tabs. React Navigation 7 no longer resolves nested screens by name, so
+ * route through the parent tab explicitly for the current role.
+ */
+function openAppointment(navigation: any, appointmentId: string) {
+  const tabs = navigation.getParent?.()
+  const routeNames: string[] = tabs?.getState?.()?.routeNames ?? []
+  if (routeNames.includes('ClientAppointments')) {
+    tabs.navigate('ClientAppointments', {
+      screen: 'AppointmentDetail',
+      params: { appointmentId },
+      initial: false,
+    })
+  } else if (routeNames.includes('VetSchedule')) {
+    tabs.navigate('VetSchedule', {
+      screen: 'VetAppointmentDetail',
+      params: { appointmentId },
+      initial: false,
+    })
+  }
+}
+
 const CATEGORY_GLYPHS: Record<string, string> = {
   APPOINTMENT: '🐾',
   PAYMENT: '💳',
@@ -70,7 +93,7 @@ export default function NotificationsScreen({ navigation }: Props) {
 
       const appointmentId = notification.metadata?.appointmentId
       if (typeof appointmentId === 'string' && appointmentId.length > 0) {
-        navigation.navigate('AppointmentDetail', { appointmentId })
+        openAppointment(navigation, appointmentId)
       }
     },
     [markReadMutation, navigation],
