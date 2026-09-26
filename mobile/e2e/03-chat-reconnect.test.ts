@@ -40,8 +40,8 @@ describe('Flow: Chat WebSocket connectivity', () => {
     await device.launchApp({ newInstance: false, url: CHAT_URL })
 
     await waitForElement(by.id('chat-screen'), 15_000)
-    await waitFor(element(by.label('En vivo')))
-      .toBeVisible()
+    await waitFor(element(by.id('chat-connection-status')))
+      .toHaveLabel('En vivo')
       .withTimeout(15_000)
 
     if (device.getPlatform() === 'ios') {
@@ -50,11 +50,11 @@ describe('Flow: Chat WebSocket connectivity', () => {
       await waitFor(element(by.text('Reconectando…')))
         .toBeVisible()
         .withTimeout(20_000)
-      await dexpect(element(by.label('Reconectando'))).toBeVisible()
+      await dexpect(element(by.id('chat-connection-status'))).toHaveLabel('Reconectando')
 
       await device.setURLBlacklist([])
-      await waitFor(element(by.label('En vivo')))
-        .toBeVisible()
+      await waitFor(element(by.id('chat-connection-status')))
+        .toHaveLabel('En vivo')
         .withTimeout(60_000)
     } else {
       // Android no ofrece URL blacklist equivalente en Detox. Reiniciamos el
@@ -67,8 +67,8 @@ describe('Flow: Chat WebSocket connectivity', () => {
       await device.sendToHome()
       await device.launchApp({ newInstance: false, url: CHAT_URL })
       await waitForElement(by.id('chat-screen'), 15_000)
-      await waitFor(element(by.label('En vivo')))
-        .toBeVisible()
+      await waitFor(element(by.id('chat-connection-status')))
+        .toHaveLabel('En vivo')
         .withTimeout(30_000)
     }
 
@@ -80,6 +80,6 @@ describe('Flow: Chat WebSocket connectivity', () => {
       .toBeVisible()
       .withTimeout(15_000)
 
-    await dexpect(element(by.label('En vivo'))).toBeVisible()
+    await dexpect(element(by.id('chat-connection-status'))).toHaveLabel('En vivo')
   })
 })
