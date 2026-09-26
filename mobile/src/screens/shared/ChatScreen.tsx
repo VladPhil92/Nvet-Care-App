@@ -344,7 +344,12 @@ function ConnectionDot({
     : 'Sin conexión'
 
   return (
-    <View style={styles.connectionDot} accessibilityLabel={label}>
+    <View
+      testID="chat-connection-status"
+      accessible
+      style={styles.connectionDot}
+      accessibilityLabel={label}
+    >
       <View style={[styles.connectionPulse, { backgroundColor: color }]} />
       <Text style={[styles.connectionLabel, { color }]}>{label}</Text>
     </View>
