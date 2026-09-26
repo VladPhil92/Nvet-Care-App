@@ -42,7 +42,16 @@ describe('Flow: Cliente reserva cita con transferencia', () => {
     // merge child Text nodes into the accessible Pressable, making by.text()
     // nondeterministic even when the card is visibly rendered.
     await waitForElement(by.id('vet-search-location-active'), 20_000)
-    await waitForElement(by.id('vet-search-result-0'), 20_000)
+    // The results list can begin below the fold on a Pixel 6 because the search
+    // header carries two horizontal filter rails. Wait for the fixture to exist,
+    // then scroll only as much as needed until the card is actually tappable.
+    await waitFor(element(by.id('vet-search-result-0')))
+      .toExist()
+      .withTimeout(20_000)
+    await waitFor(element(by.id('vet-search-result-0')))
+      .toBeVisible()
+      .whileElement(by.id('vet-search-results'))
+      .scroll(180, 'down')
 
     // 3. Abrir el veterinario fixture (ELITE ranks first in the staging seed)
     await element(by.id('vet-search-result-0')).tap()
