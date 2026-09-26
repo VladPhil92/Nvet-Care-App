@@ -288,6 +288,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "Corrective Android E2E release-certification fix for run 36190070812. Flow 01 failed only because the seeded veterinarian card existed below the effective 75% visibility threshold after the search header/filter rails; the change exposes the real FlatList as a stable scroll anchor and scrolls only until the existing card is tappable. Flow 03 failed because the rendered chat connection status was not exposed as a stable accessible Android node; the change adds an explicit test/accessibility identifier and verifies the same live/reconnecting states without altering WebSocket behavior. The PR is explicitly labeled release-blocker before certification rerun. No booking, payment, identity, clinical, backend, provider, production-data, Play-publication or commercial-launch behavior is changed."
+    },
+    {
+      "prNumber": 307,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Corrective Android Detox release-certification fix for the current main failure in Flow 01. The search screen already renders location readiness, but its dynamic vet-search-location-active/inactive test identifier lived on a nested Text inside an accessible Pressable, which Android may merge into the parent accessibility node and make unreliable to Espresso/Detox. This change moves the existing state identifier to the owning Pressable without altering geolocation acquisition, search filters, ranking, booking, payments, authentication, chat, backend APIs or production data. The blocker remains open until CI and the Android 01 -> 02 -> 03 certification circuit verify the candidate; it authorizes no commercial launch, provider mutation, real-funds movement or Play publication."
     }
   ]
 }
