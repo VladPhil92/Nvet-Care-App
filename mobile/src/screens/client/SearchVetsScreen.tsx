@@ -327,6 +327,7 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
         </View>
       ) : (
         <FlatList
+          testID="vet-search-results"
           data={allVets}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
