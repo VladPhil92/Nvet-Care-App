@@ -287,7 +287,7 @@
       "severity": "release-blocking",
       "status": "open",
       "owner": "VladPhil92",
-      "justification": "Corrective Android E2E release-certification fix for run 36190070812. Flow 01 failed only because the seeded veterinarian card existed below the effective 75% visibility threshold after the search header/filter rails; the change exposes the real FlatList as a stable scroll anchor and scrolls only until the existing card is tappable. Flow 03 failed because the rendered chat connection status was not exposed as a stable accessible Android node; the change adds an explicit test/accessibility identifier and verifies the same live/reconnecting states without altering WebSocket behavior. No booking, payment, identity, clinical, backend, provider, production-data, Play-publication or commercial-launch behavior is changed."
+      "justification": "Corrective Android E2E release-certification fix for run 36190070812. Flow 01 failed only because the seeded veterinarian card existed below the effective 75% visibility threshold after the search header/filter rails; the change exposes the real FlatList as a stable scroll anchor and scrolls only until the existing card is tappable. Flow 03 failed because the rendered chat connection status was not exposed as a stable accessible Android node; the change adds an explicit test/accessibility identifier and verifies the same live/reconnecting states without altering WebSocket behavior. The PR is explicitly labeled release-blocker before certification rerun. No booking, payment, identity, clinical, backend, provider, production-data, Play-publication or commercial-launch behavior is changed."
     }
   ]
 }
