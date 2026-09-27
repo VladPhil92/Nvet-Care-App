@@ -296,6 +296,14 @@
       "status": "resolved",
       "owner": "VladPhil92",
       "justification": "PR #307 merged into main after the protected-change certification completed for the corrective Android Detox location-readiness fix. The change moved the existing vet-search-location-active/inactive identifier from nested Text to the owning accessible Pressable, preserving geolocation, search filters, ranking, booking, payments, authentication, chat, backend APIs and production data behavior. The merged blocker is now resolved so Phase 47 can proceed to its remaining external/operator gates; this resolution does not authorize commercial launch, provider mutation, real-funds movement or Play publication."
+    },
+    {
+      "prNumber": 309,
+      "candidate": "1.0.0-rc.2",
+      "severity": "release-blocking",
+      "status": "open",
+      "owner": "VladPhil92",
+      "justification": "Corrective Android Detox release-certification fix for Mobile E2E run 36288116775 on main. Retained device evidence shows Flow 01 remained on the client Home screen because HomeScreenV2 called the vet-only GET /appointments/today endpoint, producing a client 403 surfaced as a React Native warning banner over the bottom tab bar and intercepting the Services navigation tap. The client Home now uses the role-aware GET /appointments query scoped to the local calendar day; backend CLIENT ownership scoping remains authoritative and the vet-only /appointments/today contract is unchanged. This blocker remains open until protected CI and Android 01 -> 02 -> 03 certification verify the candidate. No authentication model, booking, ranking, payment, chat, provider, production-data, real-funds, Play-publication or commercial-launch authorization is changed."
     }
   ]
 }
