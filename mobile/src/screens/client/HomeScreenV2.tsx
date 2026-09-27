@@ -30,7 +30,7 @@ import { Logo } from '../../components/common/Logo'
 import { Icon, IconNode, type IconName } from '../../components/common/Icon'
 import {
   useCurrentUserQuery,
-  useTodayAppointmentsQuery,
+  useAppointmentsQuery,
   useBalanceQuery,
 } from '../../hooks/queries/useMobileQueries'
 import { formatAppointmentDate } from '../../utils/format'
@@ -49,8 +49,16 @@ interface QuickAction {
 }
 
 export default function HomeScreenV2({ navigation }: HomeScreenProps) {
+  const today = useMemo(() => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }, [])
+
   const userQ = useCurrentUserQuery()
-  const todayApptQ = useTodayAppointmentsQuery()
+  const todayApptQ = useAppointmentsQuery({ startDate: today, endDate: today })
   const balanceQ = useBalanceQuery()
 
   const refreshing = userQ.isFetching || todayApptQ.isFetching || balanceQ.isFetching
