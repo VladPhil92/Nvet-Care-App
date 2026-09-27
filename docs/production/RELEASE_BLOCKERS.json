@@ -293,9 +293,9 @@
       "prNumber": 307,
       "candidate": "1.0.0-rc.2",
       "severity": "release-blocking",
-      "status": "open",
+      "status": "resolved",
       "owner": "VladPhil92",
-      "justification": "Corrective Android Detox release-certification fix for the current main failure in Flow 01. The search screen already renders location readiness, but its dynamic vet-search-location-active/inactive test identifier lived on a nested Text inside an accessible Pressable, which Android may merge into the parent accessibility node and make unreliable to Espresso/Detox. This change moves the existing state identifier to the owning Pressable without altering geolocation acquisition, search filters, ranking, booking, payments, authentication, chat, backend APIs or production data. The blocker remains open until CI and the Android 01 -> 02 -> 03 certification circuit verify the candidate; it authorizes no commercial launch, provider mutation, real-funds movement or Play publication."
+      "justification": "PR #307 merged into main after the protected-change certification completed for the corrective Android Detox location-readiness fix. The change moved the existing vet-search-location-active/inactive identifier from nested Text to the owning accessible Pressable, preserving geolocation, search filters, ranking, booking, payments, authentication, chat, backend APIs and production data behavior. The merged blocker is now resolved so Phase 47 can proceed to its remaining external/operator gates; this resolution does not authorize commercial launch, provider mutation, real-funds movement or Play publication."
     }
   ]
 }
