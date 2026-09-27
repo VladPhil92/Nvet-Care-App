@@ -34,9 +34,14 @@ describe('Flow: Cliente reserva cita con transferencia', () => {
     // 1. Login
     await loginAsClient()
 
-    // 2. Ir a Servicios. La tarjeta del fixture es una señal más fuerte de que
-    // el stack y la búsqueda remota están listos que un heading puramente visual.
-    await element(by.id('client-search-tab')).tap()
+    // 2. Ir a Servicios. En Android, tabBarButtonTestID puede identificar el
+    // contenedor correcto sin que el RNClickAction active de forma fiable el
+    // handler de navegación. El accessibilityLabel vive en el Pressable real,
+    // por lo que pulsarlo certifica la misma interacción que realiza el usuario.
+    await waitForElement(by.id('client-search-tab'), 20_000)
+    await element(by.label('Servicios y veterinarios')).tap()
+    await waitForElement(by.text('Veterinarios'), 10_000)
+
     // Wait for the geolocation-driven query to settle before selecting the
     // top-ranked result. VetCard exposes a stable testID because Android may
     // merge child Text nodes into the accessible Pressable, making by.text()
@@ -92,9 +97,10 @@ describe('Flow: Cliente reserva cita con transferencia', () => {
     await dexpect(element(by.text('Ver detalles'))).toBeVisible()
     await element(by.text('Volver al inicio')).tap()
 
-    // 10. La cita queda registrada en el módulo de citas
+    // 10. La cita queda registrada en el módulo de citas. Igual que Servicios,
+    // pulsamos el nodo accesible real del tab y verificamos el destino.
     await waitForElement(by.id('client-appointments-tab'), 10_000)
-    await element(by.id('client-appointments-tab')).tap()
+    await element(by.label('Mis citas')).tap()
     await waitForElement(by.text('Mis citas'), 10_000)
     await dexpect(element(by.text('Consulta general E2E')).atIndex(0)).toBeVisible()
   })
