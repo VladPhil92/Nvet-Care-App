@@ -190,16 +190,14 @@ export default function SearchVetsScreen({ navigation, route }: SearchVetsScreen
         )}
 
         <Pressable
+          testID={deviceLocation ? 'vet-search-location-active' : 'vet-search-location-inactive'}
           onPress={retryLocation}
           style={styles.locationRow}
           accessibilityRole="button"
           accessibilityLabel="Actualizar ubicación para búsqueda de veterinarios cercanos"
         >
           <Text style={styles.locationIcon}>⌖</Text>
-          <Text
-            testID={deviceLocation ? 'vet-search-location-active' : 'vet-search-location-inactive'}
-            style={styles.locationText}
-          >
+          <Text style={styles.locationText}>
             {!locationResolved
               ? 'Obteniendo ubicación…'
               : deviceLocation
