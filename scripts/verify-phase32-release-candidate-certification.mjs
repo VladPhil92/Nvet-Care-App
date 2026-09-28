@@ -11,7 +11,8 @@ const contractPath = 'docs/production/PHASE_32_RELEASE_CANDIDATE_CERTIFICATION.j
 const contract = json(contractPath);
 const restoreSource = read('ops/railway/nvet-restore-verify.mjs');
 const androidRelease = read('.github/workflows/release-android.yml');
-const androidBuild = read('mobile/android/app/build.gradle');
+const androidAppBuild = read('mobile/android/app/build.gradle');
+const androidRootBuild = read('mobile/android/build.gradle');
 
 assert(contract.phase === 32, 'Phase must be 32');
 assert(contract.candidate === '1.0.0-rc.3', 'Candidate must be 1.0.0-rc.3');
@@ -34,8 +35,9 @@ assert(restoreSource.includes('MAX_BACKUP_AGE_HOURS'), 'Restore verifier must en
 assert(androidRelease.includes('track: internal'), 'Android release workflow must target Google Play internal track');
 assert(androidRelease.includes('status: draft'), 'Android release workflow must upload as draft only');
 assert(androidRelease.includes('publish_internal'), 'Android release workflow must keep Play upload opt-in');
-assert(androidBuild.includes('applicationId "com.nvetcare"') || androidBuild.includes("applicationId 'com.nvetcare'"), 'Android applicationId must remain com.nvetcare');
-assert(/targetSdk(?:Version)?\s+36/.test(androidBuild), 'Android target SDK must remain 36');
+assert(androidAppBuild.includes('applicationId "com.nvetcare"') || androidAppBuild.includes("applicationId 'com.nvetcare'"), 'Android applicationId must remain com.nvetcare');
+assert(/targetSdkVersion\s*=\s*36/.test(androidRootBuild), 'Android target SDK must remain 36');
+assert(androidAppBuild.includes('targetSdkVersion rootProject.ext.targetSdkVersion'), 'App module must inherit canonical Android target SDK');
 
 const allowedPhase32Paths = new Set([
   '.github/workflows/phase32-release-candidate-certification.yml',
