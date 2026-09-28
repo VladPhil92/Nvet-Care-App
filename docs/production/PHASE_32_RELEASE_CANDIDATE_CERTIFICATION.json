@@ -3,10 +3,11 @@
   "phase": 32,
   "program": "production-release-candidate-certification-and-play-internal-deployment",
   "candidate": "1.0.0-rc.3",
-  "state": "IMPLEMENTING",
+  "state": "EXTERNAL_EVIDENCE_BLOCKED",
   "createdAt": "2026-09-28T16:55:00Z",
   "sourceBaseline": {
     "mainCommitSha": "733aa8854a2b39af33ebd6df25d2e0f6aa4d1b71",
+    "phase32MergeSha": "140463e7034b1c5f558cc5249ce103a574cc6c02",
     "reason": "Main after PR #310; product code is frozen from this SHA while Phase 32 adds release governance and recovery verification only.",
     "productCodeChangesAllowed": false
   },
@@ -21,29 +22,38 @@
     "projectId": "61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd",
     "productionEnvironmentId": "7f93c67e-5a63-4aae-80b6-90979a9b60b1",
     "stagingEnvironmentId": "9267d965-e5e4-4c6f-af93-001c73cf62b4",
-    "observedProductionRuntime": "healthy",
+    "observedProductionRuntime": "healthy-core-services",
     "observedStagingRuntime": "healthy",
+    "projectBucketsObserved": 0,
     "restoreVerifierService": "nvet-restore-verify",
+    "backupService": "nvet-backup-postgres",
     "restoreVerifierDefect": {
-      "deploymentId": "0aae3bfd-49bf-4a17-a1fb-d59c09c36f4d",
+      "originalDeploymentId": "0aae3bfd-49bf-4a17-a1fb-d59c09c36f4d",
+      "canonicalVerifierDeploymentId": "a46d32be-8e37-4d72-8275-cf405825d3f4",
       "observedAt": "2026-09-28",
-      "status": "confirmed",
-      "cause": "Bun.S3Client was instantiated without bucket; Railway deployment status was SUCCESS while the functional restore drill logged RESTORE DRILL FAILED.",
+      "codeDefectStatus": "remediated",
+      "configurationStatus": "blocked",
+      "originalCause": "The previous function omitted bucket from Bun.S3Client and Railway reported SUCCESS even while the functional drill logged RESTORE DRILL FAILED.",
+      "currentBlocker": "The canonical fail-closed verifier is now executing from the Phase 32 merge commit, but BUCKET resolves empty. Reference variables to nvet-backup-postgres also resolve without a usable bucket value, and the Railway project currently exposes no object-storage bucket.",
       "remediationSource": "ops/railway/nvet-restore-verify.mjs"
     }
   },
   "gates": {
     "repositoryStaticCertification": {
-      "status": "pending",
-      "evidence": null
+      "status": "verified",
+      "evidence": "GitHub Actions Phase 32 Release Candidate Certification run 36455655563 completed successfully on PR #311; CI run 36455655465 also completed successfully before merge."
     },
     "freshEncryptedBackup": {
-      "status": "pending",
-      "evidence": null
+      "status": "blocked",
+      "evidence": "nvet-backup-postgres deployment d6e18336-c9aa-4f59-a34b-5ab2eceab503 reported SUCCESS, but no independently observed backup artifact/checksum is available and the S3 bucket boundary is unresolved. Container status alone is not accepted as backup evidence."
+    },
+    "backupObjectStorageConfigured": {
+      "status": "blocked",
+      "evidence": "Canonical restore deployment a46d32be-8e37-4d72-8275-cf405825d3f4 reaches fail-closed configuration validation and reports BUCKET is required. Railway project inventory currently reports no bucket."
     },
     "isolatedRestoreDrill": {
       "status": "blocked",
-      "evidence": "Railway deployment 0aae3bfd-49bf-4a17-a1fb-d59c09c36f4d currently fails functionally; Phase 32 remediation must pass before promotion."
+      "evidence": "Canonical verifier is deployed from Phase 32 commit 140463e7034b1c5f558cc5249ce103a574cc6c02 but cannot begin S3 retrieval until a valid object-storage bucket and credentials resolve. No RESTORE DRILL PASSED marker has been produced."
     },
     "providerLevelBackupEvidence": {
       "status": "pending",
@@ -64,9 +74,8 @@
     }
   },
   "requiredSequence": [
-    "merge-phase32-governance",
-    "produce-fresh-encrypted-backup",
-    "deploy-canonical-restore-verifier",
+    "configure-object-storage-bucket-and-credentials",
+    "produce-fresh-encrypted-backup-with-artifact-evidence",
     "pass-isolated-restore-drill",
     "retain-provider-level-backup-evidence",
     "retain-real-payment-rail-evidence",
