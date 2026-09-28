@@ -1,0 +1,59 @@
+name: Phase 32 Release Candidate Certification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/phase32-release-candidate-certification.yml'
+      - '.github/workflows/release-android.yml'
+      - 'docs/production/PHASE_32_RELEASE_CANDIDATE_CERTIFICATION.json'
+      - 'docs/production/PHASE_32_RELEASE_CANDIDATE_CERTIFICATION.md'
+      - 'ops/railway/nvet-restore-verify.mjs'
+      - 'scripts/verify-phase32-release-candidate-certification.mjs'
+      - 'mobile/android/app/build.gradle'
+      - 'mobile/android/build.gradle'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase32-release-candidate-certification.yml'
+      - '.github/workflows/release-android.yml'
+      - 'docs/production/PHASE_32_RELEASE_CANDIDATE_CERTIFICATION.json'
+      - 'docs/production/PHASE_32_RELEASE_CANDIDATE_CERTIFICATION.md'
+      - 'ops/railway/nvet-restore-verify.mjs'
+      - 'scripts/verify-phase32-release-candidate-certification.mjs'
+      - 'mobile/android/app/build.gradle'
+      - 'mobile/android/build.gradle'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase32-release-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify-static-contract:
+    name: Phase 32 static fail-closed contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.x
+
+      - name: Verify Phase 32 contract
+        run: node scripts/verify-phase32-release-candidate-certification.mjs
+
+      - name: Upload Phase 32 report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase32-release-candidate-certification
+          path: .artifacts/phase32-release-candidate-certification.json
+          if-no-files-found: error
+          retention-days: 30
