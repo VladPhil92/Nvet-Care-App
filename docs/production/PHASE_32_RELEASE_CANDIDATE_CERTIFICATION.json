@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "phase": 32,
+  "program": "production-release-candidate-certification-and-play-internal-deployment",
+  "candidate": "1.0.0-rc.3",
+  "state": "IMPLEMENTING",
+  "createdAt": "2026-09-28T16:55:00Z",
+  "sourceBaseline": {
+    "mainCommitSha": "733aa8854a2b39af33ebd6df25d2e0f6aa4d1b71",
+    "reason": "Main after PR #310; product code is frozen from this SHA while Phase 32 adds release governance and recovery verification only.",
+    "productCodeChangesAllowed": false
+  },
+  "releaseIdentity": {
+    "androidApplicationId": "com.nvetcare",
+    "versionName": "1.0.0-rc.3",
+    "targetSdk": 36,
+    "distributionTrack": "internal",
+    "playUploadStatus": "draft"
+  },
+  "railway": {
+    "projectId": "61c97ce7-fd4d-4d8d-9e28-8c0ef964d8cd",
+    "productionEnvironmentId": "7f93c67e-5a63-4aae-80b6-90979a9b60b1",
+    "stagingEnvironmentId": "9267d965-e5e4-4c6f-af93-001c73cf62b4",
+    "observedProductionRuntime": "healthy",
+    "observedStagingRuntime": "healthy",
+    "restoreVerifierService": "nvet-restore-verify",
+    "restoreVerifierDefect": {
+      "deploymentId": "0aae3bfd-49bf-4a17-a1fb-d59c09c36f4d",
+      "observedAt": "2026-09-28",
+      "status": "confirmed",
+      "cause": "Bun.S3Client was instantiated without bucket; Railway deployment status was SUCCESS while the functional restore drill logged RESTORE DRILL FAILED.",
+      "remediationSource": "ops/railway/nvet-restore-verify.mjs"
+    }
+  },
+  "gates": {
+    "repositoryStaticCertification": {
+      "status": "pending",
+      "evidence": null
+    },
+    "freshEncryptedBackup": {
+      "status": "pending",
+      "evidence": null
+    },
+    "isolatedRestoreDrill": {
+      "status": "blocked",
+      "evidence": "Railway deployment 0aae3bfd-49bf-4a17-a1fb-d59c09c36f4d currently fails functionally; Phase 32 remediation must pass before promotion."
+    },
+    "providerLevelBackupEvidence": {
+      "status": "pending",
+      "evidence": null,
+      "note": "Repository/S3 pg_dump evidence does not substitute for Railway provider-level backup/snapshot evidence."
+    },
+    "paymentRailRealEvidence": {
+      "status": "pending",
+      "evidence": null
+    },
+    "signedAab": {
+      "status": "pending",
+      "evidence": null
+    },
+    "googlePlayInternalDraft": {
+      "status": "pending",
+      "evidence": null
+    }
+  },
+  "requiredSequence": [
+    "merge-phase32-governance",
+    "produce-fresh-encrypted-backup",
+    "deploy-canonical-restore-verifier",
+    "pass-isolated-restore-drill",
+    "retain-provider-level-backup-evidence",
+    "retain-real-payment-rail-evidence",
+    "tag-immutable-1.0.0-rc.3",
+    "run-release-android-for-tag",
+    "upload-signed-aab-as-google-play-internal-draft",
+    "complete-physical-device-internal-test"
+  ],
+  "boundaries": {
+    "commercialLaunchAuthorized": false,
+    "productionPlayPromotionAuthorized": false,
+    "automaticProductionPromotion": false,
+    "externalEvidenceMayNotBeSynthesized": true,
+    "phase32StaticSuccessIsNotCommercialGo": true
+  }
+}
