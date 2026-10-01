@@ -115,20 +115,23 @@ Se reprograma: la del 2026-09-28 no tiene registro en el ledger. Requiere la Eta
 
 ### Etapa 5 — Promoción del RC, AAB firmado y Google Play Internal
 
-1. Crear el tag inmutable `1.0.0-rc.3` sobre el SHA certificado y registrar el gate `rc-promoted`.
-2. Ejecutar `release-android.yml` con:
-   - `version_name=1.0.0-rc.3`;
-   - `release_ref=1.0.0-rc.3`;
-   - la URL `/api` de producción;
-   - `publish_internal=true`.
-3. Completar Play Console:
+1. Configurar Play Console **antes** de cualquier subida automatizada. Es la configuración única que exige `docs/production/ANDROID_PLAY_INTERNAL_RUNBOOK.md`, porque la API de Android Publisher no puede crear un paquete que no existe:
    - app;
    - Play App Signing;
    - certificado de subida;
    - política de privacidad publicada;
    - Data Safety;
-   - acceso del revisor.
-4. Subir el AAB al track Internal y observarlo 24 h.
+   - acceso del revisor;
+   - acceso de la cuenta de servicio.
+
+   Si la API rechaza la primera subida porque el paquete no tiene una versión inicial en la Console, subir un AAB firmado manualmente una vez, según el runbook.
+2. Crear el tag inmutable `1.0.0-rc.3` sobre el SHA certificado y registrar el gate `rc-promoted`.
+3. Ejecutar `release-android.yml` con:
+   - `version_name=1.0.0-rc.3`;
+   - `release_ref=1.0.0-rc.3`;
+   - la URL `/api` de producción;
+   - `publish_internal=true`.
+4. Verificar el borrador en el track Internal y observarlo 24 h.
 
 ### Etapa 6 — Pruebas en dispositivos físicos
 
