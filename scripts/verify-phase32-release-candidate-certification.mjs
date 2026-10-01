@@ -45,6 +45,8 @@ const allowedPhase32Paths = new Set([
   'docs/production/PHASE_32_RELEASE_CANDIDATE_CERTIFICATION.md',
   'ops/railway/nvet-restore-verify.mjs',
   'scripts/verify-phase32-release-candidate-certification.mjs',
+  // Release roadmap narrative; documentation only, never product code.
+  'docs/RELEASE_ROADMAP.md',
 ]);
 
 let changedPaths = [];
